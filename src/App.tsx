@@ -23,9 +23,7 @@ import {
   Unlock,
 } from "lucide-react";
 
-// =========================================================================
-// I TUOI DATI FIREBASE (Lasciali così, sono corretti!)
-// =========================================================================
+// I TUOI DATI FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyAq02XXQkepvHsgHEN4zTZni8pp20r1jUU",
   authDomain: "zibaldone-1-prova.firebaseapp.com",
@@ -38,6 +36,7 @@ const firebaseConfig = {
 
 const isConfigured = !firebaseConfig.apiKey.includes("INCOLLA");
 
+// Aggiunto ": any" per far felice Vercel/TypeScript
 let app: any, auth: any, db: any;
 try {
   if (isConfigured) {
@@ -50,22 +49,20 @@ try {
 }
 
 export default function ZibaldoneApp() {
-  const [user, setUser] = useState(null);
-  const [thoughts, setThoughts] = useState([]);
+  // Aggiunto "<any>" a tutti gli stati per evitare errori TS
+  const [user, setUser] = useState<any>(null);
+  const [thoughts, setThoughts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("write"); // Ora parte sempre dalla scrittura
+  const [activeTab, setActiveTab] = useState("write");
   const [sortBy, setSortBy] = useState("newest");
-
-  // STATO PER L'ACCESSO SEGRETO (Solo tu e il prof)
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Stati per il form
   const [newTitle, setNewTitle] = useState("");
   const [newAuthor, setNewAuthor] = useState("");
   const [newContent, setNewContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState(null);
-  const [selectedThought, setSelectedThought] = useState(null);
+  const [message, setMessage] = useState<any>(null);
+  const [selectedThought, setSelectedThought] = useState<any>(null);
 
   useEffect(() => {
     if (selectedThought) {
@@ -101,7 +98,6 @@ export default function ZibaldoneApp() {
     authenticate();
   }, []);
 
-  // SCARICA I PENSIERI SOLO SE SEI UN ADMIN AUTORIZZATO
   useEffect(() => {
     if (!user || !db || !isConfigured || !isAdmin) return;
 
@@ -110,15 +106,15 @@ export default function ZibaldoneApp() {
 
     const unsubscribe = onSnapshot(
       thoughtsRef,
-      (snapshot) => {
-        const fetchedThoughts = [];
-        snapshot.forEach((doc) => {
+      (snapshot: any) => {
+        const fetchedThoughts: any[] = [];
+        snapshot.forEach((doc: any) => {
           fetchedThoughts.push({ id: doc.id, ...doc.data() });
         });
         setThoughts(fetchedThoughts);
         setLoading(false);
       },
-      (error) => {
+      (error: any) => {
         console.error("Errore nel caricamento:", error);
         setLoading(false);
       }
@@ -129,17 +125,13 @@ export default function ZibaldoneApp() {
 
   const handleAdminToggle = () => {
     if (isAdmin) {
-      // Esci dalla modalità admin
       setIsAdmin(false);
       setActiveTab("write");
-      setThoughts([]); // Cancella i testi dalla memoria temporanea
+      setThoughts([]);
     } else {
-      // Entra nella modalità admin chiedendo la password
       const password = window.prompt(
         "Archivio Riservato. Inserisci la parola d'ordine:"
       );
-
-      // LA TUA PASSWORD SEGRETA E' QUI SOTTO ("infinito")
       if (password === "infinito") {
         setIsAdmin(true);
         setActiveTab("read");
@@ -149,7 +141,7 @@ export default function ZibaldoneApp() {
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
     if (!user || !newContent.trim()) return;
 
@@ -170,7 +162,7 @@ export default function ZibaldoneApp() {
       setNewContent("");
       setMessage({
         type: "success",
-        text: "Il tuo pensiero è stato affidato con successo allo Zibaldone e sigillato.",
+        text: "Il tuo pensiero è stato affidato con successo allo Zibaldone.",
       });
 
       setTimeout(() => {
@@ -186,7 +178,7 @@ export default function ZibaldoneApp() {
     }
   };
 
-  const toggleStar = async (thoughtId, currentStatus) => {
+  const toggleStar = async (thoughtId: string, currentStatus: boolean) => {
     if (!user || !db || !isAdmin) return;
     try {
       const thoughtDocRef = doc(db, "pensieri", thoughtId);
@@ -196,7 +188,7 @@ export default function ZibaldoneApp() {
     } catch (error) {}
   };
 
-  const formatDate = (timestamp) => {
+  const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
     return date.toLocaleDateString("it-IT", {
       day: "numeric",
@@ -210,9 +202,9 @@ export default function ZibaldoneApp() {
   const getProcessedThoughts = () => {
     let result = [...thoughts];
     if (activeTab === "favorites") {
-      result = result.filter((thought) => thought.isStarred);
+      result = result.filter((thought: any) => thought.isStarred);
     }
-    result.sort((a, b) => {
+    result.sort((a: any, b: any) => {
       switch (sortBy) {
         case "oldest":
           return a.timestamp - b.timestamp;
@@ -256,7 +248,6 @@ export default function ZibaldoneApp() {
           <Feather className="w-10 h-10 text-[#8B6E4E] mb-4" />
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif text-[#1A1510] tracking-tight mb-4 relative flex items-center justify-center gap-4">
             Lo Zibaldone
-            {/* TASTO SEGRETO PER LA REDAZIONE */}
             <button
               onClick={handleAdminToggle}
               className="opacity-20 hover:opacity-100 transition-opacity absolute -right-12"
@@ -280,7 +271,6 @@ export default function ZibaldoneApp() {
         </div>
       </header>
 
-      {/* MOSTRA IL MENU SOLO AGLI ADMIN */}
       {isAdmin && (
         <nav className="flex justify-center gap-2 md:gap-4 py-8 relative z-10 flex-wrap px-4 bg-[#FDFBF7] border-b border-[#E8DAC2]/50 mb-8">
           <div className="w-full text-center mb-2">
@@ -368,7 +358,7 @@ export default function ZibaldoneApp() {
             {loading ? (
               <div className="flex flex-col items-center justify-center py-20 text-[#8B6E4E]">
                 <Loader2 className="w-8 h-8 animate-spin mb-4" />
-                <p>Apertura dell'archivio segreto in corso...</p>
+                <p>Apertura dell'archivio in corso...</p>
               </div>
             ) : displayedThoughts.length === 0 ? (
               <div className="text-center py-20 animate-in fade-in">
@@ -390,7 +380,7 @@ export default function ZibaldoneApp() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {displayedThoughts.map((thought) => (
+                {displayedThoughts.map((thought: any) => (
                   <article
                     key={thought.id}
                     onClick={() => setSelectedThought(thought)}
@@ -454,7 +444,6 @@ export default function ZibaldoneApp() {
           </div>
         )}
 
-        {/* MODULO DI SCRITTURA - Visibile a tutti (classe e admin) */}
         {activeTab === "write" && (
           <div className="max-w-2xl mx-auto transition-all duration-500 animate-in fade-in zoom-in-95">
             {!isAdmin && (
@@ -525,7 +514,7 @@ export default function ZibaldoneApp() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      Inchiostratura e sigillo in corso...
+                      Inchiostratura in corso...
                     </>
                   ) : (
                     <>
@@ -539,7 +528,6 @@ export default function ZibaldoneApp() {
           </div>
         )}
 
-        {/* Modal LETTURA (solo Admin) */}
         {isAdmin && selectedThought && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
@@ -552,7 +540,7 @@ export default function ZibaldoneApp() {
             ></div>
             <div
               className="bg-[#FDFBF7] w-full max-w-3xl max-h-[85vh] rounded-3xl shadow-2xl relative z-10 flex flex-col overflow-hidden border border-[#E8DAC2]"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e: any) => e.stopPropagation()}
               style={{
                 animation:
                   "paperFloat 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards",
