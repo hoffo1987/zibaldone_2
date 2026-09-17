@@ -401,10 +401,17 @@ export default function ZibaldoneApp() {
   const confirmSingleDelete = async () => {
     if (!user || !db || !isAdmin || !thoughtToDelete) return;
     const id = thoughtToDelete.id;
-    setThoughtToDelete(null); setDeletingIds([id]); 
+    
+    // Novità: Chiude immediatamente la finestra di lettura per farti vedere l'animazione!
+    if (selectedThought?.id === id) {
+      setSelectedThought(null); 
+    }
+
+    setThoughtToDelete(null); 
+    setDeletingIds([id]); 
+
     setTimeout(async () => { 
       await deleteDoc(doc(db, "pensieri", id)); 
-      if (selectedThought?.id === id) setSelectedThought(null); 
       setDeletingIds(prev => prev.filter(dId => dId !== id)); 
     }, 1100);
   };
@@ -957,16 +964,18 @@ export default function ZibaldoneApp() {
             <div className="bg-[#FDFBF7] md:bg-[#FDFBF7]/95 w-full max-w-3xl max-h-[88vh] rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 flex flex-col overflow-hidden border border-[#E8DAC2] transition-transform duration-500" onClick={(e: any) => e.stopPropagation()} style={{ animation: "paperFloat 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
               <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-[#FDFBF7] to-transparent border-b border-l border-[#E8DAC2]/30 rounded-bl-[6rem] opacity-80 pointer-events-none z-0"></div>
               
-              <div className="flex justify-between items-start p-6 md:p-10 border-b border-[#E8DAC2]/50 sticky top-0 bg-[#FDFBF7] md:bg-[#FDFBF7]/95 backdrop-blur-none md:backdrop-blur-xl z-20 shadow-sm transition-all duration-500">
-                <div className="pr-4 flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-[#8B6E4E] uppercase tracking-widest mb-4">
+              {/* Novità: Intestazione responsiva per evitare accavallamenti su Mobile (flex-col-reverse su mobile) */}
+              <div className="flex flex-col-reverse md:flex-row justify-between items-start gap-4 md:gap-0 p-5 md:p-10 border-b border-[#E8DAC2]/50 sticky top-0 bg-[#FDFBF7] md:bg-[#FDFBF7]/95 backdrop-blur-none md:backdrop-blur-xl z-20 shadow-sm transition-all duration-500 w-full">
+                <div className="flex-1 min-w-0 w-full md:pr-4">
+                  <div className="flex flex-wrap items-center gap-2 md:gap-3 text-[10px] font-bold text-[#8B6E4E] uppercase tracking-widest mb-3 md:mb-4">
                     <span className="bg-gradient-to-r from-[#D4AF37] to-[#C59B27] text-[#1A1510] px-3 py-1.5 rounded-md truncate max-w-[200px] shadow-sm cursor-help hover:shadow-md hover:-translate-y-0.5 transition-all duration-300" title={selectedThought.author}>FIRMA: {selectedThought.author}</span>
                     <span className="bg-[#F4EFE6] px-3 py-1.5 rounded-md shrink-0 border border-[#E8DAC2] shadow-sm">{formatDate(selectedThought.timestamp)}</span>
                   </div>
                   <h2 className="text-3xl md:text-4xl font-cormorant font-bold text-[#1A1510] break-words leading-tight drop-shadow-sm">{selectedThought.title}</h2>
                 </div>
                 
-                <div className="flex items-center gap-1.5 shrink-0 bg-white p-2 rounded-full border border-[#E8DAC2] shadow-[0_4px_15px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300">
+                {/* Bottoni ancorati a destra su mobile */}
+                <div className="flex items-center gap-1.5 self-end md:self-start shrink-0 bg-white p-2 rounded-full border border-[#E8DAC2] shadow-[0_4px_15px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300">
                   {isAdmin && (
                     <>
                       <button onClick={() => setThoughtToDelete(selectedThought)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-[#FDF2F2] hover:-translate-y-1 active:scale-90 transition-all duration-300 group"><Trash2 className="w-4 h-4 text-[#D4C3A3] group-hover:text-[#902A2A] transition-colors" /></button>
