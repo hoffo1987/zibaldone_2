@@ -570,13 +570,20 @@ export default function ZibaldoneApp() {
             </>
           ) : (
             <>
-              <div className="flex flex-col items-center mb-8">
+              <div className="flex flex-col items-center mb-6">
                 <div className="w-20 h-20 bg-gradient-to-br from-[#E8DAC2]/50 to-[#D4C3A3]/20 rounded-full flex items-center justify-center mb-4 border border-[#D4AF37]/30 shadow-inner group hover:scale-105 transition-transform duration-500 cursor-default">
                    <Feather className="w-8 h-8 text-[#8B6E4E] drop-shadow-sm group-hover:rotate-12 transition-transform duration-500" strokeWidth={1.5} />
                 </div>
                 <h1 className="text-4xl font-cormorant font-bold text-[#1A1510] tracking-tight">Lo Zibaldone</h1>
                 <p className="text-sm text-[#8B6E4E] font-medium tracking-widest uppercase mt-2">Archivio della Classe</p>
               </div>
+
+              {authMode !== 'reset' && (
+                <div className="flex bg-[#F4EFE6]/80 p-1 rounded-2xl border border-[#E8DAC2]/60 mb-6 backdrop-blur-sm relative z-10 w-full max-w-[280px] mx-auto shadow-inner animate-in fade-in">
+                  <button type="button" onClick={() => { setAuthMode('login'); setAuthError(""); setAuthSuccess(""); }} className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all duration-300 ${authMode === 'login' ? 'bg-white text-[#1A1510] shadow-[0_2px_10px_rgba(0,0,0,0.05)] scale-100' : 'text-[#8B6E4E] hover:text-[#1A1510] hover:bg-white/40 scale-95'}`}>Accedi</button>
+                  <button type="button" onClick={() => { setAuthMode('register'); setAuthError(""); setAuthSuccess(""); }} className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all duration-300 ${authMode === 'register' ? 'bg-white text-[#1A1510] shadow-[0_2px_10px_rgba(0,0,0,0.05)] scale-100' : 'text-[#8B6E4E] hover:text-[#1A1510] hover:bg-white/40 scale-95'}`}>Nuova Firma</button>
+                </div>
+              )}
 
               {authError && (<div className="mb-6 p-4 rounded-2xl bg-[#FDF2F2]/80 backdrop-blur-sm border border-[#902A2A]/20 text-[#902A2A] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2">{authError}</div>)}
               {authSuccess && (<div className="mb-6 p-4 rounded-2xl bg-[#F4FDF4]/80 backdrop-blur-sm border border-[#2A9045]/20 text-[#2A9045] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2 flex flex-col items-center gap-2"><CheckCircle2 className="w-5 h-5"/>{authSuccess}</div>)}
@@ -611,11 +618,13 @@ export default function ZibaldoneApp() {
                 </button>
               </form>
 
-              <div className="mt-8 text-center border-t border-[#E8DAC2]/50 pt-6">
-                <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(""); setAuthSuccess(""); }} className="text-xs text-[#6B5A46] hover:text-[#1A1510] hover:-translate-y-0.5 font-medium transition-all duration-300">
-                  {authMode === 'reset' ? "Ricordi la chiave? Torna all'accesso" : authMode === 'login' ? "Nuovo studente? Crea il tuo Pseudonimo" : "Hai già una firma? Accedi al diario"}
-                </button>
-              </div>
+              {authMode === 'reset' && (
+                <div className="mt-8 text-center border-t border-[#E8DAC2]/50 pt-6">
+                  <button onClick={() => { setAuthMode('login'); setAuthError(""); setAuthSuccess(""); }} className="text-xs text-[#6B5A46] hover:text-[#1A1510] hover:-translate-y-0.5 font-medium transition-all duration-300">
+                    Ricordi la chiave? Torna all'accesso
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
