@@ -100,7 +100,8 @@ const compressImage = (file: File): Promise<string> => {
   });
 };
 
-const dustParticles = Array.from({ length: 60 }).map((_, i) => ({
+// RIDOTTE LE PARTICELLE PER MOBILE (Da 60 a 40 totali)
+const dustParticles = Array.from({ length: 40 }).map((_, i) => ({
   id: i,
   left: `${Math.random() * 100}%`,
   width: `${Math.random() * 4 + 2}px`, 
@@ -152,7 +153,6 @@ export default function ZibaldoneApp() {
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
 
-  // Stati per il link di recupero da email
   const [resetCode, setResetCode] = useState<string | null>(null);
   const [isResetScreen, setIsResetScreen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -185,11 +185,10 @@ export default function ZibaldoneApp() {
   const [isNextEnvelope, setIsNextEnvelope] = useState<boolean>(true); 
   const [animationConfig, setAnimationConfig] = useState({ lines: 1, duration: 2.0, lastLineChars: 10 });
 
-  // Intercetta il link magico di Firebase dall'URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
-    const oobCode = params.get('oobCode'); // Il codice segreto di Firebase
+    const oobCode = params.get('oobCode');
 
     if (mode === 'resetPassword' && oobCode) {
       setResetCode(oobCode);
@@ -209,8 +208,6 @@ export default function ZibaldoneApp() {
 
   useEffect(() => {
     if (!isConfigured) { setAuthLoading(false); return; }
-    
-    // Se siamo nella schermata di reset dal link, non forziamo il caricamento dell'auth
     if (isResetScreen) return;
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -218,7 +215,7 @@ export default function ZibaldoneApp() {
       setAuthLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [isResetScreen]);
 
   useEffect(() => {
     if (!user || !db || !isConfigured) return;
@@ -284,7 +281,6 @@ export default function ZibaldoneApp() {
       await confirmPasswordReset(auth, resetCode!, newPassword);
       setAuthSuccess("La tua nuova chiave è stata forgiata con successo.");
       setAuthLoading(false);
-      // Rimuoviamo i parametri dall'URL per pulizia
       window.history.replaceState({}, document.title, window.location.pathname);
       setTimeout(() => {
          setIsResetScreen(false);
@@ -513,6 +509,9 @@ export default function ZibaldoneApp() {
           .font-cormorant { font-family: 'Cormorant Garamond', serif; }
           .font-montserrat { font-family: 'Montserrat', sans-serif; }
           
+          /* GPU ACCELERATION FOR MOBILE */
+          .will-change-transform { will-change: transform, opacity; }
+          
           @keyframes floatUpParticle {
             0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0; }
             10% { opacity: var(--max-opacity); }
@@ -522,26 +521,29 @@ export default function ZibaldoneApp() {
           }
 
           @keyframes orbDrift {
-            0% { transform: translate(0, 0) scale(1); opacity: 0.3; }
-            50% { transform: translate(5%, 5%) scale(1.1); opacity: 0.6; }
-            100% { transform: translate(-5%, 10%) scale(0.9); opacity: 0.3; }
+            0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.3; }
+            50% { transform: translate3d(5%, 5%, 0) scale(1.1); opacity: 0.6; }
+            100% { transform: translate3d(-5%, 10%, 0) scale(0.9); opacity: 0.3; }
           }
         `}</style>
         
+        {/* Luci di Sfondo Ottimizzate */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-           <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[#D4AF37]/20 rounded-full blur-[100px]" style={{ animation: 'orbDrift 25s ease-in-out infinite alternate' }}></div>
-           <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-[#902A2A]/10 rounded-full blur-[120px]" style={{ animation: 'orbDrift 30s ease-in-out infinite alternate-reverse' }}></div>
-           <div className="absolute top-[40%] left-[60%] w-[40vw] h-[40vw] bg-[#8B6E4E]/15 rounded-full blur-[100px]" style={{ animation: 'orbDrift 20s ease-in-out infinite alternate' }}></div>
+           <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[#D4AF37]/20 rounded-full blur-[100px] md:animate-[orbDrift_25s_ease-in-out_infinite_alternate] will-change-transform"></div>
+           <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-[#902A2A]/10 rounded-full blur-[120px] md:animate-[orbDrift_30s_ease-in-out_infinite_alternate-reverse] will-change-transform"></div>
+           <div className="absolute top-[40%] left-[60%] w-[40vw] h-[40vw] bg-[#8B6E4E]/15 rounded-full blur-[100px] md:animate-[orbDrift_20s_ease-in-out_infinite_alternate] will-change-transform"></div>
         </div>
 
+        {/* Particelle Ottimizzate: metà sono nascoste su mobile */}
         <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-           {dustParticles.map(p => (
-             <div key={p.id} className="absolute bottom-[-5%] bg-[#D4AF37] rounded-full blur-[1px]" style={{ left: p.left, width: p.width, height: p.width, '--max-opacity': p.opacity, '--x-sway': p.xSway, animation: `floatUpParticle ${p.duration} ease-in-out ${p.delay} infinite` } as any} />
+           {dustParticles.map((p, index) => (
+             <div key={p.id} className={`absolute bottom-[-5%] bg-[#D4AF37] rounded-full blur-[1px] will-change-transform ${index > 15 ? 'hidden md:block' : ''}`} style={{ left: p.left, width: p.width, height: p.width, '--max-opacity': p.opacity, '--x-sway': p.xSway, animation: `floatUpParticle ${p.duration} ease-in-out ${p.delay} infinite` } as any} />
            ))}
         </div>
         <div className="fixed inset-0 pointer-events-none opacity-[0.04] mix-blend-multiply" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }}></div>
         
-        <div className="max-w-md w-full bg-white/70 backdrop-blur-xl p-8 md:p-12 rounded-[2rem] shadow-[0_20px_50px_rgba(26,21,16,0.08)] border border-[#E8DAC2]/80 relative z-10 animate-in fade-in zoom-in-95 duration-700">
+        {/* OPTIMIZED GLASSMORPHISM: No backdrop-blur on mobile, opaque background instead */}
+        <div className="max-w-md w-full bg-white/95 md:bg-white/70 backdrop-blur-none md:backdrop-blur-xl p-8 md:p-12 rounded-[2rem] shadow-[0_20px_50px_rgba(26,21,16,0.08)] border border-[#E8DAC2]/80 relative z-10 animate-in fade-in zoom-in-95 duration-700">
           
           {isResetScreen ? (
             <>
@@ -553,14 +555,14 @@ export default function ZibaldoneApp() {
                 <p className="text-sm text-[#8B6E4E] font-medium tracking-widest uppercase mt-4">Archivio Sicuro</p>
               </div>
 
-              {authError && (<div className="mb-6 p-4 rounded-2xl bg-[#FDF2F2]/80 backdrop-blur-sm border border-[#902A2A]/20 text-[#902A2A] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2">{authError}</div>)}
-              {authSuccess && (<div className="mb-6 p-4 rounded-2xl bg-[#F4FDF4]/80 backdrop-blur-sm border border-[#2A9045]/20 text-[#2A9045] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2 flex flex-col items-center gap-2"><CheckCircle2 className="w-5 h-5"/>{authSuccess}</div>)}
+              {authError && (<div className="mb-6 p-4 rounded-2xl bg-[#FDF2F2]/95 md:bg-[#FDF2F2]/80 backdrop-blur-none md:backdrop-blur-sm border border-[#902A2A]/20 text-[#902A2A] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2">{authError}</div>)}
+              {authSuccess && (<div className="mb-6 p-4 rounded-2xl bg-[#F4FDF4]/95 md:bg-[#F4FDF4]/80 backdrop-blur-none md:backdrop-blur-sm border border-[#2A9045]/20 text-[#2A9045] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2 flex flex-col items-center gap-2"><CheckCircle2 className="w-5 h-5"/>{authSuccess}</div>)}
 
               {!authSuccess && (
                 <form onSubmit={handleNewPasswordSubmit} className="space-y-5 animate-in fade-in">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 block">La Nuova Password</label>
-                    <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Almeno 6 caratteri..." className="w-full bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required minLength={6} autoFocus />
+                    <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Almeno 6 caratteri..." className="w-full bg-white md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required minLength={6} autoFocus />
                   </div>
                   <button type="submit" className="w-full bg-gradient-to-r from-[#1A1510] to-[#2C241B] text-[#FDFBF7] py-4 rounded-2xl font-semibold text-sm hover:shadow-[0_12px_25px_rgba(26,21,16,0.4)] hover:-translate-y-1 active:scale-95 active:shadow-md transition-all duration-300 mt-4 flex items-center justify-center gap-2 border border-[#3A3228]">
                     Sigilla Nuova Password
@@ -579,26 +581,26 @@ export default function ZibaldoneApp() {
               </div>
 
               {authMode !== 'reset' && (
-                <div className="flex bg-[#F4EFE6]/80 p-1 rounded-2xl border border-[#E8DAC2]/60 mb-6 backdrop-blur-sm relative z-10 w-full max-w-[280px] mx-auto shadow-inner animate-in fade-in">
+                <div className="flex bg-[#F4EFE6] md:bg-[#F4EFE6]/80 p-1 rounded-2xl border border-[#E8DAC2]/60 mb-6 backdrop-blur-none md:backdrop-blur-sm relative z-10 w-full max-w-[280px] mx-auto shadow-inner animate-in fade-in">
                   <button type="button" onClick={() => { setAuthMode('login'); setAuthError(""); setAuthSuccess(""); }} className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all duration-300 ${authMode === 'login' ? 'bg-white text-[#1A1510] shadow-[0_2px_10px_rgba(0,0,0,0.05)] scale-100' : 'text-[#8B6E4E] hover:text-[#1A1510] hover:bg-white/40 scale-95'}`}>Accedi</button>
                   <button type="button" onClick={() => { setAuthMode('register'); setAuthError(""); setAuthSuccess(""); }} className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all duration-300 ${authMode === 'register' ? 'bg-white text-[#1A1510] shadow-[0_2px_10px_rgba(0,0,0,0.05)] scale-100' : 'text-[#8B6E4E] hover:text-[#1A1510] hover:bg-white/40 scale-95'}`}>Nuova Firma</button>
                 </div>
               )}
 
-              {authError && (<div className="mb-6 p-4 rounded-2xl bg-[#FDF2F2]/80 backdrop-blur-sm border border-[#902A2A]/20 text-[#902A2A] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2">{authError}</div>)}
-              {authSuccess && (<div className="mb-6 p-4 rounded-2xl bg-[#F4FDF4]/80 backdrop-blur-sm border border-[#2A9045]/20 text-[#2A9045] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2 flex flex-col items-center gap-2"><CheckCircle2 className="w-5 h-5"/>{authSuccess}</div>)}
+              {authError && (<div className="mb-6 p-4 rounded-2xl bg-[#FDF2F2]/95 md:bg-[#FDF2F2]/80 backdrop-blur-none md:backdrop-blur-sm border border-[#902A2A]/20 text-[#902A2A] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2">{authError}</div>)}
+              {authSuccess && (<div className="mb-6 p-4 rounded-2xl bg-[#F4FDF4]/95 md:bg-[#F4FDF4]/80 backdrop-blur-none md:backdrop-blur-sm border border-[#2A9045]/20 text-[#2A9045] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2 flex flex-col items-center gap-2"><CheckCircle2 className="w-5 h-5"/>{authSuccess}</div>)}
 
               <form onSubmit={handleAuthSubmit} className="space-y-5 animate-in fade-in">
                 {authMode === 'register' && (
                   <div className="space-y-1.5 animate-in slide-in-from-top-2">
                     <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 flex items-center justify-between block">Pseudonimo <span className="text-[9px] font-normal lowercase opacity-70">Come firmerai le lettere</span></label>
-                    <input type="text" value={authName} onChange={(e) => setAuthName(e.target.value)} placeholder="Giacomo Leopardi..." className="w-full bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required />
+                    <input type="text" value={authName} onChange={(e) => setAuthName(e.target.value)} placeholder="Giacomo Leopardi..." className="w-full bg-white md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required />
                   </div>
                 )}
                 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 flex items-center justify-between block">Email <span className="text-[9px] font-normal lowercase opacity-70">{authMode === 'reset' ? 'A cui inviare la staffetta' : 'Privata, mai mostrata'}</span></label>
-                  <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="mario.rossi@gmail.com" className="w-full bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required autoFocus />
+                  <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="mario.rossi@gmail.com" className="w-full bg-white md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required autoFocus />
                 </div>
 
                 {authMode !== 'reset' && (
@@ -609,7 +611,7 @@ export default function ZibaldoneApp() {
                         <button type="button" onClick={() => { setAuthMode('reset'); setAuthError(""); setAuthSuccess(""); }} className="text-[10px] font-semibold text-[#D4AF37] hover:text-[#1A1510] transition-colors">Dimenticata?</button>
                       )}
                     </div>
-                    <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" className="w-full bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required />
+                    <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" className="w-full bg-white md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required />
                   </div>
                 )}
                 
@@ -630,7 +632,7 @@ export default function ZibaldoneApp() {
         </div>
 
         <div className="fixed bottom-3 left-4 z-50 text-[10px] font-montserrat font-bold tracking-[0.2em] uppercase text-[#8B6E4E] opacity-40 hover:opacity-100 transition-opacity duration-500 cursor-default">
-           v1.3 "Respiro Visivo"
+           v1.4 "Veloce"
         </div>
       </div>
     );
@@ -644,6 +646,8 @@ export default function ZibaldoneApp() {
         .font-cormorant { font-family: 'Cormorant Garamond', serif; }
         .font-montserrat { font-family: 'Montserrat', sans-serif; }
         
+        .will-change-transform { will-change: transform, opacity; }
+
         @keyframes floatUpParticle { 
           0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0; } 
           10% { opacity: var(--max-opacity); } 
@@ -653,9 +657,9 @@ export default function ZibaldoneApp() {
         }
 
         @keyframes orbDrift {
-          0% { transform: translate(0, 0) scale(1); opacity: 0.3; }
-          50% { transform: translate(5%, 5%) scale(1.1); opacity: 0.6; }
-          100% { transform: translate(-5%, 10%) scale(0.9); opacity: 0.3; }
+          0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.3; }
+          50% { transform: translate3d(5%, 5%, 0) scale(1.1); opacity: 0.6; }
+          100% { transform: translate3d(-5%, 10%, 0) scale(0.9); opacity: 0.3; }
         }
         
         @keyframes fadeInOverlay { from { opacity: 0; backdrop-filter: blur(0px); } to { opacity: 1; backdrop-filter: blur(10px); } }
@@ -697,27 +701,26 @@ export default function ZibaldoneApp() {
         ${sendState === 'animating_diary' ? generateDynamicKeyframes(animationConfig.lines, animationConfig.duration, animationConfig.lastLineChars) : ''}
       `}</style>
 
-      {/* Sfondo Animato Etereo e Volumetrico */}
+      {/* Sfondo Animato Etereo - OTTIMIZZATO PER MOBILE */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[#D4AF37]/20 rounded-full blur-[100px]" style={{ animation: 'orbDrift 25s ease-in-out infinite alternate' }}></div>
-         <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-[#902A2A]/10 rounded-full blur-[120px]" style={{ animation: 'orbDrift 30s ease-in-out infinite alternate-reverse' }}></div>
-         <div className="absolute top-[40%] left-[60%] w-[40vw] h-[40vw] bg-[#8B6E4E]/15 rounded-full blur-[100px]" style={{ animation: 'orbDrift 20s ease-in-out infinite alternate' }}></div>
+         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[#D4AF37]/20 rounded-full blur-[100px] md:animate-[orbDrift_25s_ease-in-out_infinite_alternate] will-change-transform"></div>
+         <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-[#902A2A]/10 rounded-full blur-[120px] md:animate-[orbDrift_30s_ease-in-out_infinite_alternate-reverse] will-change-transform"></div>
+         <div className="absolute top-[40%] left-[60%] w-[40vw] h-[40vw] bg-[#8B6E4E]/15 rounded-full blur-[100px] md:animate-[orbDrift_20s_ease-in-out_infinite_alternate] will-change-transform"></div>
       </div>
 
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-         {dustParticles.map(p => (
-           <div key={p.id} className="absolute bottom-[-5%] bg-[#D4AF37] rounded-full blur-[1.5px]" style={{ left: p.left, width: p.width, height: p.width, '--max-opacity': p.opacity, '--x-sway': p.xSway, animation: `floatUpParticle ${p.duration} ease-in-out ${p.delay} infinite` } as any} />
+         {dustParticles.map((p, index) => (
+           <div key={p.id} className={`absolute bottom-[-5%] bg-[#D4AF37] rounded-full blur-[1.5px] will-change-transform ${index > 15 ? 'hidden md:block' : ''}`} style={{ left: p.left, width: p.width, height: p.width, '--max-opacity': p.opacity, '--x-sway': p.xSway, animation: `floatUpParticle ${p.duration} ease-in-out ${p.delay} infinite` } as any} />
          ))}
       </div>
       <div className="fixed inset-0 pointer-events-none opacity-[0.03] mix-blend-multiply" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }}></div>
 
-      {}
       <header className="pt-16 pb-8 px-6 border-b border-[#E8DAC2]/50 relative z-10 text-center">
         <div className="max-w-4xl mx-auto flex flex-col items-center relative">
           
           <div className="absolute top-0 right-4 flex items-center gap-3">
             <span className="text-xs font-semibold text-[#8B6E4E] hidden sm:inline tracking-wider uppercase truncate max-w-[120px] md:max-w-[200px] cursor-help hover:text-[#1A1510] transition-colors duration-300" title={user.displayName || "Studente"}>Bentornato, {user.displayName || "Studente"}</span>
-            <button onClick={handleLogout} className="w-10 h-10 rounded-full bg-white/60 backdrop-blur-md border border-[#E8DAC2] flex items-center justify-center text-[#8B6E4E] hover:bg-[#FDF2F2] hover:text-[#902A2A] hover:border-[#902A2A]/30 hover:scale-110 hover:-translate-y-0.5 active:scale-95 transition-all duration-300 shadow-sm hover:shadow-md" title="Esci dall'Archivio">
+            <button onClick={handleLogout} className="w-10 h-10 rounded-full bg-white/95 md:bg-white/60 backdrop-blur-none md:backdrop-blur-md border border-[#E8DAC2] flex items-center justify-center text-[#8B6E4E] hover:bg-[#FDF2F2] hover:text-[#902A2A] hover:border-[#902A2A]/30 hover:scale-110 hover:-translate-y-0.5 active:scale-95 transition-all duration-300 shadow-sm hover:shadow-md" title="Esci dall'Archivio">
               <LogOut size={16} className="group-hover:-translate-x-0.5 transition-transform" />
             </button>
           </div>
@@ -743,25 +746,24 @@ export default function ZibaldoneApp() {
         </div>
       </header>
 
-      {}
+      {/* NAVBAR OTTIMIZZATA MOBILE */}
       <nav className="flex justify-center gap-3 md:gap-5 py-8 relative z-10 flex-wrap px-4 mb-8">
-        <button onClick={() => { setActiveTab("write"); setIsSelectionMode(false); setSelectedIds([]); }} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "write" ? "bg-gradient-to-r from-[#1A1510] to-[#2C241B] text-[#FDFBF7] shadow-[0_8px_20px_rgba(26,21,16,0.3)] scale-105" : "bg-white/60 backdrop-blur-md text-[#6B5A46] hover:bg-white border border-[#E8DAC2]/50 hover:shadow-lg hover:-translate-y-1 hover:text-[#1A1510]"}`}><PenTool className="w-4 h-4" />Nuova Lettera</button>
-        <button onClick={() => { setActiveTab("my_pages"); setIsSelectionMode(false); setSelectedIds([]); }} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "my_pages" ? "bg-gradient-to-r from-[#1A1510] to-[#2C241B] text-[#FDFBF7] shadow-[0_8px_20px_rgba(26,21,16,0.3)] scale-105" : "bg-white/60 backdrop-blur-md text-[#6B5A46] hover:bg-white border border-[#E8DAC2]/50 hover:shadow-lg hover:-translate-y-1 hover:text-[#1A1510]"}`}><Bookmark className="w-4 h-4" />Le Mie Pagine</button>
+        <button onClick={() => { setActiveTab("write"); setIsSelectionMode(false); setSelectedIds([]); }} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "write" ? "bg-gradient-to-r from-[#1A1510] to-[#2C241B] text-[#FDFBF7] shadow-[0_8px_20px_rgba(26,21,16,0.3)] scale-105" : "bg-white/95 md:bg-white/60 backdrop-blur-none md:backdrop-blur-md text-[#6B5A46] hover:bg-white border border-[#E8DAC2]/50 hover:shadow-lg hover:-translate-y-1 hover:text-[#1A1510]"}`}><PenTool className="w-4 h-4" />Nuova Lettera</button>
+        <button onClick={() => { setActiveTab("my_pages"); setIsSelectionMode(false); setSelectedIds([]); }} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "my_pages" ? "bg-gradient-to-r from-[#1A1510] to-[#2C241B] text-[#FDFBF7] shadow-[0_8px_20px_rgba(26,21,16,0.3)] scale-105" : "bg-white/95 md:bg-white/60 backdrop-blur-none md:backdrop-blur-md text-[#6B5A46] hover:bg-white border border-[#E8DAC2]/50 hover:shadow-lg hover:-translate-y-1 hover:text-[#1A1510]"}`}><Bookmark className="w-4 h-4" />Le Mie Pagine</button>
 
         {isAdmin && (
           <>
             <div className="w-[1px] h-8 bg-[#D4AF37]/40 mx-2 self-center"></div>
-            <button onClick={() => {setActiveTab("read"); setIsSelectionMode(false); setSelectedIds([]);}} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "read" ? "bg-gradient-to-r from-[#7A1A1A] to-[#501010] text-[#FDFBF7] shadow-[0_8px_20px_rgba(122,26,26,0.3)] scale-105" : "bg-[#FDF2F2]/80 backdrop-blur-md text-[#902A2A] border border-[#902A2A]/20 hover:bg-[#FDF2F2] hover:shadow-lg hover:-translate-y-1"}`}><BookOpen className="w-4 h-4" />Tutti (Redazione)</button>
-            <button onClick={() => {setActiveTab("favorites"); setIsSelectionMode(false); setSelectedIds([]);}} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "favorites" ? "bg-gradient-to-r from-[#7A1A1A] to-[#501010] text-[#FDFBF7] shadow-[0_8px_20px_rgba(122,26,26,0.3)] scale-105" : "bg-[#FDF2F2]/80 backdrop-blur-md text-[#902A2A] border border-[#902A2A]/20 hover:bg-[#FDF2F2] hover:shadow-lg hover:-translate-y-1"}`}><Star className="w-4 h-4" />Scelti</button>
+            <button onClick={() => {setActiveTab("read"); setIsSelectionMode(false); setSelectedIds([]);}} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "read" ? "bg-gradient-to-r from-[#7A1A1A] to-[#501010] text-[#FDFBF7] shadow-[0_8px_20px_rgba(122,26,26,0.3)] scale-105" : "bg-[#FDF2F2]/95 md:bg-[#FDF2F2]/80 backdrop-blur-none md:backdrop-blur-md text-[#902A2A] border border-[#902A2A]/20 hover:bg-[#FDF2F2] hover:shadow-lg hover:-translate-y-1"}`}><BookOpen className="w-4 h-4" />Tutti (Redazione)</button>
+            <button onClick={() => {setActiveTab("favorites"); setIsSelectionMode(false); setSelectedIds([]);}} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "favorites" ? "bg-gradient-to-r from-[#7A1A1A] to-[#501010] text-[#FDFBF7] shadow-[0_8px_20px_rgba(122,26,26,0.3)] scale-105" : "bg-[#FDF2F2]/95 md:bg-[#FDF2F2]/80 backdrop-blur-none md:backdrop-blur-md text-[#902A2A] border border-[#902A2A]/20 hover:bg-[#FDF2F2] hover:shadow-lg hover:-translate-y-1"}`}><Star className="w-4 h-4" />Scelti</button>
             
             {(activeTab === "read" || activeTab === "favorites" || activeTab === "my_pages") && thoughts.length > 0 && (
-              <button onClick={toggleSelectionMode} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${isSelectionMode ? "bg-gradient-to-r from-[#D4AF37] to-[#C59B27] text-[#1A1510] shadow-[0_8px_20px_rgba(212,175,55,0.4)] scale-105" : "bg-[#FDFBF7]/80 backdrop-blur-md text-[#D4AF37] border border-[#D4AF37]/30 hover:bg-[#FDFBF7] hover:shadow-lg hover:-translate-y-1 hover:text-[#C59B27]"}`}><ListChecks className="w-4 h-4" /> {isSelectionMode ? "Annulla" : "Seleziona Pagine"}</button>
+              <button onClick={toggleSelectionMode} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${isSelectionMode ? "bg-gradient-to-r from-[#D4AF37] to-[#C59B27] text-[#1A1510] shadow-[0_8px_20px_rgba(212,175,55,0.4)] scale-105" : "bg-[#FDFBF7]/95 md:bg-[#FDFBF7]/80 backdrop-blur-none md:backdrop-blur-md text-[#D4AF37] border border-[#D4AF37]/30 hover:bg-[#FDFBF7] hover:shadow-lg hover:-translate-y-1 hover:text-[#C59B27]"}`}><ListChecks className="w-4 h-4" /> {isSelectionMode ? "Annulla" : "Seleziona Pagine"}</button>
             )}
           </>
         )}
       </nav>
 
-      {}
       <main className={`max-w-5xl mx-auto px-6 relative z-10 min-h-[50vh]`}>
         
         {(activeTab === "read" || activeTab === "favorites" || activeTab === "my_pages") && (
@@ -769,11 +771,11 @@ export default function ZibaldoneApp() {
             {!loading && thoughts.length > 0 && (activeTab === "read" || activeTab === "favorites") && (
               <div className="flex justify-center md:justify-end mb-8 relative z-30">
                 <div className="relative">
-                  <button onClick={() => setIsSortMenuOpen(!isSortMenuOpen)} className="flex items-center gap-3 bg-white/80 backdrop-blur-md px-5 py-3 rounded-full border border-[#E8DAC2]/60 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all duration-300 text-[#4A4036] text-sm font-semibold group"><ChevronDown className="w-4 h-4 text-[#D4AF37]" />{sortBy === "newest" && "Dal più recente"}{sortBy === "oldest" && "Dal più vecchio"}{sortBy === "longest" && "I più lunghi"}{sortBy === "shortest" && "I più concisi"}<ChevronDown className={`w-4 h-4 text-[#D4C3A3] transition-transform duration-300 ${isSortMenuOpen ? 'rotate-180' : ''}`} /></button>
+                  <button onClick={() => setIsSortMenuOpen(!isSortMenuOpen)} className="flex items-center gap-3 bg-white/95 md:bg-white/80 backdrop-blur-none md:backdrop-blur-md px-5 py-3 rounded-full border border-[#E8DAC2]/60 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all duration-300 text-[#4A4036] text-sm font-semibold group"><ChevronDown className="w-4 h-4 text-[#D4AF37]" />{sortBy === "newest" && "Dal più recente"}{sortBy === "oldest" && "Dal più vecchio"}{sortBy === "longest" && "I più lunghi"}{sortBy === "shortest" && "I più concisi"}<ChevronDown className={`w-4 h-4 text-[#D4C3A3] transition-transform duration-300 ${isSortMenuOpen ? 'rotate-180' : ''}`} /></button>
                   {isSortMenuOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setIsSortMenuOpen(false)}></div>
-                      <div className="absolute right-0 mt-3 w-56 bg-white/95 backdrop-blur-xl border border-[#E8DAC2]/50 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.1)] z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 zoom-in-95 origin-top-right">
+                      <div className="absolute right-0 mt-3 w-56 bg-white/95 backdrop-blur-none md:backdrop-blur-xl border border-[#E8DAC2]/50 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.1)] z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 zoom-in-95 origin-top-right">
                         <div className="py-2">
                           {[{ id: "newest", label: "Dal più recente" }, { id: "oldest", label: "Dal più vecchio" }, { id: "longest", label: "I più lunghi" }, { id: "shortest", label: "I più concisi" }].map((option) => (
                             <button key={option.id} onClick={() => { setSortBy(option.id); setIsSortMenuOpen(false); }} className={`w-full text-left px-5 py-3.5 text-sm font-semibold transition-all duration-300 flex items-center gap-3 hover:translate-x-1.5 ${sortBy === option.id ? 'bg-[#F4EFE6] text-[#1A1510]' : 'text-[#6B5A46] hover:bg-[#FDF2F2] hover:text-[#902A2A]'}`}><div className={`w-1.5 h-1.5 rounded-full transition-colors duration-300 ${sortBy === option.id ? 'bg-[#D4AF37]' : 'bg-transparent'}`}></div>{option.label}</button>
@@ -787,7 +789,7 @@ export default function ZibaldoneApp() {
             )}
 
             {loading ? ( <div className="flex flex-col items-center justify-center py-20 text-[#8B6E4E]"><Loader2 className="w-10 h-10 animate-spin mb-4 text-[#D4AF37] filter drop-shadow-md" /><p className="font-semibold tracking-widest uppercase text-xs animate-pulse">Apertura in corso...</p></div> ) : displayedThoughts.length === 0 ? (
-              <div className="text-center py-20 animate-in fade-in slide-in-from-bottom-4 duration-700 bg-white/40 backdrop-blur-sm rounded-3xl border border-[#E8DAC2]/50 p-10 max-w-lg mx-auto shadow-sm">
+              <div className="text-center py-20 animate-in fade-in slide-in-from-bottom-4 duration-700 bg-white/90 md:bg-white/40 backdrop-blur-none md:backdrop-blur-sm rounded-3xl border border-[#E8DAC2]/50 p-10 max-w-lg mx-auto shadow-sm">
                 <Bookmark className="w-16 h-16 text-[#D4AF37]/40 mx-auto mb-6 drop-shadow-sm hover:scale-110 hover:rotate-6 transition-transform duration-500" />
                 <h3 className="text-2xl font-cormorant font-bold text-[#1A1510] mb-2">Nessuna pagina trovata.</h3>
                 <p className="text-[#6B5A46] text-sm">Le pagine dello Zibaldone attendono l'inchiostro.</p>
@@ -800,7 +802,7 @@ export default function ZibaldoneApp() {
                   const canDelete = isAdmin; 
                   
                   return (
-                  <article key={thought.id} onClick={() => handleCardClick(thought)} className={`bg-white/80 backdrop-blur-sm p-8 rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md flex flex-col group relative overflow-hidden cursor-pointer transition-all duration-500 hover:-translate-y-2 active:scale-[0.98] ${isDeleting ? "animate-[turnToAsh_1.1s_cubic-bezier(0.4,0,0.2,1)_forwards] pointer-events-none z-50" : "animate-in fade-in slide-in-from-bottom-8 zoom-in-95"} ${isSelected ? 'ring-2 ring-[#D4AF37] shadow-[0_15px_35px_rgba(212,175,55,0.2)] bg-white/95' : 'border border-[#E8DAC2]/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(212,175,55,0.15)] hover:border-[#D4AF37]/50'}`} style={isDeleting ? {} : { animationFillMode: "both", animationDelay: `${index * 60}ms` }}>
+                  <article key={thought.id} onClick={() => handleCardClick(thought)} className={`bg-white/95 md:bg-white/80 backdrop-blur-none md:backdrop-blur-sm p-8 rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md flex flex-col group relative overflow-hidden cursor-pointer transition-all duration-500 hover:-translate-y-2 active:scale-[0.98] ${isDeleting ? "animate-[turnToAsh_1.1s_cubic-bezier(0.4,0,0.2,1)_forwards] pointer-events-none z-50" : "animate-in fade-in slide-in-from-bottom-8 zoom-in-95"} ${isSelected ? 'ring-2 ring-[#D4AF37] shadow-[0_15px_35px_rgba(212,175,55,0.2)] bg-white' : 'border border-[#E8DAC2]/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(212,175,55,0.15)] hover:border-[#D4AF37]/50'}`} style={isDeleting ? {} : { animationFillMode: "both", animationDelay: `${index * 60}ms` }}>
                     
                     {isDeleting && (
                       <div className="absolute inset-0 pointer-events-none z-[60] flex items-end justify-center rounded-2xl">
@@ -831,9 +833,9 @@ export default function ZibaldoneApp() {
 
                     {!isSelectionMode && canDelete && (
                       <div className="absolute top-5 right-5 z-20 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <button onClick={(e) => { e.stopPropagation(); setThoughtToDelete(thought); }} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/90 backdrop-blur-md border border-[#E8DAC2]/50 shadow-sm hover:bg-[#FDF2F2] hover:border-[#902A2A]/30 hover:-translate-y-1 active:scale-90 transition-all duration-300 hover:shadow-md group/trash" title="Brucia"><Trash2 className="w-4 h-4 text-[#8B6E4E] group-hover/trash:text-[#902A2A] transition-colors duration-300" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); setThoughtToDelete(thought); }} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-md border border-[#E8DAC2]/50 shadow-sm hover:bg-[#FDF2F2] hover:border-[#902A2A]/30 hover:-translate-y-1 active:scale-90 transition-all duration-300 hover:shadow-md group/trash" title="Brucia"><Trash2 className="w-4 h-4 text-[#8B6E4E] group-hover/trash:text-[#902A2A] transition-colors duration-300" /></button>
                         {isAdmin && (
-                          <button onClick={(e) => { e.stopPropagation(); toggleStar(thought.id, thought.isStarred); }} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/90 backdrop-blur-md border border-[#E8DAC2]/50 shadow-sm hover:bg-[#F9F6F0] hover:border-[#D4AF37]/50 hover:-translate-y-1 active:scale-90 transition-all duration-300 hover:shadow-md group/star" title="Evidenzia"><Star className={`w-4 h-4 transition-all duration-300 group-hover/star:scale-110 group-hover/star:rotate-12 ${thought.isStarred ? "fill-[#D4AF37] text-[#D4AF37] drop-shadow-[0_0_4px_rgba(212,175,55,0.5)]" : "text-[#8B6E4E]"}`} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); toggleStar(thought.id, thought.isStarred); }} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-md border border-[#E8DAC2]/50 shadow-sm hover:bg-[#F9F6F0] hover:border-[#D4AF37]/50 hover:-translate-y-1 active:scale-90 transition-all duration-300 hover:shadow-md group/star" title="Evidenzia"><Star className={`w-4 h-4 transition-all duration-300 group-hover/star:scale-110 group-hover/star:rotate-12 ${thought.isStarred ? "fill-[#D4AF37] text-[#D4AF37] drop-shadow-[0_0_4px_rgba(212,175,55,0.5)]" : "text-[#8B6E4E]"}`} /></button>
                         )}
                       </div>
                     )}
@@ -860,25 +862,25 @@ export default function ZibaldoneApp() {
           </div>
         )}
 
-        {}
+        {/* EDITOR SCRITTURA OTTIMIZZATO */}
         {activeTab === "write" && (
           <div className="max-w-3xl mx-auto transition-all duration-700 animate-in fade-in slide-in-from-bottom-12 zoom-in-95">
             <div className="text-center mb-10"><p className="text-[#6B5A46] italic font-cormorant text-xl opacity-80 hover:opacity-100 transition-opacity duration-500">"La penna svela ciò che il pensiero nasconde."</p></div>
-            <div className="bg-white/80 backdrop-blur-xl p-8 md:p-12 rounded-[2rem] shadow-[0_20px_50px_rgba(26,21,16,0.06)] border border-[#E8DAC2]/80 relative overflow-hidden transition-all duration-500 hover:shadow-[0_25px_60px_rgba(26,21,16,0.1)]">
+            <div className="bg-white/95 md:bg-white/80 backdrop-blur-none md:backdrop-blur-xl p-8 md:p-12 rounded-[2rem] shadow-[0_20px_50px_rgba(26,21,16,0.06)] border border-[#E8DAC2]/80 relative overflow-hidden transition-all duration-500 hover:shadow-[0_25px_60px_rgba(26,21,16,0.1)]">
               <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-[#FDFBF7] to-transparent border-b border-l border-[#E8DAC2]/40 rounded-bl-[4rem] opacity-60 pointer-events-none"></div>
 
               <h2 className="text-3xl font-cormorant font-bold text-[#1A1510] mb-8 text-center relative z-10 drop-shadow-sm">Intingi la Penna</h2>
               <form onSubmit={handleSubmit} className="space-y-8 relative z-10">
                 <div className="space-y-2 group">
                   <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 block group-focus-within:text-[#D4AF37] group-focus-within:-translate-y-0.5 transition-all duration-300">Il Titolo del tuo Pensiero</label>
-                  <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Es: L'infinito" className="w-full bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-4 text-[#1A1510] font-cormorant font-bold text-xl placeholder:text-[#CDB591] placeholder:font-sans placeholder:font-normal placeholder:text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:-translate-y-1 focus:shadow-[0_10px_30px_rgba(212,175,55,0.15)] transition-all duration-500 shadow-inner" required />
+                  <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Es: L'infinito" className="w-full bg-white/95 md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-4 text-[#1A1510] font-cormorant font-bold text-xl placeholder:text-[#CDB591] placeholder:font-sans placeholder:font-normal placeholder:text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:-translate-y-1 focus:shadow-[0_10px_30px_rgba(212,175,55,0.15)] transition-all duration-500 shadow-inner" required />
                 </div>
                 
                 <div className="space-y-2 group">
                   <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 block group-focus-within:text-[#D4AF37] group-focus-within:-translate-y-0.5 transition-all duration-300">Il tuo scritto</label>
-                  <div className="w-full border border-[#E8DAC2] rounded-2xl bg-white/60 focus-within:ring-2 focus-within:ring-[#D4AF37]/50 focus-within:-translate-y-1 focus-within:shadow-[0_15px_40px_rgba(212,175,55,0.15)] transition-all duration-500 overflow-hidden flex flex-col shadow-inner isolate">
+                  <div className="w-full border border-[#E8DAC2] rounded-[15px] bg-white/95 md:bg-white/60 focus-within:ring-2 focus-within:ring-[#D4AF37]/50 focus-within:-translate-y-1 focus-within:shadow-[0_15px_40px_rgba(212,175,55,0.15)] transition-all duration-500 flex flex-col shadow-inner isolate relative">
                     
-                    <div className="flex items-center gap-3 p-3 border-b border-[#E8DAC2] bg-[#FDFBF7]/80 backdrop-blur-md flex-wrap animate-in slide-in-from-top-4 duration-500 rounded-t-[15px]">
+                    <div className="flex items-center gap-3 p-3 border-b border-[#E8DAC2] bg-[#FDFBF7]/95 md:bg-[#FDFBF7]/80 backdrop-blur-none md:backdrop-blur-md flex-wrap animate-in slide-in-from-top-4 duration-500 rounded-t-[15px]">
                       <div className="flex bg-[#F4EFE6] rounded-lg p-1 border border-[#E8DAC2]/50 shadow-sm">
                         <button type="button" onClick={() => formatText('bold')} className="w-8 h-8 flex items-center justify-center rounded hover:bg-white hover:shadow-sm text-[#4A4036] hover:scale-110 active:scale-90 hover:-translate-y-0.5 transition-all duration-300" title="Grassetto"><Bold size={16}/></button>
                         <button type="button" onClick={() => formatText('italic')} className="w-8 h-8 flex items-center justify-center rounded hover:bg-white hover:shadow-sm text-[#4A4036] hover:scale-110 active:scale-90 hover:-translate-y-0.5 transition-all duration-300" title="Corsivo"><Italic size={16}/></button>
@@ -904,7 +906,7 @@ export default function ZibaldoneApp() {
 
                     <div 
                       ref={editorRef}
-                      className="p-6 min-h-[280px] outline-none text-[#1A1510] font-cormorant font-medium text-xl rich-text-content custom-scrollbar transition-all duration-500 rounded-b-[15px]"
+                      className="p-6 min-h-[280px] outline-none text-[#1A1510] font-cormorant font-medium text-xl rich-text-content custom-scrollbar transition-all duration-500 rounded-b-[15px] z-10"
                       contentEditable={true}
                       onInput={(e) => setNewContent(e.currentTarget.innerHTML)}
                       placeholder="Traccia qui le tue parole..."
@@ -919,7 +921,7 @@ export default function ZibaldoneApp() {
                     />
                     
                     {attachedImage && (
-                      <div className="p-6 bg-[#F4EFE6]/50 border-t border-[#E8DAC2]/50 relative flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-700 rounded-b-[15px]">
+                      <div className="p-6 bg-[#F4EFE6]/95 md:bg-[#F4EFE6]/50 border-t border-[#E8DAC2]/50 relative flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-700 rounded-b-[15px] z-20">
                         <div className="relative inline-block bg-white p-3 pb-8 shadow-[0_10px_20px_rgba(0,0,0,0.1)] border border-[#E8DAC2] rotate-2 transition-all hover:rotate-0 hover:scale-105 hover:-translate-y-2 duration-500 hover:shadow-[0_20px_40px_rgba(0,0,0,0.15)] group/polaroid">
                            <img src={attachedImage} alt="Attachment" className="max-h-56 object-cover border border-[#F0EBE1] transition-transform duration-700" />
                            <button type="button" onClick={() => setAttachedImage(null)} className="absolute -top-3 -right-3 bg-white rounded-full shadow-md text-[#902A2A] hover:scale-125 active:scale-90 hover:rotate-90 transition-all duration-300"><XCircle size={26} fill="#fff" /></button>
@@ -938,9 +940,8 @@ export default function ZibaldoneApp() {
           </div>
         )}
 
-        {}
         {isSelectionMode && selectedIds.length > 0 && (
-            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-xl text-[#1A1510] px-6 py-4 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 flex items-center gap-6 animate-in slide-in-from-bottom-10 duration-500 border border-[#E8DAC2]">
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-none md:backdrop-blur-xl text-[#1A1510] px-6 py-4 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 flex items-center gap-6 animate-in slide-in-from-bottom-10 duration-500 border border-[#E8DAC2]">
                 <span className="font-bold text-sm flex items-center gap-2 tracking-wide"><CheckCircle2 className="w-5 h-5 text-[#D4AF37] drop-shadow-sm animate-pulse"/> {selectedIds.length} Pagine</span>
                 <div className="w-[1px] h-6 bg-[#E8DAC2]"></div>
                 <div className="flex items-center gap-3">
@@ -952,11 +953,11 @@ export default function ZibaldoneApp() {
 
         {selectedThought && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6" onClick={() => setSelectedThought(null)} style={{ perspective: "1500px" }}>
-            <div className="absolute inset-0 bg-[#150F0A]/70 backdrop-blur-md" style={{ animation: "fadeInOverlay 0.5s ease-out forwards" }}></div>
-            <div className="bg-[#FDFBF7] w-full max-w-3xl max-h-[88vh] rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 flex flex-col overflow-hidden border border-[#E8DAC2] transition-transform duration-500" onClick={(e: any) => e.stopPropagation()} style={{ animation: "paperFloat 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
+            <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.5s ease-out forwards" }}></div>
+            <div className="bg-[#FDFBF7] md:bg-[#FDFBF7]/95 w-full max-w-3xl max-h-[88vh] rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 flex flex-col overflow-hidden border border-[#E8DAC2] transition-transform duration-500" onClick={(e: any) => e.stopPropagation()} style={{ animation: "paperFloat 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
               <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-[#FDFBF7] to-transparent border-b border-l border-[#E8DAC2]/30 rounded-bl-[6rem] opacity-80 pointer-events-none z-0"></div>
               
-              <div className="flex justify-between items-start p-8 md:p-10 border-b border-[#E8DAC2]/50 sticky top-0 bg-[#FDFBF7]/95 backdrop-blur-xl z-20 shadow-sm transition-all duration-500">
+              <div className="flex justify-between items-start p-6 md:p-10 border-b border-[#E8DAC2]/50 sticky top-0 bg-[#FDFBF7] md:bg-[#FDFBF7]/95 backdrop-blur-none md:backdrop-blur-xl z-20 shadow-sm transition-all duration-500">
                 <div className="pr-4 flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-[#8B6E4E] uppercase tracking-widest mb-4">
                     <span className="bg-gradient-to-r from-[#D4AF37] to-[#C59B27] text-[#1A1510] px-3 py-1.5 rounded-md truncate max-w-[200px] shadow-sm cursor-help hover:shadow-md hover:-translate-y-0.5 transition-all duration-300" title={selectedThought.author}>FIRMA: {selectedThought.author}</span>
@@ -986,7 +987,7 @@ export default function ZibaldoneApp() {
                   <div className="mt-16 flex justify-center pb-10">
                      <div className="bg-white p-4 pb-14 shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-[#E8DAC2] rotate-1 relative max-w-md transition-all duration-700 hover:rotate-0 hover:scale-105 hover:-translate-y-2 hover:shadow-[0_30px_60px_rgba(0,0,0,0.2)] group/readimg" style={{ animation: "polaroidDrop 1s cubic-bezier(0.2, 0.8, 0.2, 1) both" }}>
                         <img src={selectedThought.imageUrl} alt="Polaroid allegata" className="w-full h-auto max-h-[400px] object-cover border border-[#F0EBE1]" />
-                        <div className="absolute top-[-18px] left-1/2 transform -translate-x-1/2 w-20 h-7 bg-[#E8DAC2]/90 backdrop-blur-md shadow-sm rotate-[-3deg] group-hover/readimg:rotate-0 transition-transform duration-500"></div>
+                        <div className="absolute top-[-18px] left-1/2 transform -translate-x-1/2 w-20 h-7 bg-[#E8DAC2]/95 md:bg-[#E8DAC2]/90 backdrop-blur-none md:backdrop-blur-md shadow-sm rotate-[-3deg] group-hover/readimg:rotate-0 transition-transform duration-500"></div>
                         <div className="absolute bottom-4 left-0 right-0 text-center font-cormorant text-[#8B6E4E] italic opacity-60 group-hover/readimg:opacity-100 transition-opacity duration-300">Allegato Fotografico</div>
                      </div>
                   </div>
@@ -1000,8 +1001,8 @@ export default function ZibaldoneApp() {
 
         {showAdminModal && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onClick={() => setShowAdminModal(false)}>
-            <div className="absolute inset-0 bg-[#150F0A]/70 backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
-            <div className="bg-white/90 backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#E8DAC2]" onClick={(e) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
+            <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
+            <div className="bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#E8DAC2]" onClick={(e) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
               <div className="flex flex-col items-center mb-8">
                 <div className="w-16 h-16 bg-gradient-to-br from-[#E8DAC2]/50 to-[#D4C3A3]/20 rounded-full flex items-center justify-center mb-4 border border-[#D4AF37]/30 shadow-inner group hover:scale-110 hover:-translate-y-1 transition-all duration-500">
                   <KeyRound className="w-8 h-8 text-[#8B6E4E] drop-shadow-sm group-hover:-rotate-12 transition-transform duration-500" />
@@ -1021,8 +1022,8 @@ export default function ZibaldoneApp() {
 
         {thoughtToDelete && (
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={() => setThoughtToDelete(null)}>
-            <div className="absolute inset-0 bg-[#150F0A]/70 backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
-            <div className="bg-white/95 backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#902A2A]/20 text-center" onClick={(e) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
+            <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
+            <div className="bg-white/95 md:bg-white/95 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#902A2A]/20 text-center" onClick={(e) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
               <div className="w-16 h-16 bg-gradient-to-br from-[#FDF2F2] to-[#FAD4D4] rounded-full flex items-center justify-center mx-auto mb-6 border border-[#902A2A]/30 shadow-inner group hover:scale-110 hover:-translate-y-1 transition-all duration-500">
                 <Trash2 className="w-8 h-8 text-[#902A2A] drop-shadow-sm group-hover:-rotate-12 transition-transform duration-500" />
               </div>
@@ -1038,8 +1039,8 @@ export default function ZibaldoneApp() {
         
         {showMultiDeleteModal && (
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={() => setShowMultiDeleteModal(false)}>
-            <div className="absolute inset-0 bg-[#150F0A]/70 backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
-            <div className="bg-white/95 backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#902A2A]/20 text-center" onClick={(e) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
+            <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
+            <div className="bg-white/95 md:bg-white/95 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#902A2A]/20 text-center" onClick={(e) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
               <div className="w-16 h-16 bg-gradient-to-br from-[#FDF2F2] to-[#FAD4D4] rounded-full flex items-center justify-center mx-auto mb-6 border border-[#902A2A]/30 shadow-inner group hover:scale-110 hover:-translate-y-1 transition-all duration-500">
                 <Trash2 className="w-8 h-8 text-[#902A2A] drop-shadow-sm group-hover:-rotate-12 transition-transform duration-500" />
               </div>
@@ -1054,7 +1055,6 @@ export default function ZibaldoneApp() {
         )}
       </main>
 
-      {}
       {sendState !== 'idle' && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden perspective-[1500px]">
           
