@@ -59,7 +59,8 @@ const firebaseConfig = {
 
 const isConfigured = !firebaseConfig.apiKey.includes("INCOLLA");
 
-let app, auth, db;
+// ETICHETTE TYPESCRIPT INSERITE PER VERCEL
+let app: any, auth: any, db: any;
 try {
   if (isConfigured) {
     app = initializeApp(firebaseConfig);
@@ -70,11 +71,11 @@ try {
   console.error("Firebase init error", e);
 }
 
-const compressImage = (file) => {
+const compressImage = (file: any): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = (event) => {
+    reader.onload = (event: any) => {
       const img = new Image();
       img.src = event.target?.result;
       img.onload = () => {
@@ -137,53 +138,53 @@ const dustParticles = Array.from({ length: 40 }).map((_, i) => ({
 }));
 
 export default function ZibaldoneApp() {
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [authMode, setAuthMode] = useState('login');
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authName, setAuthName] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [authSuccess, setAuthSuccess] = useState("");
+  const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [authMode, setAuthMode] = useState<string>('login');
+  const [authEmail, setAuthEmail] = useState<string>("");
+  const [authPassword, setAuthPassword] = useState<string>("");
+  const [authName, setAuthName] = useState<string>("");
+  const [authError, setAuthError] = useState<string>("");
+  const [authSuccess, setAuthSuccess] = useState<string>("");
 
-  const [resetCode, setResetCode] = useState(null);
-  const [isResetScreen, setIsResetScreen] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
+  const [resetCode, setResetCode] = useState<string | null>(null);
+  const [isResetScreen, setIsResetScreen] = useState<boolean>(false);
+  const [newPassword, setNewPassword] = useState<string>("");
 
-  const [thoughts, setThoughts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("write"); 
-  const [sortBy, setSortBy] = useState("newest");
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const [thoughts, setThoughts] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<string>("write"); 
+  const [sortBy, setSortBy] = useState<string>("newest");
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState<boolean>(false);
 
-  const [newTitle, setNewTitle] = useState("");
-  const [newContent, setNewContent] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState(null);
-  const [selectedThought, setSelectedThought] = useState(null);
-  const [activeFormats, setActiveFormats] = useState({ bold: false, italic: false, underline: false });
-  const [activeImg, setActiveImg] = useState(null);
-  const editorRef = useRef(null);
+  const [newTitle, setNewTitle] = useState<string>("");
+  const [newContent, setNewContent] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [message, setMessage] = useState<any>(null);
+  const [selectedThought, setSelectedThought] = useState<any>(null);
+  const [activeFormats, setActiveFormats] = useState<any>({ bold: false, italic: false, underline: false });
+  const [activeImg, setActiveImg] = useState<any>(null);
+  const editorRef = useRef<any>(null);
 
-  const [isDrawingMode, setIsDrawingMode] = useState(false);
-  const [drawColor, setDrawColor] = useState('#1A1510');
-  const [strokes, setStrokes] = useState([]);
-  const [currentStroke, setCurrentStroke] = useState(null);
-  const [editorHeight, setEditorHeight] = useState(600); // Altezza dinamica foglio disegno
+  const [isDrawingMode, setIsDrawingMode] = useState<boolean>(false);
+  const [drawColor, setDrawColor] = useState<string>('#1A1510');
+  const [strokes, setStrokes] = useState<any[]>([]);
+  const [currentStroke, setCurrentStroke] = useState<any>(null);
+  const [editorHeight, setEditorHeight] = useState<number>(600); 
 
-  const [showAdminModal, setShowAdminModal] = useState(false);
-  const [adminPassword, setAdminPassword] = useState("");
-  const [adminError, setAdminError] = useState(false);
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [showMultiDeleteModal, setShowMultiDeleteModal] = useState(false);
-  const [thoughtToDelete, setThoughtToDelete] = useState(null);
-  const [deletingIds, setDeletingIds] = useState([]);
+  const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
+  const [adminPassword, setAdminPassword] = useState<string>("");
+  const [adminError, setAdminError] = useState<boolean>(false);
+  const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showMultiDeleteModal, setShowMultiDeleteModal] = useState<boolean>(false);
+  const [thoughtToDelete, setThoughtToDelete] = useState<any>(null);
+  const [deletingIds, setDeletingIds] = useState<string[]>([]);
   
-  const [sendState, setSendState] = useState('idle');
-  const [isNextEnvelope, setIsNextEnvelope] = useState(true); 
-  const [animationConfig, setAnimationConfig] = useState({ lines: 1, duration: 2.0 });
+  const [sendState, setSendState] = useState<string>('idle');
+  const [isNextEnvelope, setIsNextEnvelope] = useState<boolean>(true); 
+  const [animationConfig, setAnimationConfig] = useState<any>({ lines: 1, duration: 2.0 });
 
   useEffect(() => {
     if (selectedThought || showAdminModal || thoughtToDelete || showMultiDeleteModal || sendState !== 'idle') {
@@ -208,7 +209,7 @@ export default function ZibaldoneApp() {
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser: any) => {
       setUser(currentUser);
       setAuthLoading(false);
     });
@@ -217,7 +218,7 @@ export default function ZibaldoneApp() {
 
   useEffect(() => {
     if (!user || !db || !isConfigured) return;
-    let q;
+    let q: any;
     if (isAdmin && activeTab === "read") {
       q = collection(db, "pensieri");
     } else if (isAdmin && activeTab === "favorites") {
@@ -229,17 +230,17 @@ export default function ZibaldoneApp() {
     }
 
     setLoading(true);
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedThoughts = [];
-      snapshot.forEach((doc) => { fetchedThoughts.push({ id: doc.id, ...doc.data() }); });
+    const unsubscribe = onSnapshot(q, (snapshot: any) => {
+      const fetchedThoughts: any[] = [];
+      snapshot.forEach((doc: any) => { fetchedThoughts.push({ id: doc.id, ...doc.data() }); });
       setThoughts(fetchedThoughts);
       setLoading(false);
-    }, (error) => { setLoading(false); });
+    }, (error: any) => { setLoading(false); });
 
     return () => unsubscribe();
   }, [user, isAdmin, activeTab]);
 
-  const handleAuthSubmit = async (e) => {
+  const handleAuthSubmit = async (e: any) => {
     e.preventDefault();
     setAuthError("");
     setAuthSuccess("");
@@ -259,7 +260,7 @@ export default function ZibaldoneApp() {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
       }
       setAuthLoading(false);
-    } catch (err) {
+    } catch (err: any) {
       setAuthLoading(false);
       if (err.code === 'auth/email-already-in-use') setAuthError("Questa email è già registrata.");
       else if (err.code === 'auth/invalid-credential') setAuthError("Credenziali errate o non esistenti.");
@@ -270,7 +271,7 @@ export default function ZibaldoneApp() {
     }
   };
 
-  const handleNewPasswordSubmit = async (e) => {
+  const handleNewPasswordSubmit = async (e: any) => {
     e.preventDefault();
     setAuthError("");
     setAuthSuccess("");
@@ -287,7 +288,7 @@ export default function ZibaldoneApp() {
          setAuthMode('login');
          setAuthSuccess("");
       }, 3500);
-    } catch (err) {
+    } catch (err: any) {
       setAuthLoading(false);
       setAuthError("Il link è scaduto o non valido. Richiedi una nuova staffetta.");
     }
@@ -301,7 +302,7 @@ export default function ZibaldoneApp() {
     } catch (err) { console.error(err); }
   };
 
-  const formatText = (command, value = undefined) => {
+  const formatText = (command: string, value: any = undefined) => {
     document.execCommand(command, false, value);
     if (editorRef.current) {
       editorRef.current.focus();
@@ -318,7 +319,7 @@ export default function ZibaldoneApp() {
     });
   };
 
-  const handleImageUpload = async (e) => {
+  const handleImageUpload = async (e: any) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { setMessage({ type: "error", text: "Immagine troppo grande. Massimo 10MB." }); return; }
@@ -329,7 +330,7 @@ export default function ZibaldoneApp() {
         document.execCommand('insertImage', false, compressedBase64);
         
         const imgs = editorRef.current.querySelectorAll('img');
-        imgs.forEach(img => {
+        imgs.forEach((img: any) => {
           if(!img.style.width) {
             img.style.width = '50%'; 
             img.style.display = 'block';
@@ -342,7 +343,7 @@ export default function ZibaldoneApp() {
     } catch (error) { setMessage({ type: "error", text: "Errore durante il caricamento dell'immagine." }); }
   };
 
-  const handleEditorClick = (e) => {
+  const handleEditorClick = (e: any) => {
     if (activeImg) {
       activeImg.classList.remove('ring-4', 'ring-[#D4AF37]', 'ring-offset-2', 'ring-offset-[#FDFBF7]');
     }
@@ -354,7 +355,7 @@ export default function ZibaldoneApp() {
     }
   };
 
-  const handleImageAction = (action) => {
+  const handleImageAction = (action: string) => {
     if (!activeImg) return;
     let currentWidth = parseInt(activeImg.style.width || '100');
 
@@ -413,7 +414,7 @@ export default function ZibaldoneApp() {
     if (editorRef.current) setNewContent(editorRef.current.innerHTML);
   };
 
-  const getCoordinates = (e) => {
+  const getCoordinates = (e: any) => {
     const rect = e.currentTarget.getBoundingClientRect();
     let clientX, clientY;
     if (e.touches && e.touches.length > 0) {
@@ -424,7 +425,7 @@ export default function ZibaldoneApp() {
     return { x: clientX - rect.left, y: clientY - rect.top };
   };
 
-  const handlePointerDown = (e) => {
+  const handlePointerDown = (e: any) => {
     if (!isDrawingMode) return;
     e.preventDefault(); 
     if (e.currentTarget.setPointerCapture) {
@@ -434,19 +435,18 @@ export default function ZibaldoneApp() {
     setCurrentStroke({ color: drawColor, points: [{ x, y }] });
   };
 
-  const handlePointerMove = (e) => {
+  const handlePointerMove = (e: any) => {
     if (!currentStroke || !isDrawingMode) return;
     e.preventDefault();
     const { x, y } = getCoordinates(e);
-    setCurrentStroke((prev) => ({ ...prev, points: [...prev.points, { x, y }] }));
+    setCurrentStroke((prev: any) => ({ ...prev, points: [...prev.points, { x, y }] }));
 
-    // ESPANSIONE INTELLIGENTE TELA (FOGLIO INFINITO)
     if (y > editorHeight - 150) {
       setEditorHeight((prev) => prev + 300);
     }
   };
 
-  const handlePointerUp = (e) => {
+  const handlePointerUp = (e: any) => {
     if (!isDrawingMode) return;
     if (e.currentTarget.releasePointerCapture) {
         e.currentTarget.releasePointerCapture(e.pointerId);
@@ -457,7 +457,7 @@ export default function ZibaldoneApp() {
     }
   };
 
-  const handleAdminLogin = (e) => { 
+  const handleAdminLogin = (e: any) => { 
     e.preventDefault(); 
     if (adminPassword.toLowerCase() === "infinito") { setIsAdmin(true); setActiveTab("read"); setShowAdminModal(false); setAdminPassword(""); } 
     else { setAdminError(true); } 
@@ -472,12 +472,12 @@ export default function ZibaldoneApp() {
 
   const toggleSelectionMode = () => { setIsSelectionMode(!isSelectionMode); setSelectedIds([]); };
 
-  const handleCardClick = (thought) => {
+  const handleCardClick = (thought: any) => {
     if (isSelectionMode) { setSelectedIds(prev => prev.includes(thought.id) ? prev.filter(id => id !== thought.id) : [...prev, thought.id]); } 
     else { setSelectedThought(thought); }
   };
 
-  const calculateAnimation = (htmlText) => {
+  const calculateAnimation = (htmlText: string) => {
     const plainText = htmlText.replace(/<[^>]*>?/gm, ''); 
     const charsPerLine = 35; 
     const totalLines = Math.max(1, Math.ceil(plainText.length / charsPerLine));
@@ -486,7 +486,7 @@ export default function ZibaldoneApp() {
     return { lines: cappedLines, duration };
   };
 
-  const generateDynamicKeyframes = (lines, duration) => {
+  const generateDynamicKeyframes = (lines: number, duration: number) => {
     let penKeyframes = "";
     let maskKeyframes = "";
     const lineHeight = 24; 
@@ -552,7 +552,7 @@ export default function ZibaldoneApp() {
     `;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
     if (!user || (!newContent.trim() && strokes.length === 0)) return;
     setIsSubmitting(true);
@@ -594,12 +594,12 @@ export default function ZibaldoneApp() {
     setStrokes([]);
     setIsDrawingMode(false);
     setActiveImg(null);
-    setEditorHeight(600); // Reset della tela estesa
+    setEditorHeight(600); 
     setActiveFormats({ bold: false, italic: false, underline: false });
     if(editorRef.current) editorRef.current.innerHTML = "";
   };
   
-  const toggleStar = async (thoughtId, currentStatus) => { if (user && db && isAdmin) await updateDoc(doc(db, "pensieri", thoughtId), { isStarred: !currentStatus }); };
+  const toggleStar = async (thoughtId: string, currentStatus: boolean) => { if (user && db && isAdmin) await updateDoc(doc(db, "pensieri", thoughtId), { isStarred: !currentStatus }); };
   
   const confirmSingleDelete = async () => {
     if (!user || !db || !isAdmin || !thoughtToDelete) return;
@@ -611,7 +611,7 @@ export default function ZibaldoneApp() {
 
     setTimeout(async () => { 
       await deleteDoc(doc(db, "pensieri", id)); 
-      setDeletingIds(prev => prev.filter(dId => dId !== id)); 
+      setDeletingIds((prev: string[]) => prev.filter((dId: string) => dId !== id)); 
     }, 1100);
   };
 
@@ -620,15 +620,15 @@ export default function ZibaldoneApp() {
     setShowMultiDeleteModal(false); setDeletingIds(selectedIds); 
     setTimeout(async () => {
       const batch = writeBatch(db);
-      selectedIds.forEach((id) => { batch.delete(doc(db, "pensieri", id)); });
+      selectedIds.forEach((id: string) => { batch.delete(doc(db, "pensieri", id)); });
       try { await batch.commit(); } catch (error) { console.error("Errore Batch:", error); }
       setDeletingIds([]); setSelectedIds([]); setIsSelectionMode(false); 
     }, 1100);
   };
 
-  const formatDate = (timestamp) => { return new Date(timestamp).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }); };
+  const formatDate = (timestamp: number) => { return new Date(timestamp).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }); };
 
-  const displayedThoughts = [...thoughts].filter(t => activeTab === "favorites" ? t.isStarred : true).sort((a, b) => {
+  const displayedThoughts = [...thoughts].filter((t: any) => activeTab === "favorites" ? t.isStarred : true).sort((a: any, b: any) => {
       switch (sortBy) {
         case "oldest": return a.timestamp - b.timestamp;
         case "longest": return (b.content?.length || 0) - (a.content?.length || 0);
@@ -637,12 +637,11 @@ export default function ZibaldoneApp() {
       }
   });
 
-  // CALCOLO DINAMICO TELA IN LETTURA
   const calculateReadMaxY = () => {
-    let max = 400; // Altezza minima standard
+    let max = 400; 
     if (selectedThought?.strokes) {
-      selectedThought.strokes.forEach(stroke => {
-        stroke.points.forEach(p => {
+      selectedThought.strokes.forEach((stroke: any) => {
+        stroke.points.forEach((p: any) => {
           if (p.y > max - 100) max = p.y + 100;
         });
       });
@@ -683,8 +682,8 @@ export default function ZibaldoneApp() {
         </div>
 
         <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-           {dustParticles.map((p, index) => (
-             <div key={p.id} className={`absolute bottom-[-5%] bg-[#D4AF37] rounded-full blur-[1px] will-change-transform ${index > 15 ? 'hidden md:block' : ''}`} style={{ left: p.left, width: p.width, height: p.width, '--max-opacity': p.opacity, '--x-sway': p.xSway, animation: `floatUpParticle ${p.duration} ease-in-out ${p.delay} infinite` }} />
+           {dustParticles.map((p: any, index: number) => (
+             <div key={p.id} className={`absolute bottom-[-5%] bg-[#D4AF37] rounded-full blur-[1px] will-change-transform ${index > 15 ? 'hidden md:block' : ''}`} style={{ left: p.left, width: p.width, height: p.width, '--max-opacity': p.opacity, '--x-sway': p.xSway, animation: `floatUpParticle ${p.duration} ease-in-out ${p.delay} infinite` } as React.CSSProperties} />
            ))}
         </div>
         <div className="fixed inset-0 pointer-events-none opacity-[0.04] mix-blend-multiply" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }}></div>
@@ -930,7 +929,7 @@ export default function ZibaldoneApp() {
                       <div className="fixed inset-0 z-40" onClick={() => setIsSortMenuOpen(false)}></div>
                       <div className="absolute right-0 mt-3 w-56 bg-white/95 backdrop-blur-none md:backdrop-blur-xl border border-[#E8DAC2]/50 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.1)] z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 zoom-in-95 origin-top-right">
                         <div className="py-2">
-                          {[{ id: "newest", label: "Dal più recente" }, { id: "oldest", label: "Dal più vecchio" }, { id: "longest", label: "I più lunghi" }, { id: "shortest", label: "I più concisi" }].map((option) => (
+                          {[{ id: "newest", label: "Dal più recente" }, { id: "oldest", label: "Dal più vecchio" }, { id: "longest", label: "I più lunghi" }, { id: "shortest", label: "I più concisi" }].map((option: any) => (
                             <button key={option.id} onClick={() => { setSortBy(option.id); setIsSortMenuOpen(false); }} className={`w-full text-left px-5 py-3.5 text-sm font-semibold transition-all duration-300 flex items-center gap-3 hover:translate-x-1.5 ${sortBy === option.id ? 'bg-[#F4EFE6] text-[#1A1510]' : 'text-[#6B5A46] hover:bg-[#FDF2F2] hover:text-[#902A2A]'}`}><div className={`w-1.5 h-1.5 rounded-full transition-colors duration-300 ${sortBy === option.id ? 'bg-[#D4AF37]' : 'bg-transparent'}`}></div>{option.label}</button>
                           ))}
                         </div>
@@ -949,7 +948,7 @@ export default function ZibaldoneApp() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-32">
-                {displayedThoughts.map((thought, index) => {
+                {displayedThoughts.map((thought: any, index: number) => {
                   const isDeleting = deletingIds.includes(thought.id);
                   const isSelected = selectedIds.includes(thought.id);
                   const canDelete = isAdmin; 
@@ -977,9 +976,9 @@ export default function ZibaldoneApp() {
 
                     {!isSelectionMode && canDelete && (
                       <div className="absolute top-5 right-5 z-20 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <button onClick={(e) => { e.stopPropagation(); setThoughtToDelete(thought); }} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-md border border-[#E8DAC2]/50 shadow-sm hover:bg-[#FDF2F2] hover:border-[#902A2A]/30 hover:-translate-y-1 active:scale-90 transition-all duration-300 hover:shadow-md group/trash" title="Brucia"><Trash2 className="w-4 h-4 text-[#8B6E4E] group-hover/trash:text-[#902A2A] transition-colors duration-300" /></button>
+                        <button onClick={(e: any) => { e.stopPropagation(); setThoughtToDelete(thought); }} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-md border border-[#E8DAC2]/50 shadow-sm hover:bg-[#FDF2F2] hover:border-[#902A2A]/30 hover:-translate-y-1 active:scale-90 transition-all duration-300 hover:shadow-md group/trash" title="Brucia"><Trash2 className="w-4 h-4 text-[#8B6E4E] group-hover/trash:text-[#902A2A] transition-colors duration-300" /></button>
                         {isAdmin && (
-                          <button onClick={(e) => { e.stopPropagation(); toggleStar(thought.id, thought.isStarred); }} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-md border border-[#E8DAC2]/50 shadow-sm hover:bg-[#F9F6F0] hover:border-[#D4AF37]/50 hover:-translate-y-1 active:scale-90 transition-all duration-300 hover:shadow-md group/star" title="Evidenzia"><Star className={`w-4 h-4 transition-all duration-300 group-hover/star:scale-110 group-hover/star:rotate-12 ${thought.isStarred ? "fill-[#D4AF37] text-[#D4AF37] drop-shadow-[0_0_4px_rgba(212,175,55,0.5)]" : "text-[#8B6E4E]"}`} /></button>
+                          <button onClick={(e: any) => { e.stopPropagation(); toggleStar(thought.id, thought.isStarred); }} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-md border border-[#E8DAC2]/50 shadow-sm hover:bg-[#F9F6F0] hover:border-[#D4AF37]/50 hover:-translate-y-1 active:scale-90 transition-all duration-300 hover:shadow-md group/star" title="Evidenzia"><Star className={`w-4 h-4 transition-all duration-300 group-hover/star:scale-110 group-hover/star:rotate-12 ${thought.isStarred ? "fill-[#D4AF37] text-[#D4AF37] drop-shadow-[0_0_4px_rgba(212,175,55,0.5)]" : "text-[#8B6E4E]"}`} /></button>
                         )}
                       </div>
                     )}
@@ -1010,7 +1009,6 @@ export default function ZibaldoneApp() {
           </div>
         )}
 
-        {}
         {activeTab === "write" && (
           <div className="max-w-3xl mx-auto transition-all duration-700 animate-in fade-in slide-in-from-bottom-12 zoom-in-95">
             <div className="text-center mb-10"><p className="text-[#6B5A46] italic font-cormorant text-xl opacity-80 hover:opacity-100 transition-opacity duration-500">"La penna svela ciò che il pensiero nasconde."</p></div>
@@ -1023,7 +1021,7 @@ export default function ZibaldoneApp() {
               <form onSubmit={handleSubmit} className="space-y-8 relative z-10">
                 <div className="space-y-2 group">
                   <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 block group-focus-within:text-[#D4AF37] group-focus-within:-translate-y-0.5 transition-all duration-300">Il Titolo del tuo Pensiero</label>
-                  <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Es: L'infinito" className="w-full bg-white/95 md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-4 text-[#1A1510] font-cormorant font-bold text-xl placeholder:text-[#CDB591] placeholder:font-sans placeholder:font-normal placeholder:text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:-translate-y-1 focus:shadow-[0_10px_30px_rgba(212,175,55,0.15)] transition-all duration-500 shadow-inner" required />
+                  <input type="text" value={newTitle} onChange={(e: any) => setNewTitle(e.target.value)} placeholder="Es: L'infinito" className="w-full bg-white/95 md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-4 text-[#1A1510] font-cormorant font-bold text-xl placeholder:text-[#CDB591] placeholder:font-sans placeholder:font-normal placeholder:text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:-translate-y-1 focus:shadow-[0_10px_30px_rgba(212,175,55,0.15)] transition-all duration-500 shadow-inner" required />
                 </div>
                 
                 <div className="space-y-2 group">
@@ -1031,7 +1029,6 @@ export default function ZibaldoneApp() {
                   
                   <div className={`w-full border rounded-[15px] bg-white/95 md:bg-white/60 focus-within:ring-2 focus-within:ring-[#D4AF37]/50 focus-within:-translate-y-1 transition-all duration-500 flex flex-col shadow-inner isolate relative ${isDrawingMode ? 'border-[#D4AF37] shadow-[0_15px_40px_rgba(212,175,55,0.2)]' : 'border-[#E8DAC2] focus-within:shadow-[0_15px_40px_rgba(212,175,55,0.15)]'}`}>
                     
-                    {/* Toolbar Principale */}
                     <div className="flex items-center justify-between gap-3 p-3 border-b border-[#E8DAC2] bg-[#FDFBF7]/95 md:bg-[#FDFBF7]/80 backdrop-blur-none md:backdrop-blur-md flex-wrap animate-in slide-in-from-top-4 duration-500 rounded-t-[15px] z-40 min-h-[56px]">
                       
                       {activeImg ? (
@@ -1105,7 +1102,7 @@ export default function ZibaldoneApp() {
                           ref={editorRef}
                           contentEditable={!isDrawingMode}
                           onClick={handleEditorClick}
-                          onInput={(e) => setNewContent(e.currentTarget.innerHTML)}
+                          onInput={(e: any) => setNewContent(e.currentTarget.innerHTML)}
                           onKeyUp={updateFormattingState}
                           onMouseUp={updateFormattingState}
                           onTouchEnd={updateFormattingState}
@@ -1117,16 +1114,16 @@ export default function ZibaldoneApp() {
                             backgroundOrigin: 'content-box', 
                             backgroundAttachment: 'local'
                           }}
-                          onKeyDown={(e) => {
+                          onKeyDown={(e: any) => {
                             if (e.key === 'Enter') document.execCommand('formatBlock', false, 'div');
                           }}
                         />
 
                         <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-20">
-                          {strokes.map((stroke, i) => (
+                          {strokes.map((stroke: any, i: number) => (
                             <polyline 
                               key={i} 
-                              points={stroke.points.map((p) => `${p.x},${p.y}`).join(' ')} 
+                              points={stroke.points.map((p: any) => `${p.x},${p.y}`).join(' ')} 
                               fill="none" 
                               stroke={stroke.color} 
                               strokeWidth="3" 
@@ -1136,7 +1133,7 @@ export default function ZibaldoneApp() {
                           ))}
                           {currentStroke && (
                             <polyline 
-                              points={currentStroke.points.map((p) => `${p.x},${p.y}`).join(' ')} 
+                              points={currentStroke.points.map((p: any) => `${p.x},${p.y}`).join(' ')} 
                               fill="none" 
                               stroke={currentStroke.color} 
                               strokeWidth="3" 
@@ -1170,11 +1167,10 @@ export default function ZibaldoneApp() {
           </div>
         )}
 
-        {}
         {selectedThought && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6" onClick={() => setSelectedThought(null)} style={{ perspective: "1500px" }}>
             <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.5s ease-out forwards" }}></div>
-            <div className="bg-[#FDFBF7] md:bg-[#FDFBF7]/95 w-full max-w-3xl max-h-[88vh] rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 flex flex-col overflow-hidden border border-[#E8DAC2] transition-transform duration-500" onClick={(e) => e.stopPropagation()} style={{ animation: "paperFloat 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
+            <div className="bg-[#FDFBF7] md:bg-[#FDFBF7]/95 w-full max-w-3xl max-h-[88vh] rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 flex flex-col overflow-hidden border border-[#E8DAC2] transition-transform duration-500" onClick={(e: any) => e.stopPropagation()} style={{ animation: "paperFloat 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
               <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-[#FDFBF7] to-transparent border-b border-l border-[#E8DAC2]/30 rounded-bl-[6rem] opacity-80 pointer-events-none z-0"></div>
               
               <div className="flex flex-col-reverse md:flex-row justify-between items-start gap-4 md:gap-0 p-5 md:p-10 border-b border-[#E8DAC2]/50 sticky top-0 bg-[#FDFBF7] md:bg-[#FDFBF7]/95 backdrop-blur-none md:backdrop-blur-xl z-20 shadow-sm transition-all duration-500 w-full">
@@ -1206,10 +1202,10 @@ export default function ZibaldoneApp() {
                   
                   {selectedThought.strokes && selectedThought.strokes.length > 0 && (
                     <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-20">
-                      {selectedThought.strokes.map((stroke, i) => (
+                      {selectedThought.strokes.map((stroke: any, i: number) => (
                         <polyline 
                           key={i} 
-                          points={stroke.points.map((p) => `${p.x},${p.y}`).join(' ')} 
+                          points={stroke.points.map((p: any) => `${p.x},${p.y}`).join(' ')} 
                           fill="none" 
                           stroke={stroke.color} 
                           strokeWidth="3" 
@@ -1230,7 +1226,7 @@ export default function ZibaldoneApp() {
         {showAdminModal && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onClick={() => setShowAdminModal(false)}>
             <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
-            <div className="bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#E8DAC2]" onClick={(e) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
+            <div className="bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#E8DAC2]" onClick={(e: any) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
               <div className="flex flex-col items-center mb-8">
                 <div className="w-16 h-16 bg-gradient-to-br from-[#E8DAC2]/50 to-[#D4C3A3]/20 rounded-full flex items-center justify-center mb-4 border border-[#D4AF37]/30 shadow-inner group hover:scale-110 hover:-translate-y-1 transition-all duration-500">
                   <KeyRound className="w-8 h-8 text-[#8B6E4E] drop-shadow-sm group-hover:-rotate-12 transition-transform duration-500" />
@@ -1238,7 +1234,7 @@ export default function ZibaldoneApp() {
                 <h3 className="text-3xl font-cormorant font-bold text-[#1A1510] text-center tracking-wide">Archivio Segreto</h3>
               </div>
               <form onSubmit={handleAdminLogin}>
-                <input type="password" value={adminPassword} onChange={(e) => { setAdminPassword(e.target.value); setAdminError(false); }} className={`w-full bg-[#FDFBF7] border ${adminError ? 'border-[#902A2A] ring-1 ring-[#902A2A]/50' : 'border-[#E8DAC2]'} rounded-2xl px-5 py-4 text-center mb-6 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:-translate-y-1 focus:shadow-md transition-all duration-500 shadow-inner font-medium`} placeholder="La parola d'ordine..." autoFocus />
+                <input type="password" value={adminPassword} onChange={(e: any) => { setAdminPassword(e.target.value); setAdminError(false); }} className={`w-full bg-[#FDFBF7] border ${adminError ? 'border-[#902A2A] ring-1 ring-[#902A2A]/50' : 'border-[#E8DAC2]'} rounded-2xl px-5 py-4 text-center mb-6 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:-translate-y-1 focus:shadow-md transition-all duration-500 shadow-inner font-medium`} placeholder="La parola d'ordine..." autoFocus />
                 <div className="flex gap-4">
                   <button type="button" onClick={() => setShowAdminModal(false)} className="flex-1 py-3.5 rounded-2xl text-[#8B6E4E] font-bold text-sm uppercase tracking-wider hover:bg-[#F4EFE6] hover:-translate-y-1 active:scale-95 transition-all duration-300">Annulla</button>
                   <button type="submit" disabled={!adminPassword.trim()} className="flex-1 py-3.5 rounded-2xl text-white bg-gradient-to-r from-[#1A1510] to-[#2C241B] font-bold text-sm uppercase tracking-wider shadow-[0_5px_15px_rgba(26,21,16,0.3)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(26,21,16,0.5)] active:scale-95 transition-all duration-300 disabled:opacity-50">Sblocca</button>
@@ -1251,7 +1247,7 @@ export default function ZibaldoneApp() {
         {thoughtToDelete && (
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={() => setThoughtToDelete(null)}>
             <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
-            <div className="bg-white/95 md:bg-white/95 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#902A2A]/20 text-center" onClick={(e) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
+            <div className="bg-white/95 md:bg-white/95 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#902A2A]/20 text-center" onClick={(e: any) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
               <div className="w-16 h-16 bg-gradient-to-br from-[#FDF2F2] to-[#FAD4D4] rounded-full flex items-center justify-center mx-auto mb-6 border border-[#902A2A]/30 shadow-inner group hover:scale-110 hover:-translate-y-1 transition-all duration-500">
                 <Trash2 className="w-8 h-8 text-[#902A2A] drop-shadow-sm group-hover:-rotate-12 transition-transform duration-500" />
               </div>
@@ -1277,7 +1273,7 @@ export default function ZibaldoneApp() {
         {showMultiDeleteModal && (
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={() => setShowMultiDeleteModal(false)}>
             <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
-            <div className="bg-white/95 md:bg-white/95 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#902A2A]/20 text-center" onClick={(e) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
+            <div className="bg-white/95 md:bg-white/95 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#902A2A]/20 text-center" onClick={(e: any) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
               <div className="w-16 h-16 bg-gradient-to-br from-[#FDF2F2] to-[#FAD4D4] rounded-full flex items-center justify-center mx-auto mb-6 border border-[#902A2A]/30 shadow-inner group hover:scale-110 hover:-translate-y-1 transition-all duration-500">
                 <Trash2 className="w-8 h-8 text-[#902A2A] drop-shadow-sm group-hover:-rotate-12 transition-transform duration-500" />
               </div>
@@ -1371,7 +1367,7 @@ export default function ZibaldoneApp() {
 
       {/* VERSION */}
       <div className="fixed bottom-3 left-4 z-50 text-[10px] font-montserrat font-bold tracking-[0.2em] uppercase text-[#8B6E4E] opacity-40 hover:opacity-100 transition-opacity duration-500 cursor-default pointer-events-auto">
-        v2.9 "Tela Infinita"
+        v2.9.1 "Deploy Sicuro"
       </div>
     </div>
   );
