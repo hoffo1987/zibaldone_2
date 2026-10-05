@@ -1,52 +1,19 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { initializeApp } from "firebase/app";
-import { 
-  getAuth, 
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  updateProfile,
-  sendPasswordResetEmail,
-  confirmPasswordReset
+import {
+  getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset
 } from "firebase/auth";
 import {
-  getFirestore,
-  collection,
-  onSnapshot,
-  addDoc,
-  doc,
-  updateDoc,
-  deleteDoc,
-  writeBatch,
-  query,
-  where
+  getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where
 } from "firebase/firestore";
 import {
-  PenTool,
-  BookOpen,
-  Bookmark,
-  Send,
-  Loader2,
-  Feather,
-  Star,
-  X,
-  ChevronDown,
-  Lock,
-  Unlock,
-  KeyRound,
-  Trash2,
-  ListChecks,
-  CheckCircle2,
-  Circle,
-  Bold,
-  Italic,
-  Underline,
-  Image as ImageIcon,
-  LogOut,
-  Pencil
+  Cpu, Bookmark, Loader2, Activity, Star, X, KeyRound, Trash2, ListChecks, CheckCircle2, Circle,
+  Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus
 } from "lucide-react";
 
+// --- FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyAq02XXQkepvHsgHEN4zTZni8pp20r1jUU",
   authDomain: "zibaldone-1-prova.firebaseapp.com",
@@ -56,1319 +23,703 @@ const firebaseConfig = {
   appId: "1:578635223914:web:74e1adc0de09af1a03cb13",
   measurementId: "G-S3KW241D85",
 };
+let auth: any, db: any;
+try { const app = initializeApp(firebaseConfig); auth = getAuth(app); db = getFirestore(app); } catch (e) { console.error(e); }
 
-const isConfigured = !firebaseConfig.apiKey.includes("INCOLLA");
+const INK_COLORS = [
+  { id: "#10211F", name: "Inchiostro" }, { id: "#334155", name: "Ardesia" }, { id: "#64748B", name: "Grigio tecnico" },
+  { id: "#991B1B", name: "Rosso allarme" }, { id: "#C2410C", name: "Rame" }, { id: "#EA580C", name: "Arancio" },
+  { id: "#CA8A04", name: "Oro" }, { id: "#166534", name: "Verde scheda" }, { id: "#16A34A", name: "Smeraldo LED" },
+  { id: "#0284C7", name: "Azzurro display" }, { id: "#1D4ED8", name: "Blu" }, { id: "#4F46E5", name: "Indaco" },
+  { id: "#7E22CE", name: "Viola" }, { id: "#DB2777", name: "Rosa" },
+];
+const TOOLS = [
+  { id: "pen", label: "Penna", icon: Pen }, { id: "line", label: "Linea", icon: Minus },
+  { id: "rect", label: "Rettangolo", icon: Square }, { id: "ellipse", label: "Ellisse", icon: Circle },
+  { id: "fill", label: "Forma piena", icon: PaintBucket }, { id: "eraser", label: "Gomma", icon: Eraser },
+];
+const SORTS: any = { newest: "Più recenti", oldest: "Più vecchi", longest: "Più lunghi", shortest: "Più brevi" };
 
-// ETICHETTE TYPESCRIPT INSERITE PER VERCEL
-let app: any, auth: any, db: any;
-try {
-  if (isConfigured) {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-  }
-} catch (e) {
-  console.error("Firebase init error", e);
-}
-
-const compressImage = (file: any): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event: any) => {
-      const img = new Image();
-      img.src = event.target?.result;
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX_WIDTH = 800;
-        const MAX_HEIGHT = 800;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-        } else {
-          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.7));
-      };
-      img.onerror = (error) => reject(error);
-    };
+// --- UTIL ---
+const clean = (h: string) => {
+  const d = new DOMParser().parseFromString(h || "", "text/html");
+  d.querySelectorAll("script,iframe,object,embed,style,link").forEach((n) => n.remove());
+  d.body.querySelectorAll("*").forEach((el) => {
+    Array.from(el.attributes).forEach((a) => {
+      const n = a.name.toLowerCase();
+      if (n.startsWith("on") || (["href", "src"].includes(n) && /^\s*javascript:/i.test(a.value))) el.removeAttribute(a.name);
+    });
   });
+  return d.body.innerHTML;
 };
+const plain = (h: string) => { const d = document.createElement("div"); d.innerHTML = clean(h); return d.textContent || ""; };
+const dims = (t: any) => ({
+  w: t.w || 900,
+  h: t.h || (t.strokes || []).reduce((m: number, s: any) => s.points.reduce((mm: number, p: any) => Math.max(mm, p.y + 80), m), 400),
+});
+const fmtDate = (ts: number) => new Date(ts).toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" });
+const distSeg = (p: any, a: any, b: any) => {
+  const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+};
+const compressImage = (file: File): Promise<string> => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = (ev: any) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 900 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = img.width * k; c.height = img.height * k;
+      c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
+      res(c.toDataURL("image/jpeg", 0.72));
+    };
+    img.onerror = rej; img.src = ev.target.result;
+  };
+  r.onerror = rej; r.readAsDataURL(file);
+});
 
-const FountainPenNib = () => (
-  <svg width="120" height="120" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: "drop-shadow(10px 15px 8px rgba(0,0,0,0.4))" }}>
-    <defs>
-      <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stopColor="#C59B27" />
-        <stop offset="30%" stopColor="#F9E596" />
-        <stop offset="70%" stopColor="#C59B27" />
-        <stop offset="100%" stopColor="#8A6614" />
-      </linearGradient>
-    </defs>
-    <path d="M 37 52 L 63 52 L 66 15 L 34 15 Z" fill="#111" />
-    <path d="M 42 52 L 45 15" stroke="rgba(255,255,255,0.15)" strokeWidth="3" fill="none" />
-    <path d="M 58 52 L 60 15" stroke="rgba(0,0,0,0.5)" strokeWidth="4" fill="none" />
-    <path d="M 42 75 L 58 75 L 63 52 L 37 52 Z" fill="#1A1A1A" />
-    <path d="M 45 75 L 48 52" stroke="rgba(255,255,255,0.08)" strokeWidth="2" fill="none" />
-    <rect x="37" y="52" width="26" height="3" fill="url(#goldGrad)" />
-    <rect x="34" y="10" width="32" height="5" fill="url(#goldGrad)" />
-    <path d="M 34 10 L 66 10 C 66 -4, 34 -4, 34 10 Z" fill="#0A0A0A" />
-    <path d="M 65 12 C 73 12, 76 14, 73 18 L 69 45 C 68 48, 65 48, 65 45 L 68 20 C 69 17, 66 15, 65 14 Z" fill="url(#goldGrad)" />
-    <path d="M 50 92 C 47 84, 42 79, 42 75 L 58 75 C 58 79, 53 84, 50 92 Z" fill="url(#goldGrad)" />
-    <line x1="50" y1="92" x2="50" y2="78" stroke="#111" strokeWidth="1.5" />
-    <circle cx="50" cy="77" r="1.5" fill="#111" />
-    <path d="M 50 92 C 49.5 89, 49 87, 49 85 L 51 85 C 51 87, 50.5 89, 50 92 Z" fill="#111" />
+const Logo = ({ size = 32 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round">
+    <path d="M20 50h18l8-24 14 48 8-24h12" />
+    <circle cx="14" cy="50" r="6" fill="var(--ac)" stroke="none" /><circle cx="88" cy="50" r="6" fill="var(--ac)" stroke="none" />
   </svg>
 );
 
-const dustParticles = Array.from({ length: 40 }).map((_, i) => ({
-  id: i,
-  left: `${Math.random() * 100}%`,
-  width: `${Math.random() * 4 + 2}px`, 
-  delay: `${Math.random() * 10}s`,
-  duration: `${Math.random() * 15 + 15}s`, 
-  opacity: Math.random() * 0.4 + 0.1, 
-  xSway: `${Math.random() * 40 - 20}vw` 
-}));
+const Shape = ({ s }: any) => {
+  const p = s.points; if (!p?.length) return null;
+  const a = p[0], b = p[p.length - 1];
+  const c: any = { stroke: s.color, strokeWidth: s.size || 3, strokeOpacity: s.opacity ?? 1, strokeLinecap: "round", strokeLinejoin: "round", fill: "none" };
+  if (s.tool === "line") return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} {...c} />;
+  if (s.tool === "rect" || s.tool === "ellipse") {
+    const f = s.filled ? { fill: s.color, fillOpacity: s.opacity ?? 1 } : {};
+    const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y), w = Math.abs(a.x - b.x), h = Math.abs(a.y - b.y);
+    return s.tool === "rect" ? <rect x={x} y={y} width={w} height={h} {...c} {...f} /> : <ellipse cx={x + w / 2} cy={y + h / 2} rx={w / 2} ry={h / 2} {...c} {...f} />;
+  }
+  const pts = p.map((q: any) => `${q.x},${q.y}`).join(" ");
+  return s.tool === "fill" ? <polygon points={pts} {...c} fill={s.color} fillOpacity={s.opacity ?? 1} /> : <polyline points={pts} {...c} />;
+};
+const Drawing = ({ strokes, w, h, className = "" }: any) => (
+  <svg className={className} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMinYMin meet">
+    {(strokes || []).map((s: any, i: number) => <Shape key={i} s={s} />)}
+  </svg>
+);
 
-export default function ZibaldoneApp() {
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Instrument+Sans:wght@400;500;600&display=swap');
+.root{--bg:#EDF2F1;--pn:#FFFFFF;--ink:#0E1F1D;--mu:#5B706D;--ln:#DCE6E4;--sf:#F4F8F7;--ac:#0F8B7A;--am:#E8A100;
+--sh1:0 1px 2px rgba(14,31,29,.04),0 6px 16px -8px rgba(14,31,29,.10);--sh2:0 2px 4px rgba(14,31,29,.04),0 22px 44px -16px rgba(14,31,29,.26);--ez:cubic-bezier(.22,1,.36,1);
+font-family:'Instrument Sans',system-ui,sans-serif;color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;
+background:radial-gradient(900px 420px at 85% -8%,color-mix(in srgb,var(--ac) 12%,transparent),transparent 70%) fixed,var(--bg)}
+.root.dark{--bg:#091312;--pn:#102120;--ink:#E2EFEB;--mu:#8AA7A2;--ln:#1E3532;--sf:#0C1B1A;--ac:#2DD4BF;--am:#FBBF24;
+--sh1:0 1px 2px rgba(0,0,0,.3),0 8px 20px -10px rgba(0,0,0,.55);--sh2:0 24px 50px -18px rgba(0,0,0,.75)}
+*{scrollbar-width:thin;scrollbar-color:var(--ln) transparent}
+::selection{background:color-mix(in srgb,var(--ac) 30%,transparent)}
+.hd{font-family:'Bricolage Grotesque','Instrument Sans',sans-serif;letter-spacing:-.025em}
+.pn{background:var(--pn);border:1px solid var(--ln);border-radius:18px;box-shadow:var(--sh1)}
+.hdr{background:color-mix(in srgb,var(--pn) 78%,transparent);backdrop-filter:blur(14px) saturate(1.4)}
+.inp{width:100%;background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:.7rem 1rem;font-size:.95rem;outline:none;color:var(--ink);transition:border-color .2s,box-shadow .25s var(--ez),background .2s}
+.inp:hover{border-color:color-mix(in srgb,var(--ac) 45%,var(--ln))}
+.inp:focus,.bt:focus-visible{border-color:var(--ac);box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 20%,transparent)}
+.bt{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.55rem .95rem;border-radius:12px;font-size:.85rem;font-weight:600;border:1px solid var(--ln);background:var(--pn);color:var(--ink);outline:none;cursor:pointer;
+transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,border-color .2s,filter .2s}
+.bt svg{transition:transform .3s var(--ez)}
+.bt:hover{transform:translateY(-2px);border-color:var(--ac);box-shadow:var(--sh1)}
+.bt:hover svg{transform:scale(1.15) rotate(-4deg)}
+.bt:active{transform:translateY(0) scale(.97);box-shadow:none}
+.bt:disabled{opacity:.4;pointer-events:none}
+.bt.on{background:var(--ac);border-color:var(--ac);color:#fff} .root.dark .bt.on{color:#042f2a}
+.bt.on:hover{filter:brightness(1.08);box-shadow:0 12px 26px -8px color-mix(in srgb,var(--ac) 65%,transparent)}
+.bt.pri{background:var(--ink);color:var(--bg);border-color:var(--ink)} .bt.pri:hover{box-shadow:var(--sh2)}
+.bt.dng{color:#dc2626;border-color:#fca5a5} .bt.dng:hover{background:#fef2f2;border-color:#dc2626}
+.nv:hover{background:var(--sf)!important} .nv:hover svg{transform:translateX(3px)}
+.lk{background:linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat;transition:background-size .4s var(--ez),color .2s;cursor:pointer}
+.lk:hover{background-size:100% 1px;color:var(--ink)}
+.mu{color:var(--mu)}
+.card{position:relative;transition:transform .45s var(--ez),box-shadow .45s var(--ez),border-color .3s,opacity .3s}
+.card:hover{transform:translateY(-6px);box-shadow:var(--sh2);border-color:color-mix(in srgb,var(--ac) 55%,var(--ln))}
+.card:active{transform:translateY(-2px) scale(.99)}
+.card:after{content:"";position:absolute;left:0;bottom:0;height:3px;width:100%;background:var(--ac);transform:scaleX(0);transform-origin:left;transition:transform .5s var(--ez)}
+.card:hover:after{transform:scaleX(1)}
+.card .thumb{transition:transform .8s var(--ez)} .card:hover .thumb{transform:scale(1.05)}
+.card.gone{opacity:0;transform:scale(.92)}
+.paper{background:#fff;color:#10211F}
+.mm{background-image:linear-gradient(rgba(15,139,122,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(15,139,122,.12) 1px,transparent 1px);background-size:20px 20px}
+.rt{overflow-wrap:anywhere;line-height:32px;font-size:17px}
+.rt h2{font-family:'Bricolage Grotesque',sans-serif;font-size:1.6rem;font-weight:700;line-height:40px}
+.rt ul{list-style:disc;padding-left:1.5rem} .rt b{font-weight:700} .rt u{text-underline-offset:4px}
+.rt img{max-width:100%;height:auto;border-radius:8px;margin:12px auto;display:block;border:1px solid #D5E0DE}
+.rt:empty:before{content:attr(data-ph);color:#94a3b8;pointer-events:none}
+.sm .rt{line-height:22px;font-size:13px} .sm .rt img{max-height:70px;width:auto;margin:4px 0}
+.rv{opacity:0;transform:translateY(28px);transition:opacity .8s var(--ez),transform .8s var(--ez)}
+.rv.in{opacity:1;transform:none}
+@keyframes pg{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes pop{from{opacity:0;transform:translateY(16px) scale(.95)}to{opacity:1;transform:none}}
+@keyframes popx{from{opacity:0;transform:translate(-50%,12px) scale(.95)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes fd{from{opacity:0}to{opacity:1}}
+@keyframes dash{to{stroke-dashoffset:0}}
+.pg{animation:pg .6s var(--ez) both} .up{animation:up .7s var(--ez) both}
+.pop{animation:pop .45s var(--ez) both} .popx{animation:popx .4s var(--ez) both} .fade{animation:fd .3s ease-out both}
+.tick{stroke-dasharray:60;stroke-dashoffset:60;animation:dash .7s .25s ease-out forwards}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.tick{stroke-dashoffset:0}.rv{opacity:1;transform:none}}
+`;
+
+const Reveal = ({ children, delay = 0, className = "" }: any) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    if (!("IntersectionObserver" in window)) { setOn(true); return; }
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setOn(true); io.disconnect(); } }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+    io.observe(el); return () => io.disconnect();
+  }, []);
+  return <div ref={ref} className={`rv ${on ? "in" : ""} ${className}`} style={{ transitionDelay: `${delay}ms` }}>{children}</div>;
+};
+
+export default function App() {
+  // auth
   const [user, setUser] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState<boolean>(true);
-  const [authMode, setAuthMode] = useState<string>('login');
-  const [authEmail, setAuthEmail] = useState<string>("");
-  const [authPassword, setAuthPassword] = useState<string>("");
-  const [authName, setAuthName] = useState<string>("");
-  const [authError, setAuthError] = useState<string>("");
-  const [authSuccess, setAuthSuccess] = useState<string>("");
-
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authMode, setAuthMode] = useState("login");
+  const [f, setF] = useState({ email: "", pw: "", name: "", newPw: "" });
+  const [authMsg, setAuthMsg] = useState<{ t: "err" | "ok"; m: string } | null>(null);
   const [resetCode, setResetCode] = useState<string | null>(null);
-  const [isResetScreen, setIsResetScreen] = useState<boolean>(false);
-  const [newPassword, setNewPassword] = useState<string>("");
-
-  const [thoughts, setThoughts] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<string>("write"); 
-  const [sortBy, setSortBy] = useState<string>("newest");
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [isSortMenuOpen, setIsSortMenuOpen] = useState<boolean>(false);
-
-  const [newTitle, setNewTitle] = useState<string>("");
-  const [newContent, setNewContent] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [message, setMessage] = useState<any>(null);
-  const [selectedThought, setSelectedThought] = useState<any>(null);
-  const [activeFormats, setActiveFormats] = useState<any>({ bold: false, italic: false, underline: false });
-  const [activeImg, setActiveImg] = useState<any>(null);
-  const editorRef = useRef<any>(null);
-
-  const [isDrawingMode, setIsDrawingMode] = useState<boolean>(false);
-  const [drawColor, setDrawColor] = useState<string>('#1A1510');
+  // ui
+  const [dark, setDark] = useState(() => { try { return localStorage.getItem("circuito:dark") === "1"; } catch { return false; } });
+  const [tab, setTab] = useState("write");
+  const [toast, setToast] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminModal, setAdminModal] = useState(false);
+  const [adminPw, setAdminPw] = useState("");
+  const [adminErr, setAdminErr] = useState(false);
+  // list
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
+  const [sel, setSel] = useState<any>(null);
+  const [selMode, setSelMode] = useState(false);
+  const [ids, setIds] = useState<string[]>([]);
+  const [toDelete, setToDelete] = useState<string[] | null>(null);
+  const [gone, setGone] = useState<string[]>([]);
+  // editor
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
   const [strokes, setStrokes] = useState<any[]>([]);
-  const [currentStroke, setCurrentStroke] = useState<any>(null);
-  const [editorHeight, setEditorHeight] = useState<number>(600); 
+  const [hist, setHist] = useState<any[][]>([]);
+  const [fut, setFut] = useState<any[][]>([]);
+  const [cur, setCur] = useState<any>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [tool, setTool] = useState("pen");
+  const [color, setColor] = useState("#10211F");
+  const [size, setSize] = useState(3);
+  const [opacity, setOpacity] = useState(100);
+  const [eraser, setEraser] = useState(24);
+  const [filled, setFilled] = useState(false);
+  const [grid, setGrid] = useState(true);
+  const [height, setHeight] = useState(600);
+  const [fmt, setFmt] = useState({ b: false, i: false, u: false });
+  const [colorOpen, setColorOpen] = useState(false);
+  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [loadTick, setLoadTick] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const editorRef = useRef<any>(null);
+  const canvasRef = useRef<any>(null);
+  const down = useRef(false);
+  const draftKey = user ? `circuito:bozza:${user.uid}` : "";
 
-  const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
-  const [adminPassword, setAdminPassword] = useState<string>("");
-  const [adminError, setAdminError] = useState<boolean>(false);
-  const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [showMultiDeleteModal, setShowMultiDeleteModal] = useState<boolean>(false);
-  const [thoughtToDelete, setThoughtToDelete] = useState<any>(null);
-  const [deletingIds, setDeletingIds] = useState<string[]>([]);
-  
-  const [sendState, setSendState] = useState<string>('idle');
-  const [isNextEnvelope, setIsNextEnvelope] = useState<boolean>(true); 
-  const [animationConfig, setAnimationConfig] = useState<any>({ lines: 1, duration: 2.0 });
+  const notify = (m: string) => { setToast(m); setTimeout(() => setToast(""), 3200); };
+  const err = (m: string) => setAuthMsg({ t: "err", m });
 
+  useEffect(() => { try { localStorage.setItem("circuito:dark", dark ? "1" : "0"); } catch {} }, [dark]);
   useEffect(() => {
-    if (selectedThought || showAdminModal || thoughtToDelete || showMultiDeleteModal || sendState !== 'idle') {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-    return () => { document.body.style.overflow = "unset"; };
-  }, [selectedThought, showAdminModal, thoughtToDelete, showMultiDeleteModal, sendState]);
+    const lock = sel || adminModal || toDelete || done;
+    document.body.style.overflow = lock ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [sel, adminModal, toDelete, done]);
 
+  // auth state + link reset password
   useEffect(() => {
-    if (!isConfigured) { setAuthLoading(false); return; }
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const mode = urlParams.get('mode');
-    const code = urlParams.get('oobCode');
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("mode") === "resetPassword" && p.get("oobCode")) { setResetCode(p.get("oobCode")); setAuthLoading(false); return; }
+    return onAuthStateChanged(auth, (u: any) => { setUser(u); setAuthLoading(false); });
+  }, []);
 
-    if (mode === 'resetPassword' && code) {
-      setResetCode(code);
-      setIsResetScreen(true);
-      setAuthLoading(false);
-      return;
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser: any) => {
-      setUser(currentUser);
-      setAuthLoading(false);
-    });
-    return () => unsubscribe();
-  }, [isResetScreen]);
-
+  // dati
   useEffect(() => {
-    if (!user || !db || !isConfigured) return;
+    if (!user || !db) return;
     let q: any;
-    if (isAdmin && activeTab === "read") {
-      q = collection(db, "pensieri");
-    } else if (isAdmin && activeTab === "favorites") {
-      q = query(collection(db, "pensieri"), where("isStarred", "==", true));
-    } else if (activeTab === "my_pages") {
-      q = query(collection(db, "pensieri"), where("userId", "==", user.uid));
-    } else {
-      return;
-    }
-
+    if (isAdmin && tab === "read") q = collection(db, "pensieri");
+    else if (isAdmin && tab === "favorites") q = query(collection(db, "pensieri"), where("isStarred", "==", true));
+    else if (tab === "my_pages") q = query(collection(db, "pensieri"), where("userId", "==", user.uid));
+    else return;
     setLoading(true);
-    const unsubscribe = onSnapshot(q, (snapshot: any) => {
-      const fetchedThoughts: any[] = [];
-      snapshot.forEach((doc: any) => { fetchedThoughts.push({ id: doc.id, ...doc.data() }); });
-      setThoughts(fetchedThoughts);
+    return onSnapshot(q, (s: any) => {
+      setItems(s.docs.map((d: any) => ({ id: d.id, ...d.data() })));
       setLoading(false);
-    }, (error: any) => { setLoading(false); });
+    }, () => { setLoading(false); notify("Impossibile leggere i progetti."); });
+  }, [user, isAdmin, tab]);
 
-    return () => unsubscribe();
-  }, [user, isAdmin, activeTab]);
-
-  const handleAuthSubmit = async (e: any) => {
-    e.preventDefault();
-    setAuthError("");
-    setAuthSuccess("");
-    setAuthLoading(true);
+  // bozza: ripristino + salvataggio automatico
+  useEffect(() => {
+    if (!draftKey) return;
     try {
-      if (authMode === 'reset') {
-        await sendPasswordResetEmail(auth, authEmail);
-        setAuthSuccess("Una staffetta è partita. Controlla la tua posta per forgiare una nuova chiave.");
-        setAuthLoading(false);
-        return;
-      }
+      const d = JSON.parse(localStorage.getItem(draftKey) || "null");
+      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setStrokes(d.strokes || []); setHeight(d.height || 600); setLoadTick((n) => n + 1); }
+    } catch {}
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftKey || editingId || (!title && !plain(content).trim() && !strokes.length)) return;
+    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, strokes, height })); } catch {} }, 800);
+    return () => clearTimeout(t);
+  }, [title, content, strokes, height, editingId, draftKey]);
+  useEffect(() => { if (tab === "write" && editorRef.current) editorRef.current.innerHTML = clean(content); }, [tab, loadTick]);
 
-      if (authMode === 'register') {
-        const userCred = await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-        await updateProfile(userCred.user, { displayName: authName.trim() || "Studente" });
-      } else {
-        await signInWithEmailAndPassword(auth, authEmail, authPassword);
-      }
-      setAuthLoading(false);
-    } catch (err: any) {
-      setAuthLoading(false);
-      if (err.code === 'auth/email-already-in-use') setAuthError("Questa email è già registrata.");
-      else if (err.code === 'auth/invalid-credential') setAuthError("Credenziali errate o non esistenti.");
-      else if (err.code === 'auth/weak-password') setAuthError("La password deve essere di almeno 6 caratteri.");
-      else if (err.code === 'auth/invalid-email') setAuthError("Il formato dell'email non è valido.");
-      else if (err.code === 'auth/user-not-found' || err.code === 'auth/missing-email') setAuthError("Non troviamo nessun archivio con questa email.");
-      else setAuthError(`Errore tecnico: ${err.message}`);
-    }
-  };
-
-  const handleNewPasswordSubmit = async (e: any) => {
-    e.preventDefault();
-    setAuthError("");
-    setAuthSuccess("");
-    setAuthLoading(true);
-    try {
-      if(resetCode) {
-         await confirmPasswordReset(auth, resetCode, newPassword);
-         setAuthSuccess("La tua nuova chiave è stata forgiata con successo.");
-      }
-      setAuthLoading(false);
-      window.history.replaceState({}, document.title, window.location.pathname);
-      setTimeout(() => {
-         setIsResetScreen(false);
-         setAuthMode('login');
-         setAuthSuccess("");
-      }, 3500);
-    } catch (err: any) {
-      setAuthLoading(false);
-      setAuthError("Il link è scaduto o non valido. Richiedi una nuova staffetta.");
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setIsAdmin(false);
-      setActiveTab("write");
-    } catch (err) { console.error(err); }
-  };
-
-  const formatText = (command: string, value: any = undefined) => {
-    document.execCommand(command, false, value);
-    if (editorRef.current) {
-      editorRef.current.focus();
-      setNewContent(editorRef.current.innerHTML);
-      updateFormattingState();
-    }
-  };
-
-  const updateFormattingState = () => {
-    setActiveFormats({
-      bold: document.queryCommandState('bold'),
-      italic: document.queryCommandState('italic'),
-      underline: document.queryCommandState('underline'),
-    });
-  };
-
-  const handleImageUpload = async (e: any) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { setMessage({ type: "error", text: "Immagine troppo grande. Massimo 10MB." }); return; }
-    try {
-      const compressedBase64 = await compressImage(file);
-      if (editorRef.current) {
-        editorRef.current.focus();
-        document.execCommand('insertImage', false, compressedBase64);
-        
-        const imgs = editorRef.current.querySelectorAll('img');
-        imgs.forEach((img: any) => {
-          if(!img.style.width) {
-            img.style.width = '50%'; 
-            img.style.display = 'block';
-            img.style.margin = '15px auto';
-            img.style.transition = 'all 0.3s ease';
-          }
-        });
-        setNewContent(editorRef.current.innerHTML);
-      }
-    } catch (error) { setMessage({ type: "error", text: "Errore durante il caricamento dell'immagine." }); }
-  };
-
-  const handleEditorClick = (e: any) => {
-    if (activeImg) {
-      activeImg.classList.remove('ring-4', 'ring-[#D4AF37]', 'ring-offset-2', 'ring-offset-[#FDFBF7]');
-    }
-    if (e.target.tagName === 'IMG') {
-      e.target.classList.add('ring-4', 'ring-[#D4AF37]', 'ring-offset-2', 'ring-offset-[#FDFBF7]');
-      setActiveImg(e.target);
-    } else {
-      setActiveImg(null);
-    }
-  };
-
-  const handleImageAction = (action: string) => {
-    if (!activeImg) return;
-    let currentWidth = parseInt(activeImg.style.width || '100');
-
-    switch(action) {
-      case 'shrink': 
-        currentWidth = Math.max(20, currentWidth - 10); 
-        activeImg.style.width = `${currentWidth}%`; 
-        break;
-      case 'grow': 
-        currentWidth = Math.min(100, currentWidth + 10); 
-        activeImg.style.width = `${currentWidth}%`; 
-        break;
-      case 'left': 
-        activeImg.style.float = 'left'; 
-        activeImg.style.display = 'inline'; 
-        activeImg.style.margin = '5px 25px 5px 0';
-        if(currentWidth > 60) { activeImg.style.width = '40%'; }
-        
-        {
-          const parentBlock = activeImg.parentNode;
-          if (parentBlock && parentBlock.firstChild !== activeImg) {
-              parentBlock.insertBefore(activeImg, parentBlock.firstChild);
-          }
-          if (parentBlock && (!activeImg.nextSibling || activeImg.nextSibling.nodeName === 'BR')) {
-              parentBlock.insertBefore(document.createTextNode('\u00A0'), activeImg.nextSibling);
-          }
-        }
-        break;
-      case 'center': 
-        activeImg.style.float = 'none'; 
-        activeImg.style.display = 'block'; 
-        activeImg.style.margin = '15px auto'; 
-        break;
-      case 'right': 
-        activeImg.style.float = 'right'; 
-        activeImg.style.display = 'inline'; 
-        activeImg.style.margin = '5px 0 5px 25px';
-        if(currentWidth > 60) { activeImg.style.width = '40%'; }
-        
-        {
-          const parentBlock = activeImg.parentNode;
-          if (parentBlock && parentBlock.firstChild !== activeImg) {
-              parentBlock.insertBefore(activeImg, parentBlock.firstChild);
-          }
-          if (parentBlock) {
-              parentBlock.insertBefore(document.createTextNode('\u00A0'), activeImg);
-          }
-        }
-        break;
-      case 'delete': 
-        activeImg.remove(); 
-        setActiveImg(null); 
-        break;
-      default: break;
-    }
-    if (editorRef.current) setNewContent(editorRef.current.innerHTML);
-  };
-
-  const getCoordinates = (e: any) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    let clientX, clientY;
-    if (e.touches && e.touches.length > 0) {
-      clientX = e.touches[0].clientX; clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX; clientY = e.clientY;
-    }
-    return { x: clientX - rect.left, y: clientY - rect.top };
-  };
-
-  const handlePointerDown = (e: any) => {
-    if (!isDrawingMode) return;
-    e.preventDefault(); 
-    if (e.currentTarget.setPointerCapture) {
-        e.currentTarget.setPointerCapture(e.pointerId);
-    }
-    const { x, y } = getCoordinates(e);
-    setCurrentStroke({ color: drawColor, points: [{ x, y }] });
-  };
-
-  const handlePointerMove = (e: any) => {
-    if (!currentStroke || !isDrawingMode) return;
-    e.preventDefault();
-    const { x, y } = getCoordinates(e);
-    setCurrentStroke((prev: any) => ({ ...prev, points: [...prev.points, { x, y }] }));
-
-    if (y > editorHeight - 150) {
-      setEditorHeight((prev) => prev + 300);
-    }
-  };
-
-  const handlePointerUp = (e: any) => {
-    if (!isDrawingMode) return;
-    if (e.currentTarget.releasePointerCapture) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-    if (currentStroke) {
-      setStrokes((prev) => [...prev, currentStroke]);
-      setCurrentStroke(null);
-    }
-  };
-
-  const handleAdminLogin = (e: any) => { 
-    e.preventDefault(); 
-    if (adminPassword.toLowerCase() === "infinito") { setIsAdmin(true); setActiveTab("read"); setShowAdminModal(false); setAdminPassword(""); } 
-    else { setAdminError(true); } 
-  };
-  
-  const handleAdminLock = () => {
-    setIsAdmin(false); 
-    setActiveTab("write"); 
-    setIsSelectionMode(false); 
-    setSelectedIds([]);
-  };
-
-  const toggleSelectionMode = () => { setIsSelectionMode(!isSelectionMode); setSelectedIds([]); };
-
-  const handleCardClick = (thought: any) => {
-    if (isSelectionMode) { setSelectedIds(prev => prev.includes(thought.id) ? prev.filter(id => id !== thought.id) : [...prev, thought.id]); } 
-    else { setSelectedThought(thought); }
-  };
-
-  const calculateAnimation = (htmlText: string) => {
-    const plainText = htmlText.replace(/<[^>]*>?/gm, ''); 
-    const charsPerLine = 35; 
-    const totalLines = Math.max(1, Math.ceil(plainText.length / charsPerLine));
-    const cappedLines = Math.min(totalLines, 6); 
-    const duration = cappedLines * 1.5; 
-    return { lines: cappedLines, duration };
-  };
-
-  const generateDynamicKeyframes = (lines: number, duration: number) => {
-    let penKeyframes = "";
-    let maskKeyframes = "";
-    const lineHeight = 24; 
-    const lineWidth = 230; 
-    const step = 100 / lines; 
-
-    for (let i = 0; i < lines; i++) {
-      const startP = i * step;
-      const endP = (i + 1) * step;
-      const yTop = i * lineHeight;
-      const yBot = (i + 1) * lineHeight;
-
-      maskKeyframes += `
-        ${startP}% { clip-path: polygon(0px 0px, 230px 0px, 230px ${yTop}px, 0px ${yTop}px, 0px ${yBot}px, 0px ${yBot}px); }
-        ${endP - 0.01}% { clip-path: polygon(0px 0px, 230px 0px, 230px ${yTop}px, 230px ${yTop}px, 230px ${yBot}px, 0px ${yBot}px); }
-      `;
-
-      const writeY = yTop + 16;
-      penKeyframes += `
-        ${startP}% { transform: translate(0px, ${writeY}px); }
-        ${startP + (step * 0.2)}% { transform: translate(${lineWidth * 0.2}px, ${writeY - 2}px); }
-        ${startP + (step * 0.4)}% { transform: translate(${lineWidth * 0.4}px, ${writeY + 2}px); }
-        ${startP + (step * 0.6)}% { transform: translate(${lineWidth * 0.6}px, ${writeY - 1}px); }
-        ${startP + (step * 0.8)}% { transform: translate(${lineWidth * 0.8}px, ${writeY + 1}px); }
-        ${endP - 0.01}% { transform: translate(${lineWidth}px, ${writeY}px); }
-      `;
-    }
-
-    const totalPenTime = duration + 1.0;
-    const fadeInP = (0.5 / totalPenTime) * 100;
-    const fadeOutP = ((totalPenTime - 0.5) / totalPenTime) * 100;
-
-    const totalTime = 4.5 + duration;
-    const riseEnd = (1.5 / totalTime) * 100;
-    const fallStart = ((totalTime - 1.5) / totalTime) * 100;
-
-    return `
-      @keyframes dynamicTextReveal {
-        ${maskKeyframes}
-        100% { clip-path: polygon(0px 0px, 230px 0px, 230px 100%, 0px 100%, 0px 100%, 0px 100%); }
-      }
-      @keyframes dynamicPenWrite {
-        ${penKeyframes}
-        100% { transform: translate(${lineWidth}px, ${(lines - 1) * lineHeight + 16}px); }
-      }
-      @keyframes penFadeInOut {
-        0% { opacity: 0; transform: translateY(-30px) scale(1.1); }
-        ${fadeInP}% { opacity: 1; transform: translateY(0) scale(1); }
-        ${fadeOutP}% { opacity: 1; transform: translateY(0) scale(1); }
-        100% { opacity: 0; transform: translateY(-30px) scale(1.1); }
-      }
-      @keyframes dynamicDiaryRiseFall {
-        0% { transform: translateY(100vh) rotate(-5deg) scale(0.8); opacity: 0; }
-        ${riseEnd}% { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
-        ${fallStart}% { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
-        100% { transform: translateY(100vh) rotate(5deg) scale(0.8); opacity: 0; }
-      }
-      @keyframes dynamicDiaryCoverFlip {
-        0%, ${riseEnd}% { transform: rotateY(0deg); }
-        ${(1.8 / totalTime) * 100}%, ${(totalTime - 1.8) / totalTime * 100}% { transform: rotateY(-175deg); }
-        ${fallStart}%, 100% { transform: rotateY(0deg); }
-      }
-    `;
-  };
-
-  const handleSubmit = async (e: any) => {
-    e.preventDefault();
-    if (!user || (!newContent.trim() && strokes.length === 0)) return;
-    setIsSubmitting(true);
-
-    const config = calculateAnimation(newContent);
-    setAnimationConfig(config);
-
-    try {
-      const thoughtsRef = collection(db, "pensieri");
-      await addDoc(thoughtsRef, {
-        title: newTitle.trim() || "Senza Titolo",
-        author: user.displayName || "Studente",
-        content: newContent.trim(),
-        strokes: strokes,
-        timestamp: Date.now(),
-        userId: user.uid,
-        isStarred: false,
-      });
-
-      setIsSubmitting(false);
-      
-      const nextAnim = isNextEnvelope ? 'animating_envelope' : 'animating_diary';
-      setSendState(nextAnim);
-      setIsNextEnvelope(!isNextEnvelope);
-
-      const timeoutDur = nextAnim === 'animating_diary' ? ((4.5 + config.duration) * 1000) : 6000;
-
-      setTimeout(() => {
-        setSendState('thankyou');
-      }, timeoutDur);
-
-    } catch (error) { setIsSubmitting(false); setMessage({ type: "error", text: "Impossibile salvare il pensiero. Riprova." }); }
-  };
-
-  const resetWritingForm = () => { 
-    setSendState('idle'); 
-    setNewTitle(""); 
-    setNewContent(""); 
-    setStrokes([]);
-    setIsDrawingMode(false);
-    setActiveImg(null);
-    setEditorHeight(600); 
-    setActiveFormats({ bold: false, italic: false, underline: false });
-    if(editorRef.current) editorRef.current.innerHTML = "";
-  };
-  
-  const toggleStar = async (thoughtId: string, currentStatus: boolean) => { if (user && db && isAdmin) await updateDoc(doc(db, "pensieri", thoughtId), { isStarred: !currentStatus }); };
-  
-  const confirmSingleDelete = async () => {
-    if (!user || !db || !isAdmin || !thoughtToDelete) return;
-    const id = thoughtToDelete.id;
-    
-    if (selectedThought?.id === id) setSelectedThought(null); 
-    setThoughtToDelete(null); 
-    setDeletingIds([id]); 
-
-    setTimeout(async () => { 
-      await deleteDoc(doc(db, "pensieri", id)); 
-      setDeletingIds((prev: string[]) => prev.filter((dId: string) => dId !== id)); 
-    }, 1100);
-  };
-
-  const confirmMultiDelete = async () => {
-    if (!user || !db || !isAdmin || selectedIds.length === 0) return;
-    setShowMultiDeleteModal(false); setDeletingIds(selectedIds); 
-    setTimeout(async () => {
-      const batch = writeBatch(db);
-      selectedIds.forEach((id: string) => { batch.delete(doc(db, "pensieri", id)); });
-      try { await batch.commit(); } catch (error) { console.error("Errore Batch:", error); }
-      setDeletingIds([]); setSelectedIds([]); setIsSelectionMode(false); 
-    }, 1100);
-  };
-
-  const formatDate = (timestamp: number) => { return new Date(timestamp).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }); };
-
-  const displayedThoughts = [...thoughts].filter((t: any) => activeTab === "favorites" ? t.isStarred : true).sort((a: any, b: any) => {
-      switch (sortBy) {
-        case "oldest": return a.timestamp - b.timestamp;
-        case "longest": return (b.content?.length || 0) - (a.content?.length || 0);
-        case "shortest": return (a.content?.length || 0) - (b.content?.length || 0);
-        case "newest": default: return b.timestamp - a.timestamp;
-      }
+  // scorciatoie disegno
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if (!drawing || !(e.ctrlKey || e.metaKey)) return;
+      if (e.key === "z") { e.preventDefault(); undo(); } else if (e.key === "y") { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   });
 
-  const calculateReadMaxY = () => {
-    let max = 400; 
-    if (selectedThought?.strokes) {
-      selectedThought.strokes.forEach((stroke: any) => {
-        stroke.points.forEach((p: any) => {
-          if (p.y > max - 100) max = p.y + 100;
-        });
-      });
+  // --- auth handlers ---
+  const submitAuth = async (e: any) => {
+    e.preventDefault(); setAuthMsg(null); setAuthLoading(true);
+    try {
+      if (authMode === "reset") { await sendPasswordResetEmail(auth, f.email); setAuthMsg({ t: "ok", m: "Link di recupero inviato. Controlla la posta." }); }
+      else if (authMode === "register") { const c = await createUserWithEmailAndPassword(auth, f.email, f.pw); await updateProfile(c.user, { displayName: f.name.trim() || "Operatore" }); }
+      else await signInWithEmailAndPassword(auth, f.email, f.pw);
+    } catch (x: any) {
+      const m: any = { "auth/email-already-in-use": "Questa email è già registrata.", "auth/invalid-credential": "Email o password errate.", "auth/weak-password": "La password deve avere almeno 6 caratteri.", "auth/invalid-email": "L'email non è valida.", "auth/user-not-found": "Utente non trovato.", "auth/missing-email": "Inserisci un'email." };
+      err(m[x.code] || `Errore: ${x.message}`);
     }
-    return max;
+    setAuthLoading(false);
+  };
+  const submitNewPw = async (e: any) => {
+    e.preventDefault(); setAuthMsg(null); setAuthLoading(true);
+    try {
+      await confirmPasswordReset(auth, resetCode!, f.newPw);
+      setAuthMsg({ t: "ok", m: "Password aggiornata. Ora puoi accedere." });
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setTimeout(() => { setResetCode(null); setAuthMode("login"); setAuthMsg(null); }, 2500);
+    } catch { err("Il link è scaduto o non è valido."); }
+    setAuthLoading(false);
+  };
+  const logout = async () => { await signOut(auth); setIsAdmin(false); setTab("write"); };
+  const adminLogin = (e: any) => {
+    e.preventDefault();
+    if (adminPw.toLowerCase() === "infinito") { setIsAdmin(true); setTab("read"); setAdminModal(false); setAdminPw(""); } else setAdminErr(true);
   };
 
-  if (authLoading) {
-    return ( <div className="min-h-screen bg-[#F4EFE6] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#8B6E4E]" /></div> );
-  }
+  // --- editor handlers ---
+  const cmd = (c: string, v?: string) => {
+    document.execCommand(c, false, v);
+    editorRef.current?.focus(); setContent(editorRef.current.innerHTML); readFmt();
+  };
+  const readFmt = () => setFmt({ b: document.queryCommandState("bold"), i: document.queryCommandState("italic"), u: document.queryCommandState("underline") });
+  const addImage = async (e: any) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    try {
+      const src = await compressImage(file);
+      editorRef.current.focus(); document.execCommand("insertImage", false, src);
+      editorRef.current.querySelectorAll("img").forEach((im: any) => { if (!im.style.width) { im.style.width = "50%"; im.style.cursor = "pointer"; } });
+      setContent(editorRef.current.innerHTML);
+    } catch { notify("Immagine non valida."); }
+    e.target.value = "";
+  };
+  const pickImg = (e: any) => {
+    img?.style.removeProperty("outline");
+    if (e.target.tagName === "IMG") { e.target.style.outline = "3px solid #0F8B7A"; setImg(e.target); } else setImg(null);
+  };
+  const resizeImg = (w: string) => { if (img) { img.style.width = w; setContent(editorRef.current.innerHTML); } };
+  const removeImg = () => { img?.remove(); setImg(null); setContent(editorRef.current.innerHTML); };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#FDFBF7] via-[#F4EFE6] to-[#E8DAC2] text-[#2C241B] font-montserrat flex flex-col items-center justify-center px-6 relative overflow-hidden">
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=Montserrat:wght@300;400;500;600&display=swap');
-          .font-cormorant { font-family: 'Cormorant Garamond', serif; }
-          .font-montserrat { font-family: 'Montserrat', sans-serif; }
-          .will-change-transform { will-change: transform, opacity; }
-          @keyframes floatUpParticle {
-            0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0; }
-            10% { opacity: var(--max-opacity); }
-            50% { transform: translate3d(var(--x-sway), -50vh, 0) rotate(180deg); opacity: var(--max-opacity); }
-            90% { opacity: var(--max-opacity); }
-            100% { transform: translate3d(calc(var(--x-sway) * -0.5), -110vh, 0) rotate(360deg); opacity: 0; }
-          }
-          @keyframes orbDrift {
-            0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.3; }
-            50% { transform: translate3d(5%, 5%, 0) scale(1.1); opacity: 0.6; }
-            100% { transform: translate3d(-5%, 10%, 0) scale(0.9); opacity: 0.3; }
-          }
-        `}</style>
-        
-        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-           <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[#D4AF37]/20 rounded-full blur-[100px] md:animate-[orbDrift_25s_ease-in-out_infinite_alternate] will-change-transform"></div>
-           <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-[#902A2A]/10 rounded-full blur-[120px] md:animate-[orbDrift_30s_ease-in-out_infinite_alternate-reverse] will-change-transform"></div>
-           <div className="absolute top-[40%] left-[60%] w-[40vw] h-[40vw] bg-[#8B6E4E]/15 rounded-full blur-[100px] md:animate-[orbDrift_20s_ease-in-out_infinite_alternate] will-change-transform"></div>
+  const snap = () => { setHist((h) => [...h.slice(-49), strokes]); setFut([]); };
+  const undo = () => { if (!hist.length) return; setFut((x) => [...x, strokes]); setStrokes(hist[hist.length - 1]); setHist((h) => h.slice(0, -1)); };
+  const redo = () => { if (!fut.length) return; setHist((h) => [...h, strokes]); setStrokes(fut[fut.length - 1]); setFut((x) => x.slice(0, -1)); };
+  const pos = (e: any) => { const r = e.currentTarget.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+
+  const erase = (x: number, y: number) => {
+    const r = eraser / 2;
+    setStrokes((prev) => {
+      const out: any[] = [];
+      prev.forEach((s) => {
+        const a = s.points[0], b = s.points[s.points.length - 1];
+        if (s.tool === "line") { if (distSeg({ x, y }, a, b) > r + (s.size || 3) / 2) out.push(s); return; }
+        if (s.tool === "rect" || s.tool === "ellipse") {
+          const hit = x >= Math.min(a.x, b.x) - r && x <= Math.max(a.x, b.x) + r && y >= Math.min(a.y, b.y) - r && y <= Math.max(a.y, b.y) + r;
+          if (!hit) out.push(s); return;
+        }
+        let seg: any[] = [];
+        s.points.forEach((p: any) => {
+          if ((p.x - x) ** 2 + (p.y - y) ** 2 > r * r) seg.push(p);
+          else { if (seg.length) out.push({ ...s, points: seg }); seg = []; }
+        });
+        if (seg.length) out.push({ ...s, points: seg });
+      });
+      return out;
+    });
+  };
+  const pDown = (e: any) => {
+    e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); down.current = true;
+    const { x, y } = pos(e); snap();
+    if (tool === "eraser") erase(x, y);
+    else setCur({ tool, color, size, opacity: opacity / 100, filled, points: [{ x, y }, { x: x + 0.01, y }] });
+  };
+  const pMove = (e: any) => {
+    if (!down.current) return; e.preventDefault();
+    const p = pos(e);
+    if (tool === "eraser") return erase(p.x, p.y);
+    setCur((c: any) => {
+      if (!c) return c;
+      if (["line", "rect", "ellipse"].includes(c.tool)) return { ...c, points: [c.points[0], p] };
+      const l = c.points[c.points.length - 1];
+      return Math.hypot(p.x - l.x, p.y - l.y) < 1.5 ? c : { ...c, points: [...c.points, p] };
+    });
+    if (p.y > height - 120) setHeight((h) => h + 300);
+  };
+  const pUp = (e: any) => {
+    if (!down.current) return; down.current = false;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    if (cur) { setStrokes((s) => [...s, cur]); setCur(null); }
+  };
+
+  const resetForm = () => {
+    setEditingId(null); setTitle(""); setContent(""); setStrokes([]); setHist([]); setFut([]); setHeight(600);
+    setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
+    try { localStorage.removeItem(draftKey); } catch {}
+  };
+  const startEdit = (t: any) => {
+    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setStrokes(t.strokes || []);
+    setHist([]); setFut([]); setHeight(t.h || 600); setSel(null); setDrawing(false); setTab("write"); setLoadTick((n) => n + 1);
+  };
+
+  const submit = async (e: any) => {
+    e.preventDefault();
+    const html = clean(editorRef.current?.innerHTML || "");
+    if (!user || !(plain(html).trim() || /<img/.test(html) || strokes.length)) return;
+    const st = strokes.map((s) => ({ ...s, points: s.points.map((p: any) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 })) }));
+    const data = { title: title.trim() || "Senza titolo", content: html, strokes: st, w: Math.round(canvasRef.current?.clientWidth || 900), h: Math.round(height) };
+    if (JSON.stringify(data).length > 950000) return notify("Progetto troppo pesante: riduci le immagini o il disegno.");
+    setSaving(true);
+    try {
+      if (editingId) await updateDoc(doc(db, "pensieri", editingId), { ...data, updatedAt: Date.now() });
+      else await addDoc(collection(db, "pensieri"), { ...data, author: user.displayName || "Operatore", timestamp: Date.now(), userId: user.uid, isStarred: false });
+      setDone(editingId ? "edit" : "new");
+    } catch { notify("Salvataggio non riuscito. Riprova."); }
+    setSaving(false);
+  };
+
+  // --- azioni lista ---
+  const canEdit = (t: any) => isAdmin || t.userId === user?.uid;
+  const star = async (t: any) => { if (isAdmin) { await updateDoc(doc(db, "pensieri", t.id), { isStarred: !t.isStarred }); if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
+  const confirmDelete = async () => {
+    const list = toDelete!; setToDelete(null); setSel(null); setGone(list);
+    setTimeout(async () => {
+      try { const b = writeBatch(db); list.forEach((id) => b.delete(doc(db, "pensieri", id))); await b.commit(); notify(list.length > 1 ? `${list.length} progetti eliminati.` : "Progetto eliminato."); }
+      catch { notify("Eliminazione non riuscita: controlla i permessi."); }
+      setGone([]); setIds([]); setSelMode(false);
+    }, 300);
+  };
+  const go = (t: string) => { setTab(t); setSelMode(false); setIds([]); setSearch(""); };
+
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items
+      .filter((t) => !q || `${t.title} ${t.author} ${plain(t.content)}`.toLowerCase().includes(q))
+      .sort((a, b) => sortBy === "oldest" ? a.timestamp - b.timestamp : sortBy === "longest" ? (b.content?.length || 0) - (a.content?.length || 0) : sortBy === "shortest" ? (a.content?.length || 0) - (b.content?.length || 0) : b.timestamp - a.timestamp);
+  }, [items, search, sortBy]);
+  const words = plain(content).trim().split(/\s+/).filter(Boolean).length;
+
+  // ================= RENDER =================
+  const shell = (children: any) => <div className={`root ${dark ? "dark" : ""} min-h-screen`}><style>{CSS}</style>{children}</div>;
+
+  if (authLoading) return shell(<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin" style={{ color: "var(--ac)" }} /></div>);
+
+  if (!user || resetCode) {
+    const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
+    const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
+    return shell(
+      <div className="min-h-screen grid md:grid-cols-2">
+        <div className="mm hidden md:flex flex-col justify-between p-12" style={{ background: "var(--sf)" }}>
+          <div className="flex items-center gap-3"><Logo size={36} /><span className="hd text-xl font-bold">Il Circuito</span></div>
+          <div>
+            <h1 className="hd text-5xl font-bold leading-tight max-w-md up">Appunti, schemi e progetti nello stesso quaderno.</h1>
+            <p className="mu mt-4 max-w-sm up" style={{ animationDelay: "150ms" }}>Scrivi, incolla foto e disegna a mano libera sopra il testo. Tutto resta salvato e ordinato.</p>
+          </div>
+          <span className="mu text-sm">Archivio personale di elettrotecnica</span>
         </div>
-
-        <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-           {dustParticles.map((p: any, index: number) => (
-             <div key={p.id} className={`absolute bottom-[-5%] bg-[#D4AF37] rounded-full blur-[1px] will-change-transform ${index > 15 ? 'hidden md:block' : ''}`} style={{ left: p.left, width: p.width, height: p.width, '--max-opacity': p.opacity, '--x-sway': p.xSway, animation: `floatUpParticle ${p.duration} ease-in-out ${p.delay} infinite` } as React.CSSProperties} />
-           ))}
-        </div>
-        <div className="fixed inset-0 pointer-events-none opacity-[0.04] mix-blend-multiply" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }}></div>
-        
-        <div className="max-w-md w-full bg-white/95 md:bg-white/70 backdrop-blur-none md:backdrop-blur-xl p-8 md:p-12 rounded-[2rem] shadow-[0_20px_50px_rgba(26,21,16,0.08)] border border-[#E8DAC2]/80 relative z-10 animate-in fade-in zoom-in-95 duration-700">
-          {isResetScreen ? (
-            <>
-              <div className="flex flex-col items-center mb-8">
-                <div className="w-20 h-20 bg-gradient-to-br from-[#E8DAC2]/50 to-[#D4C3A3]/20 rounded-full flex items-center justify-center mb-4 border border-[#D4AF37]/30 shadow-inner group hover:scale-105 transition-transform duration-500 cursor-default">
-                   <KeyRound className="w-8 h-8 text-[#8B6E4E] drop-shadow-sm group-hover:-rotate-12 transition-transform duration-500" strokeWidth={1.5} />
-                </div>
-                <h1 className="text-4xl font-cormorant font-bold text-[#1A1510] tracking-tight text-center leading-tight">Forgia la <br/>Nuova Chiave</h1>
-                <p className="text-sm text-[#8B6E4E] font-medium tracking-widest uppercase mt-4">Archivio Sicuro</p>
-              </div>
-
-              {authError && (<div className="mb-6 p-4 rounded-2xl bg-[#FDF2F2]/95 md:bg-[#FDF2F2]/80 backdrop-blur-none md:backdrop-blur-sm border border-[#902A2A]/20 text-[#902A2A] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2">{authError}</div>)}
-              {authSuccess && (<div className="mb-6 p-4 rounded-2xl bg-[#F4FDF4]/95 md:bg-[#F4FDF4]/80 backdrop-blur-none md:backdrop-blur-sm border border-[#2A9045]/20 text-[#2A9045] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2 flex flex-col items-center gap-2"><CheckCircle2 className="w-5 h-5"/>{authSuccess}</div>)}
-
-              {!authSuccess && (
-                <form onSubmit={handleNewPasswordSubmit} className="space-y-5 animate-in fade-in">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 block">La Nuova Password</label>
-                    <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Almeno 6 caratteri..." className="w-full bg-white md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required minLength={6} autoFocus />
-                  </div>
-                  <button type="submit" className="w-full bg-gradient-to-r from-[#1A1510] to-[#2C241B] text-[#FDFBF7] py-4 rounded-2xl font-semibold text-sm hover:shadow-[0_12px_25px_rgba(26,21,16,0.4)] hover:-translate-y-1 active:scale-95 active:shadow-md transition-all duration-300 mt-4 flex items-center justify-center gap-2 border border-[#3A3228]">
-                    Sigilla Nuova Password
-                  </button>
-                </form>
-              )}
-            </>
-          ) : (
-            <>
-              <div className="flex flex-col items-center mb-6">
-                <div className="w-20 h-20 bg-gradient-to-br from-[#E8DAC2]/50 to-[#D4C3A3]/20 rounded-full flex items-center justify-center mb-4 border border-[#D4AF37]/30 shadow-inner group hover:scale-105 transition-transform duration-500 cursor-default">
-                   <Feather className="w-8 h-8 text-[#8B6E4E] drop-shadow-sm group-hover:rotate-12 transition-transform duration-500" strokeWidth={1.5} />
-                </div>
-                <h1 className="text-4xl font-cormorant font-bold text-[#1A1510] tracking-tight">Lo Zibaldone</h1>
-                <p className="text-sm text-[#8B6E4E] font-medium tracking-widest uppercase mt-2">Archivio della Classe</p>
-              </div>
-
-              {authMode !== 'reset' && (
-                <div className="flex bg-[#F4EFE6] md:bg-[#F4EFE6]/80 p-1 rounded-2xl border border-[#E8DAC2]/60 mb-6 backdrop-blur-none md:backdrop-blur-sm relative z-10 w-full max-w-[280px] mx-auto shadow-inner animate-in fade-in">
-                  <button type="button" onClick={() => { setAuthMode('login'); setAuthError(""); setAuthSuccess(""); }} className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all duration-300 ${authMode === 'login' ? 'bg-white text-[#1A1510] shadow-[0_2px_10px_rgba(0,0,0,0.05)] scale-100' : 'text-[#8B6E4E] hover:text-[#1A1510] hover:bg-white/40 scale-95'}`}>Accedi</button>
-                  <button type="button" onClick={() => { setAuthMode('register'); setAuthError(""); setAuthSuccess(""); }} className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all duration-300 ${authMode === 'register' ? 'bg-white text-[#1A1510] shadow-[0_2px_10px_rgba(0,0,0,0.05)] scale-100' : 'text-[#8B6E4E] hover:text-[#1A1510] hover:bg-white/40 scale-95'}`}>Nuova Firma</button>
-                </div>
-              )}
-
-              {authError && (<div className="mb-6 p-4 rounded-2xl bg-[#FDF2F2]/95 md:bg-[#FDF2F2]/80 backdrop-blur-none md:backdrop-blur-sm border border-[#902A2A]/20 text-[#902A2A] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2">{authError}</div>)}
-              {authSuccess && (<div className="mb-6 p-4 rounded-2xl bg-[#F4FDF4]/95 md:bg-[#F4FDF4]/80 backdrop-blur-none md:backdrop-blur-sm border border-[#2A9045]/20 text-[#2A9045] text-xs text-center font-medium shadow-sm animate-in slide-in-from-top-2 flex flex-col items-center gap-2"><CheckCircle2 className="w-5 h-5"/>{authSuccess}</div>)}
-
-              <form onSubmit={handleAuthSubmit} className="space-y-5 animate-in fade-in">
-                {authMode === 'register' && (
-                  <div className="space-y-1.5 animate-in slide-in-from-top-2">
-                    <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 flex items-center justify-between block">Pseudonimo <span className="text-[9px] font-normal lowercase opacity-70">Come firmerai le lettere</span></label>
-                    <input type="text" value={authName} onChange={(e) => setAuthName(e.target.value)} placeholder="Giacomo Leopardi..." className="w-full bg-white md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required />
-                  </div>
-                )}
-                
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 flex items-center justify-between block">Email <span className="text-[9px] font-normal lowercase opacity-70">{authMode === 'reset' ? 'A cui inviare la staffetta' : 'Privata, mai mostrata'}</span></label>
-                  <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="mario.rossi@gmail.com" className="w-full bg-white md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required autoFocus={authMode === 'reset'} />
-                </div>
-
-                {authMode !== 'reset' && (
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-end pr-2">
-                      <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 block">La tua chiave</label>
-                      {authMode === 'login' && (
-                        <button type="button" onClick={() => { setAuthMode('reset'); setAuthError(""); setAuthSuccess(""); }} className="text-[10px] font-semibold text-[#D4AF37] hover:text-[#1A1510] transition-colors">Dimenticata?</button>
-                      )}
-                    </div>
-                    <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" className="w-full bg-white md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-3.5 text-[#1A1510] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:bg-white focus:-translate-y-1 focus:shadow-[0_8px_20px_rgba(212,175,55,0.15)] transition-all duration-300 shadow-sm placeholder:text-[#CDB591]" required />
-                  </div>
-                )}
-                
-                <button type="submit" className="w-full bg-gradient-to-r from-[#1A1510] to-[#2C241B] text-[#FDFBF7] py-4 rounded-2xl font-semibold text-sm hover:shadow-[0_12px_25px_rgba(26,21,16,0.4)] hover:-translate-y-1 active:scale-95 active:shadow-md transition-all duration-300 mt-4 flex items-center justify-center gap-2 border border-[#3A3228]">
-                  {authMode === 'login' ? "Sblocca l'Archivio" : authMode === 'register' ? "Registra la tua Firma" : "Invia staffetta di recupero"}
-                </button>
+        <div className="flex items-center justify-center p-6">
+          <div className="w-full max-w-sm pop">
+            {resetCode ? (
+              <form onSubmit={submitNewPw} className="space-y-4">
+                <h2 className="hd text-3xl font-bold mb-2">Scegli una nuova password</h2>
+                {Msg}
+                <input className="inp" type="password" minLength={6} required autoFocus placeholder="Almeno 6 caratteri" value={f.newPw} onChange={set("newPw")} />
+                <button className="bt pri w-full py-3">Aggiorna password</button>
               </form>
-
-              {authMode === 'reset' && (
-                <div className="mt-8 text-center border-t border-[#E8DAC2]/50 pt-6">
-                  <button onClick={() => { setAuthMode('login'); setAuthError(""); setAuthSuccess(""); }} className="text-xs text-[#6B5A46] hover:text-[#1A1510] hover:-translate-y-0.5 font-medium transition-all duration-300">
-                    Ricordi la chiave? Torna all'accesso
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+            ) : (
+              <form onSubmit={submitAuth} className="space-y-4">
+                <h2 className="hd text-3xl font-bold">{authMode === "login" ? "Bentornato" : authMode === "register" ? "Crea il tuo profilo" : "Recupera l'accesso"}</h2>
+                {authMode !== "reset" && (
+                  <div className="flex p-1 rounded-xl sf" style={{ background: "var(--sf)", border: "1px solid var(--ln)" }}>
+                    {["login", "register"].map((m) => <button type="button" key={m} onClick={() => { setAuthMode(m); setAuthMsg(null); }} className={`bt flex-1 border-0 ${authMode === m ? "" : "!bg-transparent mu"}`}>{m === "login" ? "Accedi" : "Registrati"}</button>)}
+                  </div>
+                )}
+                {Msg}
+                {authMode === "register" && <input className="inp" required placeholder="Nome operatore" value={f.name} onChange={set("name")} />}
+                <input className="inp" type="email" required placeholder="Email" value={f.email} onChange={set("email")} />
+                {authMode !== "reset" && <input className="inp" type="password" required placeholder="Password" value={f.pw} onChange={set("pw")} />}
+                <button className="bt pri w-full py-3">{authMode === "login" ? "Entra" : authMode === "register" ? "Crea profilo" : "Invia link di recupero"}</button>
+                {authMode === "login" && <button type="button" className="mu text-sm lk" onClick={() => { setAuthMode("reset"); setAuthMsg(null); }}>Password dimenticata?</button>}
+                {authMode === "reset" && <button type="button" className="mu text-sm lk" onClick={() => { setAuthMode("login"); setAuthMsg(null); }}>Torna all'accesso</button>}
+              </form>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#FDFBF7] via-[#F4EFE6] to-[#E8DAC2] text-[#2C241B] font-montserrat selection:bg-[#D4AF37]/30 selection:text-[#1A1510] pb-24 relative overflow-x-hidden">
-      
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=Montserrat:wght@300;400;500;600&display=swap');
-        .font-cormorant { font-family: 'Cormorant Garamond', serif; }
-        .font-montserrat { font-family: 'Montserrat', sans-serif; }
-        
-        .will-change-transform { will-change: transform, opacity; }
+  const nav = [
+    { id: "write", label: editingId ? "Modifica" : "Nuovo", icon: Pen },
+    { id: "my_pages", label: "I miei progetti", icon: Bookmark },
+    ...(isAdmin ? [{ id: "read", label: "Tutti", icon: Activity }, { id: "favorites", label: "Preferiti", icon: Star }] : []),
+  ];
+  const titles: any = { write: editingId ? "Modifica progetto" : "Nuovo progetto", my_pages: "I miei progetti", read: "Tutti i progetti", favorites: "Preferiti" };
+  const isList = tab !== "write";
 
-        @keyframes floatUpParticle { 
-          0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0; } 
-          10% { opacity: var(--max-opacity); } 
-          50% { transform: translate3d(var(--x-sway), -50vh, 0) rotate(180deg); opacity: var(--max-opacity); }
-          90% { opacity: var(--max-opacity); } 
-          100% { transform: translate3d(calc(var(--x-sway) * -0.5), -110vh, 0) rotate(360deg); opacity: 0; } 
-        }
-
-        @keyframes orbDrift {
-          0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.3; }
-          50% { transform: translate3d(5%, 5%, 0) scale(1.1); opacity: 0.6; }
-          100% { transform: translate3d(-5%, 10%, 0) scale(0.9); opacity: 0.3; }
-        }
-        
-        @keyframes fadeInOverlay { from { opacity: 0; backdrop-filter: blur(0px); } to { opacity: 1; backdrop-filter: blur(10px); } }
-        @keyframes paperFloat { from { opacity: 0; transform: translateY(40px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        @keyframes textRevealUp { 0% { transform: translateY(40px); opacity: 0; filter: blur(8px); } 100% { transform: translateY(0); opacity: 1; filter: blur(0px); } }
-        @keyframes bgCinematicBlur { 0% { opacity: 0; backdrop-filter: blur(0px); background-color: rgba(26, 21, 16, 0); } 100% { opacity: 1; backdrop-filter: blur(16px); background-color: rgba(15, 12, 10, 0.85); } }
-        
-        @keyframes turnToAsh { 0% { filter: brightness(1); transform: scale(1) translateY(0); } 30% { filter: brightness(0.6) sepia(1) hue-rotate(-20deg) saturate(3); background-color: #2C241B; border-color: #902A2A; transform: scale(0.95) translateY(-5px); } 70% { filter: brightness(0.1) blur(2px); background-color: #000; opacity: 1; transform: scale(0.8) translateY(-30px); } 100% { filter: brightness(0) blur(10px); opacity: 0; transform: scale(0.5) translateY(-80px); } }
-        @keyframes fireRise { 0% { transform: translateY(80px) scale(0.5); opacity: 0; } 20% { transform: translateY(20px) scale(1.2); opacity: 1; } 70% { transform: translateY(-40px) scale(1.5); opacity: 1; } 100% { transform: translateY(-120px) scale(0.8); opacity: 0; } }
-        @keyframes fireGlow { 0% { opacity: 0; } 30% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
-        
-        @keyframes letterDrop {
-          0% { transform: translateY(-300px) rotate(3deg); opacity: 0; filter: blur(4px); }
-          10% { opacity: 1; filter: blur(0px); }
-          80% { transform: translateY(24px) rotate(-1deg); }
-          100% { transform: translateY(16px) rotate(0deg); opacity: 1; }
-        }
-        @keyframes flapClose {
-          0% { transform: rotateX(180deg); z-index: 5; }
-          49% { z-index: 5; }
-          50% { z-index: 30; }
-          100% { transform: rotateX(0deg); z-index: 30; }
-        }
-        @keyframes sealPop {
-          0% { transform: scale(3); opacity: 0; filter: blur(4px); }
-          50% { transform: scale(0.85); opacity: 1; filter: blur(0px); }
-          100% { transform: scale(1); opacity: 1; filter: blur(0px); }
-        }
-        @keyframes envelopeFly {
-          0% { transform: translateY(0) scale(1) rotate(0deg); }
-          20% { transform: translateY(30px) scale(0.95) rotate(-2deg); }
-          100% { transform: translateY(-150vh) scale(0.4) rotate(12deg); opacity: 0; }
-        }
-
-        ${sendState === 'animating_diary' ? generateDynamicKeyframes(animationConfig.lines, animationConfig.duration) : ''}
-
-        /* REGOLE DI TESTO ESTREME (Per l'affiancamento e parola infinita) */
-        .rich-text-content {
-          overflow-wrap: anywhere; 
-          word-break: break-word; 
-        }
-        
-        .rich-text-content b { font-weight: 800; color: #1A1510; }
-        .rich-text-content i { font-style: italic; font-family: Georgia, serif; }
-        .rich-text-content u { text-decoration: underline; text-underline-offset: 4px; decoration-thickness: 1px; }
-        
-        .rich-text-content div { 
-            min-height: 32px; 
-        }
-
-        .rich-text-content img { 
-            max-width: 100%; 
-            height: auto; 
-            border-radius: 8px; 
-            margin: 15px auto; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-            border: 1px solid #E8DAC2; 
-        }
-        
-        .drop-cap::first-letter { float: left; font-size: 5rem; line-height: 4rem; font-weight: bold; margin-right: 0.5rem; margin-top: 0.5rem; color: #1A1510; font-family: 'Cormorant Garamond', serif; }
-      `}</style>
-
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[#D4AF37]/20 rounded-full blur-[100px] md:animate-[orbDrift_25s_ease-in-out_infinite_alternate] will-change-transform"></div>
-         <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-[#902A2A]/10 rounded-full blur-[120px] md:animate-[orbDrift_30s_ease-in-out_infinite_alternate-reverse] will-change-transform"></div>
-         <div className="absolute top-[40%] left-[60%] w-[40vw] h-[40vw] bg-[#8B6E4E]/15 rounded-full blur-[100px] md:animate-[orbDrift_20s_ease-in-out_infinite_alternate] will-change-transform"></div>
-      </div>
-      <div className="fixed inset-0 pointer-events-none opacity-[0.03] mix-blend-multiply" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }}></div>
-
-      <header className="pt-16 pb-8 px-6 border-b border-[#E8DAC2]/50 relative z-10 text-center">
-        <div className="max-w-4xl mx-auto flex flex-col items-center relative">
-          
-          <div className="absolute top-0 right-4 flex items-center gap-3">
-            <span className="text-xs font-semibold text-[#8B6E4E] hidden sm:inline tracking-wider uppercase truncate max-w-[120px] md:max-w-[200px] cursor-help hover:text-[#1A1510] transition-colors duration-300" title={user.displayName || "Studente"}>Bentornato, {user.displayName || "Studente"}</span>
-            <button onClick={handleLogout} className="w-10 h-10 rounded-full bg-white/95 md:bg-white/60 backdrop-blur-none md:backdrop-blur-md border border-[#E8DAC2] flex items-center justify-center text-[#8B6E4E] hover:bg-[#FDF2F2] hover:text-[#902A2A] hover:border-[#902A2A]/30 hover:scale-110 hover:-translate-y-0.5 active:scale-95 transition-all duration-300 shadow-sm hover:shadow-md group" title="Esci dall'Archivio">
-              <LogOut size={16} className="group-hover:-translate-x-0.5 transition-transform" />
-            </button>
+  return shell(
+    <>
+      {/* sidebar desktop */}
+      <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col p-5 gap-1 pn !rounded-none !border-y-0 !border-l-0 z-20">
+        <div className="flex items-center gap-2.5 mb-8 cursor-pointer select-none" onDoubleClick={() => !isAdmin && setAdminModal(true)} title="Il Circuito">
+          <Logo size={30} /><span className="hd text-lg font-bold">Il Circuito</span>
+        </div>
+        {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt !justify-start w-full ${tab === n.id ? "on" : "!border-transparent !bg-transparent"} nv`}><n.icon size={16} />{n.label}</button>)}
+        <div className="mt-auto space-y-2">
+          {isAdmin && <button onClick={() => { setIsAdmin(false); setTab("write"); }} className="bt w-full !justify-start"><Unlock size={16} />Esci da admin</button>}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0 text-sm"><div className="font-semibold truncate">{user.displayName || "Operatore"}</div><div className="mu text-xs truncate">{user.email}</div></div>
+            <button className="bt !p-2" onClick={() => setDark(!dark)} title="Cambia tema">{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
+            <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
           </div>
+        </div>
+      </aside>
 
-          <div className="relative w-20 h-20 mb-6 flex items-center justify-center group cursor-pointer" onDoubleClick={() => { if (!isAdmin) setShowAdminModal(true); }} title={isAdmin ? "Archivio Redazione Aperto" : "Zibaldone"}>
-             <div className="absolute inset-0 border border-[#D4AF37]/30 rounded-full animate-[spin_20s_linear_infinite] group-hover:border-[#D4AF37] group-hover:scale-105 transition-all duration-700"></div>
-             <div className="absolute inset-2 border border-[#D4AF37]/20 rounded-full animate-[spin_15s_linear_infinite_reverse] group-hover:scale-95 transition-all duration-700"></div>
-             <Feather className="w-8 h-8 text-[#8B6E4E] drop-shadow-md group-hover:scale-110 group-hover:text-[#D4AF37] transition-all duration-500" strokeWidth={1.5} />
-          </div>
-          
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-cormorant font-bold text-[#1A1510] tracking-wide mb-4 relative flex items-center justify-center gap-4">
-            Lo Zibaldone
-            {isAdmin && (
-              <button onClick={handleAdminLock} className="opacity-60 hover:opacity-100 hover:scale-110 active:scale-95 hover:rotate-12 transition-all duration-300 absolute -right-12" title="Chiudi Archivio Redazione">
-                <Unlock className="w-5 h-5 text-[#D4AF37] drop-shadow-sm" />
-              </button>
-            )}
-          </h1>
-          <p className="text-lg md:text-xl font-cormorant text-[#6B5A46] font-light max-w-2xl italic">
-            "Il più solido piacere di questa vita è il piacer vano delle illusioni." <br />
-            <span className="text-sm not-italic mt-3 block font-montserrat tracking-widest uppercase text-[#8B6E4E] font-semibold transition-colors duration-500 hover:text-[#D4AF37]">— Buca delle lettere e scritture della classe —</span>
-          </p>
+      {/* barra mobile */}
+      <header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
+        <div className="flex items-center gap-2" onDoubleClick={() => !isAdmin && setAdminModal(true)}><Logo size={26} /><span className="hd font-bold">Il Circuito</span></div>
+        <div className="flex gap-2">
+          <button className="bt !p-2" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
+          <button className="bt !p-2" onClick={logout}><LogOut size={16} /></button>
         </div>
       </header>
-
-      <nav className="flex justify-center gap-3 md:gap-5 py-8 relative z-10 flex-wrap px-4 mb-8">
-        <button onClick={() => { setActiveTab("write"); setIsSelectionMode(false); setSelectedIds([]); }} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "write" ? "bg-gradient-to-r from-[#1A1510] to-[#2C241B] text-[#FDFBF7] shadow-[0_8px_20px_rgba(26,21,16,0.3)] scale-105" : "bg-white/95 md:bg-white/60 backdrop-blur-none md:backdrop-blur-md text-[#6B5A46] hover:bg-white border border-[#E8DAC2]/50 hover:shadow-lg hover:-translate-y-1 hover:text-[#1A1510]"}`}><PenTool className="w-4 h-4" />Nuova Lettera</button>
-        <button onClick={() => { setActiveTab("my_pages"); setIsSelectionMode(false); setSelectedIds([]); }} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "my_pages" ? "bg-gradient-to-r from-[#1A1510] to-[#2C241B] text-[#FDFBF7] shadow-[0_8px_20px_rgba(26,21,16,0.3)] scale-105" : "bg-white/95 md:bg-white/60 backdrop-blur-none md:backdrop-blur-md text-[#6B5A46] hover:bg-white border border-[#E8DAC2]/50 hover:shadow-lg hover:-translate-y-1 hover:text-[#1A1510]"}`}><Bookmark className="w-4 h-4" />Le Mie Pagine</button>
-
-        {isAdmin && (
-          <>
-            <div className="w-[1px] h-8 bg-[#D4AF37]/40 mx-2 self-center"></div>
-            <button onClick={() => {setActiveTab("read"); setIsSelectionMode(false); setSelectedIds([]);}} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "read" ? "bg-gradient-to-r from-[#7A1A1A] to-[#501010] text-[#FDFBF7] shadow-[0_8px_20px_rgba(122,26,26,0.3)] scale-105" : "bg-[#FDF2F2]/95 md:bg-[#FDF2F2]/80 backdrop-blur-none md:backdrop-blur-md text-[#902A2A] border border-[#902A2A]/20 hover:bg-[#FDF2F2] hover:shadow-lg hover:-translate-y-1"}`}><BookOpen className="w-4 h-4" />Tutti (Redazione)</button>
-            <button onClick={() => {setActiveTab("favorites"); setIsSelectionMode(false); setSelectedIds([]);}} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${activeTab === "favorites" ? "bg-gradient-to-r from-[#7A1A1A] to-[#501010] text-[#FDFBF7] shadow-[0_8px_20px_rgba(122,26,26,0.3)] scale-105" : "bg-[#FDF2F2]/95 md:bg-[#FDF2F2]/80 backdrop-blur-none md:backdrop-blur-md text-[#902A2A] border border-[#902A2A]/20 hover:bg-[#FDF2F2] hover:shadow-lg hover:-translate-y-1"}`}><Star className="w-4 h-4" />Scelti</button>
-            
-            {(activeTab === "read" || activeTab === "favorites" || activeTab === "my_pages") && thoughts.length > 0 && (
-              <button onClick={toggleSelectionMode} className={`flex items-center gap-2 px-6 py-3.5 rounded-full transition-all duration-500 font-semibold text-sm active:scale-95 ${isSelectionMode ? "bg-gradient-to-r from-[#D4AF37] to-[#C59B27] text-[#1A1510] shadow-[0_8px_20px_rgba(212,175,55,0.4)] scale-105" : "bg-[#FDFBF7]/95 md:bg-[#FDFBF7]/80 backdrop-blur-none md:backdrop-blur-md text-[#D4AF37] border border-[#D4AF37]/30 hover:bg-[#FDFBF7] hover:shadow-lg hover:-translate-y-1 hover:text-[#C59B27]"}`}><ListChecks className="w-4 h-4" /> {isSelectionMode ? "Annulla" : "Seleziona Pagine"}</button>
-            )}
-          </>
-        )}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn !rounded-none !border-x-0 !border-b-0 flex justify-around p-2 hdr">
+        {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt flex-col !gap-0.5 !text-[11px] flex-1 ${tab === n.id ? "on" : "!border-transparent"}`}><n.icon size={17} />{n.label.split(" ")[0]}</button>)}
       </nav>
 
-      <main className={`max-w-5xl mx-auto px-6 relative z-10 min-h-[50vh]`}>
-        {(activeTab === "read" || activeTab === "favorites" || activeTab === "my_pages") && (
-          <div className="transition-all duration-700 animate-in fade-in slide-in-from-bottom-4">
-            {!loading && thoughts.length > 0 && (activeTab === "read" || activeTab === "favorites") && (
-              <div className="flex justify-center md:justify-end mb-8 relative z-30">
-                <div className="relative">
-                  <button onClick={() => setIsSortMenuOpen(!isSortMenuOpen)} className="flex items-center gap-3 bg-white/95 md:bg-white/80 backdrop-blur-none md:backdrop-blur-md px-5 py-3 rounded-full border border-[#E8DAC2]/60 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all duration-300 text-[#4A4036] text-sm font-semibold group"><ChevronDown className="w-4 h-4 text-[#D4AF37]" />{sortBy === "newest" && "Dal più recente"}{sortBy === "oldest" && "Dal più vecchio"}{sortBy === "longest" && "I più lunghi"}{sortBy === "shortest" && "I più concisi"}<ChevronDown className={`w-4 h-4 text-[#D4C3A3] transition-transform duration-300 ${isSortMenuOpen ? 'rotate-180' : ''}`} /></button>
-                  {isSortMenuOpen && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setIsSortMenuOpen(false)}></div>
-                      <div className="absolute right-0 mt-3 w-56 bg-white/95 backdrop-blur-none md:backdrop-blur-xl border border-[#E8DAC2]/50 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.1)] z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 zoom-in-95 origin-top-right">
-                        <div className="py-2">
-                          {[{ id: "newest", label: "Dal più recente" }, { id: "oldest", label: "Dal più vecchio" }, { id: "longest", label: "I più lunghi" }, { id: "shortest", label: "I più concisi" }].map((option: any) => (
-                            <button key={option.id} onClick={() => { setSortBy(option.id); setIsSortMenuOpen(false); }} className={`w-full text-left px-5 py-3.5 text-sm font-semibold transition-all duration-300 flex items-center gap-3 hover:translate-x-1.5 ${sortBy === option.id ? 'bg-[#F4EFE6] text-[#1A1510]' : 'text-[#6B5A46] hover:bg-[#FDF2F2] hover:text-[#902A2A]'}`}><div className={`w-1.5 h-1.5 rounded-full transition-colors duration-300 ${sortBy === option.id ? 'bg-[#D4AF37]' : 'bg-transparent'}`}></div>{option.label}</button>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {loading ? ( <div className="flex flex-col items-center justify-center py-20 text-[#8B6E4E]"><Loader2 className="w-10 h-10 animate-spin mb-4 text-[#D4AF37] filter drop-shadow-md" /><p className="font-semibold tracking-widest uppercase text-xs animate-pulse">Apertura in corso...</p></div> ) : displayedThoughts.length === 0 ? (
-              <div className="text-center py-20 animate-in fade-in slide-in-from-bottom-4 duration-700 bg-white/90 md:bg-white/40 backdrop-blur-none md:backdrop-blur-sm rounded-3xl border border-[#E8DAC2]/50 p-10 max-w-lg mx-auto shadow-sm">
-                <Bookmark className="w-16 h-16 text-[#D4AF37]/40 mx-auto mb-6 drop-shadow-sm hover:scale-110 hover:rotate-6 transition-transform duration-500" />
-                <h3 className="text-2xl font-cormorant font-bold text-[#1A1510] mb-2">Nessuna pagina trovata.</h3>
-                <p className="text-[#6B5A46] text-sm">Le pagine dello Zibaldone attendono l'inchiostro.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-32">
-                {displayedThoughts.map((thought: any, index: number) => {
-                  const isDeleting = deletingIds.includes(thought.id);
-                  const isSelected = selectedIds.includes(thought.id);
-                  const canDelete = isAdmin; 
-                  
-                  return (
-                  <article key={thought.id} onClick={() => handleCardClick(thought)} className={`bg-white/95 md:bg-white/80 backdrop-blur-none md:backdrop-blur-sm p-8 rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md flex flex-col group relative overflow-hidden cursor-pointer transition-all duration-500 hover:-translate-y-2 active:scale-[0.98] ${isDeleting ? "animate-[turnToAsh_1.1s_cubic-bezier(0.4,0,0.2,1)_forwards] pointer-events-none z-50" : "animate-in fade-in slide-in-from-bottom-8 zoom-in-95"} ${isSelected ? 'ring-2 ring-[#D4AF37] shadow-[0_15px_35px_rgba(212,175,55,0.2)] bg-white' : 'border border-[#E8DAC2]/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(212,175,55,0.15)] hover:border-[#D4AF37]/50'}`} style={isDeleting ? {} : { animationFillMode: "both", animationDelay: `${index * 60}ms` }}>
-                    
-                    {isDeleting && (
-                      <div className="absolute inset-0 pointer-events-none z-[60] flex items-end justify-center rounded-2xl">
-                         <div className="absolute inset-0 bg-gradient-to-t from-[#902A2A] via-[#D45A27]/40 to-transparent opacity-0 animate-[fireGlow_1.1s_ease-out_forwards]"></div>
-                         <div className="absolute bottom-[-10px] flex items-end justify-center animate-[fireRise_1.1s_ease-in-out_forwards]">
-                            <div className="absolute w-32 h-32 bg-[#902A2A] rounded-tl-full rounded-br-full rounded-bl-full -rotate-45 -translate-x-12 translate-y-4"></div>
-                            <div className="absolute w-40 h-40 bg-[#902A2A] rounded-tl-full rounded-br-full rounded-bl-full -rotate-45 translate-x-8 translate-y-8"></div>
-                         </div>
-                      </div>
-                    )}
-
-                    <div className="absolute left-6 top-0 bottom-0 w-[1px] bg-gradient-to-b from-transparent via-[#D4AF37]/30 to-transparent z-0"></div>
-
-                    {isSelectionMode && canDelete && (
-                      <div className="absolute top-5 right-5 z-20 transition-transform duration-300 hover:scale-110 active:scale-95">
-                        {isSelected ? <CheckCircle2 className="w-7 h-7 text-[#D4AF37] drop-shadow-md fill-white" /> : <Circle className="w-7 h-7 text-[#E8DAC2] group-hover:text-[#D4AF37]/70 transition-colors duration-300" />}
-                      </div>
-                    )}
-
-                    {!isSelectionMode && canDelete && (
-                      <div className="absolute top-5 right-5 z-20 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <button onClick={(e: any) => { e.stopPropagation(); setThoughtToDelete(thought); }} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-md border border-[#E8DAC2]/50 shadow-sm hover:bg-[#FDF2F2] hover:border-[#902A2A]/30 hover:-translate-y-1 active:scale-90 transition-all duration-300 hover:shadow-md group/trash" title="Brucia"><Trash2 className="w-4 h-4 text-[#8B6E4E] group-hover/trash:text-[#902A2A] transition-colors duration-300" /></button>
-                        {isAdmin && (
-                          <button onClick={(e: any) => { e.stopPropagation(); toggleStar(thought.id, thought.isStarred); }} className="w-9 h-9 rounded-full flex items-center justify-center bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-md border border-[#E8DAC2]/50 shadow-sm hover:bg-[#F9F6F0] hover:border-[#D4AF37]/50 hover:-translate-y-1 active:scale-90 transition-all duration-300 hover:shadow-md group/star" title="Evidenzia"><Star className={`w-4 h-4 transition-all duration-300 group-hover/star:scale-110 group-hover/star:rotate-12 ${thought.isStarred ? "fill-[#D4AF37] text-[#D4AF37] drop-shadow-[0_0_4px_rgba(212,175,55,0.5)]" : "text-[#8B6E4E]"}`} /></button>
-                        )}
-                      </div>
-                    )}
-
-                    <header className={`mb-5 relative z-10 pl-4 ${isSelectionMode ? 'pr-12' : 'pr-20'}`}>
-                      <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 text-[9px] font-bold text-[#8B6E4E] uppercase tracking-widest mb-3">
-                        <span className="truncate max-w-[140px] bg-[#F4EFE6] px-2.5 py-1 rounded-sm cursor-help hover:bg-[#E8DAC2] hover:text-[#1A1510] transition-colors duration-300 shadow-sm" title={thought.author}>DI {thought.author}</span>
-                        <span className="hidden sm:inline w-1 h-1 rounded-full bg-[#D4AF37] shrink-0"></span>
-                        <span className="shrink-0 opacity-80">{formatDate(thought.timestamp)}</span>
-                      </div>
-                      <h2 className="text-2xl font-cormorant font-bold text-[#1A1510] leading-snug break-words line-clamp-2 group-hover:text-[#8B6E4E] transition-colors duration-300">{thought.title}</h2>
-                    </header>
-                    <div className="flex-grow relative z-10 pl-4"><div className="text-[#3A3228] leading-relaxed whitespace-pre-wrap font-cormorant font-medium text-lg line-clamp-4 break-words rich-text-content" dangerouslySetInnerHTML={{ __html: thought.content }} /></div>
-                    
-                    {thought.strokes && thought.strokes.length > 0 && (
-                       <div className="mt-5 pl-4 flex items-center gap-2 text-[10px] text-[#2C5E9E] font-bold tracking-wider uppercase opacity-80 group-hover:opacity-100 transition-opacity duration-300">
-                         <Pencil className="w-3 h-3" /> Disegni Inclusi
-                       </div>
-                    )}
-
-                    {!isSelectionMode && (
-                      <div className="mt-6 pt-5 border-t border-[#E8DAC2]/40 flex justify-between items-center relative z-10 pl-4"><div className="w-10 h-[2px] bg-[#E8DAC2] transition-all duration-500 group-hover:w-20 group-hover:bg-[#D4AF37]"></div><span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8B6E4E] group-hover:text-[#D4AF37] group-hover:translate-x-1 transition-all duration-300">Esplora pagina</span></div>
-                    )}
-                  </article>
-                )})}
+      <div className="md:ml-60 pb-28 md:pb-12">
+        <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
+            <div><h1 className="hd text-3xl md:text-5xl font-bold">{titles[tab]}</h1>{isList && !loading && <p className="mu text-sm mt-1.5">{shown.length} {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
+            {isList && (
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+                <select className="inp !w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>{Object.keys(SORTS).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}</select>
+                {items.length > 0 && <button className={`bt ${selMode ? "on" : ""}`} onClick={() => { setSelMode(!selMode); setIds([]); }}><ListChecks size={15} />{selMode ? "Fine" : "Seleziona"}</button>}
               </div>
             )}
           </div>
-        )}
 
-        {activeTab === "write" && (
-          <div className="max-w-3xl mx-auto transition-all duration-700 animate-in fade-in slide-in-from-bottom-12 zoom-in-95">
-            <div className="text-center mb-10"><p className="text-[#6B5A46] italic font-cormorant text-xl opacity-80 hover:opacity-100 transition-opacity duration-500">"La penna svela ciò che il pensiero nasconde."</p></div>
-            <div className="bg-white/95 md:bg-white/80 backdrop-blur-none md:backdrop-blur-xl p-8 md:p-12 rounded-[2rem] shadow-[0_20px_50px_rgba(26,21,16,0.06)] border border-[#E8DAC2]/80 relative transition-all duration-500 hover:shadow-[0_25px_60px_rgba(26,21,16,0.1)] isolate">
-              
-              <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-[#FDFBF7] to-transparent border-b border-l border-[#E8DAC2]/40 rounded-bl-[4rem] opacity-60 pointer-events-none -z-10"></div>
-
-              <h2 className="text-3xl font-cormorant font-bold text-[#1A1510] mb-8 text-center relative z-10 drop-shadow-sm">Intingi la Penna</h2>
-              
-              <form onSubmit={handleSubmit} className="space-y-8 relative z-10">
-                <div className="space-y-2 group">
-                  <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 block group-focus-within:text-[#D4AF37] group-focus-within:-translate-y-0.5 transition-all duration-300">Il Titolo del tuo Pensiero</label>
-                  <input type="text" value={newTitle} onChange={(e: any) => setNewTitle(e.target.value)} placeholder="Es: L'infinito" className="w-full bg-white/95 md:bg-white/60 border border-[#E8DAC2] rounded-2xl px-5 py-4 text-[#1A1510] font-cormorant font-bold text-xl placeholder:text-[#CDB591] placeholder:font-sans placeholder:font-normal placeholder:text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:-translate-y-1 focus:shadow-[0_10px_30px_rgba(212,175,55,0.15)] transition-all duration-500 shadow-inner" required />
-                </div>
-                
-                <div className="space-y-2 group">
-                  <label className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider pl-2 block group-focus-within:text-[#D4AF37] group-focus-within:-translate-y-0.5 transition-all duration-300 flex items-center justify-between">Il tuo scritto</label>
-                  
-                  <div className={`w-full border rounded-[15px] bg-white/95 md:bg-white/60 focus-within:ring-2 focus-within:ring-[#D4AF37]/50 focus-within:-translate-y-1 transition-all duration-500 flex flex-col shadow-inner isolate relative ${isDrawingMode ? 'border-[#D4AF37] shadow-[0_15px_40px_rgba(212,175,55,0.2)]' : 'border-[#E8DAC2] focus-within:shadow-[0_15px_40px_rgba(212,175,55,0.15)]'}`}>
-                    
-                    <div className="flex items-center justify-between gap-3 p-3 border-b border-[#E8DAC2] bg-[#FDFBF7]/95 md:bg-[#FDFBF7]/80 backdrop-blur-none md:backdrop-blur-md flex-wrap animate-in slide-in-from-top-4 duration-500 rounded-t-[15px] z-40 min-h-[56px]">
-                      
-                      {activeImg ? (
-                        <div className="flex items-center gap-2 w-full animate-in fade-in zoom-in-95 duration-300">
-                          <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider hidden sm:inline mr-2">Foto Selezionata:</span>
-                          
-                          <div className="flex bg-[#F4EFE6] rounded-lg p-1 border border-[#D4AF37]/50 shadow-sm">
-                            <button type="button" onClick={() => handleImageAction('shrink')} className="w-8 h-8 flex items-center justify-center rounded text-[#4A4036] hover:bg-white hover:text-[#1A1510] active:scale-90 transition-all" title="Rimpicciolisci"><span className="text-lg font-bold">-</span></button>
-                            <button type="button" onClick={() => handleImageAction('grow')} className="w-8 h-8 flex items-center justify-center rounded text-[#4A4036] hover:bg-white hover:text-[#1A1510] active:scale-90 transition-all" title="Ingrandisci"><span className="text-lg font-bold">+</span></button>
-                          </div>
-                          
-                          <div className="w-[1px] h-6 bg-[#D4AF37]/30 mx-1"></div>
-                          
-                          <div className="flex bg-[#F4EFE6] rounded-lg p-1 border border-[#E8DAC2]/50 shadow-sm">
-                            <button type="button" onClick={() => handleImageAction('left')} className="w-8 h-8 flex items-center justify-center rounded text-[#4A4036] hover:bg-white hover:text-[#1A1510] active:scale-90 transition-all" title="Sposta a Sinistra"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h6M4 18h16"/></svg></button>
-                            <button type="button" onClick={() => handleImageAction('center')} className="w-8 h-8 flex items-center justify-center rounded text-[#4A4036] hover:bg-white hover:text-[#1A1510] active:scale-90 transition-all" title="Centra"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M9 12h6M4 18h16"/></svg></button>
-                            <button type="button" onClick={() => handleImageAction('right')} className="w-8 h-8 flex items-center justify-center rounded text-[#4A4036] hover:bg-white hover:text-[#1A1510] active:scale-90 transition-all" title="Sposta a Destra"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M14 12h6M4 18h16"/></svg></button>
-                          </div>
-
-                          <div className="w-[1px] h-6 bg-[#D4AF37]/30 mx-1"></div>
-
-                          <button type="button" onClick={() => handleImageAction('delete')} className="w-8 h-8 flex items-center justify-center rounded bg-[#FDF2F2] border border-[#902A2A]/30 text-[#902A2A] hover:bg-[#902A2A] hover:text-white active:scale-90 transition-all ml-auto" title="Rimuovi Foto"><Trash2 size={16}/></button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex gap-2 flex-wrap items-center">
-                            <div className="flex bg-[#F4EFE6] rounded-lg p-1 border border-[#E8DAC2]/50 shadow-sm">
-                              <button type="button" onClick={() => formatText('bold')} className={`w-8 h-8 flex items-center justify-center rounded transition-all duration-300 ${activeFormats.bold ? 'bg-[#1A1510] text-[#D4AF37] shadow-md scale-110' : 'hover:bg-white hover:shadow-sm text-[#4A4036] hover:scale-110 active:scale-90 hover:-translate-y-0.5'}`} title="Grassetto"><Bold size={16}/></button>
-                              <button type="button" onClick={() => formatText('italic')} className={`w-8 h-8 flex items-center justify-center rounded transition-all duration-300 ${activeFormats.italic ? 'bg-[#1A1510] text-[#D4AF37] shadow-md scale-110' : 'hover:bg-white hover:shadow-sm text-[#4A4036] hover:scale-110 active:scale-90 hover:-translate-y-0.5'}`} title="Corsivo"><Italic size={16}/></button>
-                              <button type="button" onClick={() => formatText('underline')} className={`w-8 h-8 flex items-center justify-center rounded transition-all duration-300 ${activeFormats.underline ? 'bg-[#1A1510] text-[#D4AF37] shadow-md scale-110' : 'hover:bg-white hover:shadow-sm text-[#4A4036] hover:scale-110 active:scale-90 hover:-translate-y-0.5'}`} title="Sottolineato"><Underline size={16}/></button>
-                            </div>
-                            
-                            <div className="w-[1px] h-6 bg-[#D4AF37]/30 mx-1 hidden sm:block"></div>
-                            
-                            <div className="flex bg-[#F4EFE6] rounded-lg p-1 border border-[#E8DAC2]/50 shadow-sm">
-                               <label className="w-8 h-8 flex items-center justify-center rounded hover:bg-white hover:shadow-sm text-[#4A4036] hover:scale-110 active:scale-90 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer" title="Inserisci Foto al cursore">
-                                  <ImageIcon size={16} />
-                                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                               </label>
-                            </div>
-                          </div>
-                          
-                          <div className="flex bg-[#F4EFE6] rounded-lg p-1 border border-[#E8DAC2]/50 shadow-sm ml-auto">
-                            <button type="button" onClick={() => setIsDrawingMode(!isDrawingMode)} className={`w-8 h-8 flex items-center justify-center rounded transition-all duration-300 ${isDrawingMode ? 'bg-[#1A1510] text-[#D4AF37] shadow-md scale-110' : 'hover:bg-white hover:shadow-sm text-[#4A4036] hover:scale-110 active:scale-90 hover:-translate-y-0.5'}`} title="Disegna a Mano">
-                              <Pencil size={16}/>
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    {isDrawingMode && (
-                      <div className="flex flex-wrap items-center justify-between gap-2 p-2 px-3 bg-[#F4EFE6]/90 backdrop-blur-sm border-b border-[#E8DAC2] animate-in slide-in-from-top-2 z-40 shadow-inner">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-[#8B6E4E] uppercase tracking-wider ml-1 hidden sm:inline">Inchiostro:</span>
-                          <div className="flex gap-2">
-                            <button type="button" onClick={() => setDrawColor('#1A1510')} className={`w-6 h-6 rounded-full bg-[#1A1510] border-2 shadow-sm transition-all ${drawColor === '#1A1510' ? 'border-[#D4AF37] scale-125' : 'border-white hover:scale-110'}`} title="Nero"></button>
-                            <button type="button" onClick={() => setDrawColor('#902A2A')} className={`w-6 h-6 rounded-full bg-[#902A2A] border-2 shadow-sm transition-all ${drawColor === '#902A2A' ? 'border-[#D4AF37] scale-125' : 'border-white hover:scale-110'}`} title="Rosso"></button>
-                            <button type="button" onClick={() => setDrawColor('#2C5E9E')} className={`w-6 h-6 rounded-full bg-[#2C5E9E] border-2 shadow-sm transition-all ${drawColor === '#2C5E9E' ? 'border-[#D4AF37] scale-125' : 'border-white hover:scale-110'}`} title="Blu"></button>
-                            <button type="button" onClick={() => setDrawColor('#2A6B36')} className={`w-6 h-6 rounded-full bg-[#2A6B36] border-2 shadow-sm transition-all ${drawColor === '#2A6B36' ? 'border-[#D4AF37] scale-125' : 'border-white hover:scale-110'}`} title="Verde"></button>
-                          </div>
-                        </div>
-                        <button type="button" onClick={() => setStrokes([])} className="text-[10px] font-bold uppercase text-[#902A2A] bg-white border border-[#902A2A]/20 hover:bg-[#FDF2F2] px-3 py-1.5 rounded-lg transition-all active:scale-95 shadow-sm ml-auto">Svuota</button>
-                      </div>
-                    )}
-
-                    <div className="relative bg-transparent rounded-b-[15px]">
-                      <div className="relative w-full transition-all duration-300" style={{ minHeight: `${editorHeight}px` }}>
-                        
-                        <div
-                          ref={editorRef}
-                          contentEditable={!isDrawingMode}
-                          onClick={handleEditorClick}
-                          onInput={(e: any) => setNewContent(e.currentTarget.innerHTML)}
-                          onKeyUp={updateFormattingState}
-                          onMouseUp={updateFormattingState}
-                          onTouchEnd={updateFormattingState}
-                          className={`p-5 md:p-6 outline-none font-cormorant font-medium text-xl leading-[32px] text-[#2C241B] rich-text-content transition-opacity duration-300 break-words [word-break:break-word] ${isDrawingMode ? 'opacity-50 select-none whitespace-pre-wrap' : 'opacity-100'}`}
-                          style={{ 
-                            minHeight: `${editorHeight}px`,
-                            backgroundImage: 'linear-gradient(transparent 31px, rgba(212,175,55,0.15) 32px)', 
-                            backgroundSize: '100% 32px', 
-                            backgroundOrigin: 'content-box', 
-                            backgroundAttachment: 'local'
-                          }}
-                          onKeyDown={(e: any) => {
-                            if (e.key === 'Enter') document.execCommand('formatBlock', false, 'div');
-                          }}
-                        />
-
-                        <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-20">
-                          {strokes.map((stroke: any, i: number) => (
-                            <polyline 
-                              key={i} 
-                              points={stroke.points.map((p: any) => `${p.x},${p.y}`).join(' ')} 
-                              fill="none" 
-                              stroke={stroke.color} 
-                              strokeWidth="3" 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round" 
-                            />
-                          ))}
-                          {currentStroke && (
-                            <polyline 
-                              points={currentStroke.points.map((p: any) => `${p.x},${p.y}`).join(' ')} 
-                              fill="none" 
-                              stroke={currentStroke.color} 
-                              strokeWidth="3" 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round" 
-                            />
-                          )}
-                        </svg>
-
-                        {isDrawingMode && (
-                          <div
-                            className="absolute top-0 left-0 w-full h-full z-30 cursor-crosshair"
-                            style={{ touchAction: 'none' }}
-                            onPointerDown={handlePointerDown}
-                            onPointerMove={handlePointerMove}
-                            onPointerUp={handlePointerUp}
-                            onPointerCancel={handlePointerUp}
-                            onPointerLeave={handlePointerUp}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <button type="submit" disabled={isSubmitting || (!newContent.trim() && strokes.length === 0)} className="w-full bg-gradient-to-r from-[#1A1510] to-[#2C241B] text-[#FDFBF7] py-4 rounded-2xl font-semibold text-sm transition-all duration-500 hover:shadow-[0_15px_35px_rgba(26,21,16,0.4)] hover:-translate-y-1.5 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 mt-8 border border-[#3A3228] group">
-                  {isSubmitting ? <><Loader2 className="w-5 h-5 animate-spin text-[#D4AF37]" /><span className="animate-pulse">Sigillo in corso...</span></> : <><Send className="w-5 h-5 text-[#D4AF37] group-hover:translate-x-2 group-hover:-translate-y-2 transition-transform duration-500" />Affida la lettera all'Archivio</>}
-                </button>
-              </form>
+          {/* LISTA */}
+          {isList && (loading ? (
+            <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
+          ) : shown.length === 0 ? (
+            <div className="pn p-12 text-center max-w-md mx-auto up">
+              <Cpu className="mx-auto mb-4 mu" size={36} />
+              <h3 className="hd text-xl font-bold mb-1">{search ? "Nessun risultato" : "Ancora nessun progetto"}</h3>
+              <p className="mu text-sm mb-5">{search ? "Prova con un'altra parola." : "Crea il primo: puoi scrivere, aggiungere foto e disegnare."}</p>
+              {!search && <button className="bt pri" onClick={() => go("write")}><Plus size={15} />Nuovo progetto</button>}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {shown.map((t, i) => {
+                const picked = ids.includes(t.id), { w, h } = dims(t);
+                return (
+                  <Reveal key={t.id} delay={(i % 3) * 90} className="h-full"><article onClick={() => selMode ? setIds((p) => p.includes(t.id) ? p.filter((x) => x !== t.id) : [...p, t.id]) : setSel(t)}
+                    className={`pn card h-full overflow-hidden cursor-pointer ${gone.includes(t.id) ? "gone" : ""} ${picked ? "!border-[var(--ac)] ring-2 ring-[var(--ac)]" : ""}`}>
+                    <div className="paper mm sm relative h-40 overflow-hidden">
+                      <div className="thumb absolute inset-0">
+                        {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
+                        <div className="rt relative p-3 line-clamp-5" dangerouslySetInnerHTML={{ __html: clean(t.content) }} />
+                      </div>
+                      {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
+                      {t.isStarred && <Star size={16} className="absolute top-2 left-2" style={{ fill: "var(--am)", color: "var(--am)" }} />}
+                    </div>
+                    <div className="p-5 border-t" style={{ borderColor: "var(--ln)" }}>
+                      <h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
+                      <div className="mu text-xs mt-1 flex justify-between"><span className="truncate">{t.author}</span><span>{fmtDate(t.timestamp)}</span></div>
+                    </div>
+                  </article></Reveal>
+                );
+              })}
+            </div>
+          ))}
 
-        {selectedThought && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6" onClick={() => setSelectedThought(null)} style={{ perspective: "1500px" }}>
-            <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.5s ease-out forwards" }}></div>
-            <div className="bg-[#FDFBF7] md:bg-[#FDFBF7]/95 w-full max-w-3xl max-h-[88vh] rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 flex flex-col overflow-hidden border border-[#E8DAC2] transition-transform duration-500" onClick={(e: any) => e.stopPropagation()} style={{ animation: "paperFloat 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
-              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-[#FDFBF7] to-transparent border-b border-l border-[#E8DAC2]/30 rounded-bl-[6rem] opacity-80 pointer-events-none z-0"></div>
-              
-              <div className="flex flex-col-reverse md:flex-row justify-between items-start gap-4 md:gap-0 p-5 md:p-10 border-b border-[#E8DAC2]/50 sticky top-0 bg-[#FDFBF7] md:bg-[#FDFBF7]/95 backdrop-blur-none md:backdrop-blur-xl z-20 shadow-sm transition-all duration-500 w-full">
-                <div className="flex-1 min-w-0 w-full md:pr-4">
-                  <div className="flex flex-wrap items-center gap-2 md:gap-3 text-[10px] font-bold text-[#8B6E4E] uppercase tracking-widest mb-3 md:mb-4">
-                    <span className="bg-gradient-to-r from-[#D4AF37] to-[#C59B27] text-[#1A1510] px-3 py-1.5 rounded-md truncate max-w-[200px] shadow-sm cursor-help hover:shadow-md hover:-translate-y-0.5 transition-all duration-300" title={selectedThought.author}>FIRMA: {selectedThought.author}</span>
-                    <span className="bg-[#F4EFE6] px-3 py-1.5 rounded-md shrink-0 border border-[#E8DAC2] shadow-sm">{formatDate(selectedThought.timestamp)}</span>
+          {/* EDITOR */}
+          {tab === "write" && (
+            <form onSubmit={submit} className="space-y-4 up">
+              <input className="inp !text-xl !py-3 hd font-bold" placeholder="Nome del progetto" value={title} onChange={(e) => setTitle(e.target.value)} required />
+              <div className="pn overflow-hidden">
+                <div className="p-2 border-b space-y-2" style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onMouseDown={(e) => { if ((e.target as any).tagName !== "INPUT" && (e.target as any).tagName !== "SELECT") e.preventDefault(); }}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex p-0.5 rounded-lg" style={{ border: "1px solid var(--ln)" }}>
+                      <button type="button" className={`bt border-0 ${!drawing ? "on" : ""}`} onClick={() => setDrawing(false)}><Type size={15} />Testo</button>
+                      <button type="button" className={`bt border-0 ${drawing ? "on" : ""}`} onClick={() => { setDrawing(true); setImg(null); }}><Pencil size={15} />Disegno</button>
+                    </div>
+                    {!drawing ? (<>
+                      <button type="button" className={`bt !p-2 ${fmt.b ? "on" : ""}`} onClick={() => cmd("bold")} title="Grassetto"><Bold size={15} /></button>
+                      <button type="button" className={`bt !p-2 ${fmt.i ? "on" : ""}`} onClick={() => cmd("italic")} title="Corsivo"><Italic size={15} /></button>
+                      <button type="button" className={`bt !p-2 ${fmt.u ? "on" : ""}`} onClick={() => cmd("underline")} title="Sottolineato"><Underline size={15} /></button>
+                      <button type="button" className="bt !p-2" onClick={() => cmd("formatBlock", "h2")} title="Titolo"><Heading2 size={15} /></button>
+                      <button type="button" className="bt !p-2" onClick={() => cmd("insertUnorderedList")} title="Elenco"><List size={15} /></button>
+                      <div className="relative">
+                        <button type="button" className="bt !p-2" onClick={() => setColorOpen(!colorOpen)} title="Colore testo"><Palette size={15} /></button>
+                        {colorOpen && <div className="absolute z-40 top-full mt-1 pn p-2 grid grid-cols-7 gap-1.5 pop">{INK_COLORS.map((c) => <button type="button" key={c.id} title={c.name} className="w-6 h-6 rounded-full border" style={{ background: c.id, borderColor: "var(--ln)" }} onClick={() => { cmd("foreColor", c.id); setColorOpen(false); }} />)}</div>}
+                      </div>
+                      <label className="bt !p-2 cursor-pointer" title="Inserisci foto"><ImageIcon size={15} /><input type="file" accept="image/*" className="hidden" onChange={addImage} /></label>
+                      {img && <div className="flex gap-1 items-center ml-1">
+                        {["25%", "50%", "75%", "100%"].map((w) => <button type="button" key={w} className="bt !px-2 !py-1 !text-xs" onClick={() => resizeImg(w)}>{w}</button>)}
+                        <button type="button" className="bt dng !p-1.5" onClick={removeImg}><Trash2 size={14} /></button>
+                      </div>}
+                    </>) : (<>
+                      {TOOLS.map((t) => <button type="button" key={t.id} className={`bt ${tool === t.id ? "on" : ""}`} onClick={() => setTool(t.id)}><t.icon size={15} />{t.label}</button>)}
+                    </>)}
+                    <div className="ml-auto flex gap-2">
+                      <button type="button" className={`bt !p-2 ${grid ? "on" : ""}`} onClick={() => setGrid(!grid)} title="Griglia"><Grid3x3 size={15} /></button>
+                      {drawing && <>
+                        <button type="button" className="bt !p-2" disabled={!hist.length} onClick={undo} title="Annulla (Ctrl+Z)"><Undo size={15} /></button>
+                        <button type="button" className="bt !p-2" disabled={!fut.length} onClick={redo} title="Ripeti (Ctrl+Y)"><Redo size={15} /></button>
+                        <button type="button" className="bt dng" disabled={!strokes.length} onClick={() => { snap(); setStrokes([]); }}>Svuota</button>
+                      </>}
+                    </div>
                   </div>
-                  <h2 className="text-3xl md:text-4xl font-cormorant font-bold text-[#1A1510] break-words leading-tight drop-shadow-sm">{selectedThought.title}</h2>
-                </div>
-                
-                <div className="flex items-center gap-1.5 self-end md:self-start shrink-0 bg-white p-2 rounded-full border border-[#E8DAC2] shadow-[0_4px_15px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300">
-                  {isAdmin && (
-                    <>
-                      <button onClick={() => setThoughtToDelete(selectedThought)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-[#FDF2F2] hover:-translate-y-1 active:scale-90 transition-all duration-300 group"><Trash2 className="w-4 h-4 text-[#D4C3A3] group-hover:text-[#902A2A] transition-colors" /></button>
-                      <div className="w-[1px] h-6 bg-[#E8DAC2]"></div>
-                      <button onClick={() => { toggleStar(selectedThought.id, selectedThought.isStarred); setSelectedThought({ ...selectedThought, isStarred: !selectedThought.isStarred }); }} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-[#F4EFE6] hover:-translate-y-1 active:scale-90 transition-all duration-300"><Star className={`w-4 h-4 transition-all duration-300 ${selectedThought.isStarred ? "fill-[#D4AF37] text-[#D4AF37] drop-shadow-[0_0_5px_rgba(212,175,55,0.6)] scale-125 rotate-12" : "text-[#D4C3A3] hover:scale-110"}`} /></button>
-                      <div className="w-[1px] h-6 bg-[#E8DAC2]"></div>
-                    </>
-                  )}
-                  <button onClick={() => setSelectedThought(null)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-[#FDFBF7] text-[#1A1510] hover:scale-110 hover:rotate-90 active:scale-90 transition-all duration-300 bg-[#F4EFE6]"><X className="w-5 h-5" /></button>
-                </div>
-              </div>
-              
-              <div className="p-8 md:p-12 overflow-y-auto relative z-10 custom-scrollbar">
-                
-                <div className="relative w-full" style={{ minHeight: `${calculateReadMaxY()}px` }}>
-                  <div className={`text-[#3A3228] leading-[32px] whitespace-pre-wrap font-cormorant font-medium text-2xl break-words rich-text-content ${selectedThought.content && !selectedThought.content.startsWith('<') ? 'drop-cap' : ''} pb-10`} dangerouslySetInnerHTML={{ __html: selectedThought.content }} />
-                  
-                  {selectedThought.strokes && selectedThought.strokes.length > 0 && (
-                    <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-20">
-                      {selectedThought.strokes.map((stroke: any, i: number) => (
-                        <polyline 
-                          key={i} 
-                          points={stroke.points.map((p: any) => `${p.x},${p.y}`).join(' ')} 
-                          fill="none" 
-                          stroke={stroke.color} 
-                          strokeWidth="3" 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round" 
-                        />
-                      ))}
-                    </svg>
+                  {drawing && (
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                      {tool !== "eraser" && <div className="grid grid-cols-14 gap-1" style={{ gridTemplateColumns: "repeat(14,minmax(0,1fr))" }}>
+                        {INK_COLORS.map((c) => <button type="button" key={c.id} title={c.name} onClick={() => setColor(c.id)} className="w-6 h-6 rounded-full border-2" style={{ background: c.id, borderColor: color === c.id ? "var(--ac)" : "var(--ln)", transform: color === c.id ? "scale(1.15)" : "none" }} />)}
+                      </div>}
+                      <label className="flex items-center gap-2 text-xs mu">Spessore<input type="range" min={tool === "eraser" ? 5 : 1} max={tool === "eraser" ? 100 : 40} value={tool === "eraser" ? eraser : size} onChange={(e) => tool === "eraser" ? setEraser(+e.target.value) : setSize(+e.target.value)} className="accent-teal-600" /></label>
+                      {tool !== "eraser" && <label className="flex items-center gap-2 text-xs mu">Opacità<input type="range" min={5} max={100} value={opacity} onChange={(e) => setOpacity(+e.target.value)} className="accent-teal-600" /></label>}
+                      {(tool === "rect" || tool === "ellipse") && <label className="flex items-center gap-2 text-xs mu"><input type="checkbox" checked={filled} onChange={(e) => setFilled(e.target.checked)} />Riempi</label>}
+                    </div>
                   )}
                 </div>
 
-                <div className="mt-20 flex flex-col items-center justify-center group"><Feather className="w-8 h-8 text-[#D4AF37]/50 mb-3 drop-shadow-sm group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-500" /><div className="w-12 h-[1px] bg-[#D4AF37]/30 mb-3 group-hover:w-20 transition-all duration-500"></div><span className="text-xs font-montserrat font-bold tracking-[0.3em] uppercase text-[#CDB591] group-hover:text-[#8B6E4E] transition-colors duration-500">Fine Pagina</span></div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showAdminModal && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onClick={() => setShowAdminModal(false)}>
-            <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
-            <div className="bg-white/95 md:bg-white/90 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#E8DAC2]" onClick={(e: any) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
-              <div className="flex flex-col items-center mb-8">
-                <div className="w-16 h-16 bg-gradient-to-br from-[#E8DAC2]/50 to-[#D4C3A3]/20 rounded-full flex items-center justify-center mb-4 border border-[#D4AF37]/30 shadow-inner group hover:scale-110 hover:-translate-y-1 transition-all duration-500">
-                  <KeyRound className="w-8 h-8 text-[#8B6E4E] drop-shadow-sm group-hover:-rotate-12 transition-transform duration-500" />
+                <div ref={canvasRef} className={`paper relative ${grid ? "mm" : ""}`} style={{ minHeight: height }}>
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                    {strokes.map((s, i) => <Shape key={i} s={s} />)}
+                    {cur && <Shape s={cur} />}
+                  </svg>
+                  <div ref={editorRef} contentEditable={!drawing} suppressContentEditableWarning data-ph="Scrivi appunti, formule, note di cablaggio…"
+                    className="rt relative p-6 outline-none" style={{ minHeight: height, caretColor: "#0F8B7A" }}
+                    onInput={(e: any) => setContent(e.currentTarget.innerHTML)} onClick={pickImg} onKeyUp={readFmt} onMouseUp={readFmt}
+                    onKeyDown={(e) => { if (e.key === "Enter") document.execCommand("formatBlock", false, "div"); }} />
+                  {drawing && <div className="absolute inset-0 z-30" style={{ touchAction: "none", cursor: tool === "eraser" ? "cell" : "crosshair" }} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp} />}
                 </div>
-                <h3 className="text-3xl font-cormorant font-bold text-[#1A1510] text-center tracking-wide">Archivio Segreto</h3>
-              </div>
-              <form onSubmit={handleAdminLogin}>
-                <input type="password" value={adminPassword} onChange={(e: any) => { setAdminPassword(e.target.value); setAdminError(false); }} className={`w-full bg-[#FDFBF7] border ${adminError ? 'border-[#902A2A] ring-1 ring-[#902A2A]/50' : 'border-[#E8DAC2]'} rounded-2xl px-5 py-4 text-center mb-6 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:-translate-y-1 focus:shadow-md transition-all duration-500 shadow-inner font-medium`} placeholder="La parola d'ordine..." autoFocus />
-                <div className="flex gap-4">
-                  <button type="button" onClick={() => setShowAdminModal(false)} className="flex-1 py-3.5 rounded-2xl text-[#8B6E4E] font-bold text-sm uppercase tracking-wider hover:bg-[#F4EFE6] hover:-translate-y-1 active:scale-95 transition-all duration-300">Annulla</button>
-                  <button type="submit" disabled={!adminPassword.trim()} className="flex-1 py-3.5 rounded-2xl text-white bg-gradient-to-r from-[#1A1510] to-[#2C241B] font-bold text-sm uppercase tracking-wider shadow-[0_5px_15px_rgba(26,21,16,0.3)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(26,21,16,0.5)] active:scale-95 transition-all duration-300 disabled:opacity-50">Sblocca</button>
+                <div className="flex justify-between items-center px-4 py-2 text-xs mu border-t" style={{ borderColor: "var(--ln)" }}>
+                  <span>{words} parole · {strokes.length} tratti{!editingId && " · bozza salvata in automatico"}</span>
+                  <button type="button" className="bt !py-1 !text-xs" onClick={() => setHeight((h) => h + 300)}><Plus size={13} />Più spazio</button>
                 </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {thoughtToDelete && (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={() => setThoughtToDelete(null)}>
-            <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
-            <div className="bg-white/95 md:bg-white/95 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#902A2A]/20 text-center" onClick={(e: any) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
-              <div className="w-16 h-16 bg-gradient-to-br from-[#FDF2F2] to-[#FAD4D4] rounded-full flex items-center justify-center mx-auto mb-6 border border-[#902A2A]/30 shadow-inner group hover:scale-110 hover:-translate-y-1 transition-all duration-500">
-                <Trash2 className="w-8 h-8 text-[#902A2A] drop-shadow-sm group-hover:-rotate-12 transition-transform duration-500" />
               </div>
-              <h3 className="text-3xl font-cormorant font-bold text-[#1A1510] mb-3">Bruciare il foglio?</h3>
-              <p className="text-[#6B5A46] text-sm mb-8 leading-relaxed font-medium">L'azione è irreversibile. Il pensiero sarà ridotto in cenere e perso per sempre.</p>
-              <div className="flex gap-4">
-                <button onClick={() => setThoughtToDelete(null)} className="flex-1 py-3.5 rounded-2xl text-[#8B6E4E] font-bold text-xs uppercase tracking-wider border border-[#E8DAC2] hover:bg-[#F4EFE6] hover:-translate-y-1 active:scale-95 transition-all duration-300">Annulla</button>
-                <button onClick={confirmSingleDelete} className="flex-1 py-3.5 rounded-2xl text-white bg-gradient-to-r from-[#902A2A] to-[#7A1A1A] font-bold text-xs uppercase tracking-wider shadow-[0_5px_15px_rgba(144,42,42,0.3)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(144,42,42,0.5)] active:scale-95 transition-all duration-300">Sì, Brucia</button>
+              <div className="flex gap-2 justify-end">
+                {(editingId || title || strokes.length > 0 || words > 0) && <button type="button" className="bt" onClick={() => { if (confirm("Scartare le modifiche?")) resetForm(); }}>{editingId ? "Annulla modifica" : "Scarta bozza"}</button>}
+                <button className="bt on !px-6 !py-3" disabled={saving}>{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{editingId ? "Salva modifiche" : "Salva progetto"}</button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {isSelectionMode && selectedIds.length > 0 && (
-          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[55] animate-in slide-in-from-bottom-8 duration-500">
-            <button onClick={() => setShowMultiDeleteModal(true)} className="flex items-center gap-3 bg-gradient-to-r from-[#902A2A] to-[#7A1A1A] text-[#FDFBF7] px-8 py-4 rounded-full font-bold text-sm tracking-widest uppercase shadow-[0_10px_30px_rgba(144,42,42,0.4)] hover:shadow-[0_15px_40px_rgba(144,42,42,0.6)] hover:-translate-y-1 active:scale-95 transition-all duration-300 border border-[#4A1010]">
-              <Trash2 className="w-5 h-5" />
-              Brucia {selectedIds.length} Pagin{selectedIds.length === 1 ? 'a' : 'e'}
-            </button>
-          </div>
-        )}
-
-        {showMultiDeleteModal && (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={() => setShowMultiDeleteModal(false)}>
-            <div className="absolute inset-0 bg-[#150F0A]/80 md:bg-[#150F0A]/70 backdrop-blur-none md:backdrop-blur-md" style={{ animation: "fadeInOverlay 0.3s ease-out forwards" }}></div>
-            <div className="bg-white/95 md:bg-white/95 backdrop-blur-none md:backdrop-blur-xl p-10 rounded-[2rem] shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative z-10 w-full max-w-sm border border-[#902A2A]/20 text-center" onClick={(e: any) => e.stopPropagation()} style={{ animation: "paperFloat 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.05) forwards" }}>
-              <div className="w-16 h-16 bg-gradient-to-br from-[#FDF2F2] to-[#FAD4D4] rounded-full flex items-center justify-center mx-auto mb-6 border border-[#902A2A]/30 shadow-inner group hover:scale-110 hover:-translate-y-1 transition-all duration-500">
-                <Trash2 className="w-8 h-8 text-[#902A2A] drop-shadow-sm group-hover:-rotate-12 transition-transform duration-500" />
-              </div>
-              <h3 className="text-3xl font-cormorant font-bold text-[#1A1510] mb-3">Bruciare i fogli?</h3>
-              <p className="text-[#6B5A46] text-sm mb-8 leading-relaxed font-medium">L'azione è irreversibile. Le {selectedIds.length} pagine selezionate saranno ridotte in cenere e perse per sempre.</p>
-              <div className="flex gap-4">
-                <button onClick={() => setShowMultiDeleteModal(false)} className="flex-1 py-3.5 rounded-2xl text-[#8B6E4E] font-bold text-xs uppercase tracking-wider border border-[#E8DAC2] hover:bg-[#F4EFE6] hover:-translate-y-1 active:scale-95 transition-all duration-300">Annulla</button>
-                <button onClick={confirmMultiDelete} className="flex-1 py-3.5 rounded-2xl text-white bg-gradient-to-r from-[#902A2A] to-[#7A1A1A] font-bold text-xs uppercase tracking-wider shadow-[0_5px_15px_rgba(144,42,42,0.3)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(144,42,42,0.5)] active:scale-95 transition-all duration-300">Sì, Brucia</button>
-              </div>
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* ================= CINEMATIC SEND ANIMATION ================= */}
-      {sendState !== 'idle' && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden perspective-[1500px]">
-          
-          <div className="absolute inset-0 transition-all" style={{ animation: "bgCinematicBlur 1s ease-out both" }}></div>
-
-          {sendState === 'thankyou' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-[#FDFBF7] px-6 text-center z-10" style={{ animation: "textRevealUp 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) both" }}>
-              <div className="w-24 h-24 bg-[#D4AF37]/10 rounded-full flex items-center justify-center mb-8 backdrop-blur-md border border-[#D4AF37]/30 shadow-[0_0_40px_rgba(212,175,55,0.2)]">
-                <Feather className="w-12 h-12 text-[#D4AF37] opacity-90 drop-shadow-lg" />
-              </div>
-              <h2 className="text-5xl md:text-7xl font-cormorant font-bold mb-6 drop-shadow-lg text-white">Affidata all'Archivio</h2>
-              <div className="w-20 h-[2px] bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent mx-auto mb-8"></div>
-              <p className="text-xl md:text-2xl text-[#E8DAC2] font-cormorant font-light italic max-w-lg mb-12 drop-shadow-md">La tua scrittura è stata sigillata e riposa al sicuro nelle pagine dello Zibaldone.</p>
-              <button onClick={resetWritingForm} className="px-10 py-4 rounded-full bg-gradient-to-r from-[#DFCCB0] to-[#CDB591] text-[#1A1510] font-bold text-sm tracking-[0.2em] uppercase hover:shadow-[0_15px_40px_rgba(223,204,176,0.4)] hover:-translate-y-1.5 active:scale-95 transition-all duration-300 border border-[#E8DAC2]/50 flex items-center gap-3 group"><PenTool className="w-5 h-5 group-hover:-rotate-12 transition-transform duration-300" />Scrivi un'altra pagina</button>
-            </div>
+            </form>
           )}
+        </div>
+      </div>
 
-          {sendState === 'animating_envelope' && (
-            <div className="relative w-[320px] h-[224px] z-20" style={{ animation: "envelopeFly 1.5s ease-in-out 4.5s both" }}>
-               <div className="absolute inset-0 bg-[#D4C3A3] rounded-md shadow-2xl z-0"></div>
-               <div className="absolute left-[16px] right-[16px] h-[192px] bg-[#FDFBF7] p-5 shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] border border-[#E8DAC2] z-10 overflow-hidden" style={{ backgroundImage: 'linear-gradient(transparent 23px, #E8DAC2 24px), url("https://www.transparenttextures.com/patterns/cream-paper.png")', backgroundSize: '100% 24px, auto', animation: "letterDrop 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.5s both" }}>
-                  <div className="absolute top-0 bottom-0 left-6 w-[1px] bg-[#902A2A]/30"></div>
-                  <div className="pl-6 pt-1">
-                    <h4 className="font-cormorant font-bold text-[#1A1510] text-[16px] leading-[24px] line-clamp-1">{newTitle || "Senza Titolo"}</h4>
-                    <p className="text-[10px] text-[#8B6E4E] uppercase tracking-widest font-semibold leading-[24px] mb-1">di {user.displayName || "Studente"}</p>
-                    <div className="text-[13px] text-[#4A4036] font-cormorant leading-[24px] line-clamp-3 text-justify rich-text-content" dangerouslySetInnerHTML={{ __html: newContent }} />
-                  </div>
-               </div>
-               <div className="absolute inset-y-0 left-0 w-1/2 bg-[#DFCCB0] z-20" style={{ clipPath: 'polygon(0 0, 100% 50%, 0 100%)' }}></div>
-               <div className="absolute inset-y-0 right-0 w-1/2 bg-[#C6B38E] z-20" style={{ clipPath: 'polygon(100% 0, 0 50%, 100% 100%)' }}></div>
-               <div className="absolute bottom-0 inset-x-0 h-[65%] bg-[#E8DAC2] z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.05)]" style={{ clipPath: 'polygon(0 100%, 50% 0, 100% 100%)' }}></div>
-               <div className="absolute top-0 inset-x-0 h-[65%] origin-top" style={{ animation: "flapClose 0.8s cubic-bezier(0.4, 0, 0.2, 1) 2.2s both" }}>
-                 <div className="w-full h-full bg-[#DFCCB0] border-b border-white/30" style={{ clipPath: 'polygon(0 0, 50% 100%, 100% 0)' }}></div>
-               </div>
-               <div className="absolute top-[50%] left-1/2 -ml-6 -mt-6 w-12 h-12 z-40 flex items-center justify-center" style={{ animation: "sealPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 3.0s both" }}>
-                  <div className="w-full h-full bg-gradient-to-br from-[#902A2A] to-[#601a1a] rounded-full flex items-center justify-center relative shadow-lg border border-[#7a2222]">
-                    <div className="absolute inset-[3px] border border-[#D4AF37]/60 rounded-full"></div>
-                    <Feather className="w-5 h-5 text-[#E8DAC2]" />
-                  </div>
-               </div>
-            </div>
-          )}
-
-          {sendState === 'animating_diary' && (
-            <div className="relative w-[280px] h-[380px] z-20" style={{ animation: `dynamicDiaryRiseFall ${4.5 + animationConfig.duration}s cubic-bezier(0.4, 0, 0.2, 1) both`, transformStyle: "preserve-3d" }}>
-              <div className="absolute inset-0 bg-[#2C241B] rounded-r-xl shadow-2xl border-l-8 border-[#1A1510]"></div>
-              <div className="absolute inset-y-1 right-1 left-2 bg-[#D4C3A3] rounded-r-lg shadow-inner"></div>
-              
-              <div className="absolute inset-y-2 right-2 left-2 bg-[#FDFBF7] rounded-r-md p-6 flex flex-col shadow-[inset_15px_0_20px_rgba(0,0,0,0.1)]" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")' }}>
-                <h4 className="font-cormorant font-bold text-[#1A1510] text-lg leading-snug line-clamp-2 pb-1 border-b border-[#E8DAC2]/50">{newTitle || "Senza Titolo"}</h4>
-                <p className="text-[10px] text-[#8B6E4E] mt-2 uppercase tracking-widest font-semibold italic">di {user.displayName || "Studente"}</p>
-                <div className="relative mt-4 w-[230px]">
-                  <div className="text-[14px] text-[#2C241B] font-cormorant leading-[24px] line-clamp-6 text-justify rich-text-content" dangerouslySetInnerHTML={{ __html: newContent }} style={{ animation: `dynamicTextReveal ${animationConfig.duration}s linear 2s both` }} />
-                  <div className="absolute top-0 left-0 pointer-events-none z-50" style={{ animation: `dynamicPenWrite ${animationConfig.duration}s linear 2s both` }}>
-                    <div style={{ animation: `penFadeInOut ${animationConfig.duration + 1}s ease-in-out 1.5s both` }}>
-                      <div style={{ transform: 'translate(-50px, -92px) rotate(25deg)', transformOrigin: '50px 92px' }}><FountainPenNib /></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="absolute inset-0 origin-left z-30" style={{ animation: `dynamicDiaryCoverFlip ${4.5 + animationConfig.duration}s cubic-bezier(0.4, 0, 0.2, 1) both`, transformStyle: "preserve-3d" }}>
-                <div className="absolute inset-0 rounded-r-xl border-l-8 border-[#150F0A] flex items-center justify-center shadow-xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #3A2C1E 0%, #201710 100%)', backfaceVisibility: "hidden" }}>
-                  <div className="absolute inset-3 border border-[#D4AF37]/40 rounded-lg pointer-events-none"></div>
-                  <div className="absolute inset-4 border border-[#D4AF37]/20 rounded-md pointer-events-none"></div>
-                  <div className="border border-[#D4AF37] bg-[#150F0A]/50 backdrop-blur-sm px-6 py-8 rounded-sm shadow-inner"><span className="text-[#D4AF37] font-serif uppercase tracking-[0.3em] text-sm font-bold drop-shadow-md">Zibaldone</span></div>
-                </div>
-                <div className="absolute inset-0 bg-[#CBA471] rounded-l-xl border-r-8 border-[#9C7951] shadow-[inset_-10px_0_20px_rgba(0,0,0,0.3)]" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")', backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
-                  <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-black/40 to-transparent rounded-r-xl"></div>
-                </div>
-              </div>
-            </div>
-          )}
+      {/* barra selezione multipla */}
+      {selMode && (
+        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 pn shadow-xl flex items-center gap-2 p-2 popx">
+          <span className="text-sm px-2">{ids.length} selezionati</span>
+          <button className="bt" onClick={() => setIds(ids.length === shown.length ? [] : shown.map((t) => t.id))}>Tutti</button>
+          <button className="bt dng" disabled={!ids.length} onClick={() => setToDelete(ids)}><Trash2 size={15} />Elimina</button>
         </div>
       )}
 
-      {/* VERSION */}
-      <div className="fixed bottom-3 left-4 z-50 text-[10px] font-montserrat font-bold tracking-[0.2em] uppercase text-[#8B6E4E] opacity-40 hover:opacity-100 transition-opacity duration-500 cursor-default pointer-events-auto">
-        v2.9.1 "Deploy Sicuro"
-      </div>
-    </div>
+      {/* lettura */}
+      {sel && (() => {
+        const { w, h } = dims(sel);
+        return (
+          <div className="fade fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm" onClick={() => setSel(null)}>
+            <div className="pn w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden pop" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
+                <div className="flex-1 min-w-0"><h2 className="hd text-2xl font-bold truncate">{sel.title}</h2><div className="mu text-xs">{sel.author} · {fmtDate(sel.timestamp)}</div></div>
+                <button className="bt !p-2" title="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>
+                {isAdmin && <button className="bt !p-2" onClick={() => star(sel)}><Star size={15} style={sel.isStarred ? { fill: "var(--am)", color: "var(--am)" } : {}} /></button>}
+                {canEdit(sel) && <button className="bt !p-2" onClick={() => startEdit(sel)} title="Modifica"><Pencil size={15} /></button>}
+                {canEdit(sel) && <button className="bt dng !p-2" onClick={() => setToDelete([sel.id])} title="Elimina"><Trash2 size={15} /></button>}
+                <button className="bt !p-2" onClick={() => setSel(null)}><X size={15} /></button>
+              </div>
+              <div className="overflow-y-auto">
+                <div className="paper mm relative" style={{ aspectRatio: `${w}/${h}` }}>
+                  {sel.strokes?.length > 0 && <Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" />}
+                  <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: clean(sel.content) }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* conferma eliminazione */}
+      {toDelete && (
+        <div className="fade fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60" onClick={() => setToDelete(null)}>
+          <div className="pn p-6 max-w-sm w-full pop" onClick={(e) => e.stopPropagation()}>
+            <h3 className="hd text-xl font-bold mb-1">{toDelete.length > 1 ? `Eliminare ${toDelete.length} progetti?` : "Eliminare il progetto?"}</h3>
+            <p className="mu text-sm mb-5">L'operazione non si può annullare.</p>
+            <div className="flex gap-2 justify-end"><button className="bt" onClick={() => setToDelete(null)}>Annulla</button><button className="bt on !bg-red-600 !border-red-600 !text-white" onClick={confirmDelete}>Elimina</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* admin */}
+      {adminModal && (
+        <div className="fade fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60" onClick={() => setAdminModal(false)}>
+          <form onSubmit={adminLogin} className="pn p-6 max-w-sm w-full pop" onClick={(e) => e.stopPropagation()}>
+            <KeyRound className="mb-3" style={{ color: "var(--ac)" }} />
+            <h3 className="hd text-xl font-bold mb-3">Accesso amministratore</h3>
+            <input type="password" autoFocus className="inp mb-1" style={adminErr ? { borderColor: "#dc2626" } : {}} placeholder="Password" value={adminPw} onChange={(e) => { setAdminPw(e.target.value); setAdminErr(false); }} />
+            <p className="text-xs text-red-600 h-4 mb-3">{adminErr ? "Password errata." : ""}</p>
+            <div className="flex gap-2 justify-end"><button type="button" className="bt" onClick={() => setAdminModal(false)}>Annulla</button><button className="bt pri" disabled={!adminPw.trim()}>Sblocca</button></div>
+          </form>
+        </div>
+      )}
+
+      {/* salvataggio riuscito */}
+      {done && (
+        <div className="fade fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="pn p-8 max-w-sm w-full text-center pop">
+            <svg viewBox="0 0 64 64" width="72" height="72" className="mx-auto mb-3" fill="none" stroke="var(--ac)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><circle cx="32" cy="32" r="28" opacity=".3" /><path className="tick" d="M18 33l9 9 19-20" /></svg>
+            <h3 className="hd text-2xl font-bold">{done === "edit" ? "Modifiche salvate" : "Progetto salvato"}</h3>
+            <div className="flex gap-2 mt-6 justify-center">
+              <button className="bt" onClick={() => { setDone(null); resetForm(); }}><Plus size={15} />Nuovo</button>
+              <button className="bt pri" onClick={() => { setDone(null); resetForm(); go("my_pages"); }}>Vai ai miei progetti</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] pn px-4 py-2 text-sm shadow-lg popx">{toast}</div>}
+    </>
   );
 }
