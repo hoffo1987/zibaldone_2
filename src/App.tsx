@@ -12,6 +12,7 @@ import {
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
   Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download
 } from "lucide-react";
+import { PannelloAdmin, STATI } from "./Valutazione";
 
 // --- FIREBASE ---
 const firebaseConfig = {
@@ -727,6 +728,7 @@ export default function App() {
   const [month, setMonth] = useState(() => mKey(Date.now()));
   const [monthFilter, setMonthFilter] = useState("all");
   const [onlyMarked, setOnlyMarked] = useState(false);
+  const [statoF, setStatoF] = useState("all");
   const [visible, setVisible] = useState(18);
   const [kb, setKb] = useState(false);
   const [profiles, setProfiles] = useState<any>({});
@@ -744,6 +746,11 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+  const [vals, setVals] = useState<any>({});
+  useEffect(() => {
+    if (!user || !db || !isAdmin) { setVals({}); return; }
+    return onSnapshot(collection(db, "valutazioni"), (s: any) => { const m: any = {}; s.forEach((d: any) => { m[d.id] = d.data(); }); setVals(m); }, () => {});
+  }, [user, isAdmin]);
   useEffect(() => { setVisible(18); }, [search, sortBy, monthFilter, onlyMarked, tab]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
   useEffect(() => {
@@ -1040,15 +1047,15 @@ export default function App() {
   };
   const openView = (t: any) => { history.pushState({ tab, v: 1 }, ""); setSel(t); };
   const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
-  const go = (t: string) => { if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); };
+  const go = (t: string) => { if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setStatoF("all"); };
 
   const prepared = useMemo(() => items.map((t) => ({ ...t, _tx: plain(t.content), _img: /<img/.test(t.content || "") })), [items]);
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     return prepared
-      .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!onlyMarked || t.isStarred) && (!q || `${t.title} ${t.author} ${t._tx}`.toLowerCase().includes(q)))
+      .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!onlyMarked || t.isStarred) && (statoF === "all" || (vals[t.id]?.stato || "da_leggere") === statoF) && (!q || `${t.title} ${t.author} ${t._tx}`.toLowerCase().includes(q)))
       .sort((a, b) => sortBy === "rated" ? (b.rating || 0) - (a.rating || 0) || b.timestamp - a.timestamp : sortBy === "oldest" ? a.timestamp - b.timestamp : sortBy === "longest" ? (b.content?.length || 0) - (a.content?.length || 0) : sortBy === "shortest" ? (a.content?.length || 0) - (b.content?.length || 0) : b.timestamp - a.timestamp);
-  }, [prepared, search, sortBy, monthFilter, onlyMarked]);
+  }, [prepared, search, sortBy, monthFilter, onlyMarked, statoF, vals]);
   const words = plain(content).trim().split(/\s+/).filter(Boolean).length;
 
   // ================= RENDER =================
@@ -1340,6 +1347,7 @@ export default function App() {
                 <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>
                 <select className="inp !w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>{Object.keys(SORTS).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}</select>
                 <select className="inp !w-auto" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}><option value="all">Tutti i mesi</option>{monthOpts.map((k) => <option key={k} value={k}>{mLabel(k)}</option>)}</select>
+                {isAdmin && tab === "read" && <select className="inp !w-auto" value={statoF} onChange={(e) => setStatoF(e.target.value)}><option value="all">Tutti gli stati</option>{STATI.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
                 {isAdmin && tab === "read" && <button className={`bt ${onlyMarked ? "on" : ""}`} onClick={() => setOnlyMarked(!onlyMarked)}><Bookmark size={15} style={onlyMarked ? { fill: "currentColor" } : {}} />Segnalati{items.some((t) => t.isStarred) ? ` (${items.filter((t) => t.isStarred).length})` : ""}</button>}
                 {items.length > 0 && <button className={`bt ${selMode ? "on" : ""}`} onClick={() => { setSelMode(!selMode); setIds([]); }}><ListChecks size={15} />{selMode ? "Fine" : "Seleziona"}</button>}
               </div>
@@ -1372,6 +1380,7 @@ export default function App() {
                         {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
                         <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{t._tx.slice(0, 260) || (t._img ? "Contenuto con immagini" : "")}</p>
                       </div>
+                      {isAdmin && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span className="absolute top-2 left-2 text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: vals[t.id].stato === "scelto" ? "var(--am)" : "rgba(255,255,255,.92)", color: vals[t.id].stato === "scelto" ? "#3b2a00" : "#0E1F1D", boxShadow: "var(--sh1)" }}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}
                       {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
                       {isAdmin && !selMode && <button type="button" aria-label="Segnalibro" title={t.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={(e) => { e.stopPropagation(); star(t); }} className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110" style={{ background: "rgba(255,255,255,.92)", boxShadow: "var(--sh1)" }}><Bookmark size={16} style={t.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : { color: "#64748b" }} /></button>}
                     </div>
@@ -1477,6 +1486,7 @@ export default function App() {
       {/* lettura */}
       {sel && (() => {
         const { w, h } = dims(sel);
+        const si = shown.findIndex((x) => x.id === sel.id);
         return (
           <div className="fade fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm" onClick={closeView}>
             <div className="pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden pop" onClick={(e) => e.stopPropagation()}>
@@ -1490,11 +1500,13 @@ export default function App() {
                   {isAdmin && <button className="bt flex-1 md:flex-none justify-center !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /><span className="md:hidden text-xs">Salva</span></button>}
                   {canEdit(sel) && <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={() => startEdit(sel)} title="Modifica"><Pencil size={15} /><span className="md:hidden text-xs">Modifica</span></button>}
                   {canEdit(sel) && <button className="bt dng flex-1 md:flex-none justify-center !p-2" onClick={() => setToDelete([sel.id])} title="Elimina"><Trash2 size={15} /><span className="md:hidden text-xs">Elimina</span></button>}
+                  {si >= 0 && shown.length > 1 && <><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si <= 0} onClick={() => setSel(shown[si - 1])} aria-label="Scritto precedente"><ChevronLeft size={15} /></button><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si >= shown.length - 1} onClick={() => setSel(shown[si + 1])} aria-label="Scritto successivo"><ChevronRight size={15} /></button></>}
                   <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={closeView}><X size={15} /><span className="md:hidden text-xs">Chiudi</span></button>
                 </div>
               </div>
               {isAdmin && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={(n: number) => rate(sel, n)} size={22} /></div>}
-              <div className="overflow-y-auto">
+              {isAdmin && <PannelloAdmin db={db} id={sel.id} notify={notify} />}
+              <div key={sel.id} className="overflow-y-auto">
                 <div className="paper mm relative" style={{ aspectRatio: `${w}/${h}` }}>
                   {sel.strokes?.length > 0 && <Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" />}
                   <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: clean(sel.content) }} />
