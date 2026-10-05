@@ -34,9 +34,9 @@ const INK_COLORS = [
   { id: "#7E22CE", name: "Viola" }, { id: "#DB2777", name: "Rosa" },
 ];
 const TOOLS = [
-  { id: "hand", label: "Scorri", icon: Hand }, { id: "pen", label: "Penna", icon: Pen }, { id: "line", label: "Linea", icon: Minus },
+  { id: "pen", label: "Penna", icon: Pen }, { id: "line", label: "Linea", icon: Minus },
   { id: "rect", label: "Rettangolo", icon: Square }, { id: "ellipse", label: "Ellisse", icon: Circle },
-  { id: "fill", label: "Forma piena", icon: PaintBucket }, { id: "eraser", label: "Gomma", icon: Eraser },
+  { id: "fill", label: "Forma piena", icon: PaintBucket }, { id: "eraser", label: "Gomma", icon: Eraser }, { id: "hand", label: "Scorri", icon: Hand },
 ];
 const SORTS: any = { newest: "Più recenti", rated: "Voto più alto", oldest: "Più vecchi", longest: "Più lunghi", shortest: "Più brevi" };
 
@@ -221,6 +221,7 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .cpov{position:fixed;inset:0;z-index:40}
 @media (max-width:767px){.root:has(.cpov) nav.hdr{display:none}}
 .cp{position:absolute;top:100%;left:0;margin-top:.5rem;width:336px;z-index:50;box-shadow:var(--sh2);animation:pop .3s var(--ez) both}
+.cp-r{left:auto;right:0}
 @keyframes sheet{from{transform:translateY(100%)}to{transform:none}}
 .root{min-height:100dvh;-webkit-tap-highlight-color:transparent}
 .bt{touch-action:manipulation}
@@ -263,29 +264,34 @@ const Stars = ({ v = 0, onSet, size = 16 }: any) => {
   );
 };
 
-const ColorPicker = ({ value, onPick, label, cls = "bt", children }: any) => {
+const Pop = ({ label, trigger, cls = "bt", wrap = "", right, children }: any) => {
   const [o, setO] = useState(false);
-  const [hov, setHov] = useState("");
   return (
-    <div className="relative">
-      <button type="button" className={cls} onClick={() => setO(!o)} title={label}>{children}</button>
+    <div className={`relative ${wrap}`}>
+      <button type="button" className={cls} onClick={() => setO(!o)} title={label} aria-label={label}>{trigger}</button>
       {o && (<>
         <div className="cpov" onClick={() => setO(false)} />
-        <div className="cp pn p-5">
+        <div className={`cp pn p-5 ${right ? "cp-r" : ""}`}>
           <div className="flex items-center justify-between mb-4"><span className="hd font-bold text-lg">{label}</span><button type="button" className="bt !p-2 md:hidden" onClick={() => setO(false)} aria-label="Chiudi"><X size={16} /></button></div>
-          <div className="grid grid-cols-5 md:grid-cols-7 gap-4 md:gap-3">
-            {INK_COLORS.map((c) => (
-              <button type="button" key={c.id} aria-label={c.name} onMouseEnter={() => setHov(c.name)} onMouseLeave={() => setHov("")}
-                onClick={() => { onPick(c.id); setO(false); }} className="sw aspect-square w-full rounded-full"
-                style={{ background: c.id, boxShadow: value === c.id ? `0 0 0 2px var(--pn),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />
-            ))}
-          </div>
-          <p className="text-sm mu mt-4 h-5">{hov || INK_COLORS.find((c) => c.id === value)?.name || "Scegli un colore"}</p>
+          {typeof children === "function" ? children(() => setO(false)) : children}
         </div>
       </>)}
     </div>
   );
 };
+const Swatches = ({ value, onPick, cols = "grid-cols-7" }: any) => (
+  <div className={`grid ${cols} gap-3`}>
+    {INK_COLORS.map((c) => <button type="button" key={c.id} aria-label={c.name} title={c.name} onClick={() => onPick(c.id)} className="sw aspect-square w-full rounded-full" style={{ background: c.id, boxShadow: value === c.id ? `0 0 0 2px var(--pn),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />)}
+  </div>
+);
+const ColorPicker = ({ value, onPick, label, cls = "bt", wrap = "", children }: any) => (
+  <Pop label={label} cls={cls} wrap={wrap} trigger={children}>
+    {(close: any) => <Swatches value={value} cols="grid-cols-5 md:grid-cols-7" onPick={(c: string) => { onPick(c); close(); }} />}
+  </Pop>
+);
+const TB = ({ on, fn, icon: Icon, label }: any) => (
+  <button type="button" title={label} aria-label={label} onClick={fn} className={`bt !min-w-0 !px-0 ${on ? "on" : ""}`}><Icon size={18} /></button>
+);
 
 const BANNERS = [
   { id: "teal", g: "linear-gradient(135deg,#17C3AE,#0A4F49)" }, { id: "amber", g: "linear-gradient(135deg,#FBBF24,#C2410C)" },
@@ -900,7 +906,7 @@ export default function App() {
         <div className="flex items-center gap-2" onDoubleClick={() => !isAdmin && setAdminModal(true)}><Wordmark size={40} fs={19} tag={false} /></div>
         <div className="flex items-center gap-2"><button className="bt !p-2" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button><button onClick={() => go("profile")} aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
       </header>
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))", display: kb ? "none" : undefined }}>
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))", display: kb || (tab === "write" && drawing) ? "none" : undefined }}>
         {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} aria-label={n.label} className={`bt flex-col flex-1 min-w-0 !gap-1 !px-0 !py-2 !text-[10px] ${tab === n.id ? "on" : "!border-transparent !bg-transparent"}`}><n.icon size={18} /><span className="truncate max-w-full">{n.s || n.label}</span></button>)}
       </nav>
 
@@ -966,44 +972,49 @@ export default function App() {
             <form onSubmit={submit} className="space-y-4 fadein">
               <input className="inp !text-xl !py-3 hd font-bold" placeholder="Nome del progetto" value={title} onChange={(e) => setTitle(e.target.value)} required />
               <div className="pn">
-                <div className={`p-2 border-b space-y-2 rounded-t-[17px] ${!drawing ? "sticky top-[64px] md:top-0 z-[35]" : ""}`} style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { if ((e.target as any).tagName !== "INPUT" && (e.target as any).tagName !== "SELECT") e.preventDefault(); }}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex p-0.5 rounded-lg" style={{ border: "1px solid var(--ln)" }}>
-                      <button type="button" className={`bt border-0 ${!drawing ? "on" : ""}`} onClick={() => setDrawing(false)}><Type size={15} />Testo</button>
-                      <button type="button" className={`bt border-0 ${drawing ? "on" : ""}`} onClick={() => { setDrawing(true); setImg(null); }}><Pencil size={15} />Disegno</button>
-                    </div>
-                    {!drawing ? (<>
-                      <button type="button" className={`bt !p-2 ${fmt.b ? "on" : ""}`} onClick={() => cmd("bold")} title="Grassetto"><Bold size={15} /></button>
-                      <button type="button" className={`bt !p-2 ${fmt.i ? "on" : ""}`} onClick={() => cmd("italic")} title="Corsivo"><Italic size={15} /></button>
-                      <button type="button" className={`bt !p-2 ${fmt.u ? "on" : ""}`} onClick={() => cmd("underline")} title="Sottolineato"><Underline size={15} /></button>
-                      <button type="button" className="bt !p-2" onClick={() => cmd("formatBlock", "h2")} title="Titolo"><Heading2 size={15} /></button>
-                      <button type="button" className="bt !p-2" onClick={() => cmd("insertUnorderedList")} title="Elenco"><List size={15} /></button>
-                      <ColorPicker value="" onPick={(c: string) => cmd("foreColor", c)} label="Colore testo" cls="bt !p-2"><Palette size={15} /></ColorPicker>
-                      <label className="bt !p-2 cursor-pointer" title="Inserisci foto"><ImageIcon size={15} /><input type="file" accept="image/*" className="hidden" onChange={addImage} /></label>
-                      {img && <div className="flex gap-1 items-center ml-1">
-                        {["25%", "50%", "75%", "100%"].map((w) => <button type="button" key={w} className="bt !px-2 !py-1 !text-xs" onClick={() => resizeImg(w)}>{w}</button>)}
-                        <button type="button" className="bt dng !p-1.5" onClick={removeImg}><Trash2 size={14} /></button>
-                      </div>}
-                    </>) : (<>
-                      {TOOLS.map((t) => <button type="button" key={t.id} title={t.label} aria-label={t.label} className={`bt ${tool === t.id ? "on" : ""}`} onClick={() => setTool(t.id)}><t.icon size={16} /><span className="hidden sm:inline">{t.label}</span></button>)}
-                    </>)}
-                    <div className="ml-auto flex gap-2">
-                      <button type="button" className={`bt !p-2 ${grid ? "on" : ""}`} onClick={() => setGrid(!grid)} title="Griglia"><Grid3x3 size={15} /></button>
-                      {drawing && <>
-                        <button type="button" className="bt !p-2" disabled={!hist.length} onClick={undo} title="Annulla (Ctrl+Z)"><Undo size={15} /></button>
-                        <button type="button" className="bt !p-2" disabled={!fut.length} onClick={redo} title="Ripeti (Ctrl+Y)"><Redo size={15} /></button>
-                        <button type="button" className="bt dng" disabled={!strokes.length} onClick={() => { snap(); setStrokes([]); }}>Svuota</button>
-                      </>}
-                    </div>
+                <div className="p-2 rounded-t-[17px]" style={{ background: "var(--sf)" }}>
+                  <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl" style={{ background: "var(--ln)" }}>
+                    <button type="button" className={`bt !border-0 ${!drawing ? "on" : "!bg-transparent"}`} onClick={() => setDrawing(false)}><Type size={16} />Testo</button>
+                    <button type="button" className={`bt !border-0 ${drawing ? "on" : "!bg-transparent"}`} onClick={() => { setDrawing(true); setImg(null); }}><Pencil size={16} />Disegno</button>
                   </div>
-                  {drawing && (
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                      {tool !== "eraser" && <ColorPicker value={color} onPick={setColor} label="Colore"><span className="w-4 h-4 rounded-full" style={{ background: color, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.2)" }} />Colore</ColorPicker>}
-                      <label className="flex items-center gap-2 text-xs mu">Spessore<input type="range" min={tool === "eraser" ? 5 : 1} max={tool === "eraser" ? 100 : 40} value={tool === "eraser" ? eraser : size} onChange={(e) => tool === "eraser" ? setEraser(+e.target.value) : setSize(+e.target.value)} className="accent-teal-600" /></label>
-                      {tool !== "eraser" && <label className="flex items-center gap-2 text-xs mu">Opacità<input type="range" min={5} max={100} value={opacity} onChange={(e) => setOpacity(+e.target.value)} className="accent-teal-600" /></label>}
-                      {(tool === "rect" || tool === "ellipse") && <label className="flex items-center gap-2 text-xs mu"><input type="checkbox" checked={filled} onChange={(e) => setFilled(e.target.checked)} />Riempi</label>}
+                </div>
+                <div className="sticky top-[64px] md:top-0 z-[35] p-2 pt-0 space-y-2 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }}>
+                  {!drawing ? (<>
+                    <div className="grid grid-cols-7 gap-1.5 pt-2">
+                      <TB on={fmt.b} fn={() => cmd("bold")} icon={Bold} label="Grassetto" />
+                      <TB on={fmt.i} fn={() => cmd("italic")} icon={Italic} label="Corsivo" />
+                      <TB on={fmt.u} fn={() => cmd("underline")} icon={Underline} label="Sottolineato" />
+                      <TB fn={() => cmd("formatBlock", "h2")} icon={Heading2} label="Titolo" />
+                      <TB fn={() => cmd("insertUnorderedList")} icon={List} label="Elenco" />
+                      <ColorPicker value="" onPick={(c: string) => cmd("foreColor", c)} label="Colore del testo" cls="bt !min-w-0 !px-0 w-full" wrap="min-w-0"><Palette size={18} /></ColorPicker>
+                      <label className="bt !min-w-0 !px-0 cursor-pointer" title="Inserisci foto"><ImageIcon size={18} /><input type="file" accept="image/*" className="hidden" onChange={addImage} /></label>
                     </div>
-                  )}
+                    {img && <div className="flex items-center gap-1.5">
+                      {["25%", "50%", "75%", "100%"].map((w) => <button type="button" key={w} className="bt flex-1 !min-w-0 !px-0 !text-xs" onClick={() => resizeImg(w)}>{w}</button>)}
+                      <button type="button" className="bt dng !px-0 !min-w-0 w-11 shrink-0" onClick={removeImg} aria-label="Elimina immagine"><Trash2 size={16} /></button>
+                    </div>}
+                  </>) : (<>
+                    <div className="grid grid-cols-7 gap-1.5 pt-2">{TOOLS.map((t) => <TB key={t.id} on={tool === t.id} fn={() => setTool(t.id)} icon={t.icon} label={t.label} />)}</div>
+                    <div className="flex items-center gap-1.5">
+                      <Pop label="Colore e spessore" wrap="flex-1 min-w-0" cls="bt w-full !justify-start" trigger={<>
+                        <span className="w-5 h-5 rounded-full shrink-0" style={tool === "eraser" ? { border: "2px solid currentColor" } : { background: color, boxShadow: "inset 0 0 0 1px rgba(128,128,128,.5)" }} />
+                        <span className="truncate">{TOOLS.find((t) => t.id === tool)?.label}{tool !== "hand" && ` · ${tool === "eraser" ? eraser : size}px`}</span></>}>
+                        <div className="space-y-5">
+                          {tool !== "eraser" && tool !== "hand" && <div><span className="text-xs mu">Colore</span><div className="mt-2"><Swatches value={color} onPick={setColor} /></div></div>}
+                          {tool !== "hand" && <label className="block"><span className="flex justify-between text-sm"><span>Spessore</span><b>{tool === "eraser" ? eraser : size}px</b></span>
+                            <input type="range" className="w-full h-9 accent-teal-600" min={tool === "eraser" ? 5 : 1} max={tool === "eraser" ? 100 : 40} value={tool === "eraser" ? eraser : size} onChange={(e) => tool === "eraser" ? setEraser(+e.target.value) : setSize(+e.target.value)} /></label>}
+                          {tool !== "eraser" && tool !== "hand" && <label className="block"><span className="flex justify-between text-sm"><span>Opacità</span><b>{opacity}%</b></span>
+                            <input type="range" className="w-full h-9 accent-teal-600" min={5} max={100} value={opacity} onChange={(e) => setOpacity(+e.target.value)} /></label>}
+                          {(tool === "rect" || tool === "ellipse") && <label className="flex items-center justify-between text-sm"><span>Riempi la forma</span><input type="checkbox" className="w-6 h-6 accent-teal-600" checked={filled} onChange={(e) => setFilled(e.target.checked)} /></label>}
+                          {tool === "hand" ? <p className="mu text-sm">Con "Scorri" il dito sposta la pagina senza disegnare.</p>
+                            : <div className="paper rounded-xl h-16 flex items-center justify-center"><span className="rounded-full" style={tool === "eraser" ? { width: Math.min(eraser, 56), height: Math.min(eraser, 56), border: "2px solid #64748b" } : { width: Math.min(size, 48), height: Math.min(size, 48), background: color, opacity: opacity / 100 }} /></div>}
+                        </div>
+                      </Pop>
+                      <button type="button" className="bt !px-0 !min-w-0 w-11 shrink-0" disabled={!hist.length} onClick={undo} aria-label="Annulla"><Undo size={18} /></button>
+                      <button type="button" className="bt !px-0 !min-w-0 w-11 shrink-0" disabled={!fut.length} onClick={redo} aria-label="Ripeti"><Redo size={18} /></button>
+                      <button type="button" className="bt dng !px-0 !min-w-0 w-11 shrink-0" disabled={!strokes.length} onClick={() => { snap(); setStrokes([]); }} aria-label="Svuota il disegno"><Trash2 size={18} /></button>
+                    </div>
+                  </>)}
                 </div>
 
                 <div ref={canvasRef} className={`paper relative ${grid ? "mm" : ""}`} style={{ minHeight: height }}>
@@ -1018,8 +1029,8 @@ export default function App() {
                   {drawing && <div className="absolute inset-0 z-30" style={{ touchAction: tool === "hand" ? "pan-y" : "none", cursor: tool === "hand" ? "grab" : tool === "eraser" ? "cell" : "crosshair" }} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp} />}
                 </div>
                 <div className="flex justify-between items-center px-4 py-2 text-xs mu border-t" style={{ borderColor: "var(--ln)" }}>
-                  <span>{words} parole · {strokes.length} tratti{!editingId && " · bozza salvata in automatico"}</span>
-                  <button type="button" className="bt !py-1 !text-xs" onClick={() => setHeight((h) => h + 300)}><Plus size={13} />Più spazio</button>
+                  <span className="truncate">{drawing ? `${strokes.length} tratti` : `${words} parole`}{!editingId && " · bozza automatica"}</span>
+                  <div className="flex gap-1.5 shrink-0"><button type="button" className={`bt !p-2 ${grid ? "on" : ""}`} onClick={() => setGrid(!grid)} aria-label="Griglia"><Grid3x3 size={16} /></button><button type="button" className="bt !text-xs" onClick={() => setHeight((h) => h + 300)}><Plus size={14} />Spazio</button></div>
                 </div>
               </div>
               <div className="flex gap-2 justify-end">
