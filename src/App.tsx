@@ -495,7 +495,7 @@ const usePresence = (v: any, ms = 320): [any, boolean] => {
     setOut(true);
     const t = setTimeout(() => { setKeep(null); setOut(false); }, ms);
     return () => clearTimeout(t);
-  }, [v]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [v]);
   return [v || keep || null, out && !v];
 };
 
