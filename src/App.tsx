@@ -5,12 +5,12 @@ import {
   signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset
 } from "firebase/auth";
 import {
-  getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where
+  getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, setDoc
 } from "firebase/firestore";
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, KeyRound, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, MapPin, Link2, Camera, Award, CalendarDays
 } from "lucide-react";
 
 // --- FIREBASE ---
@@ -105,7 +105,7 @@ const Wordmark = ({ size = 38, fs, light, center, stack, tag = true }: any) => (
   </div>
 );
 const Backdrop = ({ tab }: { tab: string }) => {
-  const k = ["home", "write", "podio", "authors"].includes(tab) ? tab : "archive";
+  const k = tab === "profile" ? "authors" : ["home", "write", "podio", "authors"].includes(tab) ? tab : "archive";
   return <div key={k} className={`bd bd-${k} fade fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" /><div className="bd-p" /></div>;
 };
 
@@ -219,6 +219,7 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 @keyframes lgp{from{opacity:0;transform:scale(0)}to{opacity:1;transform:none}}
 @keyframes lgb{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
 .cpov{position:fixed;inset:0;z-index:40}
+@media (max-width:767px){.root:has(.cpov) nav.hdr{display:none}}
 .cp{position:absolute;top:100%;left:0;margin-top:.5rem;width:336px;z-index:50;box-shadow:var(--sh2);animation:pop .3s var(--ez) both}
 @keyframes sheet{from{transform:translateY(100%)}to{transform:none}}
 .root{min-height:100dvh;-webkit-tap-highlight-color:transparent}
@@ -276,7 +277,7 @@ const ColorPicker = ({ value, onPick, label, cls = "bt", children }: any) => {
             {INK_COLORS.map((c) => (
               <button type="button" key={c.id} aria-label={c.name} onMouseEnter={() => setHov(c.name)} onMouseLeave={() => setHov("")}
                 onClick={() => { onPick(c.id); setO(false); }} className="sw aspect-square w-full rounded-full"
-                style={{ background: c.id, boxShadow: value === c.id ? `0 0 0 2px var(--pn),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(0,0,0,.14)" }} />
+                style={{ background: c.id, boxShadow: value === c.id ? `0 0 0 2px var(--pn),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />
             ))}
           </div>
           <p className="text-sm mu mt-4 h-5">{hov || INK_COLORS.find((c) => c.id === value)?.name || "Scegli un colore"}</p>
@@ -285,6 +286,29 @@ const ColorPicker = ({ value, onPick, label, cls = "bt", children }: any) => {
     </div>
   );
 };
+
+const BANNERS = [
+  { id: "teal", g: "linear-gradient(135deg,#17C3AE,#0A4F49)" }, { id: "amber", g: "linear-gradient(135deg,#FBBF24,#C2410C)" },
+  { id: "indigo", g: "linear-gradient(135deg,#818CF8,#1E1B4B)" }, { id: "rose", g: "linear-gradient(135deg,#FB7185,#881337)" },
+  { id: "sky", g: "linear-gradient(135deg,#38BDF8,#1E3A8A)" }, { id: "slate", g: "linear-gradient(135deg,#94A3B8,#0F172A)" },
+];
+const AV = ["#0F8B7A", "#C2410C", "#4F46E5", "#DB2777", "#0284C7", "#CA8A04", "#7E22CE"];
+const Avatar = ({ p, name = "?", size = 40 }: any) => {
+  const h = Array.from(String(name)).reduce((a, c) => a + c.charCodeAt(0), 0);
+  return p?.avatar
+    ? <img src={p.avatar} alt="" className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />
+    : <span className="rounded-full shrink-0 inline-flex items-center justify-center font-bold text-white uppercase" style={{ width: size, height: size, background: AV[h % AV.length], fontSize: size * 0.4 }}>{String(name).slice(0, 2)}</span>;
+};
+const avatarFrom = (file: File): Promise<string> => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = (ev: any) => {
+    const im = new Image();
+    im.onload = () => { const c = document.createElement("canvas"); c.width = c.height = 256; const m = Math.min(im.width, im.height); c.getContext("2d")?.drawImage(im, (im.width - m) / 2, (im.height - m) / 2, m, m, 0, 0, 256, 256); res(c.toDataURL("image/jpeg", 0.8)); };
+    im.onerror = rej; im.src = ev.target.result;
+  };
+  r.onerror = rej; r.readAsDataURL(file);
+});
+const safeUrl = (u: string) => { const v = u.trim(); if (/^https?:\/\//i.test(v)) return v; if (/^[a-z][a-z0-9+.-]*:/i.test(v)) return "#"; return `https://${v}`; };
 
 const Reveal = ({ children, delay = 0, className = "" }: any) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -314,6 +338,10 @@ export default function App() {
   const [onlyMarked, setOnlyMarked] = useState(false);
   const [visible, setVisible] = useState(18);
   const [kb, setKb] = useState(false);
+  const [profiles, setProfiles] = useState<any>({});
+  const [editProf, setEditProf] = useState(false);
+  const [pf, setPf] = useState<any>({});
+  const [viewProf, setViewProf] = useState<string | null>(null);
   const [showPw, setShowPw] = useState(false);
   const [toast, setToast] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -327,6 +355,10 @@ export default function App() {
   const [sortBy, setSortBy] = useState("newest");
   useEffect(() => { setVisible(18); }, [search, sortBy, monthFilter, onlyMarked, tab]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
+  useEffect(() => {
+    if (!user || !db) return;
+    return onSnapshot(collection(db, "profili"), (snap: any) => { const m: any = {}; snap.forEach((d: any) => { m[d.id] = d.data(); }); setProfiles(m); }, () => {});
+  }, [user]);
   useEffect(() => { try { setIsAdmin(!!user && localStorage.getItem("circuito:admin") === user.uid); } catch {} }, [user]);
   useEffect(() => {
     const i = (e: any) => { const t = e.target; setKb(!!t?.isContentEditable || t?.tagName === "TEXTAREA" || (t?.tagName === "INPUT" && !["range", "checkbox", "file"].includes(t.type))); };
@@ -337,7 +369,7 @@ export default function App() {
   useEffect(() => {
     history.replaceState({ tab: "home" }, "");
     const pop = (e: PopStateEvent) => { setSel(null); setTab(e.state?.tab || "home"); };
-    const esc = (e: KeyboardEvent) => { if (e.key !== "Escape") return; if (history.state?.v) history.back(); else { setSel(null); setToDelete(null); setAdminModal(false); } };
+    const esc = (e: KeyboardEvent) => { if (e.key !== "Escape") return; if (history.state?.v) history.back(); else { setSel(null); setToDelete(null); setAdminModal(false); setViewProf(null); } };
     window.addEventListener("popstate", pop); window.addEventListener("keydown", esc);
     return () => { window.removeEventListener("popstate", pop); window.removeEventListener("keydown", esc); };
   }, []);
@@ -379,10 +411,10 @@ export default function App() {
 
   useEffect(() => { try { localStorage.setItem("circuito:dark", dark ? "1" : "0"); } catch {} }, [dark]);
   useEffect(() => {
-    const lock = sel || adminModal || toDelete || done;
+    const lock = sel || adminModal || toDelete || done || viewProf;
     document.body.style.overflow = lock ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [sel, adminModal, toDelete, done]);
+  }, [sel, adminModal, toDelete, done, viewProf]);
 
   // auth state + link reset password
   useEffect(() => {
@@ -396,7 +428,7 @@ export default function App() {
     if (!user || !db) return;
     let q: any;
     if (isAdmin && ["read", "home", "podio", "authors"].includes(tab)) q = collection(db, "pensieri");
-    else if (tab === "my_pages" || tab === "home") q = query(collection(db, "pensieri"), where("userId", "==", user.uid));
+    else if (tab === "my_pages" || tab === "home" || tab === "profile") q = query(collection(db, "pensieri"), where("userId", "==", user.uid));
     else return;
     setLoading(true); setItems([]);
     return onSnapshot(q, (s: any) => {
@@ -552,7 +584,7 @@ export default function App() {
     setSaving(true);
     try {
       if (editingId) await updateDoc(doc(db, "pensieri", editingId), { ...data, updatedAt: Date.now() });
-      else await addDoc(collection(db, "pensieri"), { ...data, author: user.displayName || "Operatore", timestamp: Date.now(), userId: user.uid, isStarred: false });
+      else await addDoc(collection(db, "pensieri"), { ...data, author: profiles[user.uid]?.displayName || user.displayName || "Operatore", timestamp: Date.now(), userId: user.uid, isStarred: false });
       setDone(editingId ? "edit" : "new");
     } catch { notify("Salvataggio non riuscito. Riprova."); }
     setSaving(false);
@@ -652,14 +684,100 @@ export default function App() {
   const monthOpts: string[] = Array.from(new Set<string>(items.map((t: any) => mKey(t.timestamp)))).sort().reverse();
   const monthNow = mKey(Date.now());
   const thisMonth = items.filter((t) => mKey(t.timestamp) === monthNow);
-  const first = (user.displayName || "Operatore").split(" ")[0];
+  const myName = profiles[user.uid]?.displayName || user.displayName || "Operatore";
+  const first = myName.split(" ")[0];
+  const dn = (uid: string, fb: string) => profiles[uid]?.displayName || fb;
   const wc = (t: any) => plain(t.content).trim().split(/\s+/).filter(Boolean).length;
   const Row = ({ t, rank }: any) => (
     <button key={t.id} onClick={() => openView(t)} className="nv w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-colors">
       {rank && <span className="hd w-8 text-center font-bold mu">{rank}</span>}
-      <div className="flex-1 min-w-0"><div className="font-semibold truncate">{t.title}</div><div className="mu text-xs">{t.author} · {fmtDate(t.timestamp)}</div></div>
+      <Avatar p={profiles[t.userId]} name={t.author} size={36} />
+      <div className="flex-1 min-w-0"><div className="font-semibold truncate">{t.title}</div><div className="mu text-xs">{dn(t.userId, t.author)} · {fmtDate(t.timestamp)}</div></div>
       {isAdmin && <Stars v={t.rating || 0} size={14} />}
     </button>
+  );
+
+  const startEditProf = () => {
+    const p = profiles[user.uid] || {};
+    setPf({ displayName: p.displayName || user.displayName || "", handle: p.handle || "", status: p.status || "", bio: p.bio || "", place: p.place || "", link: p.link || "", tagsText: (p.tags || []).join(", "), avatar: p.avatar || "", banner: p.banner || "teal" });
+    setEditProf(true);
+  };
+  const pickAvatar = async (e: any) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    try { setPf({ ...pf, avatar: await avatarFrom(f) }); } catch { notify("Immagine non valida."); }
+    e.target.value = "";
+  };
+  const saveProf = async (e: any) => {
+    e.preventDefault();
+    const name = (pf.displayName || "").trim() || "Operatore";
+    const data = { displayName: name, handle: (pf.handle || "").trim(), status: (pf.status || "").trim(), bio: (pf.bio || "").trim(), place: (pf.place || "").trim(), link: (pf.link || "").trim(),
+      tags: (pf.tagsText || "").split(",").map((x: string) => x.trim().replace(/^#/, "")).filter(Boolean).slice(0, 5), avatar: pf.avatar || "", banner: pf.banner || "teal",
+      createdAt: profiles[user.uid]?.createdAt || Date.now(), updatedAt: Date.now() };
+    try { await setDoc(doc(db, "profili", user.uid), data); if (name !== user.displayName) await updateProfile(user, { displayName: name }); setEditProf(false); notify("Profilo aggiornato."); }
+    catch { notify("Salvataggio del profilo non riuscito."); }
+  };
+  const fld = (label: string, key: string, ph = "", max = 60, fmt?: (v: string) => string) => (
+    <label className="block"><span className="text-xs mu">{label}</span>
+      <input className="inp mt-1" maxLength={max} placeholder={ph} value={pf[key] || ""} onChange={(e) => setPf({ ...pf, [key]: fmt ? fmt(e.target.value) : e.target.value })} /></label>
+  );
+  const profileView = (uid: string, own: boolean) => {
+    const p = profiles[uid] || {};
+    const name = p.displayName || (own ? user.displayName : items.find((t) => t.userId === uid)?.author) || "Operatore";
+    const mine = items.filter((t) => t.userId === uid);
+    const showStats = own || (isAdmin && ["read", "home", "podio", "authors"].includes(tab));
+    const words = mine.reduce((a, t) => a + wc(t), 0);
+    const badges = [mine.length >= 1 && "Primo scritto", mine.length >= 5 && "Costante", mine.length >= 20 && "Prolifico", mine.some((t) => t.strokes?.length) && "Disegnatore", mine.some((t) => /<img/.test(t.content || "")) && "Fotografo", words >= 1000 && "Mille parole"].filter(Boolean) as string[];
+    const bn = BANNERS.find((b) => b.id === (own && editProf ? pf.banner : p.banner)) || BANNERS[0];
+    const ts = own ? (user.metadata?.creationTime ? new Date(user.metadata.creationTime).getTime() : 0) : p.createdAt;
+    const shownAvatar = own && editProf ? { avatar: pf.avatar } : p;
+    return (
+      <div>
+        <div className="relative h-32 md:h-40" style={{ background: bn.g }}><div className="bd-p w" /></div>
+        <div className="px-5 md:px-8 pb-7">
+          <div className="flex items-end justify-between -mt-12">
+            <span className="rounded-full p-1 relative" style={{ background: "var(--pn)" }}><Avatar p={shownAvatar} name={name} size={96} /></span>
+            {own && !editProf && <button className="bt" onClick={startEditProf}><Pencil size={15} />Modifica profilo</button>}
+          </div>
+          {own && editProf ? (
+            <form onSubmit={saveProf} className="space-y-4 mt-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="bt cursor-pointer"><Camera size={15} />Cambia foto<input type="file" accept="image/*" className="hidden" onChange={pickAvatar} /></label>
+                {pf.avatar && <button type="button" className="bt dng" onClick={() => setPf({ ...pf, avatar: "" })}>Rimuovi</button>}
+              </div>
+              <div><span className="text-xs mu">Copertina</span>
+                <div className="flex flex-wrap gap-3 mt-2">{BANNERS.map((b) => <button type="button" key={b.id} aria-label={`Copertina ${b.id}`} onClick={() => setPf({ ...pf, banner: b.id })} className="sw w-11 h-11 rounded-xl" style={{ background: b.g, boxShadow: pf.banner === b.id ? "0 0 0 2px var(--pn),0 0 0 4px var(--ac)" : "none" }} />)}</div></div>
+              {fld("Nome visualizzato", "displayName", "Il tuo nome", 30)}
+              {fld("Handle", "handle", "es. mario.rossi", 20, (v) => v.toLowerCase().replace(/[^a-z0-9_.]/g, ""))}
+              {fld("Stato", "status", "es. Scrivo di notte ✍️", 40)}
+              <label className="block"><span className="text-xs mu flex justify-between"><span>Bio</span><span>{(pf.bio || "").length}/160</span></span>
+                <textarea className="inp mt-1 min-h-[96px]" maxLength={160} placeholder="Raccontati in poche righe" value={pf.bio || ""} onChange={(e) => setPf({ ...pf, bio: e.target.value })} /></label>
+              {fld("Luogo", "place", "es. Torino", 40)}
+              {fld("Sito o link", "link", "es. miosito.it", 80)}
+              {fld("Interessi (separati da virgola, max 5)", "tagsText", "elettronica, poesia, jazz", 80)}
+              <div className="flex gap-2 justify-end pt-2"><button type="button" className="bt" onClick={() => setEditProf(false)}>Annulla</button><button className="bt on !px-6">Salva profilo</button></div>
+            </form>
+          ) : (<>
+            <h2 className="hd text-2xl md:text-3xl font-bold mt-3">{name}</h2>
+            <div className="mu text-sm">{p.handle ? `@${p.handle}` : own ? "Aggiungi un handle" : ""}{p.status ? ` · ${p.status}` : ""}</div>
+            {p.bio ? <p className="mt-4 whitespace-pre-line">{p.bio}</p> : own && <p className="mu mt-4 text-sm">Aggiungi una bio per presentarti.</p>}
+            <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-sm mu">
+              {p.place && <span className="inline-flex items-center gap-1.5"><MapPin size={15} />{p.place}</span>}
+              {p.link && <a className="lk inline-flex items-center gap-1.5" href={safeUrl(p.link)} target="_blank" rel="noopener noreferrer"><Link2 size={15} />{p.link.replace(/^https?:\/\//i, "")}</a>}
+              {ts ? <span className="inline-flex items-center gap-1.5"><CalendarDays size={15} />Membro da {mLabel(mKey(ts))}</span> : null}
+            </div>
+            {p.tags?.length > 0 && <div className="flex flex-wrap gap-2 mt-4">{p.tags.map((t: string) => <span key={t} className="text-xs px-3 py-1 rounded-full" style={{ border: "1px solid var(--ln)", background: "var(--sf)" }}>#{t}</span>)}</div>}
+            {showStats && <div className="grid grid-cols-3 gap-3 mt-6">{[["Scritti", mine.length], ["Parole", words], ["Questo mese", mine.filter((t) => mKey(t.timestamp) === monthNow).length]].map(([l, v]) => <div key={String(l)} className="rounded-xl p-3 text-center" style={{ background: "var(--sf)", border: "1px solid var(--ln)" }}><div className="hd text-2xl font-bold">{v}</div><div className="mu text-xs">{l}</div></div>)}</div>}
+            {showStats && badges.length > 0 && <div className="flex flex-wrap gap-2 mt-4">{badges.map((b) => <span key={b} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: "color-mix(in srgb,var(--am) 20%,transparent)" }}><Award size={13} />{b}</span>)}</div>}
+          </>)}
+        </div>
+      </div>
+    );
+  };
+  const profilePage = (
+    <div className="max-w-2xl mx-auto space-y-5">
+      <div className="pn overflow-hidden">{profileView(user.uid, true)}</div>
+      <button className="bt dng w-full md:hidden" onClick={logout}><LogOut size={16} />Esci dall'account</button>
+    </div>
   );
 
   const stats = isAdmin
@@ -722,7 +840,7 @@ export default function App() {
                       <Stars v={t.rating || 0} size={16} />
                     </div>
                     <h3 className="hd text-xl font-bold mt-5 line-clamp-2">{t.title}</h3>
-                    <p className="mu text-sm mt-1">{t.author}</p>
+                    <div className="flex items-center gap-2 mt-2"><Avatar p={profiles[t.userId]} name={t.author} size={24} /><span className="mu text-sm">{dn(t.userId, t.author)}</span></div>
                     <p className="mu text-sm mt-3 line-clamp-3">{plain(t.content)}</p>
                   </div>
                 </Reveal>
@@ -733,7 +851,7 @@ export default function App() {
     </div>
   );
 
-  const authors: any[] = Object.values(items.reduce((m: any, t) => { const k = t.userId || t.author; const a = (m[k] = m[k] || { name: t.author || "?", n: 0, r: [], last: 0 }); a.n++; if (t.rating) a.r.push(t.rating); a.last = Math.max(a.last, t.timestamp); return m; }, {}))
+  const authors: any[] = Object.values(items.reduce((m: any, t) => { const k = t.userId || t.author; const a = (m[k] = m[k] || { name: dn(t.userId, t.author || "?"), uid: t.userId, n: 0, r: [], last: 0 }); a.n++; if (t.rating) a.r.push(t.rating); a.last = Math.max(a.last, t.timestamp); return m; }, {}))
     .map((a: any) => ({ ...a, avg: a.r.length ? a.r.reduce((x: number, y: number) => x + y, 0) / a.r.length : 0 })).sort((a: any, b: any) => b.n - a.n);
   const authorsView = loading ? <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div> : authors.length === 0 ? (
     <div className="pn p-12 text-center max-w-md mx-auto"><Users className="mx-auto mb-4 mu" size={36} /><h3 className="hd text-xl font-bold">Ancora nessun autore</h3><p className="mu text-sm mt-1">Compariranno appena arriva il primo scritto.</p></div>
@@ -743,7 +861,7 @@ export default function App() {
         <Reveal key={a.name + i} delay={(i % 3) * 90} className="h-full">
           <div className="pn card h-full p-6 cursor-pointer" onClick={() => { setTab("read"); setSearch(a.name); setMonthFilter("all"); }}>
             <div className="flex items-center gap-4">
-              <span className="hd w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold uppercase" style={{ background: "color-mix(in srgb,var(--ac) 16%,transparent)", color: "var(--ac)" }}>{a.name.slice(0, 2)}</span>
+              <button type="button" aria-label="Apri profilo" onClick={(e) => { e.stopPropagation(); setViewProf(a.uid); }}><Avatar p={profiles[a.uid]} name={a.name} size={48} /></button>
               <div className="min-w-0"><div className="hd font-bold text-lg truncate">{a.name}</div><div className="mu text-xs">Ultimo invio {fmtDate(a.last)}</div></div>
             </div>
             <div className="flex justify-between items-end mt-6">
@@ -755,7 +873,7 @@ export default function App() {
       ))}
     </div>
   );
-  const titles: any = { write: editingId ? "Modifica progetto" : "Nuovo progetto", my_pages: "I miei progetti", read: "Tutti gli scritti", home: "Panoramica", podio: "Podio del mese", authors: "Autori" };
+  const titles: any = { write: editingId ? "Modifica progetto" : "Nuovo progetto", my_pages: "I miei progetti", read: "Tutti gli scritti", home: "Panoramica", profile: "Il tuo profilo", podio: "Podio del mese", authors: "Autori" };
   const isList = ["my_pages", "read"].includes(tab);
 
   return shell(
@@ -770,7 +888,7 @@ export default function App() {
         <div className="mt-auto space-y-2">
           {isAdmin && <button onClick={() => { try { localStorage.removeItem("circuito:admin"); } catch {} setIsAdmin(false); setTab("home"); }} className="bt w-full !justify-start"><Unlock size={16} />Esci da admin</button>}
           <div className="flex items-center gap-2">
-            <div className="flex-1 min-w-0 text-sm"><div className="font-semibold truncate">{user.displayName || "Operatore"}</div><div className="mu text-xs truncate">{user.email}</div></div>
+            <button onClick={() => go("profile")} className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{user.email}</span></span></button>
             <button className="bt !p-2" onClick={() => setDark(!dark)} title="Cambia tema">{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
             <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
           </div>
@@ -780,16 +898,13 @@ export default function App() {
       {/* barra mobile */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
         <div className="flex items-center gap-2" onDoubleClick={() => !isAdmin && setAdminModal(true)}><Wordmark size={40} fs={19} tag={false} /></div>
-        <div className="flex gap-2">
-          <button className="bt !p-2" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
-          <button className="bt !p-2" onClick={logout}><LogOut size={16} /></button>
-        </div>
+        <div className="flex items-center gap-2"><button className="bt !p-2" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button><button onClick={() => go("profile")} aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
       </header>
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))", display: kb ? "none" : undefined }}>
         {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} aria-label={n.label} className={`bt flex-col flex-1 min-w-0 !gap-1 !px-0 !py-2 !text-[10px] ${tab === n.id ? "on" : "!border-transparent !bg-transparent"}`}><n.icon size={18} /><span className="truncate max-w-full">{n.s || n.label}</span></button>)}
       </nav>
 
-      <div className="md:ml-60 pb-28 md:pb-12 relative z-10">
+      <div className="md:ml-60 pb-28 md:pb-12 relative">
         <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
             <div><h1 className="hd text-3xl md:text-5xl font-bold">{titles[tab]}</h1>{isList && !loading && <p className="mu text-sm mt-1.5">{shown.length} {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
@@ -805,6 +920,7 @@ export default function App() {
           </div>
 
           {tab === "home" && homeView}
+          {tab === "profile" && profilePage}
           {tab === "podio" && podioView}
           {tab === "authors" && authorsView}
           {/* LISTA */}
@@ -834,7 +950,7 @@ export default function App() {
                     </div>
                     <div className="p-5 border-t" style={{ borderColor: "var(--ln)" }}>
                       <h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
-                      <div className="mu text-xs mt-1 flex justify-between"><span className="truncate">{t.author}</span><span>{fmtDate(t.timestamp)}</span></div>
+                      <div className="mt-2 flex items-center gap-2 mu text-xs"><Avatar p={profiles[t.userId]} name={t.author} size={22} /><span className="truncate flex-1">{dn(t.userId, t.author)}</span><span>{fmtDate(t.timestamp)}</span></div>
                       {isAdmin && <div className="mt-3"><Stars v={t.rating || 0} onSet={(n: number) => rate(t, n)} size={15} /></div>}
                     </div>
                   </article></Reveal>
@@ -933,7 +1049,8 @@ export default function App() {
           <div className="fade fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm" onClick={closeView}>
             <div className="pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden pop" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
-                <div className="flex-1 min-w-0"><h2 className="hd text-2xl font-bold truncate">{sel.title}</h2><div className="mu text-xs">{sel.author} · {fmtDate(sel.timestamp)}</div></div>
+                <button type="button" onClick={() => setViewProf(sel.userId)} className="shrink-0" aria-label="Apri profilo"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></button>
+                <div className="flex-1 min-w-0"><h2 className="hd text-2xl font-bold truncate">{sel.title}</h2><div className="mu text-xs">{dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
                 <button className="bt !p-2" title="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>
                 {isAdmin && <button className="bt !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /></button>}
                 {canEdit(sel) && <button className="bt !p-2" onClick={() => startEdit(sel)} title="Modifica"><Pencil size={15} /></button>}
@@ -951,6 +1068,15 @@ export default function App() {
           </div>
         );
       })()}
+
+      {viewProf && (
+        <div className="fade fixed inset-0 z-[65] flex items-end md:items-center justify-center bg-black/60" onClick={() => setViewProf(null)}>
+          <div className="pn w-full max-w-lg max-h-[92dvh] overflow-y-auto pop relative !rounded-b-none md:!rounded-b-[18px]" onClick={(e) => e.stopPropagation()}>
+            <button className="bt !p-2 absolute top-3 right-3 z-10" onClick={() => setViewProf(null)} aria-label="Chiudi"><X size={15} /></button>
+            {profileView(viewProf, false)}
+          </div>
+        </div>
+      )}
 
       {/* conferma eliminazione */}
       {toDelete && (
