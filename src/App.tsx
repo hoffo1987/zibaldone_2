@@ -10,7 +10,7 @@ import {
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, KeyRound, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight
 } from "lucide-react";
 
 // --- FIREBASE ---
@@ -38,7 +38,7 @@ const TOOLS = [
   { id: "rect", label: "Rettangolo", icon: Square }, { id: "ellipse", label: "Ellisse", icon: Circle },
   { id: "fill", label: "Forma piena", icon: PaintBucket }, { id: "eraser", label: "Gomma", icon: Eraser },
 ];
-const SORTS: any = { newest: "Più recenti", oldest: "Più vecchi", longest: "Più lunghi", shortest: "Più brevi" };
+const SORTS: any = { newest: "Più recenti", rated: "Voto più alto", oldest: "Più vecchi", longest: "Più lunghi", shortest: "Più brevi" };
 
 // --- UTIL ---
 const clean = (h: string) => {
@@ -151,6 +151,7 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .rt img{max-width:100%;height:auto;border-radius:8px;margin:12px auto;display:block;border:1px solid #D5E0DE}
 .rt:empty:before{content:attr(data-ph);color:#94a3b8;pointer-events:none}
 .sm .rt{line-height:22px;font-size:13px} .sm .rt img{max-height:70px;width:auto;margin:4px 0}
+.sw{cursor:pointer;transition:transform .25s var(--ez),box-shadow .25s}.sw:hover{transform:scale(1.18)}
 .rv{opacity:0;transform:translateY(28px);transition:opacity .8s var(--ez),transform .8s var(--ez)}
 .rv.in{opacity:1;transform:none}
 @keyframes pg{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
@@ -164,6 +165,45 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .tick{stroke-dasharray:60;stroke-dashoffset:60;animation:dash .7s .25s ease-out forwards}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.tick{stroke-dashoffset:0}.rv{opacity:1;transform:none}}
 `;
+
+const mKey = (ts: number) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
+const mLabel = (k: string) => { const [y, m] = k.split("-"); return new Date(+y, +m - 1, 1).toLocaleDateString("it-IT", { month: "long", year: "numeric" }); };
+
+const Stars = ({ v = 0, onSet, size = 16 }: any) => {
+  const El: any = onSet ? "button" : "span";
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <El key={n} {...(onSet ? { type: "button", title: `${n} su 5`, onClick: (e: any) => { e.stopPropagation(); onSet(v === n ? 0 : n); } } : {})} className="transition-transform hover:scale-125 inline-flex">
+          <Star size={size} style={n <= v ? { fill: "var(--am)", color: "var(--am)" } : { color: "var(--mu)", opacity: 0.35 }} />
+        </El>
+      ))}
+    </div>
+  );
+};
+
+const ColorPicker = ({ value, onPick, label, cls = "bt", children }: any) => {
+  const [o, setO] = useState(false);
+  const [hov, setHov] = useState("");
+  return (
+    <div className="relative">
+      <button type="button" className={cls} onClick={() => setO(!o)} title={label}>{children}</button>
+      {o && (<>
+        <div className="fixed inset-0 z-40" onClick={() => setO(false)} />
+        <div className="absolute z-50 top-full left-0 mt-2 pn p-5 pop w-[336px] max-w-[88vw]" style={{ boxShadow: "var(--sh2)" }}>
+          <div className="grid grid-cols-7 gap-3">
+            {INK_COLORS.map((c) => (
+              <button type="button" key={c.id} aria-label={c.name} onMouseEnter={() => setHov(c.name)} onMouseLeave={() => setHov("")}
+                onClick={() => { onPick(c.id); setO(false); }} className="sw aspect-square w-full rounded-full"
+                style={{ background: c.id, boxShadow: value === c.id ? `0 0 0 2px var(--pn),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(0,0,0,.14)" }} />
+            ))}
+          </div>
+          <p className="text-sm mu mt-4 h-5">{hov || INK_COLORS.find((c) => c.id === value)?.name || "Scegli un colore"}</p>
+        </div>
+      </>)}
+    </div>
+  );
+};
 
 const Reveal = ({ children, delay = 0, className = "" }: any) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -187,7 +227,9 @@ export default function App() {
   const [resetCode, setResetCode] = useState<string | null>(null);
   // ui
   const [dark, setDark] = useState(() => { try { return localStorage.getItem("circuito:dark") === "1"; } catch { return false; } });
-  const [tab, setTab] = useState("write");
+  const [tab, setTab] = useState("home");
+  const [month, setMonth] = useState(() => mKey(Date.now()));
+  const [monthFilter, setMonthFilter] = useState("all");
   const [toast, setToast] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminModal, setAdminModal] = useState(false);
@@ -252,11 +294,11 @@ export default function App() {
   useEffect(() => {
     if (!user || !db) return;
     let q: any;
-    if (isAdmin && tab === "read") q = collection(db, "pensieri");
+    if (isAdmin && ["read", "home", "podio", "authors"].includes(tab)) q = collection(db, "pensieri");
     else if (isAdmin && tab === "favorites") q = query(collection(db, "pensieri"), where("isStarred", "==", true));
-    else if (tab === "my_pages") q = query(collection(db, "pensieri"), where("userId", "==", user.uid));
+    else if (tab === "my_pages" || tab === "home") q = query(collection(db, "pensieri"), where("userId", "==", user.uid));
     else return;
-    setLoading(true);
+    setLoading(true); setItems([]);
     return onSnapshot(q, (s: any) => {
       setItems(s.docs.map((d: any) => ({ id: d.id, ...d.data() })));
       setLoading(false);
@@ -292,434 +334,4 @@ export default function App() {
     e.preventDefault(); setAuthMsg(null); setAuthLoading(true);
     try {
       if (authMode === "reset") { await sendPasswordResetEmail(auth, f.email); setAuthMsg({ t: "ok", m: "Link di recupero inviato. Controlla la posta." }); }
-      else if (authMode === "register") { const c = await createUserWithEmailAndPassword(auth, f.email, f.pw); await updateProfile(c.user, { displayName: f.name.trim() || "Operatore" }); }
-      else await signInWithEmailAndPassword(auth, f.email, f.pw);
-    } catch (x: any) {
-      const m: any = { "auth/email-already-in-use": "Questa email è già registrata.", "auth/invalid-credential": "Email o password errate.", "auth/weak-password": "La password deve avere almeno 6 caratteri.", "auth/invalid-email": "L'email non è valida.", "auth/user-not-found": "Utente non trovato.", "auth/missing-email": "Inserisci un'email." };
-      err(m[x.code] || `Errore: ${x.message}`);
-    }
-    setAuthLoading(false);
-  };
-  const submitNewPw = async (e: any) => {
-    e.preventDefault(); setAuthMsg(null); setAuthLoading(true);
-    try {
-      await confirmPasswordReset(auth, resetCode!, f.newPw);
-      setAuthMsg({ t: "ok", m: "Password aggiornata. Ora puoi accedere." });
-      window.history.replaceState({}, document.title, window.location.pathname);
-      setTimeout(() => { setResetCode(null); setAuthMode("login"); setAuthMsg(null); }, 2500);
-    } catch { err("Il link è scaduto o non è valido."); }
-    setAuthLoading(false);
-  };
-  const logout = async () => { await signOut(auth); setIsAdmin(false); setTab("write"); };
-  const adminLogin = (e: any) => {
-    e.preventDefault();
-    if (adminPw.toLowerCase() === "infinito") { setIsAdmin(true); setTab("read"); setAdminModal(false); setAdminPw(""); } else setAdminErr(true);
-  };
-
-  // --- editor handlers ---
-  const cmd = (c: string, v?: string) => {
-    document.execCommand(c, false, v);
-    editorRef.current?.focus(); setContent(editorRef.current.innerHTML); readFmt();
-  };
-  const readFmt = () => setFmt({ b: document.queryCommandState("bold"), i: document.queryCommandState("italic"), u: document.queryCommandState("underline") });
-  const addImage = async (e: any) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    try {
-      const src = await compressImage(file);
-      editorRef.current.focus(); document.execCommand("insertImage", false, src);
-      editorRef.current.querySelectorAll("img").forEach((im: any) => { if (!im.style.width) { im.style.width = "50%"; im.style.cursor = "pointer"; } });
-      setContent(editorRef.current.innerHTML);
-    } catch { notify("Immagine non valida."); }
-    e.target.value = "";
-  };
-  const pickImg = (e: any) => {
-    img?.style.removeProperty("outline");
-    if (e.target.tagName === "IMG") { e.target.style.outline = "3px solid #0F8B7A"; setImg(e.target); } else setImg(null);
-  };
-  const resizeImg = (w: string) => { if (img) { img.style.width = w; setContent(editorRef.current.innerHTML); } };
-  const removeImg = () => { img?.remove(); setImg(null); setContent(editorRef.current.innerHTML); };
-
-  const snap = () => { setHist((h) => [...h.slice(-49), strokes]); setFut([]); };
-  const undo = () => { if (!hist.length) return; setFut((x) => [...x, strokes]); setStrokes(hist[hist.length - 1]); setHist((h) => h.slice(0, -1)); };
-  const redo = () => { if (!fut.length) return; setHist((h) => [...h, strokes]); setStrokes(fut[fut.length - 1]); setFut((x) => x.slice(0, -1)); };
-  const pos = (e: any) => { const r = e.currentTarget.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-
-  const erase = (x: number, y: number) => {
-    const r = eraser / 2;
-    setStrokes((prev) => {
-      const out: any[] = [];
-      prev.forEach((s) => {
-        const a = s.points[0], b = s.points[s.points.length - 1];
-        if (s.tool === "line") { if (distSeg({ x, y }, a, b) > r + (s.size || 3) / 2) out.push(s); return; }
-        if (s.tool === "rect" || s.tool === "ellipse") {
-          const hit = x >= Math.min(a.x, b.x) - r && x <= Math.max(a.x, b.x) + r && y >= Math.min(a.y, b.y) - r && y <= Math.max(a.y, b.y) + r;
-          if (!hit) out.push(s); return;
-        }
-        let seg: any[] = [];
-        s.points.forEach((p: any) => {
-          if ((p.x - x) ** 2 + (p.y - y) ** 2 > r * r) seg.push(p);
-          else { if (seg.length) out.push({ ...s, points: seg }); seg = []; }
-        });
-        if (seg.length) out.push({ ...s, points: seg });
-      });
-      return out;
-    });
-  };
-  const pDown = (e: any) => {
-    e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); down.current = true;
-    const { x, y } = pos(e); snap();
-    if (tool === "eraser") erase(x, y);
-    else setCur({ tool, color, size, opacity: opacity / 100, filled, points: [{ x, y }, { x: x + 0.01, y }] });
-  };
-  const pMove = (e: any) => {
-    if (!down.current) return; e.preventDefault();
-    const p = pos(e);
-    if (tool === "eraser") return erase(p.x, p.y);
-    setCur((c: any) => {
-      if (!c) return c;
-      if (["line", "rect", "ellipse"].includes(c.tool)) return { ...c, points: [c.points[0], p] };
-      const l = c.points[c.points.length - 1];
-      return Math.hypot(p.x - l.x, p.y - l.y) < 1.5 ? c : { ...c, points: [...c.points, p] };
-    });
-    if (p.y > height - 120) setHeight((h) => h + 300);
-  };
-  const pUp = (e: any) => {
-    if (!down.current) return; down.current = false;
-    e.currentTarget.releasePointerCapture?.(e.pointerId);
-    if (cur) { setStrokes((s) => [...s, cur]); setCur(null); }
-  };
-
-  const resetForm = () => {
-    setEditingId(null); setTitle(""); setContent(""); setStrokes([]); setHist([]); setFut([]); setHeight(600);
-    setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
-    try { localStorage.removeItem(draftKey); } catch {}
-  };
-  const startEdit = (t: any) => {
-    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setStrokes(t.strokes || []);
-    setHist([]); setFut([]); setHeight(t.h || 600); setSel(null); setDrawing(false); setTab("write"); setLoadTick((n) => n + 1);
-  };
-
-  const submit = async (e: any) => {
-    e.preventDefault();
-    const html = clean(editorRef.current?.innerHTML || "");
-    if (!user || !(plain(html).trim() || /<img/.test(html) || strokes.length)) return;
-    const st = strokes.map((s) => ({ ...s, points: s.points.map((p: any) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 })) }));
-    const data = { title: title.trim() || "Senza titolo", content: html, strokes: st, w: Math.round(canvasRef.current?.clientWidth || 900), h: Math.round(height) };
-    if (JSON.stringify(data).length > 950000) return notify("Progetto troppo pesante: riduci le immagini o il disegno.");
-    setSaving(true);
-    try {
-      if (editingId) await updateDoc(doc(db, "pensieri", editingId), { ...data, updatedAt: Date.now() });
-      else await addDoc(collection(db, "pensieri"), { ...data, author: user.displayName || "Operatore", timestamp: Date.now(), userId: user.uid, isStarred: false });
-      setDone(editingId ? "edit" : "new");
-    } catch { notify("Salvataggio non riuscito. Riprova."); }
-    setSaving(false);
-  };
-
-  // --- azioni lista ---
-  const canEdit = (t: any) => isAdmin || t.userId === user?.uid;
-  const star = async (t: any) => { if (isAdmin) { await updateDoc(doc(db, "pensieri", t.id), { isStarred: !t.isStarred }); if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
-  const confirmDelete = async () => {
-    const list = toDelete!; setToDelete(null); setSel(null); setGone(list);
-    setTimeout(async () => {
-      try { const b = writeBatch(db); list.forEach((id) => b.delete(doc(db, "pensieri", id))); await b.commit(); notify(list.length > 1 ? `${list.length} progetti eliminati.` : "Progetto eliminato."); }
-      catch { notify("Eliminazione non riuscita: controlla i permessi."); }
-      setGone([]); setIds([]); setSelMode(false);
-    }, 300);
-  };
-  const go = (t: string) => { setTab(t); setSelMode(false); setIds([]); setSearch(""); };
-
-  const shown = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return items
-      .filter((t) => !q || `${t.title} ${t.author} ${plain(t.content)}`.toLowerCase().includes(q))
-      .sort((a, b) => sortBy === "oldest" ? a.timestamp - b.timestamp : sortBy === "longest" ? (b.content?.length || 0) - (a.content?.length || 0) : sortBy === "shortest" ? (a.content?.length || 0) - (b.content?.length || 0) : b.timestamp - a.timestamp);
-  }, [items, search, sortBy]);
-  const words = plain(content).trim().split(/\s+/).filter(Boolean).length;
-
-  // ================= RENDER =================
-  const shell = (children: any) => <div className={`root ${dark ? "dark" : ""} min-h-screen`}><style>{CSS}</style>{children}</div>;
-
-  if (authLoading) return shell(<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin" style={{ color: "var(--ac)" }} /></div>);
-
-  if (!user || resetCode) {
-    const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
-    const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
-    return shell(
-      <div className="min-h-screen grid md:grid-cols-2">
-        <div className="mm hidden md:flex flex-col justify-between p-12" style={{ background: "var(--sf)" }}>
-          <div className="flex items-center gap-3"><Logo size={36} /><span className="hd text-xl font-bold">Il Circuito</span></div>
-          <div>
-            <h1 className="hd text-5xl font-bold leading-tight max-w-md up">Appunti, schemi e progetti nello stesso quaderno.</h1>
-            <p className="mu mt-4 max-w-sm up" style={{ animationDelay: "150ms" }}>Scrivi, incolla foto e disegna a mano libera sopra il testo. Tutto resta salvato e ordinato.</p>
-          </div>
-          <span className="mu text-sm">Archivio personale di elettrotecnica</span>
-        </div>
-        <div className="flex items-center justify-center p-6">
-          <div className="w-full max-w-sm pop">
-            {resetCode ? (
-              <form onSubmit={submitNewPw} className="space-y-4">
-                <h2 className="hd text-3xl font-bold mb-2">Scegli una nuova password</h2>
-                {Msg}
-                <input className="inp" type="password" minLength={6} required autoFocus placeholder="Almeno 6 caratteri" value={f.newPw} onChange={set("newPw")} />
-                <button className="bt pri w-full py-3">Aggiorna password</button>
-              </form>
-            ) : (
-              <form onSubmit={submitAuth} className="space-y-4">
-                <h2 className="hd text-3xl font-bold">{authMode === "login" ? "Bentornato" : authMode === "register" ? "Crea il tuo profilo" : "Recupera l'accesso"}</h2>
-                {authMode !== "reset" && (
-                  <div className="flex p-1 rounded-xl sf" style={{ background: "var(--sf)", border: "1px solid var(--ln)" }}>
-                    {["login", "register"].map((m) => <button type="button" key={m} onClick={() => { setAuthMode(m); setAuthMsg(null); }} className={`bt flex-1 border-0 ${authMode === m ? "" : "!bg-transparent mu"}`}>{m === "login" ? "Accedi" : "Registrati"}</button>)}
-                  </div>
-                )}
-                {Msg}
-                {authMode === "register" && <input className="inp" required placeholder="Nome operatore" value={f.name} onChange={set("name")} />}
-                <input className="inp" type="email" required placeholder="Email" value={f.email} onChange={set("email")} />
-                {authMode !== "reset" && <input className="inp" type="password" required placeholder="Password" value={f.pw} onChange={set("pw")} />}
-                <button className="bt pri w-full py-3">{authMode === "login" ? "Entra" : authMode === "register" ? "Crea profilo" : "Invia link di recupero"}</button>
-                {authMode === "login" && <button type="button" className="mu text-sm lk" onClick={() => { setAuthMode("reset"); setAuthMsg(null); }}>Password dimenticata?</button>}
-                {authMode === "reset" && <button type="button" className="mu text-sm lk" onClick={() => { setAuthMode("login"); setAuthMsg(null); }}>Torna all'accesso</button>}
-              </form>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const nav = [
-    { id: "write", label: editingId ? "Modifica" : "Nuovo", icon: Pen },
-    { id: "my_pages", label: "I miei progetti", icon: Bookmark },
-    ...(isAdmin ? [{ id: "read", label: "Tutti", icon: Activity }, { id: "favorites", label: "Preferiti", icon: Star }] : []),
-  ];
-  const titles: any = { write: editingId ? "Modifica progetto" : "Nuovo progetto", my_pages: "I miei progetti", read: "Tutti i progetti", favorites: "Preferiti" };
-  const isList = tab !== "write";
-
-  return shell(
-    <>
-      {/* sidebar desktop */}
-      <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col p-5 gap-1 pn !rounded-none !border-y-0 !border-l-0 z-20">
-        <div className="flex items-center gap-2.5 mb-8 cursor-pointer select-none" onDoubleClick={() => !isAdmin && setAdminModal(true)} title="Il Circuito">
-          <Logo size={30} /><span className="hd text-lg font-bold">Il Circuito</span>
-        </div>
-        {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt !justify-start w-full ${tab === n.id ? "on" : "!border-transparent !bg-transparent"} nv`}><n.icon size={16} />{n.label}</button>)}
-        <div className="mt-auto space-y-2">
-          {isAdmin && <button onClick={() => { setIsAdmin(false); setTab("write"); }} className="bt w-full !justify-start"><Unlock size={16} />Esci da admin</button>}
-          <div className="flex items-center gap-2">
-            <div className="flex-1 min-w-0 text-sm"><div className="font-semibold truncate">{user.displayName || "Operatore"}</div><div className="mu text-xs truncate">{user.email}</div></div>
-            <button className="bt !p-2" onClick={() => setDark(!dark)} title="Cambia tema">{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
-            <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
-          </div>
-        </div>
-      </aside>
-
-      {/* barra mobile */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
-        <div className="flex items-center gap-2" onDoubleClick={() => !isAdmin && setAdminModal(true)}><Logo size={26} /><span className="hd font-bold">Il Circuito</span></div>
-        <div className="flex gap-2">
-          <button className="bt !p-2" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
-          <button className="bt !p-2" onClick={logout}><LogOut size={16} /></button>
-        </div>
-      </header>
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn !rounded-none !border-x-0 !border-b-0 flex justify-around p-2 hdr">
-        {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt flex-col !gap-0.5 !text-[11px] flex-1 ${tab === n.id ? "on" : "!border-transparent"}`}><n.icon size={17} />{n.label.split(" ")[0]}</button>)}
-      </nav>
-
-      <div className="md:ml-60 pb-28 md:pb-12">
-        <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div><h1 className="hd text-3xl md:text-5xl font-bold">{titles[tab]}</h1>{isList && !loading && <p className="mu text-sm mt-1.5">{shown.length} {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
-            {isList && (
-              <div className="flex flex-wrap gap-2 items-center">
-                <div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-                <select className="inp !w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>{Object.keys(SORTS).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}</select>
-                {items.length > 0 && <button className={`bt ${selMode ? "on" : ""}`} onClick={() => { setSelMode(!selMode); setIds([]); }}><ListChecks size={15} />{selMode ? "Fine" : "Seleziona"}</button>}
-              </div>
-            )}
-          </div>
-
-          {/* LISTA */}
-          {isList && (loading ? (
-            <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
-          ) : shown.length === 0 ? (
-            <div className="pn p-12 text-center max-w-md mx-auto up">
-              <Cpu className="mx-auto mb-4 mu" size={36} />
-              <h3 className="hd text-xl font-bold mb-1">{search ? "Nessun risultato" : "Ancora nessun progetto"}</h3>
-              <p className="mu text-sm mb-5">{search ? "Prova con un'altra parola." : "Crea il primo: puoi scrivere, aggiungere foto e disegnare."}</p>
-              {!search && <button className="bt pri" onClick={() => go("write")}><Plus size={15} />Nuovo progetto</button>}
-            </div>
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {shown.map((t, i) => {
-                const picked = ids.includes(t.id), { w, h } = dims(t);
-                return (
-                  <Reveal key={t.id} delay={(i % 3) * 90} className="h-full"><article onClick={() => selMode ? setIds((p) => p.includes(t.id) ? p.filter((x) => x !== t.id) : [...p, t.id]) : setSel(t)}
-                    className={`pn card h-full overflow-hidden cursor-pointer ${gone.includes(t.id) ? "gone" : ""} ${picked ? "!border-[var(--ac)] ring-2 ring-[var(--ac)]" : ""}`}>
-                    <div className="paper mm sm relative h-40 overflow-hidden">
-                      <div className="thumb absolute inset-0">
-                        {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
-                        <div className="rt relative p-3 line-clamp-5" dangerouslySetInnerHTML={{ __html: clean(t.content) }} />
-                      </div>
-                      {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
-                      {t.isStarred && <Star size={16} className="absolute top-2 left-2" style={{ fill: "var(--am)", color: "var(--am)" }} />}
-                    </div>
-                    <div className="p-5 border-t" style={{ borderColor: "var(--ln)" }}>
-                      <h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
-                      <div className="mu text-xs mt-1 flex justify-between"><span className="truncate">{t.author}</span><span>{fmtDate(t.timestamp)}</span></div>
-                    </div>
-                  </article></Reveal>
-                );
-              })}
-            </div>
-          ))}
-
-          {/* EDITOR */}
-          {tab === "write" && (
-            <form onSubmit={submit} className="space-y-4 up">
-              <input className="inp !text-xl !py-3 hd font-bold" placeholder="Nome del progetto" value={title} onChange={(e) => setTitle(e.target.value)} required />
-              <div className="pn overflow-hidden">
-                <div className="p-2 border-b space-y-2" style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onMouseDown={(e) => { if ((e.target as any).tagName !== "INPUT" && (e.target as any).tagName !== "SELECT") e.preventDefault(); }}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex p-0.5 rounded-lg" style={{ border: "1px solid var(--ln)" }}>
-                      <button type="button" className={`bt border-0 ${!drawing ? "on" : ""}`} onClick={() => setDrawing(false)}><Type size={15} />Testo</button>
-                      <button type="button" className={`bt border-0 ${drawing ? "on" : ""}`} onClick={() => { setDrawing(true); setImg(null); }}><Pencil size={15} />Disegno</button>
-                    </div>
-                    {!drawing ? (<>
-                      <button type="button" className={`bt !p-2 ${fmt.b ? "on" : ""}`} onClick={() => cmd("bold")} title="Grassetto"><Bold size={15} /></button>
-                      <button type="button" className={`bt !p-2 ${fmt.i ? "on" : ""}`} onClick={() => cmd("italic")} title="Corsivo"><Italic size={15} /></button>
-                      <button type="button" className={`bt !p-2 ${fmt.u ? "on" : ""}`} onClick={() => cmd("underline")} title="Sottolineato"><Underline size={15} /></button>
-                      <button type="button" className="bt !p-2" onClick={() => cmd("formatBlock", "h2")} title="Titolo"><Heading2 size={15} /></button>
-                      <button type="button" className="bt !p-2" onClick={() => cmd("insertUnorderedList")} title="Elenco"><List size={15} /></button>
-                      <div className="relative">
-                        <button type="button" className="bt !p-2" onClick={() => setColorOpen(!colorOpen)} title="Colore testo"><Palette size={15} /></button>
-                        {colorOpen && <div className="absolute z-40 top-full mt-1 pn p-2 grid grid-cols-7 gap-1.5 pop">{INK_COLORS.map((c) => <button type="button" key={c.id} title={c.name} className="w-6 h-6 rounded-full border" style={{ background: c.id, borderColor: "var(--ln)" }} onClick={() => { cmd("foreColor", c.id); setColorOpen(false); }} />)}</div>}
-                      </div>
-                      <label className="bt !p-2 cursor-pointer" title="Inserisci foto"><ImageIcon size={15} /><input type="file" accept="image/*" className="hidden" onChange={addImage} /></label>
-                      {img && <div className="flex gap-1 items-center ml-1">
-                        {["25%", "50%", "75%", "100%"].map((w) => <button type="button" key={w} className="bt !px-2 !py-1 !text-xs" onClick={() => resizeImg(w)}>{w}</button>)}
-                        <button type="button" className="bt dng !p-1.5" onClick={removeImg}><Trash2 size={14} /></button>
-                      </div>}
-                    </>) : (<>
-                      {TOOLS.map((t) => <button type="button" key={t.id} className={`bt ${tool === t.id ? "on" : ""}`} onClick={() => setTool(t.id)}><t.icon size={15} />{t.label}</button>)}
-                    </>)}
-                    <div className="ml-auto flex gap-2">
-                      <button type="button" className={`bt !p-2 ${grid ? "on" : ""}`} onClick={() => setGrid(!grid)} title="Griglia"><Grid3x3 size={15} /></button>
-                      {drawing && <>
-                        <button type="button" className="bt !p-2" disabled={!hist.length} onClick={undo} title="Annulla (Ctrl+Z)"><Undo size={15} /></button>
-                        <button type="button" className="bt !p-2" disabled={!fut.length} onClick={redo} title="Ripeti (Ctrl+Y)"><Redo size={15} /></button>
-                        <button type="button" className="bt dng" disabled={!strokes.length} onClick={() => { snap(); setStrokes([]); }}>Svuota</button>
-                      </>}
-                    </div>
-                  </div>
-                  {drawing && (
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                      {tool !== "eraser" && <div className="grid grid-cols-14 gap-1" style={{ gridTemplateColumns: "repeat(14,minmax(0,1fr))" }}>
-                        {INK_COLORS.map((c) => <button type="button" key={c.id} title={c.name} onClick={() => setColor(c.id)} className="w-6 h-6 rounded-full border-2" style={{ background: c.id, borderColor: color === c.id ? "var(--ac)" : "var(--ln)", transform: color === c.id ? "scale(1.15)" : "none" }} />)}
-                      </div>}
-                      <label className="flex items-center gap-2 text-xs mu">Spessore<input type="range" min={tool === "eraser" ? 5 : 1} max={tool === "eraser" ? 100 : 40} value={tool === "eraser" ? eraser : size} onChange={(e) => tool === "eraser" ? setEraser(+e.target.value) : setSize(+e.target.value)} className="accent-teal-600" /></label>
-                      {tool !== "eraser" && <label className="flex items-center gap-2 text-xs mu">Opacità<input type="range" min={5} max={100} value={opacity} onChange={(e) => setOpacity(+e.target.value)} className="accent-teal-600" /></label>}
-                      {(tool === "rect" || tool === "ellipse") && <label className="flex items-center gap-2 text-xs mu"><input type="checkbox" checked={filled} onChange={(e) => setFilled(e.target.checked)} />Riempi</label>}
-                    </div>
-                  )}
-                </div>
-
-                <div ref={canvasRef} className={`paper relative ${grid ? "mm" : ""}`} style={{ minHeight: height }}>
-                  <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                    {strokes.map((s, i) => <Shape key={i} s={s} />)}
-                    {cur && <Shape s={cur} />}
-                  </svg>
-                  <div ref={editorRef} contentEditable={!drawing} suppressContentEditableWarning data-ph="Scrivi appunti, formule, note di cablaggio…"
-                    className="rt relative p-6 outline-none" style={{ minHeight: height, caretColor: "#0F8B7A" }}
-                    onInput={(e: any) => setContent(e.currentTarget.innerHTML)} onClick={pickImg} onKeyUp={readFmt} onMouseUp={readFmt}
-                    onKeyDown={(e) => { if (e.key === "Enter") document.execCommand("formatBlock", false, "div"); }} />
-                  {drawing && <div className="absolute inset-0 z-30" style={{ touchAction: "none", cursor: tool === "eraser" ? "cell" : "crosshair" }} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp} />}
-                </div>
-                <div className="flex justify-between items-center px-4 py-2 text-xs mu border-t" style={{ borderColor: "var(--ln)" }}>
-                  <span>{words} parole · {strokes.length} tratti{!editingId && " · bozza salvata in automatico"}</span>
-                  <button type="button" className="bt !py-1 !text-xs" onClick={() => setHeight((h) => h + 300)}><Plus size={13} />Più spazio</button>
-                </div>
-              </div>
-              <div className="flex gap-2 justify-end">
-                {(editingId || title || strokes.length > 0 || words > 0) && <button type="button" className="bt" onClick={() => { if (confirm("Scartare le modifiche?")) resetForm(); }}>{editingId ? "Annulla modifica" : "Scarta bozza"}</button>}
-                <button className="bt on !px-6 !py-3" disabled={saving}>{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{editingId ? "Salva modifiche" : "Salva progetto"}</button>
-              </div>
-            </form>
-          )}
-        </div>
-      </div>
-
-      {/* barra selezione multipla */}
-      {selMode && (
-        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 pn shadow-xl flex items-center gap-2 p-2 popx">
-          <span className="text-sm px-2">{ids.length} selezionati</span>
-          <button className="bt" onClick={() => setIds(ids.length === shown.length ? [] : shown.map((t) => t.id))}>Tutti</button>
-          <button className="bt dng" disabled={!ids.length} onClick={() => setToDelete(ids)}><Trash2 size={15} />Elimina</button>
-        </div>
-      )}
-
-      {/* lettura */}
-      {sel && (() => {
-        const { w, h } = dims(sel);
-        return (
-          <div className="fade fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm" onClick={() => setSel(null)}>
-            <div className="pn w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden pop" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
-                <div className="flex-1 min-w-0"><h2 className="hd text-2xl font-bold truncate">{sel.title}</h2><div className="mu text-xs">{sel.author} · {fmtDate(sel.timestamp)}</div></div>
-                <button className="bt !p-2" title="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>
-                {isAdmin && <button className="bt !p-2" onClick={() => star(sel)}><Star size={15} style={sel.isStarred ? { fill: "var(--am)", color: "var(--am)" } : {}} /></button>}
-                {canEdit(sel) && <button className="bt !p-2" onClick={() => startEdit(sel)} title="Modifica"><Pencil size={15} /></button>}
-                {canEdit(sel) && <button className="bt dng !p-2" onClick={() => setToDelete([sel.id])} title="Elimina"><Trash2 size={15} /></button>}
-                <button className="bt !p-2" onClick={() => setSel(null)}><X size={15} /></button>
-              </div>
-              <div className="overflow-y-auto">
-                <div className="paper mm relative" style={{ aspectRatio: `${w}/${h}` }}>
-                  {sel.strokes?.length > 0 && <Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" />}
-                  <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: clean(sel.content) }} />
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* conferma eliminazione */}
-      {toDelete && (
-        <div className="fade fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60" onClick={() => setToDelete(null)}>
-          <div className="pn p-6 max-w-sm w-full pop" onClick={(e) => e.stopPropagation()}>
-            <h3 className="hd text-xl font-bold mb-1">{toDelete.length > 1 ? `Eliminare ${toDelete.length} progetti?` : "Eliminare il progetto?"}</h3>
-            <p className="mu text-sm mb-5">L'operazione non si può annullare.</p>
-            <div className="flex gap-2 justify-end"><button className="bt" onClick={() => setToDelete(null)}>Annulla</button><button className="bt on !bg-red-600 !border-red-600 !text-white" onClick={confirmDelete}>Elimina</button></div>
-          </div>
-        </div>
-      )}
-
-      {/* admin */}
-      {adminModal && (
-        <div className="fade fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60" onClick={() => setAdminModal(false)}>
-          <form onSubmit={adminLogin} className="pn p-6 max-w-sm w-full pop" onClick={(e) => e.stopPropagation()}>
-            <KeyRound className="mb-3" style={{ color: "var(--ac)" }} />
-            <h3 className="hd text-xl font-bold mb-3">Accesso amministratore</h3>
-            <input type="password" autoFocus className="inp mb-1" style={adminErr ? { borderColor: "#dc2626" } : {}} placeholder="Password" value={adminPw} onChange={(e) => { setAdminPw(e.target.value); setAdminErr(false); }} />
-            <p className="text-xs text-red-600 h-4 mb-3">{adminErr ? "Password errata." : ""}</p>
-            <div className="flex gap-2 justify-end"><button type="button" className="bt" onClick={() => setAdminModal(false)}>Annulla</button><button className="bt pri" disabled={!adminPw.trim()}>Sblocca</button></div>
-          </form>
-        </div>
-      )}
-
-      {/* salvataggio riuscito */}
-      {done && (
-        <div className="fade fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="pn p-8 max-w-sm w-full text-center pop">
-            <svg viewBox="0 0 64 64" width="72" height="72" className="mx-auto mb-3" fill="none" stroke="var(--ac)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><circle cx="32" cy="32" r="28" opacity=".3" /><path className="tick" d="M18 33l9 9 19-20" /></svg>
-            <h3 className="hd text-2xl font-bold">{done === "edit" ? "Modifiche salvate" : "Progetto salvato"}</h3>
-            <div className="flex gap-2 mt-6 justify-center">
-              <button className="bt" onClick={() => { setDone(null); resetForm(); }}><Plus size={15} />Nuovo</button>
-              <button className="bt pri" onClick={() => { setDone(null); resetForm(); go("my_pages"); }}>Vai ai miei progetti</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {toast && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] pn px-4 py-2 text-sm shadow-lg popx">{toast}</div>}
-    </>
-  );
-}
+      else if (authMode === "register") { const c = await createUserWithEmailAndPassword(auth, f.email, f.pw); await updateProf
