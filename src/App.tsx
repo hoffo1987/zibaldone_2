@@ -80,11 +80,28 @@ const compressImage = (file: File): Promise<string> => new Promise((res, rej) =>
 });
 
 const Logo = ({ size = 32 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round">
-    <path d="M20 50h18l8-24 14 48 8-24h12" />
-    <circle cx="14" cy="50" r="6" fill="var(--ac)" stroke="none" /><circle cx="88" cy="50" r="6" fill="var(--ac)" stroke="none" />
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-label="Il Circuito">
+    <defs><linearGradient id="lg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse"><stop stopColor="#17C3AE" /><stop offset="1" stopColor="#0A4F49" /></linearGradient></defs>
+    <rect width="64" height="64" rx="17" fill="url(#lg)" />
+    <rect x=".75" y=".75" width="62.5" height="62.5" rx="16.25" stroke="#fff" strokeOpacity=".22" strokeWidth="1.5" />
+    <path d="M43.5 22.4A15 15 0 1 0 43.5 41.6" stroke="#fff" strokeWidth="5" strokeLinecap="round" />
+    <path d="M31 32H47" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
+    <circle cx="43.5" cy="22.4" r="4.2" fill="#fff" /><circle cx="43.5" cy="41.6" r="4.2" fill="#FBBF24" /><circle cx="31" cy="32" r="3.2" fill="#fff" />
   </svg>
 );
+const Wordmark = ({ small, light }: any) => (
+  <div className="flex items-center gap-3 leading-none">
+    <Logo size={small ? 30 : 38} />
+    <div>
+      <div className="hd font-bold" style={{ fontSize: small ? 17 : 20, color: light ? "#fff" : "var(--ink)" }}>Il Circuito</div>
+      {!small && <div className="text-xs mt-1" style={{ color: light ? "rgba(255,255,255,.65)" : "var(--mu)" }}>Archivio di scrittura</div>}
+    </div>
+  </div>
+);
+const Backdrop = ({ tab }: { tab: string }) => {
+  const k = ["home", "write", "podio", "authors"].includes(tab) ? tab : "archive";
+  return <div key={k} className={`bd bd-${k} fade fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" /><div className="bd-p" /></div>;
+};
 
 const Shape = ({ s }: any) => {
   const p = s.points; if (!p?.length) return null;
@@ -110,7 +127,7 @@ const CSS = `
 .root{--bg:#EDF2F1;--pn:#FFFFFF;--ink:#0E1F1D;--mu:#5B706D;--ln:#DCE6E4;--sf:#F4F8F7;--ac:#0F8B7A;--am:#E8A100;
 --sh1:0 1px 2px rgba(14,31,29,.04),0 6px 16px -8px rgba(14,31,29,.10);--sh2:0 2px 4px rgba(14,31,29,.04),0 22px 44px -16px rgba(14,31,29,.26);--ez:cubic-bezier(.22,1,.36,1);
 font-family:'Instrument Sans',system-ui,sans-serif;color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;
-background:radial-gradient(900px 420px at 85% -8%,color-mix(in srgb,var(--ac) 12%,transparent),transparent 70%) fixed,var(--bg)}
+background:var(--bg)}
 .root.dark{--bg:#091312;--pn:#102120;--ink:#E2EFEB;--mu:#8AA7A2;--ln:#1E3532;--sf:#0C1B1A;--ac:#2DD4BF;--am:#FBBF24;
 --sh1:0 1px 2px rgba(0,0,0,.3),0 8px 20px -10px rgba(0,0,0,.55);--sh2:0 24px 50px -18px rgba(0,0,0,.75)}
 *{scrollbar-width:thin;scrollbar-color:var(--ln) transparent}
@@ -154,6 +171,30 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .sw{cursor:pointer;transition:transform .25s var(--ez),box-shadow .25s}.sw:hover{transform:scale(1.18)}
 .rv{opacity:0;transform:translateY(28px);transition:opacity .8s var(--ez),transform .8s var(--ez)}
 .rv.in{opacity:1;transform:none}
+.root{--m-circuit:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' fill='none' stroke='black' stroke-width='1.5'%3E%3Cpath d='M0 40H50L70 60V100H120L140 120V160M30 0V30L50 50M160 80H110L90 100M140 0V18M30 160V142M0 80H18M160 40H148'/%3E%3Ccircle cx='50' cy='40' r='3.5'/%3E%3Ccircle cx='120' cy='100' r='3.5'/%3E%3Ccircle cx='30' cy='30' r='3.5'/%3E%3Ccircle cx='110' cy='80' r='3.5'/%3E%3C/svg%3E");
+--m-cross:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' fill='none' stroke='black' stroke-width='1.3'%3E%3Cpath d='M28 22V34M22 28H34'/%3E%3C/svg%3E");
+--m-hatch:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' fill='none' stroke='black' stroke-width='1.2'%3E%3Cpath d='M-4 4L4 -4M0 28L28 0M24 32L32 24'/%3E%3C/svg%3E");
+--m-net:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' stroke='black' stroke-width='1.3'%3E%3Cpath d='M30 40L110 90M110 90L190 50M110 90L90 180M90 180L180 170'/%3E%3Ccircle cx='30' cy='40' r='4'/%3E%3Ccircle cx='110' cy='90' r='5'/%3E%3Ccircle cx='190' cy='50' r='4'/%3E%3Ccircle cx='90' cy='180' r='4'/%3E%3Ccircle cx='180' cy='170' r='4'/%3E%3C/svg%3E")}
+.bd{position:fixed}
+.bd-w,.bd-p{position:absolute;inset:0}
+.bd-p{background:var(--ac);opacity:.11;-webkit-mask-image:var(--m);mask-image:var(--m);-webkit-mask-size:var(--ts,160px);mask-size:var(--ts,160px)}
+.root.dark .bd-p{opacity:.15}
+.bd:after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 25%,color-mix(in srgb,var(--bg) 88%,transparent) 100%)}
+.bd-home .bd-w{background:radial-gradient(760px 460px at 92% -6%,color-mix(in srgb,var(--ac) 24%,transparent),transparent 70%),radial-gradient(620px 520px at 0% 100%,color-mix(in srgb,var(--am) 14%,transparent),transparent 70%)}
+.bd-home .bd-p{--m:var(--m-circuit);--ts:160px}
+.bd-write .bd-w{background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 12%,transparent),transparent 50%)}
+.bd-write .bd-p{--m:var(--m-cross);--ts:56px;opacity:.16}
+.bd-archive .bd-w{background:radial-gradient(700px 480px at 8% -4%,color-mix(in srgb,var(--ac) 18%,transparent),transparent 70%),radial-gradient(640px 500px at 100% 100%,color-mix(in srgb,#64748B 16%,transparent),transparent 70%)}
+.bd-archive .bd-p{--m:var(--m-hatch);--ts:28px;opacity:.08}
+.bd-authors .bd-w{background:radial-gradient(700px 520px at 20% 10%,color-mix(in srgb,var(--ac) 18%,transparent),transparent 70%),radial-gradient(600px 460px at 100% 90%,color-mix(in srgb,#0284C7 14%,transparent),transparent 70%)}
+.bd-authors .bd-p{--m:var(--m-net);--ts:220px}
+.bd-podio .bd-w{background:radial-gradient(820px 520px at 50% -12%,color-mix(in srgb,var(--am) 26%,transparent),transparent 72%)}
+.bd-podio .bd-p{background:repeating-conic-gradient(from -45deg at 50% -8%,var(--am) 0 2.5deg,transparent 2.5deg 9deg);-webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 0,#000,transparent);mask-image:radial-gradient(ellipse 80% 70% at 50% 0,#000,transparent);opacity:.18}
+.brandpanel{position:relative;overflow:hidden;color:#fff;background:radial-gradient(620px 420px at 100% 0,rgba(251,191,36,.2),transparent 60%),linear-gradient(155deg,#0E7468,#08403C 55%,#052321);border-color:transparent}
+.brandpanel>:not(.bd-p){position:relative}
+.brandpanel .mu{color:rgba(255,255,255,.75)}
+.bd-p.w{background:#fff;opacity:.09;--m:var(--m-circuit);--ts:160px}
+@media (hover:none){.bt:hover{transform:none;box-shadow:none}}
 @keyframes pg{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes pop{from{opacity:0;transform:translateY(16px) scale(.95)}to{opacity:1;transform:none}}
@@ -230,6 +271,7 @@ export default function App() {
   const [tab, setTab] = useState("home");
   const [month, setMonth] = useState(() => mKey(Date.now()));
   const [monthFilter, setMonthFilter] = useState("all");
+  const [onlyMarked, setOnlyMarked] = useState(false);
   const [toast, setToast] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminModal, setAdminModal] = useState(false);
@@ -295,7 +337,6 @@ export default function App() {
     if (!user || !db) return;
     let q: any;
     if (isAdmin && ["read", "home", "podio", "authors"].includes(tab)) q = collection(db, "pensieri");
-    else if (isAdmin && tab === "favorites") q = query(collection(db, "pensieri"), where("isStarred", "==", true));
     else if (tab === "my_pages" || tab === "home") q = query(collection(db, "pensieri"), where("userId", "==", user.uid));
     else return;
     setLoading(true); setItems([]);
@@ -459,6 +500,12 @@ export default function App() {
 
   // --- azioni lista ---
   const canEdit = (t: any) => isAdmin || t.userId === user?.uid;
+  const bulkMark = async () => {
+    const chosen = items.filter((t) => ids.includes(t.id)); const val = !chosen.every((t) => t.isStarred);
+    try { const b = writeBatch(db); chosen.forEach((t) => b.update(doc(db, "pensieri", t.id), { isStarred: val })); await b.commit(); notify(val ? "Segnalibro aggiunto." : "Segnalibro rimosso."); }
+    catch { notify("Operazione non riuscita."); }
+    setIds([]); setSelMode(false);
+  };
   const rate = async (t: any, n: number) => { if (!isAdmin) return; await updateDoc(doc(db, "pensieri", t.id), { rating: n }); if (sel?.id === t.id) setSel({ ...sel, rating: n }); };
   const star = async (t: any) => { if (isAdmin) { await updateDoc(doc(db, "pensieri", t.id), { isStarred: !t.isStarred }); if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
   const confirmDelete = async () => {
@@ -469,14 +516,14 @@ export default function App() {
       setGone([]); setIds([]); setSelMode(false);
     }, 300);
   };
-  const go = (t: string) => { setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); };
+  const go = (t: string) => { setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); };
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items
-      .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!q || `${t.title} ${t.author} ${plain(t.content)}`.toLowerCase().includes(q)))
+      .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!onlyMarked || t.isStarred) && (!q || `${t.title} ${t.author} ${plain(t.content)}`.toLowerCase().includes(q)))
       .sort((a, b) => sortBy === "rated" ? (b.rating || 0) - (a.rating || 0) || b.timestamp - a.timestamp : sortBy === "oldest" ? a.timestamp - b.timestamp : sortBy === "longest" ? (b.content?.length || 0) - (a.content?.length || 0) : sortBy === "shortest" ? (a.content?.length || 0) - (b.content?.length || 0) : b.timestamp - a.timestamp);
-  }, [items, search, sortBy, monthFilter]);
+  }, [items, search, sortBy, monthFilter, onlyMarked]);
   const words = plain(content).trim().split(/\s+/).filter(Boolean).length;
 
   // ================= RENDER =================
@@ -487,15 +534,16 @@ export default function App() {
   if (!user || resetCode) {
     const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
     const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
-    return shell(
-      <div className="min-h-screen grid md:grid-cols-2">
-        <div className="mm hidden md:flex flex-col justify-between p-12" style={{ background: "var(--sf)" }}>
-          <div className="flex items-center gap-3"><Logo size={36} /><span className="hd text-xl font-bold">Il Circuito</span></div>
+    return shell(<>
+      <Backdrop tab="home" />
+      <div className="relative z-10 min-h-screen grid md:grid-cols-2">
+        <div className="brandpanel hidden md:flex flex-col justify-between p-12"><div className="bd-p w" />
+          <Wordmark light />
           <div>
-            <h1 className="hd text-5xl font-bold leading-tight max-w-md up">Appunti, schemi e progetti nello stesso quaderno.</h1>
-            <p className="mu mt-4 max-w-sm up" style={{ animationDelay: "150ms" }}>Scrivi, incolla foto e disegna a mano libera sopra il testo. Tutto resta salvato e ordinato.</p>
+            <h1 className="hd text-5xl font-bold leading-tight max-w-md up">Scrivi senza limiti. Ogni mese emergono i testi migliori.</h1>
+            <p className="mu mt-4 max-w-sm up" style={{ animationDelay: "150ms" }}>Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
           </div>
-          <span className="mu text-sm">Archivio personale di elettrotecnica</span>
+          <span className="mu text-sm">Archivio di scrittura</span>
         </div>
         <div className="flex items-center justify-center p-6">
           <div className="w-full max-w-sm pop">
@@ -526,7 +574,7 @@ export default function App() {
           </div>
         </div>
       </div>
-    );
+    </>);
   }
 
   const nav: any[] = [
@@ -534,7 +582,7 @@ export default function App() {
     { id: "write", label: editingId ? "Modifica" : "Nuovo progetto", s: editingId ? "Modifica" : "Nuovo", icon: Pen },
     { id: "my_pages", label: "I miei progetti", s: "Miei", icon: Bookmark },
     ...(isAdmin ? [
-      { id: "read", label: "Tutti gli scritti", s: "Tutti", icon: Activity }, { id: "favorites", label: "Preferiti", icon: Star },
+      { id: "read", label: "Tutti gli scritti", s: "Tutti", icon: Activity },
       { id: "podio", label: "Podio del mese", s: "Podio", icon: Trophy }, { id: "authors", label: "Autori", icon: Users },
     ] : []),
   ];
@@ -557,11 +605,11 @@ export default function App() {
   const recent = [...items].sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
   const homeView = (
     <div className="space-y-8">
-      <Reveal><div className="pn mm relative overflow-hidden p-8 md:p-12">
+      <Reveal><div className="pn brandpanel p-8 md:p-12"><div className="bd-p w" />
         <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight">Ciao {first}, {isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}</h2>
         <p className="mu mt-3 max-w-md">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
         <div className="flex flex-wrap gap-2 mt-7">
-          <button className="bt on !px-5 !py-3" onClick={() => go("write")}><Pen size={16} />Scrivi un progetto</button>
+          <button className="bt !px-5 !py-3" onClick={() => go("write")}><Pen size={16} />Scrivi un progetto</button>
           {isAdmin && <button className="bt !px-5 !py-3" onClick={() => go("podio")}><Trophy size={16} />Vai al podio</button>}
         </div>
       </div></Reveal>
@@ -644,15 +692,16 @@ export default function App() {
       ))}
     </div>
   );
-  const titles: any = { write: editingId ? "Modifica progetto" : "Nuovo progetto", my_pages: "I miei progetti", read: "Tutti gli scritti", favorites: "Preferiti", home: "Panoramica", podio: "Podio del mese", authors: "Autori" };
-  const isList = ["my_pages", "read", "favorites"].includes(tab);
+  const titles: any = { write: editingId ? "Modifica progetto" : "Nuovo progetto", my_pages: "I miei progetti", read: "Tutti gli scritti", home: "Panoramica", podio: "Podio del mese", authors: "Autori" };
+  const isList = ["my_pages", "read"].includes(tab);
 
   return shell(
     <>
+      <Backdrop tab={tab} />
       {/* sidebar desktop */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col p-5 gap-1 pn !rounded-none !border-y-0 !border-l-0 z-20">
         <div className="flex items-center gap-2.5 mb-8 cursor-pointer select-none" onDoubleClick={() => !isAdmin && setAdminModal(true)} title="Il Circuito">
-          <Logo size={30} /><span className="hd text-lg font-bold">Il Circuito</span>
+          <Wordmark />
         </div>
         {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt !justify-start w-full ${tab === n.id ? "on" : "!border-transparent !bg-transparent"} nv`}><n.icon size={16} />{n.label}</button>)}
         <div className="mt-auto space-y-2">
@@ -667,17 +716,17 @@ export default function App() {
 
       {/* barra mobile */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
-        <div className="flex items-center gap-2" onDoubleClick={() => !isAdmin && setAdminModal(true)}><Logo size={26} /><span className="hd font-bold">Il Circuito</span></div>
+        <div className="flex items-center gap-2" onDoubleClick={() => !isAdmin && setAdminModal(true)}><Wordmark small /></div>
         <div className="flex gap-2">
           <button className="bt !p-2" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
           <button className="bt !p-2" onClick={logout}><LogOut size={16} /></button>
         </div>
       </header>
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn !rounded-none !border-x-0 !border-b-0 flex justify-around p-2 hdr">
-        {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt flex-col !gap-0.5 !text-[11px] flex-1 ${tab === n.id ? "on" : "!border-transparent"}`}><n.icon size={17} />{n.s || n.label}</button>)}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))" }}>
+        {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} aria-label={n.label} className={`bt flex-col flex-1 min-w-0 !gap-1 !px-0 !py-2 !text-[10px] ${tab === n.id ? "on" : "!border-transparent !bg-transparent"}`}><n.icon size={18} /><span className="truncate max-w-full">{n.s || n.label}</span></button>)}
       </nav>
 
-      <div className="md:ml-60 pb-28 md:pb-12">
+      <div className="md:ml-60 pb-28 md:pb-12 relative z-10">
         <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
             <div><h1 className="hd text-3xl md:text-5xl font-bold">{titles[tab]}</h1>{isList && !loading && <p className="mu text-sm mt-1.5">{shown.length} {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
@@ -686,6 +735,7 @@ export default function App() {
                 <div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
                 <select className="inp !w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>{Object.keys(SORTS).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}</select>
                 <select className="inp !w-auto" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}><option value="all">Tutti i mesi</option>{monthOpts.map((k) => <option key={k} value={k}>{mLabel(k)}</option>)}</select>
+                {isAdmin && tab === "read" && <button className={`bt ${onlyMarked ? "on" : ""}`} onClick={() => setOnlyMarked(!onlyMarked)}><Bookmark size={15} style={onlyMarked ? { fill: "currentColor" } : {}} />Segnalati{items.some((t) => t.isStarred) ? ` (${items.filter((t) => t.isStarred).length})` : ""}</button>}
                 {items.length > 0 && <button className={`bt ${selMode ? "on" : ""}`} onClick={() => { setSelMode(!selMode); setIds([]); }}><ListChecks size={15} />{selMode ? "Fine" : "Seleziona"}</button>}
               </div>
             )}
@@ -717,7 +767,7 @@ export default function App() {
                         <div className="rt relative p-3 line-clamp-5" dangerouslySetInnerHTML={{ __html: clean(t.content) }} />
                       </div>
                       {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
-                      {t.isStarred && <Star size={16} className="absolute top-2 left-2" style={{ fill: "var(--am)", color: "var(--am)" }} />}
+                      {isAdmin && !selMode && <button type="button" aria-label="Segnalibro" title={t.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={(e) => { e.stopPropagation(); star(t); }} className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110" style={{ background: "rgba(255,255,255,.92)", boxShadow: "var(--sh1)" }}><Bookmark size={16} style={t.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : { color: "#64748b" }} /></button>}
                     </div>
                     <div className="p-5 border-t" style={{ borderColor: "var(--ln)" }}>
                       <h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
@@ -802,9 +852,10 @@ export default function App() {
 
       {/* barra selezione multipla */}
       {selMode && (
-        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 pn shadow-xl flex items-center gap-2 p-2 popx">
+        <div className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-40 pn shadow-xl flex items-center gap-2 p-2 popx">
           <span className="text-sm px-2">{ids.length} selezionati</span>
           <button className="bt" onClick={() => setIds(ids.length === shown.length ? [] : shown.map((t) => t.id))}>Tutti</button>
+          {isAdmin && <button className="bt" disabled={!ids.length} onClick={bulkMark}><Bookmark size={15} />Segnalibro</button>}
           <button className="bt dng" disabled={!ids.length} onClick={() => setToDelete(ids)}><Trash2 size={15} />Elimina</button>
         </div>
       )}
@@ -818,7 +869,7 @@ export default function App() {
               <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
                 <div className="flex-1 min-w-0"><h2 className="hd text-2xl font-bold truncate">{sel.title}</h2><div className="mu text-xs">{sel.author} · {fmtDate(sel.timestamp)}</div></div>
                 <button className="bt !p-2" title="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>
-                {isAdmin && <button className="bt !p-2" onClick={() => star(sel)}><Star size={15} style={sel.isStarred ? { fill: "var(--am)", color: "var(--am)" } : {}} /></button>}
+                {isAdmin && <button className="bt !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /></button>}
                 {canEdit(sel) && <button className="bt !p-2" onClick={() => startEdit(sel)} title="Modifica"><Pencil size={15} /></button>}
                 {canEdit(sel) && <button className="bt dng !p-2" onClick={() => setToDelete([sel.id])} title="Elimina"><Trash2 size={15} /></button>}
                 <button className="bt !p-2" onClick={() => setSel(null)}><X size={15} /></button>
