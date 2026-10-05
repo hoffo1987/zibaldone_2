@@ -10,7 +10,7 @@ import {
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, KeyRound, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, MapPin, Link2, Camera, Award, CalendarDays
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw
 } from "lucide-react";
 
 // --- FIREBASE ---
@@ -104,9 +104,12 @@ const Wordmark = ({ size = 38, fs, light, center, stack, tag = true }: any) => (
     </div>
   </div>
 );
-const Backdrop = ({ tab }: { tab: string }) => {
+const Backdrop = ({ tab, fx, dark }: { tab: string; fx: boolean; dark: boolean }) => {
   const k = tab === "profile" ? "authors" : ["home", "write", "podio", "authors"].includes(tab) ? tab : "archive";
-  return <div key={k} className={`bd bd-${k} fade fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" /><div className="bd-p" /></div>;
+  return (<>
+    <div key={k} className={`bd bd-${k} fade fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" /><div className="au a1" /><div className="au a2" /><div className="au a3" /><div className="bd-p" /></div>
+    {fx && <FX dark={dark} />}
+  </>);
 };
 
 const Shape = ({ s }: any) => {
@@ -148,7 +151,7 @@ background:var(--bg)}
 .bt{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.55rem .95rem;border-radius:12px;font-size:.85rem;font-weight:600;border:1px solid var(--ln);background:var(--pn);color:var(--ink);outline:none;cursor:pointer;
 transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,border-color .2s,filter .2s}
 .bt svg{transition:transform .3s var(--ez)}
-.bt:hover{transform:translateY(-2px);border-color:var(--ac);box-shadow:var(--sh1)}
+.bt:hover{transform:translate(var(--tx,0px),calc(var(--ty,0px) - 2px));border-color:var(--ac);box-shadow:var(--sh1)}
 .bt:hover svg{transform:scale(1.15) rotate(-4deg)}
 .bt:active{transform:translateY(0) scale(.97);box-shadow:none}
 .bt:disabled{opacity:.4;pointer-events:none}
@@ -161,7 +164,7 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .lk:hover{background-size:100% 1px;color:var(--ink)}
 .mu{color:var(--mu)}
 .card{position:relative;transition:transform .45s var(--ez),box-shadow .45s var(--ez),border-color .3s,opacity .3s}
-.card:hover{transform:translateY(-6px);box-shadow:var(--sh2);border-color:color-mix(in srgb,var(--ac) 55%,var(--ln))}
+.card:hover{transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(-6px);box-shadow:var(--sh2);border-color:color-mix(in srgb,var(--ac) 55%,var(--ln))}
 .card:active{transform:translateY(-2px) scale(.99)}
 .card:after{content:"";position:absolute;left:0;bottom:0;height:3px;width:100%;background:var(--ac);transform:scaleX(0);transform-origin:left;transition:transform .5s var(--ez)}
 .card:hover:after{transform:scaleX(1)}
@@ -236,6 +239,39 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .card:hover{transform:none;box-shadow:var(--sh1)}
 .rv{transform:translateY(16px)}}
 @keyframes pgf{from{opacity:0}}
+@property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes ang{to{--ang:360deg}}
+.bt:not(.absolute){position:relative}
+.bt{overflow:hidden}
+.bt:before,.card:before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s}
+.bt:before{background:radial-gradient(90px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,currentColor 22%,transparent),transparent 70%)}
+.card:before{z-index:1;background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--ac) 26%,transparent),transparent 65%)}
+.bt:hover:before,.card:hover:before,.card:active:before{opacity:1}
+.bt.rip:after{content:"";position:absolute;left:var(--px,50%);top:var(--py,50%);width:8px;height:8px;margin:-4px;border-radius:50%;background:color-mix(in srgb,currentColor 40%,transparent);pointer-events:none;animation:ripl .65s var(--ez) forwards}
+@keyframes ripl{to{transform:scale(32);opacity:0}}
+.au{position:absolute;width:60vmax;height:60vmax;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 34%,transparent),transparent);will-change:transform;animation:aur 24s ease-in-out infinite alternate}
+.a1{--c:var(--ac);left:-18vmax;top:-24vmax}.a2{--c:var(--am);right:-24vmax;top:22vh;animation-duration:30s}.a3{--c:#6366F1;left:18vw;bottom:-34vmax;animation-duration:36s;opacity:.7}
+@keyframes aur{to{transform:translate(9vw,7vh) scale(1.22) rotate(35deg)}}
+.bd-p{inset:-25vh 0;transform:translateY(calc(var(--sy,0)*-.12px))}
+.bd-podio .bd-p{inset:0;transform:none}
+.prog{position:fixed;top:0;left:0;right:0;height:3px;z-index:90;transform-origin:0 50%;transform:scaleX(var(--sp,0));background:linear-gradient(90deg,var(--ac),var(--am));box-shadow:0 0 12px var(--ac);pointer-events:none}
+.spinring{display:inline-block;padding:4px;border-radius:50%;background:conic-gradient(from var(--ang),var(--ac),var(--am),#6366F1,var(--ac));animation:ang 5s linear infinite}
+.pn.spin-b{border:2px solid transparent;background:linear-gradient(var(--pn),var(--pn)) padding-box,conic-gradient(from var(--ang),transparent 55%,var(--am),var(--ac),transparent) border-box;animation:ang 6s linear infinite}
+@keyframes boot{0%{opacity:0;transform:translateY(22px) skewX(-5deg) scale(.96)}35%{opacity:.7;transform:translateX(-3px) skewX(2deg)}48%{opacity:.25;transform:translateX(3px)}62%{opacity:1;transform:translateX(-1px)}100%{opacity:1;transform:none}}
+.rv.in{transition:none;animation:boot .8s var(--ez) backwards}
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+::view-transition-new(root){animation:vtr .75s var(--ez)}
+@keyframes vtr{from{clip-path:circle(0 at var(--vx,50%) var(--vy,50%))}to{clip-path:circle(150vmax at var(--vx,50%) var(--vy,50%))}}
+.root.nointro .rv{opacity:1;transform:none}.root.nointro .rv.in{animation:none}
+.root.nointro .wl,.root.nointro .lg-n,.root.nointro .lg-amber{animation:none;opacity:1}.root.nointro .lg-arc,.root.nointro .lg-line{animation:none;stroke-dashoffset:0}
+.root.noaurora .au{display:none}
+.noglow .bt:before,.noglow .card:before,.noglow .bt.rip:after{display:none}
+.root.lite *,.root.lite *:before,.root.lite *:after{animation:none!important;transition:none!important}
+.root.lite .bd,.root.lite .prog{display:none}
+.root.lite .rv{opacity:1;transform:none}
+.root.lite .wl,.root.lite .lg-n,.root.lite .lg-amber{opacity:1}
+.root.lite .lg-arc,.root.lite .lg-line,.root.lite .tick{stroke-dashoffset:0}
+.root.lite .hdr,.root.lite .backdrop-blur-sm{backdrop-filter:none!important}
 @keyframes pg{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes pop{from{opacity:0;transform:translateY(16px) scale(.95)}to{opacity:1;transform:none}}
@@ -314,7 +350,85 @@ const avatarFrom = (file: File): Promise<string> => new Promise((res, rej) => {
   };
   r.onerror = rej; r.readAsDataURL(file);
 });
-const safeUrl = (u: string) => { const v = u.trim(); if (/^https?:\/\//i.test(v)) return v; if (/^[a-z][a-z0-9+.-]*:/i.test(v)) return "#"; return `https://${v}`; };
+
+const DEF = { level: "full", fx: true, glow: true, aurora: true, intro: true, sound: false, vibrate: true, text: 1 };
+let actx: any = null;
+const blip = (f = 660) => { try { const AC = (window as any).AudioContext || (window as any).webkitAudioContext; actx = actx || new AC(); const o = actx.createOscillator(), g = actx.createGain(); o.type = "square"; o.frequency.value = f; g.gain.setValueAtTime(0.03, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.08); o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.09); } catch {} };
+
+const Scramble = ({ text, on }: any) => {
+  const [t, setT] = useState(text);
+  useEffect(() => {
+    if (!on) { setT(text); return; }
+    const chars = "01/|<>_#=+*"; let f = 0; const N = 20;
+    const id = setInterval(() => { f++; setT(text.split("").map((c: string, i: number) => (c === " " || i < (f / N) * text.length ? c : chars[Math.floor(Math.random() * chars.length)])).join("")); if (f >= N) { clearInterval(id); setT(text); } }, 32);
+    return () => clearInterval(id);
+  }, [text, on]);
+  return <>{t}</>;
+};
+
+const FX = ({ dark }: { dark: boolean }) => {
+  const bg = useRef<HTMLCanvasElement>(null);
+  const fg = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const a = bg.current, b = fg.current; if (!a || !b) return;
+    const ca = a.getContext("2d")!, cb = b.getContext("2d")!;
+    const G = 48, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let W = 0, H = 0, raf = 0, last = 0;
+    const fit = () => { W = window.innerWidth; H = window.innerHeight; [a, b].forEach((c) => { c.width = W * dpr; c.height = H * dpr; c.style.width = W + "px"; c.style.height = H + "px"; c.getContext("2d")!.setTransform(dpr, 0, 0, dpr, 0, 0); }); };
+    fit(); window.addEventListener("resize", fit);
+    const pulses: any[] = [], sparks: any[] = [];
+    const spawn = (x = Math.random() * W, y = Math.random() * H) => { const h = Math.random() < 0.5, s = Math.random() < 0.5 ? 1 : -1; pulses.push({ x: Math.round(x / G) * G, y: Math.round(y / G) * G, dx: h ? s : 0, dy: h ? 0 : s, t: [], n: 0, max: 160 + Math.random() * 240, am: Math.random() < 0.25 }); };
+    for (let i = 0; i < (W < 600 ? 7 : 14); i++) spawn();
+    const down = (e: PointerEvent) => {
+      for (let i = 0; i < 16; i++) { const an = (i / 16) * Math.PI * 2, v = 2 + Math.random() * 3.5; sparks.push({ x: e.clientX, y: e.clientY, vx: Math.cos(an) * v, vy: Math.sin(an) * v, l: 1 }); }
+      sparks.push({ x: e.clientX, y: e.clientY, r: 4, l: 1, ring: true }); spawn(e.clientX, e.clientY);
+    };
+    window.addEventListener("pointerdown", down, { passive: true });
+    const frame = (ts: number) => {
+      raf = requestAnimationFrame(frame);
+      if (document.hidden || ts - last < 32) return; last = ts;
+      const c = dark ? "45,212,191" : "15,139,122";
+      ca.clearRect(0, 0, W, H); cb.clearRect(0, 0, W, H); ca.lineWidth = 1.6; ca.lineCap = "round";
+      for (let i = pulses.length - 1; i >= 0; i--) {
+        const p = pulses[i];
+        for (let k = 0; k < 2; k++) {
+          p.x += p.dx * 2; p.y += p.dy * 2;
+          if (p.x % G === 0 && p.y % G === 0 && Math.random() < 0.3) { if (p.dx) { p.dx = 0; p.dy = Math.random() < 0.5 ? 1 : -1; } else { p.dy = 0; p.dx = Math.random() < 0.5 ? 1 : -1; } }
+        }
+        p.t.push([p.x, p.y]); if (p.t.length > 22) p.t.shift(); p.n++;
+        const col = p.am ? "251,191,36" : c;
+        for (let k = 1; k < p.t.length; k++) { ca.strokeStyle = `rgba(${col},${(k / p.t.length) * 0.55})`; ca.beginPath(); ca.moveTo(p.t[k - 1][0], p.t[k - 1][1]); ca.lineTo(p.t[k][0], p.t[k][1]); ca.stroke(); }
+        ca.fillStyle = `rgba(${col},.9)`; ca.beginPath(); ca.arc(p.x, p.y, 2.6, 0, 7); ca.fill();
+        if (p.n > p.max || p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50) { pulses.splice(i, 1); spawn(); }
+      }
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const s = sparks[i]; s.l -= s.ring ? 0.05 : 0.04;
+        if (s.l <= 0) { sparks.splice(i, 1); continue; }
+        cb.lineWidth = 2;
+        if (s.ring) { s.r += 5; cb.strokeStyle = `rgba(${c},${s.l * 0.7})`; cb.beginPath(); cb.arc(s.x, s.y, s.r, 0, 7); cb.stroke(); }
+        else { s.x += s.vx; s.y += s.vy; s.vx *= 0.94; s.vy *= 0.94; cb.strokeStyle = `rgba(251,191,36,${s.l})`; cb.beginPath(); cb.moveTo(s.x, s.y); cb.lineTo(s.x - s.vx * 2.5, s.y - s.vy * 2.5); cb.stroke(); }
+      }
+    };
+    raf = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", fit); window.removeEventListener("pointerdown", down); };
+  }, [dark]);
+  return (<>
+    <canvas ref={bg} className="fixed inset-0 pointer-events-none" style={{ opacity: 0.8 }} aria-hidden="true" />
+    <canvas ref={fg} className="fixed inset-0 pointer-events-none z-[95]" aria-hidden="true" />
+  </>);
+};
+
+const Sw = ({ on, set, label, hint, off }: any) => (
+  <button type="button" role="switch" aria-checked={!!on && !off} disabled={off} onClick={() => set(!on)} className="w-full flex items-center justify-between gap-4 py-3 text-left disabled:opacity-40">
+    <span><span className="block text-sm font-semibold">{label}</span>{hint && <span className="block text-xs mu">{hint}</span>}</span>
+    <span className="relative w-12 h-7 rounded-full shrink-0" style={{ background: on && !off ? "var(--ac)" : "var(--ln)", transition: "background .25s" }}><span className="absolute top-1 w-5 h-5 rounded-full bg-white" style={{ left: on && !off ? 24 : 4, transition: "left .25s var(--ez)" }} /></span>
+  </button>
+);
+const Seg = ({ v, set, items }: any) => (
+  <div className="grid gap-1 p-1 rounded-2xl" style={{ background: "var(--ln)", gridTemplateColumns: `repeat(${items.length},1fr)` }}>
+    {items.map(([id, label]: any) => <button type="button" key={String(id)} onClick={(e) => set(id, e)} className={`bt !border-0 !px-1 !text-xs ${v === id ? "on" : "!bg-transparent"}`}>{label}</button>)}
+  </div>
+);
 
 const Reveal = ({ children, delay = 0, className = "" }: any) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -338,6 +452,11 @@ export default function App() {
   const [resetCode, setResetCode] = useState<string | null>(null);
   // ui
   const [dark, setDark] = useState(() => { try { return localStorage.getItem("circuito:dark") === "1"; } catch { return false; } });
+  const [opts, setOpts] = useState<any>(() => { let o: any = {}; try { o = JSON.parse(localStorage.getItem("circuito:opts") || "{}"); } catch {} const red = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches; return { ...DEF, ...(red && !o.level ? { level: "lite" } : {}), ...o }; });
+  const [optOpen, setOptOpen] = useState(false);
+  const lite = opts.level === "lite", mid = opts.level === "mid";
+  const E = { fx: !lite && !mid && !!opts.fx, glow: !lite && !mid && !!opts.glow, aurora: !lite && !mid && !!opts.aurora, intro: !lite && !!opts.intro };
+  const setOpt = (k: string, v: any) => setOpts((o: any) => ({ ...o, [k]: v }));
   const [tab, setTab] = useState("home");
   const [month, setMonth] = useState(() => mKey(Date.now()));
   const [monthFilter, setMonthFilter] = useState("all");
@@ -416,6 +535,45 @@ export default function App() {
   const err = (m: string) => setAuthMsg({ t: "err", m });
 
   useEffect(() => { try { localStorage.setItem("circuito:dark", dark ? "1" : "0"); } catch {} }, [dark]);
+  useEffect(() => { try { localStorage.setItem("circuito:opts", JSON.stringify(opts)); } catch {} document.documentElement.style.fontSize = `${16 * (opts.text || 1)}px`; }, [opts]);
+  const setTheme = (next: boolean, e?: any) => {
+    const d: any = document;
+    if (next === dark) return;
+    if (!d.startViewTransition || lite || !e) { setDark(next); return; }
+    const h = document.documentElement; h.style.setProperty("--vx", `${e.clientX}px`); h.style.setProperty("--vy", `${e.clientY}px`);
+    d.startViewTransition(() => new Promise<void>((res) => { setDark(next); setTimeout(res, 80); }));
+  };
+  useEffect(() => {
+    if (lite) return;
+    let raf = 0;
+    const f = () => { raf = 0; const h = document.documentElement; const y = window.scrollY, m = h.scrollHeight - window.innerHeight; h.style.setProperty("--sy", String(y)); h.style.setProperty("--sp", m > 0 ? String(Math.min(1, y / m)) : "0"); };
+    const on = () => { if (!raf) raf = requestAnimationFrame(f); };
+    window.addEventListener("scroll", on, { passive: true }); f();
+    return () => { window.removeEventListener("scroll", on); cancelAnimationFrame(raf); };
+  }, [lite]);
+  useEffect(() => {
+    if (!E.glow && !opts.sound) return;
+    let raf = 0, el: any = null, ev: any = null;
+    const run = () => {
+      raf = 0; if (!el || !ev) return;
+      const r = el.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+      el.style.setProperty("--mx", `${x}px`); el.style.setProperty("--my", `${y}px`);
+      if (ev.pointerType !== "mouse") return;
+      if (el.classList.contains("card")) { el.style.setProperty("--rx", `${((y / r.height - 0.5) * -7).toFixed(2)}deg`); el.style.setProperty("--ry", `${((x / r.width - 0.5) * 7).toFixed(2)}deg`); }
+      else { el.style.setProperty("--tx", `${((x / r.width - 0.5) * 6).toFixed(1)}px`); el.style.setProperty("--ty", `${((y / r.height - 0.5) * 4).toFixed(1)}px`); }
+    };
+    const mv = (e: any) => { if (!E.glow) return; const t = e.target?.closest?.(".card,.bt"); if (!t) return; el = t; ev = e; if (!raf) raf = requestAnimationFrame(run); };
+    const out = (e: any) => { const t = e.target?.closest?.(".card,.bt"); if (t) ["--rx", "--ry", "--tx", "--ty"].forEach((k) => t.style.removeProperty(k)); };
+    const dn = (e: any) => {
+      const t = e.target?.closest?.(".card,.bt"); if (!t) return;
+      if (opts.sound) blip(480 + Math.random() * 360);
+      if (!E.glow) return;
+      const r = t.getBoundingClientRect(); t.style.setProperty("--mx", `${e.clientX - r.left}px`); t.style.setProperty("--my", `${e.clientY - r.top}px`);
+      if (t.classList.contains("bt")) { t.style.setProperty("--px", `${e.clientX - r.left}px`); t.style.setProperty("--py", `${e.clientY - r.top}px`); t.classList.remove("rip"); void t.offsetWidth; t.classList.add("rip"); }
+    };
+    document.addEventListener("pointermove", mv, { passive: true }); document.addEventListener("pointerout", out, { passive: true }); document.addEventListener("pointerdown", dn, { passive: true });
+    return () => { document.removeEventListener("pointermove", mv); document.removeEventListener("pointerout", out); document.removeEventListener("pointerdown", dn); cancelAnimationFrame(raf); };
+  }, [E.glow, opts.sound]);
   useEffect(() => {
     const lock = sel || adminModal || toDelete || done || viewProf;
     document.body.style.overflow = lock ? "hidden" : "";
@@ -604,8 +762,8 @@ export default function App() {
     catch { notify("Operazione non riuscita."); }
     setIds([]); setSelMode(false);
   };
-  const rate = async (t: any, n: number) => { if (!isAdmin) return; navigator.vibrate?.(12); await updateDoc(doc(db, "pensieri", t.id), { rating: n }); if (sel?.id === t.id) setSel({ ...sel, rating: n }); };
-  const star = async (t: any) => { if (isAdmin) { navigator.vibrate?.(12); await updateDoc(doc(db, "pensieri", t.id), { isStarred: !t.isStarred }); if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
+  const rate = async (t: any, n: number) => { if (!isAdmin) return; if (opts.vibrate) navigator.vibrate?.(12); await updateDoc(doc(db, "pensieri", t.id), { rating: n }); if (sel?.id === t.id) setSel({ ...sel, rating: n }); };
+  const star = async (t: any) => { if (isAdmin) { if (opts.vibrate) navigator.vibrate?.(12); await updateDoc(doc(db, "pensieri", t.id), { isStarred: !t.isStarred }); if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
   const confirmDelete = async () => {
     const list = toDelete!; setToDelete(null); setSel(null); setGone(list);
     setTimeout(async () => {
@@ -628,7 +786,7 @@ export default function App() {
   const words = plain(content).trim().split(/\s+/).filter(Boolean).length;
 
   // ================= RENDER =================
-  const shell = (children: any) => <div className={`root ${dark ? "dark" : ""} min-h-screen`}><style>{CSS}</style>{children}</div>;
+  const shell = (children: any) => <div className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${E.glow ? "" : "noglow"} ${E.aurora ? "" : "noaurora"} ${E.intro ? "" : "nointro"} min-h-screen`}><style>{CSS}</style><div className="prog" />{children}</div>;
 
   if (authLoading) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
@@ -636,7 +794,7 @@ export default function App() {
     const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
     const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
     return shell(<>
-      <Backdrop tab="home" />
+      <Backdrop tab="home" fx={E.fx} dark={dark} />
       <div className="relative z-10 min-h-screen grid md:grid-cols-2">
         <div className="brandpanel hidden md:flex flex-col justify-between p-12"><div className="bd-p w" />
           <Wordmark light size={56} fs={26} />
@@ -705,7 +863,7 @@ export default function App() {
 
   const startEditProf = () => {
     const p = profiles[user.uid] || {};
-    setPf({ displayName: p.displayName || user.displayName || "", handle: p.handle || "", status: p.status || "", bio: p.bio || "", place: p.place || "", link: p.link || "", tagsText: (p.tags || []).join(", "), avatar: p.avatar || "", banner: p.banner || "teal" });
+    setPf({ displayName: p.displayName || user.displayName || "", handle: p.handle || "", status: p.status || "", bio: p.bio || "", avatar: p.avatar || "", banner: p.banner || "teal" });
     setEditProf(true);
   };
   const pickAvatar = async (e: any) => {
@@ -716,8 +874,7 @@ export default function App() {
   const saveProf = async (e: any) => {
     e.preventDefault();
     const name = (pf.displayName || "").trim() || "Operatore";
-    const data = { displayName: name, handle: (pf.handle || "").trim(), status: (pf.status || "").trim(), bio: (pf.bio || "").trim(), place: (pf.place || "").trim(), link: (pf.link || "").trim(),
-      tags: (pf.tagsText || "").split(",").map((x: string) => x.trim().replace(/^#/, "")).filter(Boolean).slice(0, 5), avatar: pf.avatar || "", banner: pf.banner || "teal",
+    const data = { displayName: name, handle: (pf.handle || "").trim(), status: (pf.status || "").trim(), bio: (pf.bio || "").trim(), avatar: pf.avatar || "", banner: pf.banner || "teal",
       createdAt: profiles[user.uid]?.createdAt || Date.now(), updatedAt: Date.now() };
     try { await setDoc(doc(db, "profili", user.uid), data); if (name !== user.displayName) await updateProfile(user, { displayName: name }); setEditProf(false); notify("Profilo aggiornato."); }
     catch { notify("Salvataggio del profilo non riuscito."); }
@@ -741,7 +898,7 @@ export default function App() {
         <div className="relative h-32 md:h-40" style={{ background: bn.g }}><div className="bd-p w" /></div>
         <div className="px-5 md:px-8 pb-7">
           <div className="flex items-end justify-between -mt-12">
-            <span className="rounded-full p-1 relative" style={{ background: "var(--pn)" }}><Avatar p={shownAvatar} name={name} size={96} /></span>
+            <span className="spinring"><span className="block rounded-full p-1" style={{ background: "var(--pn)" }}><Avatar p={shownAvatar} name={name} size={96} /></span></span>
             {own && !editProf && <button className="bt" onClick={startEditProf}><Pencil size={15} />Modifica profilo</button>}
           </div>
           {own && editProf ? (
@@ -757,9 +914,6 @@ export default function App() {
               {fld("Stato", "status", "es. Scrivo di notte ✍️", 40)}
               <label className="block"><span className="text-xs mu flex justify-between"><span>Bio</span><span>{(pf.bio || "").length}/160</span></span>
                 <textarea className="inp mt-1 min-h-[96px]" maxLength={160} placeholder="Raccontati in poche righe" value={pf.bio || ""} onChange={(e) => setPf({ ...pf, bio: e.target.value })} /></label>
-              {fld("Luogo", "place", "es. Torino", 40)}
-              {fld("Sito o link", "link", "es. miosito.it", 80)}
-              {fld("Interessi (separati da virgola, max 5)", "tagsText", "elettronica, poesia, jazz", 80)}
               <div className="flex gap-2 justify-end pt-2"><button type="button" className="bt" onClick={() => setEditProf(false)}>Annulla</button><button className="bt on !px-6">Salva profilo</button></div>
             </form>
           ) : (<>
@@ -767,11 +921,8 @@ export default function App() {
             <div className="mu text-sm">{p.handle ? `@${p.handle}` : own ? "Aggiungi un handle" : ""}{p.status ? ` · ${p.status}` : ""}</div>
             {p.bio ? <p className="mt-4 whitespace-pre-line">{p.bio}</p> : own && <p className="mu mt-4 text-sm">Aggiungi una bio per presentarti.</p>}
             <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-sm mu">
-              {p.place && <span className="inline-flex items-center gap-1.5"><MapPin size={15} />{p.place}</span>}
-              {p.link && <a className="lk inline-flex items-center gap-1.5" href={safeUrl(p.link)} target="_blank" rel="noopener noreferrer"><Link2 size={15} />{p.link.replace(/^https?:\/\//i, "")}</a>}
               {ts ? <span className="inline-flex items-center gap-1.5"><CalendarDays size={15} />Membro da {mLabel(mKey(ts))}</span> : null}
             </div>
-            {p.tags?.length > 0 && <div className="flex flex-wrap gap-2 mt-4">{p.tags.map((t: string) => <span key={t} className="text-xs px-3 py-1 rounded-full" style={{ border: "1px solid var(--ln)", background: "var(--sf)" }}>#{t}</span>)}</div>}
             {showStats && <div className="grid grid-cols-3 gap-3 mt-6">{[["Scritti", mine.length], ["Parole", words], ["Questo mese", mine.filter((t) => mKey(t.timestamp) === monthNow).length]].map(([l, v]) => <div key={String(l)} className="rounded-xl p-3 text-center" style={{ background: "var(--sf)", border: "1px solid var(--ln)" }}><div className="hd text-2xl font-bold">{v}</div><div className="mu text-xs">{l}</div></div>)}</div>}
             {showStats && badges.length > 0 && <div className="flex flex-wrap gap-2 mt-4">{badges.map((b) => <span key={b} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: "color-mix(in srgb,var(--am) 20%,transparent)" }}><Award size={13} />{b}</span>)}</div>}
           </>)}
@@ -782,6 +933,7 @@ export default function App() {
   const profilePage = (
     <div className="max-w-2xl mx-auto space-y-5">
       <div className="pn overflow-hidden">{profileView(user.uid, true)}</div>
+      <button className="bt w-full" onClick={() => setOptOpen(true)}><Settings size={16} />Opzioni</button>
       <button className="bt dng w-full md:hidden" onClick={logout}><LogOut size={16} />Esci dall'account</button>
     </div>
   );
@@ -840,7 +992,7 @@ export default function App() {
             {[1, 0, 2].map((k) => { const t = top[k]; if (!t) return <div key={k} className="hidden md:block" />;
               return (
                 <Reveal key={t.id} delay={k * 120}>
-                  <div onClick={() => openView(t)} className={`pn card cursor-pointer p-6 ${k === 0 ? "md:pt-10 md:pb-16 !border-[var(--am)]" : ""}`}>
+                  <div onClick={() => openView(t)} className={`pn card cursor-pointer p-6 ${k === 0 ? "md:pt-10 md:pb-16 spin-b" : ""}`}>
                     <div className="flex items-center justify-between">
                       <span className="hd w-11 h-11 rounded-full flex items-center justify-center text-lg font-bold" style={{ background: k === 0 ? "var(--am)" : "var(--sf)", color: k === 0 ? "#3b2a00" : "var(--ink)" }}>{k + 1}</span>
                       <Stars v={t.rating || 0} size={16} />
@@ -884,7 +1036,7 @@ export default function App() {
 
   return shell(
     <>
-      <Backdrop tab={tab} />
+      <Backdrop tab={tab} fx={E.fx} dark={dark} />
       {/* sidebar desktop */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col p-5 gap-1 pn !rounded-none !border-y-0 !border-l-0 z-20">
         <div className="flex items-center gap-2.5 mb-8 cursor-pointer select-none" onDoubleClick={() => !isAdmin && setAdminModal(true)} title="Il Circuito">
@@ -895,7 +1047,7 @@ export default function App() {
           {isAdmin && <button onClick={() => { try { localStorage.removeItem("circuito:admin"); } catch {} setIsAdmin(false); setTab("home"); }} className="bt w-full !justify-start"><Unlock size={16} />Esci da admin</button>}
           <div className="flex items-center gap-2">
             <button onClick={() => go("profile")} className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{user.email}</span></span></button>
-            <button className="bt !p-2" onClick={() => setDark(!dark)} title="Cambia tema">{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
+            <button className="bt !p-2" onClick={() => setOptOpen(true)} title="Opzioni" aria-label="Opzioni"><Settings size={18} /></button>
             <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
           </div>
         </div>
@@ -904,7 +1056,7 @@ export default function App() {
       {/* barra mobile */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
         <div className="flex items-center gap-2" onDoubleClick={() => !isAdmin && setAdminModal(true)}><Wordmark size={40} fs={19} tag={false} /></div>
-        <div className="flex items-center gap-2"><button className="bt !p-2" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button><button onClick={() => go("profile")} aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
+        <div className="flex items-center gap-2"><button className="bt !p-2" onClick={() => setOptOpen(true)} aria-label="Opzioni"><Settings size={18} /></button><button onClick={() => go("profile")} aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
       </header>
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))", display: kb || (tab === "write" && drawing) ? "none" : undefined }}>
         {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} aria-label={n.label} className={`bt flex-col flex-1 min-w-0 !gap-1 !px-0 !py-2 !text-[10px] ${tab === n.id ? "on" : "!border-transparent !bg-transparent"}`}><n.icon size={18} /><span className="truncate max-w-full">{n.s || n.label}</span></button>)}
@@ -913,7 +1065,7 @@ export default function App() {
       <div className="md:ml-60 pb-28 md:pb-12 relative">
         <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div><h1 className="hd text-3xl md:text-5xl font-bold">{titles[tab]}</h1>{isList && !loading && <p className="mu text-sm mt-1.5">{shown.length} {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
+            <div><h1 className="hd text-3xl md:text-5xl font-bold"><Scramble text={titles[tab]} on={E.intro} /></h1>{isList && !loading && <p className="mu text-sm mt-1.5">{shown.length} {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
             {isList && (
               <div className="flex flex-wrap gap-2 items-center">
                 <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>
@@ -1085,6 +1237,34 @@ export default function App() {
           <div className="pn w-full max-w-lg max-h-[92dvh] overflow-y-auto pop relative !rounded-b-none md:!rounded-b-[18px]" onClick={(e) => e.stopPropagation()}>
             <button className="bt !p-2 absolute top-3 right-3 z-10" onClick={() => setViewProf(null)} aria-label="Chiudi"><X size={15} /></button>
             {profileView(viewProf, false)}
+          </div>
+        </div>
+      )}
+
+      {optOpen && (
+        <div className="fade fixed inset-0 z-[70] flex items-end md:items-center justify-center bg-black/60" onClick={() => setOptOpen(false)}>
+          <div className="pn w-full max-w-md max-h-[90dvh] overflow-y-auto p-5 pop !rounded-b-none md:!rounded-b-[18px]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5"><h3 className="hd text-2xl font-bold">Opzioni</h3><button className="bt !p-2" onClick={() => setOptOpen(false)} aria-label="Chiudi"><X size={16} /></button></div>
+            <h4 className="text-xs mu mb-2">Aspetto</h4>
+            <Seg v={dark} set={(v: boolean, e: any) => setTheme(v, e)} items={[[false, <><Sun size={14} />Chiaro</>], [true, <><Moon size={14} />Scuro</>]]} />
+            <div className="h-2" />
+            <Seg v={opts.text} set={(v: number) => setOpt("text", v)} items={[[0.9, "Testo piccolo"], [1, "Normale"], [1.12, "Grande"]]} />
+            <h4 className="text-xs mu mt-6 mb-2">Effetti e animazioni</h4>
+            <Seg v={opts.level} set={(v: string) => setOpt("level", v)} items={[["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"]]} />
+            <p className="text-xs mu mt-2">{({ full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, aurora e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria." } as any)[opts.level]}</p>
+            <div className="mt-2">
+              <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="Impulsi di corrente sullo sfondo e scintille quando tocchi" />
+              <Sw on={opts.glow} off={opts.level !== "full"} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
+              <Sw on={opts.aurora} off={opts.level !== "full"} set={(v: boolean) => setOpt("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
+              <Sw on={opts.intro} off={lite} set={(v: boolean) => setOpt("intro", v)} label="Titoli, logo e card animati" hint="Titoli che si decodificano, card che si accendono" />
+            </div>
+            <h4 className="text-xs mu mt-4 mb-1">Altro</h4>
+            <Sw on={opts.sound} set={(v: boolean) => setOpt("sound", v)} label="Suoni" hint="Piccoli bip elettronici al tocco" />
+            <Sw on={opts.vibrate} set={(v: boolean) => setOpt("vibrate", v)} label="Vibrazione" hint="Feedback tattile su segnalibro e voti" />
+            <div className="flex gap-2 mt-5">
+              <button className="bt flex-1" onClick={() => setOpts({ ...DEF })}><RotateCcw size={15} />Ripristina</button>
+              <button className="bt on flex-1" onClick={() => setOpt("level", "lite")}><Zap size={15} />Elimina effetti</button>
+            </div>
           </div>
         </div>
       )}
