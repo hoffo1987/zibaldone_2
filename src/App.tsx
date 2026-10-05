@@ -312,7 +312,6 @@ export default function App() {
   const [monthFilter, setMonthFilter] = useState("all");
   const [onlyMarked, setOnlyMarked] = useState(false);
   const [visible, setVisible] = useState(18);
-  useEffect(() => setVisible(18), [search, sortBy, monthFilter, onlyMarked, tab]);
   const [toast, setToast] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminModal, setAdminModal] = useState(false);
@@ -323,6 +322,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+  useEffect(() => { setVisible(18); }, [search, sortBy, monthFilter, onlyMarked, tab]);
   const [sel, setSel] = useState<any>(null);
   const [selMode, setSelMode] = useState(false);
   const [ids, setIds] = useState<string[]>([]);
@@ -629,7 +629,7 @@ export default function App() {
       { id: "podio", label: "Podio del mese", s: "Podio", icon: Trophy }, { id: "authors", label: "Autori", icon: Users },
     ] : []),
   ];
-  const monthOpts = Array.from(new Set(items.map((t) => mKey(t.timestamp)))).sort().reverse();
+  const monthOpts: string[] = Array.from(new Set<string>(items.map((t: any) => mKey(t.timestamp)))).sort().reverse();
   const monthNow = mKey(Date.now());
   const thisMonth = items.filter((t) => mKey(t.timestamp) === monthNow);
   const first = (user.displayName || "Operatore").split(" ")[0];
