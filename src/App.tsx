@@ -10,7 +10,7 @@ import {
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, KeyRound, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand
 } from "lucide-react";
 
 // --- FIREBASE ---
@@ -34,7 +34,7 @@ const INK_COLORS = [
   { id: "#7E22CE", name: "Viola" }, { id: "#DB2777", name: "Rosa" },
 ];
 const TOOLS = [
-  { id: "pen", label: "Penna", icon: Pen }, { id: "line", label: "Linea", icon: Minus },
+  { id: "hand", label: "Scorri", icon: Hand }, { id: "pen", label: "Penna", icon: Pen }, { id: "line", label: "Linea", icon: Minus },
   { id: "rect", label: "Rettangolo", icon: Square }, { id: "ellipse", label: "Ellisse", icon: Circle },
   { id: "fill", label: "Forma piena", icon: PaintBucket }, { id: "eraser", label: "Gomma", icon: Eraser },
 ];
@@ -44,6 +44,7 @@ const SORTS: any = { newest: "Più recenti", rated: "Voto più alto", oldest: "P
 const clean = (h: string) => {
   const d = new DOMParser().parseFromString(h || "", "text/html");
   d.querySelectorAll("script,iframe,object,embed,style,link").forEach((n) => n.remove());
+  d.body.querySelectorAll("img").forEach((i) => { i.setAttribute("loading", "lazy"); i.setAttribute("decoding", "async"); });
   d.body.querySelectorAll("*").forEach((el) => {
     Array.from(el.attributes).forEach((a) => {
       const n = a.name.toLowerCase();
@@ -80,21 +81,26 @@ const compressImage = (file: File): Promise<string> => new Promise((res, rej) =>
 });
 
 const Logo = ({ size = 32 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-label="Il Circuito">
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-label="Il Circuito" className="lgf">
     <defs><linearGradient id="lg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse"><stop stopColor="#17C3AE" /><stop offset="1" stopColor="#0A4F49" /></linearGradient></defs>
     <rect width="64" height="64" rx="17" fill="url(#lg)" />
     <rect x=".75" y=".75" width="62.5" height="62.5" rx="16.25" stroke="#fff" strokeOpacity=".22" strokeWidth="1.5" />
-    <path d="M43.5 22.4A15 15 0 1 0 43.5 41.6" stroke="#fff" strokeWidth="5" strokeLinecap="round" />
-    <path d="M31 32H47" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
-    <circle cx="43.5" cy="22.4" r="4.2" fill="#fff" /><circle cx="43.5" cy="41.6" r="4.2" fill="#FBBF24" /><circle cx="31" cy="32" r="3.2" fill="#fff" />
+    <path className="lg-arc" pathLength={100} d="M43.5 22.4A15 15 0 1 0 43.5 41.6" stroke="#fff" strokeWidth="5" strokeLinecap="round" />
+    <path className="lg-line" pathLength={100} d="M31 32H47" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
+    <path className="lg-flow" d="M31 32H47" stroke="#FBBF24" strokeWidth="1.4" strokeLinecap="round" strokeDasharray="2 5" />
+    <circle className="lg-n" cx="43.5" cy="22.4" r="4.2" fill="#fff" />
+    <circle className="lg-amber" cx="43.5" cy="41.6" r="4.2" fill="#FBBF24" />
+    <circle className="lg-n" cx="31" cy="32" r="3.2" fill="#fff" />
   </svg>
 );
-const Wordmark = ({ small, light }: any) => (
-  <div className="flex items-center gap-3 leading-none">
-    <Logo size={small ? 30 : 38} />
+const Wordmark = ({ size = 38, fs, light, center, stack, tag = true }: any) => (
+  <div className={`flex leading-none ${stack ? "flex-col gap-4" : "gap-3"} ${stack && !center ? "items-start" : "items-center"} ${center ? "text-center" : ""}`}>
+    <span className="lgw inline-flex shrink-0"><Logo size={size} /></span>
     <div>
-      <div className="hd font-bold" style={{ fontSize: small ? 17 : 20, color: light ? "#fff" : "var(--ink)" }}>Il Circuito</div>
-      {!small && <div className="text-xs mt-1" style={{ color: light ? "rgba(255,255,255,.65)" : "var(--mu)" }}>Archivio di scrittura</div>}
+      <div className="wm" aria-label="Il Circuito" style={{ fontSize: fs || Math.round(size * 0.5), ["--wc" as any]: light ? "#fff" : "var(--ink)", ["--wa" as any]: light ? "#FBBF24" : "var(--ac)" }}>
+        {"Il Circuito".split("").map((c, i) => <span key={i} aria-hidden="true" className="wl" style={{ ["--i" as any]: i }}>{c === " " ? "\u00A0" : c}</span>)}
+      </div>
+      {tag && <div className="text-xs mt-2" style={{ color: light ? "rgba(255,255,255,.7)" : "var(--mu)" }}>Archivio di scrittura</div>}
     </div>
   </div>
 );
@@ -123,6 +129,7 @@ const Drawing = ({ strokes, w, h, className = "" }: any) => (
 );
 
 const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@600&text=Il%20Circuito&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Instrument+Sans:wght@400;500;600&display=swap');
 .root{--bg:#EDF2F1;--pn:#FFFFFF;--ink:#0E1F1D;--mu:#5B706D;--ln:#DCE6E4;--sf:#F4F8F7;--ac:#0F8B7A;--am:#E8A100;
 --sh1:0 1px 2px rgba(14,31,29,.04),0 6px 16px -8px rgba(14,31,29,.10);--sh2:0 2px 4px rgba(14,31,29,.04),0 22px 44px -16px rgba(14,31,29,.26);--ez:cubic-bezier(.22,1,.36,1);
@@ -195,6 +202,37 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .brandpanel .mu{color:rgba(255,255,255,.75)}
 .bd-p.w{background:#fff;opacity:.09;--m:var(--m-circuit);--ts:160px}
 @media (hover:none){.bt:hover{transform:none;box-shadow:none}}
+.wm{font-family:'Unbounded','Bricolage Grotesque',sans-serif;font-weight:600;white-space:nowrap;letter-spacing:-.01em}
+.wl{display:inline-block;color:var(--wc);opacity:0;animation:wl .7s var(--ez) calc(var(--i)*60ms + .2s) forwards,lw 7s ease-in-out calc(2.4s + var(--i)*90ms) infinite}
+@keyframes wl{from{opacity:0;transform:translateY(.7em) rotate(6deg)}to{opacity:1;transform:none}}
+@keyframes lw{0%,14%,100%{color:var(--wc)}7%{color:var(--wa)}}
+.lgw{transition:transform .5s var(--ez);cursor:pointer}.lgw:hover{transform:rotate(-8deg) scale(1.08)}
+.lgf{animation:lgfl 5s ease-in-out infinite}
+@keyframes lgfl{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.lg-arc,.lg-line{stroke-dasharray:100;stroke-dashoffset:100;animation:lgd 1.1s var(--ez) .15s forwards}
+.lg-line{animation-duration:.5s;animation-delay:.8s}
+@keyframes lgd{to{stroke-dashoffset:0}}
+.lg-flow{opacity:0;animation:lgs .9s linear 1.4s infinite,fd .4s 1.4s forwards}
+@keyframes lgs{to{stroke-dashoffset:-7}}
+.lg-n,.lg-amber{transform-box:fill-box;transform-origin:center;animation:lgp .55s var(--ez) .9s both}
+.lg-amber{animation:lgp .55s var(--ez) 1.05s both,lgb 2.8s ease-in-out 2s infinite}
+@keyframes lgp{from{opacity:0;transform:scale(0)}to{opacity:1;transform:none}}
+@keyframes lgb{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
+.cpov{position:fixed;inset:0;z-index:40}
+.cp{position:absolute;top:100%;left:0;margin-top:.5rem;width:336px;z-index:50;box-shadow:var(--sh2);animation:pop .3s var(--ez) both}
+@keyframes sheet{from{transform:translateY(100%)}to{transform:none}}
+.root{min-height:100dvh;-webkit-tap-highlight-color:transparent}
+.bt{touch-action:manipulation}
+.inp{font-size:16px}
+.bd{contain:strict}
+@media (pointer:coarse){.bt{min-height:44px;min-width:44px}}
+@media (max-width:767px){
+.cpov{background:rgba(0,0,0,.4);animation:fd .25s both}
+.cp{position:fixed;left:0;right:0;bottom:0;top:auto;margin:0;width:auto;border-radius:24px 24px 0 0;padding-bottom:calc(1.5rem + env(safe-area-inset-bottom))!important;animation:sheet .4s var(--ez) both;max-height:80dvh;overflow-y:auto}
+.backdrop-blur-sm{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.hdr{backdrop-filter:blur(8px)}
+.card:hover{transform:none;box-shadow:var(--sh1)}
+.rv{transform:translateY(16px)}}
 @keyframes pg{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes pop{from{opacity:0;transform:translateY(16px) scale(.95)}to{opacity:1;transform:none}}
@@ -204,7 +242,7 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .pg{animation:pg .6s var(--ez) both} .up{animation:up .7s var(--ez) both}
 .pop{animation:pop .45s var(--ez) both} .popx{animation:popx .4s var(--ez) both} .fade{animation:fd .3s ease-out both}
 .tick{stroke-dasharray:60;stroke-dashoffset:60;animation:dash .7s .25s ease-out forwards}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.tick{stroke-dashoffset:0}.rv{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.tick{stroke-dashoffset:0}.rv{opacity:1;transform:none}.wl,.lg-n,.lg-amber{opacity:1}.lg-arc,.lg-line{stroke-dashoffset:0}}
 `;
 
 const mKey = (ts: number) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
@@ -230,9 +268,10 @@ const ColorPicker = ({ value, onPick, label, cls = "bt", children }: any) => {
     <div className="relative">
       <button type="button" className={cls} onClick={() => setO(!o)} title={label}>{children}</button>
       {o && (<>
-        <div className="fixed inset-0 z-40" onClick={() => setO(false)} />
-        <div className="absolute z-50 top-full left-0 mt-2 pn p-5 pop w-[336px] max-w-[88vw]" style={{ boxShadow: "var(--sh2)" }}>
-          <div className="grid grid-cols-7 gap-3">
+        <div className="cpov" onClick={() => setO(false)} />
+        <div className="cp pn p-5">
+          <div className="flex items-center justify-between mb-4"><span className="hd font-bold text-lg">{label}</span><button type="button" className="bt !p-2 md:hidden" onClick={() => setO(false)} aria-label="Chiudi"><X size={16} /></button></div>
+          <div className="grid grid-cols-5 md:grid-cols-7 gap-4 md:gap-3">
             {INK_COLORS.map((c) => (
               <button type="button" key={c.id} aria-label={c.name} onMouseEnter={() => setHov(c.name)} onMouseLeave={() => setHov("")}
                 onClick={() => { onPick(c.id); setO(false); }} className="sw aspect-square w-full rounded-full"
@@ -272,6 +311,8 @@ export default function App() {
   const [month, setMonth] = useState(() => mKey(Date.now()));
   const [monthFilter, setMonthFilter] = useState("all");
   const [onlyMarked, setOnlyMarked] = useState(false);
+  const [visible, setVisible] = useState(18);
+  useEffect(() => setVisible(18), [search, sortBy, monthFilter, onlyMarked, tab]);
   const [toast, setToast] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminModal, setAdminModal] = useState(false);
@@ -449,6 +490,7 @@ export default function App() {
     });
   };
   const pDown = (e: any) => {
+    if (tool === "hand") return;
     e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); down.current = true;
     const { x, y } = pos(e); snap();
     if (tool === "eraser") erase(x, y);
@@ -518,18 +560,19 @@ export default function App() {
   };
   const go = (t: string) => { setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); };
 
+  const prepared = useMemo(() => items.map((t) => ({ ...t, _tx: plain(t.content), _img: /<img/.test(t.content || "") })), [items]);
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return items
-      .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!onlyMarked || t.isStarred) && (!q || `${t.title} ${t.author} ${plain(t.content)}`.toLowerCase().includes(q)))
+    return prepared
+      .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!onlyMarked || t.isStarred) && (!q || `${t.title} ${t.author} ${t._tx}`.toLowerCase().includes(q)))
       .sort((a, b) => sortBy === "rated" ? (b.rating || 0) - (a.rating || 0) || b.timestamp - a.timestamp : sortBy === "oldest" ? a.timestamp - b.timestamp : sortBy === "longest" ? (b.content?.length || 0) - (a.content?.length || 0) : sortBy === "shortest" ? (a.content?.length || 0) - (b.content?.length || 0) : b.timestamp - a.timestamp);
-  }, [items, search, sortBy, monthFilter, onlyMarked]);
+  }, [prepared, search, sortBy, monthFilter, onlyMarked]);
   const words = plain(content).trim().split(/\s+/).filter(Boolean).length;
 
   // ================= RENDER =================
   const shell = (children: any) => <div className={`root ${dark ? "dark" : ""} min-h-screen`}><style>{CSS}</style>{children}</div>;
 
-  if (authLoading) return shell(<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin" style={{ color: "var(--ac)" }} /></div>);
+  if (authLoading) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
   if (!user || resetCode) {
     const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
@@ -538,7 +581,7 @@ export default function App() {
       <Backdrop tab="home" />
       <div className="relative z-10 min-h-screen grid md:grid-cols-2">
         <div className="brandpanel hidden md:flex flex-col justify-between p-12"><div className="bd-p w" />
-          <Wordmark light />
+          <Wordmark light size={56} fs={26} />
           <div>
             <h1 className="hd text-5xl font-bold leading-tight max-w-md up">Scrivi senza limiti. Ogni mese emergono i testi migliori.</h1>
             <p className="mu mt-4 max-w-sm up" style={{ animationDelay: "150ms" }}>Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
@@ -546,7 +589,7 @@ export default function App() {
           <span className="mu text-sm">Archivio di scrittura</span>
         </div>
         <div className="flex items-center justify-center p-6">
-          <div className="w-full max-w-sm pop">
+          <div className="w-full max-w-sm pop"><div className="md:hidden mb-10"><Wordmark stack center size={88} fs={30} /></div>
             {resetCode ? (
               <form onSubmit={submitNewPw} className="space-y-4">
                 <h2 className="hd text-3xl font-bold mb-2">Scegli una nuova password</h2>
@@ -605,7 +648,7 @@ export default function App() {
   const recent = [...items].sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
   const homeView = (
     <div className="space-y-8">
-      <Reveal><div className="pn brandpanel p-8 md:p-12"><div className="bd-p w" />
+      <Reveal><div className="pn brandpanel p-8 md:p-12"><div className="bd-p w" /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><Logo size={170} /></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
         <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight">Ciao {first}, {isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}</h2>
         <p className="mu mt-3 max-w-md">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
         <div className="flex flex-wrap gap-2 mt-7">
@@ -701,7 +744,7 @@ export default function App() {
       {/* sidebar desktop */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col p-5 gap-1 pn !rounded-none !border-y-0 !border-l-0 z-20">
         <div className="flex items-center gap-2.5 mb-8 cursor-pointer select-none" onDoubleClick={() => !isAdmin && setAdminModal(true)} title="Il Circuito">
-          <Wordmark />
+          <Wordmark stack size={52} fs={22} />
         </div>
         {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt !justify-start w-full ${tab === n.id ? "on" : "!border-transparent !bg-transparent"} nv`}><n.icon size={16} />{n.label}</button>)}
         <div className="mt-auto space-y-2">
@@ -716,7 +759,7 @@ export default function App() {
 
       {/* barra mobile */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
-        <div className="flex items-center gap-2" onDoubleClick={() => !isAdmin && setAdminModal(true)}><Wordmark small /></div>
+        <div className="flex items-center gap-2" onDoubleClick={() => !isAdmin && setAdminModal(true)}><Wordmark size={40} fs={19} tag={false} /></div>
         <div className="flex gap-2">
           <button className="bt !p-2" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
           <button className="bt !p-2" onClick={logout}><LogOut size={16} /></button>
@@ -755,8 +798,8 @@ export default function App() {
               {!search && <button className="bt pri" onClick={() => go("write")}><Plus size={15} />Nuovo progetto</button>}
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {shown.map((t, i) => {
+            <><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {shown.slice(0, visible).map((t, i) => {
                 const picked = ids.includes(t.id), { w, h } = dims(t);
                 return (
                   <Reveal key={t.id} delay={(i % 3) * 90} className="h-full"><article onClick={() => selMode ? setIds((p) => p.includes(t.id) ? p.filter((x) => x !== t.id) : [...p, t.id]) : setSel(t)}
@@ -764,7 +807,7 @@ export default function App() {
                     <div className="paper mm sm relative h-40 overflow-hidden">
                       <div className="thumb absolute inset-0">
                         {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
-                        <div className="rt relative p-3 line-clamp-5" dangerouslySetInnerHTML={{ __html: clean(t.content) }} />
+                        <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{t._tx.slice(0, 260) || (t._img ? "Contenuto con immagini" : "")}</p>
                       </div>
                       {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
                       {isAdmin && !selMode && <button type="button" aria-label="Segnalibro" title={t.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={(e) => { e.stopPropagation(); star(t); }} className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110" style={{ background: "rgba(255,255,255,.92)", boxShadow: "var(--sh1)" }}><Bookmark size={16} style={t.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : { color: "#64748b" }} /></button>}
@@ -778,14 +821,16 @@ export default function App() {
                 );
               })}
             </div>
+            {shown.length > visible && <div className="flex justify-center mt-8"><button className="bt !px-6 !py-3" onClick={() => setVisible((v) => v + 18)}>Mostra altri ({shown.length - visible})</button></div>}
+            </>
           ))}
 
           {/* EDITOR */}
           {tab === "write" && (
             <form onSubmit={submit} className="space-y-4 up">
               <input className="inp !text-xl !py-3 hd font-bold" placeholder="Nome del progetto" value={title} onChange={(e) => setTitle(e.target.value)} required />
-              <div className="pn overflow-hidden">
-                <div className="p-2 border-b space-y-2" style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onMouseDown={(e) => { if ((e.target as any).tagName !== "INPUT" && (e.target as any).tagName !== "SELECT") e.preventDefault(); }}>
+              <div className="pn">
+                <div className={`p-2 border-b space-y-2 rounded-t-[17px] ${!drawing ? "sticky top-[64px] md:top-0 z-[35]" : ""}`} style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { if ((e.target as any).tagName !== "INPUT" && (e.target as any).tagName !== "SELECT") e.preventDefault(); }}>
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="flex p-0.5 rounded-lg" style={{ border: "1px solid var(--ln)" }}>
                       <button type="button" className={`bt border-0 ${!drawing ? "on" : ""}`} onClick={() => setDrawing(false)}><Type size={15} />Testo</button>
@@ -804,7 +849,7 @@ export default function App() {
                         <button type="button" className="bt dng !p-1.5" onClick={removeImg}><Trash2 size={14} /></button>
                       </div>}
                     </>) : (<>
-                      {TOOLS.map((t) => <button type="button" key={t.id} className={`bt ${tool === t.id ? "on" : ""}`} onClick={() => setTool(t.id)}><t.icon size={15} />{t.label}</button>)}
+                      {TOOLS.map((t) => <button type="button" key={t.id} title={t.label} aria-label={t.label} className={`bt ${tool === t.id ? "on" : ""}`} onClick={() => setTool(t.id)}><t.icon size={16} /><span className="hidden sm:inline">{t.label}</span></button>)}
                     </>)}
                     <div className="ml-auto flex gap-2">
                       <button type="button" className={`bt !p-2 ${grid ? "on" : ""}`} onClick={() => setGrid(!grid)} title="Griglia"><Grid3x3 size={15} /></button>
@@ -834,7 +879,7 @@ export default function App() {
                     className="rt relative p-6 outline-none" style={{ minHeight: height, caretColor: "#0F8B7A" }}
                     onInput={(e: any) => setContent(e.currentTarget.innerHTML)} onClick={pickImg} onKeyUp={readFmt} onMouseUp={readFmt}
                     onKeyDown={(e) => { if (e.key === "Enter") document.execCommand("formatBlock", false, "div"); }} />
-                  {drawing && <div className="absolute inset-0 z-30" style={{ touchAction: "none", cursor: tool === "eraser" ? "cell" : "crosshair" }} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp} />}
+                  {drawing && <div className="absolute inset-0 z-30" style={{ touchAction: tool === "hand" ? "pan-y" : "none", cursor: tool === "hand" ? "grab" : tool === "eraser" ? "cell" : "crosshair" }} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp} />}
                 </div>
                 <div className="flex justify-between items-center px-4 py-2 text-xs mu border-t" style={{ borderColor: "var(--ln)" }}>
                   <span>{words} parole · {strokes.length} tratti{!editingId && " · bozza salvata in automatico"}</span>
@@ -847,6 +892,7 @@ export default function App() {
               </div>
             </form>
           )}
+          <Reveal className="mt-16"><div className="flex flex-col items-center gap-3 py-8"><Wordmark stack center size={64} fs={24} /><p className="mu text-xs">Scrivi, leggi, scegli. Ogni mese.</p></div></Reveal>
         </div>
       </div>
 
@@ -865,7 +911,7 @@ export default function App() {
         const { w, h } = dims(sel);
         return (
           <div className="fade fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm" onClick={() => setSel(null)}>
-            <div className="pn w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden pop" onClick={(e) => e.stopPropagation()}>
+            <div className="pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden pop" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
                 <div className="flex-1 min-w-0"><h2 className="hd text-2xl font-bold truncate">{sel.title}</h2><div className="mu text-xs">{sel.author} · {fmtDate(sel.timestamp)}</div></div>
                 <button className="bt !p-2" title="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>
