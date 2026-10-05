@@ -5,12 +5,12 @@ import {
   signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset
 } from "firebase/auth";
 import {
-  getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, setDoc
+  getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, setDoc, getDoc
 } from "firebase/firestore";
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, KeyRound, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download
 } from "lucide-react";
 
 // --- FIREBASE ---
@@ -130,6 +130,52 @@ const Drawing = ({ strokes, w, h, className = "" }: any) => (
     {(strokes || []).map((s: any, i: number) => <Shape key={i} s={s} />)}
   </svg>
 );
+
+// --- APP ANDROID (APK) ---
+// Il link all'APK si trova su Firestore, nel documento  app_config/android  con i campi:
+//   apkUrl  (testo, obbligatorio)  link https diretto al file .apk
+//   version (testo, facoltativo)   es. "1.0.3", mostrato sul pulsante
+// Per aggiornare l'app basta cambiare quel documento dalla console Firebase: nessun nuovo deploy del sito.
+// Se il documento non esiste (o non è leggibile) il pulsante resta nascosto.
+let apkCache: { url: string; version?: string } | null | undefined;
+const loadApk = async () => {
+  if (apkCache !== undefined) return apkCache;
+  try {
+    if (!db) return null;
+    const s = await getDoc(doc(db, "app_config", "android"));
+    const d: any = s.exists() ? s.data() : null;
+    const url = d && typeof d.apkUrl === "string" ? d.apkUrl.trim() : "";
+    apkCache = /^https:\/\//i.test(url) ? { url, version: d.version ? String(d.version).trim() : undefined } : null;
+    return apkCache;
+  } catch (e) {
+    console.warn("APK: impossibile leggere app_config/android (controlla le regole di Firestore)", e);
+    return null; // niente cache: riprova al prossimo montaggio (es. dopo il login)
+  }
+};
+// Non ha senso proporre l'APK a chi usa già l'app installata o a chi è su iPhone/iPad
+const skipApk = () => {
+  try {
+    const w: any = window, ua = navigator.userAgent;
+    return !!w.Capacitor?.isNativePlatform?.() || window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true || /iPad|iPhone|iPod/.test(ua) || /; wv\)/.test(ua);
+  } catch { return false; }
+};
+const ApkDownload = ({ compact, divider, className = "" }: { compact?: boolean; divider?: boolean; className?: string }) => {
+  const [info, setInfo] = useState<{ url: string; version?: string } | null>(null);
+  useEffect(() => {
+    let on = true;
+    loadApk().then((r) => { if (on && r) setInfo(r); });
+    return () => { on = false; };
+  }, []);
+  if (!info || skipApk()) return null;
+  return (
+    <div className={`${divider ? "mt-6 pt-6" : ""} ${className}`} style={divider ? { borderTop: "1px solid var(--ln)" } : undefined}>
+      <a href={info.url} download rel="noopener noreferrer" className={`bt pri w-full no-underline ${compact ? "" : "py-3"}`} title={info.version ? `Versione ${info.version}` : undefined}>
+        <Download size={16} />{compact ? "Scarica app Android" : `Scarica l'app Android${info.version ? ` · v${info.version}` : ""}`}
+      </a>
+      {!compact && <p className="mu text-xs mt-2 text-center">Dopo il download apri il file .apk e, se richiesto, consenti l'installazione da questa fonte.</p>}
+    </div>
+  );
+};
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@600&text=Il%20Circuito&display=swap');
@@ -1050,6 +1096,7 @@ export default function App() {
                 {authMode === "reset" && <button type="button" className="mu text-sm lk" onClick={() => { setAuthMode("login"); setAuthMsg(null); }}>Torna all'accesso</button>}
               </form>
             )}
+            {!resetCode && <ApkDownload divider />}
           </div>
         </div>
       </div>
@@ -1154,6 +1201,7 @@ export default function App() {
     <div className="max-w-2xl mx-auto space-y-5">
       <div className="pn overflow-hidden">{profileView(user.uid, true)}</div>
       <button className="bt w-full" onClick={() => setOptOpen(true)}><Settings size={16} />Opzioni</button>
+      <ApkDownload className="md:hidden" />
       <button className="bt dng w-full md:hidden" onClick={logout}><LogOut size={16} />Esci dall'account</button>
     </div>
   );
@@ -1264,6 +1312,7 @@ export default function App() {
         </div>
         {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt !justify-start w-full ${tab === n.id ? "on" : "!border-transparent !bg-transparent"} nv`}><n.icon size={16} />{n.label}</button>)}
         <div className="mt-auto space-y-2">
+          <ApkDownload compact />
           {isAdmin && <button onClick={() => { try { localStorage.removeItem("circuito:admin"); } catch {} setIsAdmin(false); setTab("home"); }} className="bt w-full !justify-start"><Unlock size={16} />Esci da admin</button>}
           <div className="flex items-center gap-2">
             <button onClick={() => go("profile")} className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{user.email}</span></span></button>
