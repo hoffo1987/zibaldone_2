@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -107,7 +107,7 @@ const Wordmark = ({ size = 38, fs, light, center, stack, tag = true }: any) => (
 const Backdrop = ({ tab, fx, dark }: { tab: string; fx: boolean; dark: boolean }) => {
   const k = tab === "profile" ? "authors" : ["home", "write", "podio", "authors"].includes(tab) ? tab : "archive";
   return (<>
-    <div key={k} className={`bd bd-${k} fade fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" /><div className="au a1" /><div className="au a2" /><div className="au a3" /><div className="bd-p" /></div>
+    <div key={k} className={`bd bd-${k} bdin fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" /><div className="au a1" /><div className="au a2" /><div className="au a3" /><div className="bd-p" /></div>
     {fx && <FX dark={dark} />}
   </>);
 };
@@ -135,7 +135,7 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@600&text=Il%20Circuito&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Instrument+Sans:wght@400;500;600&display=swap');
 .root{--bg:#EDF2F1;--pn:#FFFFFF;--ink:#0E1F1D;--mu:#5B706D;--ln:#DCE6E4;--sf:#F4F8F7;--ac:#0F8B7A;--am:#E8A100;
---sh1:0 1px 2px rgba(14,31,29,.04),0 6px 16px -8px rgba(14,31,29,.10);--sh2:0 2px 4px rgba(14,31,29,.04),0 22px 44px -16px rgba(14,31,29,.26);--ez:cubic-bezier(.22,1,.36,1);
+--sh1:0 1px 2px rgba(14,31,29,.04),0 6px 16px -8px rgba(14,31,29,.10);--sh2:0 2px 4px rgba(14,31,29,.04),0 22px 44px -16px rgba(14,31,29,.26);--ez:cubic-bezier(.22,1,.36,1);--out:cubic-bezier(.16,1,.3,1);--snap:cubic-bezier(.77,0,.18,1);--spring:cubic-bezier(.34,1.56,.64,1);
 font-family:'Instrument Sans',system-ui,sans-serif;color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;
 background:var(--bg)}
 .root.dark{--bg:#091312;--pn:#102120;--ink:#E2EFEB;--mu:#8AA7A2;--ln:#1E3532;--sf:#0C1B1A;--ac:#2DD4BF;--am:#FBBF24;
@@ -169,7 +169,7 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .card:after{content:"";position:absolute;left:0;bottom:0;height:3px;width:100%;background:var(--ac);transform:scaleX(0);transform-origin:left;transition:transform .5s var(--ez)}
 .card:hover:after{transform:scaleX(1)}
 .card .thumb{transition:transform .8s var(--ez)} .card:hover .thumb{transform:scale(1.05)}
-.card.gone{opacity:0;transform:scale(.92)}
+.card.gone{animation:shred .32s var(--snap) forwards;pointer-events:none}
 .paper{background:#fff;color:#10211F}
 .mm{background-image:linear-gradient(rgba(15,139,122,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(15,139,122,.12) 1px,transparent 1px);background-size:20px 20px}
 .rt{overflow-wrap:anywhere;line-height:32px;font-size:17px}
@@ -179,7 +179,7 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .rt:empty:before{content:attr(data-ph);color:#94a3b8;pointer-events:none}
 .sm .rt{line-height:22px;font-size:13px} .sm .rt img{max-height:70px;width:auto;margin:4px 0}
 .sw{cursor:pointer;transition:transform .25s var(--ez),box-shadow .25s}.sw:hover{transform:scale(1.18)}
-.rv{opacity:0;transform:translateY(28px);transition:opacity .8s var(--ez),transform .8s var(--ez)}
+.rv{opacity:0}
 .rv.in{opacity:1;transform:none}
 .root{--m-circuit:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' fill='none' stroke='black' stroke-width='1.5'%3E%3Cpath d='M0 40H50L70 60V100H120L140 120V160M30 0V30L50 50M160 80H110L90 100M140 0V18M30 160V142M0 80H18M160 40H148'/%3E%3Ccircle cx='50' cy='40' r='3.5'/%3E%3Ccircle cx='120' cy='100' r='3.5'/%3E%3Ccircle cx='30' cy='30' r='3.5'/%3E%3Ccircle cx='110' cy='80' r='3.5'/%3E%3C/svg%3E");
 --m-cross:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' fill='none' stroke='black' stroke-width='1.3'%3E%3Cpath d='M28 22V34M22 28H34'/%3E%3C/svg%3E");
@@ -223,8 +223,8 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 @keyframes lgb{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
 .cpov{position:fixed;inset:0;z-index:40}
 @media (max-width:767px){.root:has(.cpov) nav.hdr{display:none}}
-.cp{position:absolute;top:100%;left:0;margin-top:.5rem;width:336px;z-index:50;box-shadow:var(--sh2);animation:pop .3s var(--ez) both}
-.cp-r{left:auto;right:0}
+.cp{position:absolute;top:100%;left:0;margin-top:.5rem;width:336px;z-index:50;box-shadow:var(--sh2);animation:cpIn .4s var(--out) backwards;transform-origin:0 0}
+.cp-r{left:auto;right:0;transform-origin:100% 0}
 @keyframes sheet{from{transform:translateY(100%)}to{transform:none}}
 .root{min-height:100dvh;-webkit-tap-highlight-color:transparent}
 .bt{touch-action:manipulation}
@@ -237,7 +237,7 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .backdrop-blur-sm{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 .hdr{backdrop-filter:blur(8px)}
 .card:hover{transform:none;box-shadow:var(--sh1)}
-.rv{transform:translateY(16px)}}
+}
 @keyframes pgf{from{opacity:0}}
 @property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
 @keyframes ang{to{--ang:360deg}}
@@ -278,9 +278,192 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 @keyframes popx{from{opacity:0;transform:translate(-50%,12px) scale(.95)}to{opacity:1;transform:translate(-50%,0)}}
 @keyframes fd{from{opacity:0}to{opacity:1}}
 @keyframes dash{to{stroke-dashoffset:0}}
-.pg,.fadein{animation:pgf .45s ease-out backwards} .up{animation:up .7s var(--ez) both}
+.up{animation:up .7s var(--ez) both}
 .pop{animation:pop .45s var(--ez) both} .popx{animation:popx .4s var(--ez) both} .fade{animation:fd .3s ease-out both}
 .tick{stroke-dasharray:60;stroke-dashoffset:60;animation:dash .7s .25s ease-out forwards}
+/* ===== MOTION SYSTEM: ogni elemento ha un ingresso (e un'uscita) tutto suo ===== */
+.rv:not(.in) *{animation-play-state:paused!important}
+.rv.in.fx-wipe{animation:rvWipe 1.05s var(--snap) backwards}
+.rv.in.fx-flip{animation:rvFlip .85s var(--out) backwards;transform-origin:50% 0}
+.rv.in.fx-rise{animation:rvRise .95s var(--spring) backwards;transform-origin:50% 100%}
+.rv.in.fx-zoom{animation:rvZoom .75s var(--out) backwards}
+.rv.in.fx-deal{animation:rvDeal .8s var(--out) backwards}
+@keyframes rvWipe{from{clip-path:inset(0 100% 0 0 round 18px)}to{clip-path:inset(0 0 0 0 round 18px)}}
+@keyframes rvFlip{from{opacity:0;transform:perspective(800px) rotateX(-80deg) translateY(-12px)}}
+@keyframes rvRise{from{opacity:0;transform:translateY(110px) scaleY(.4)}}
+@keyframes rvZoom{from{opacity:0;transform:scale(.8);filter:blur(10px)}}
+@keyframes rvDeal{from{opacity:0;transform:translate(var(--dx,0px),140px) rotate(var(--rot,0deg)) scale(.86)}}
+.cas>*:not(.bd-p){animation:casUp .65s var(--out) backwards}
+.cas>:nth-child(1){animation-delay:calc(var(--cb,0s) + 60ms)}.cas>:nth-child(2){animation-delay:calc(var(--cb,0s) + 120ms)}.cas>:nth-child(3){animation-delay:calc(var(--cb,0s) + 180ms)}.cas>:nth-child(4){animation-delay:calc(var(--cb,0s) + 240ms)}
+.cas>:nth-child(5){animation-delay:calc(var(--cb,0s) + 300ms)}.cas>:nth-child(6){animation-delay:calc(var(--cb,0s) + 360ms)}.cas>:nth-child(7){animation-delay:calc(var(--cb,0s) + 420ms)}.cas>:nth-child(8){animation-delay:calc(var(--cb,0s) + 480ms)}
+.cas>:nth-child(9){animation-delay:calc(var(--cb,0s) + 540ms)}.cas>:nth-child(10){animation-delay:calc(var(--cb,0s) + 600ms)}.cas>:nth-child(11){animation-delay:calc(var(--cb,0s) + 660ms)}.cas>:nth-child(12){animation-delay:calc(var(--cb,0s) + 720ms)}.cas>:nth-child(n+13){animation-delay:calc(var(--cb,0s) + 780ms)}
+.cas-l>*:not(.bd-p){animation-name:casL}
+.cas>.swap{animation:swapIn .5s var(--out) backwards}
+.cas>.fld{animation:fldIn .45s var(--out) backwards}
+.fld{transform-origin:50% 0}
+@keyframes casUp{from{opacity:0;transform:translateY(20px)}}
+@keyframes casL{from{opacity:0;transform:translateX(-30px)}}
+@keyframes swapIn{from{opacity:0;transform:translateY(10px);filter:blur(6px)}}
+@keyframes fldIn{from{opacity:0;transform:scaleY(.5) translateY(-10px)}}
+/* pagine: ogni sezione entra in modo diverso */
+.pg{position:relative;animation:.65s var(--out) backwards}
+.pg-home{animation-name:pgHome}
+.pg-write{animation-name:pgWrite;transform-origin:50% 0}
+.pg-my_pages{animation-name:pgMine}
+.pg-read{animation-name:pgRead;animation-duration:.8s;animation-timing-function:var(--snap)}
+.pg-podio{animation-name:pgPodio;animation-duration:.85s;animation-timing-function:var(--ez)}
+.pg-authors{animation-name:pgAuth}
+.pg-profile{animation-name:pgProf;animation-duration:.85s;animation-timing-function:var(--snap)}
+@media (min-width:768px){.pg-profile{animation-name:pgProfD}}
+@keyframes pgHome{from{opacity:0;transform:scale(.965);filter:blur(6px)}}
+@keyframes pgWrite{from{opacity:0;transform:perspective(1400px) rotateX(12deg) translateY(60px)}}
+@keyframes pgMine{from{opacity:0;transform:translateX(56px) skewX(-5deg)}}
+@keyframes pgRead{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes pgPodio{0%{opacity:0;transform:translateY(-60px)}55%{opacity:1;transform:translateY(10px)}78%{transform:translateY(-4px)}100%{transform:none}}
+@keyframes pgAuth{from{opacity:0;transform:scale(1.07);filter:blur(6px)}}
+@keyframes pgProf{from{clip-path:circle(0% at 100% 0)}to{clip-path:circle(150% at 100% 0)}}
+@keyframes pgProfD{from{clip-path:circle(0% at 0 100%)}to{clip-path:circle(150% at 0 100%)}}
+.trace{position:absolute;top:0;left:1rem;right:1rem;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--ac) 20%,var(--am) 80%,transparent);box-shadow:0 0 12px var(--ac);transform-origin:0 50%;opacity:0;pointer-events:none;animation:trace 1s var(--snap) .05s}
+@keyframes trace{0%{opacity:1;transform:scaleX(0)}65%{opacity:1;transform:scaleX(1)}100%{opacity:0;transform:scaleX(1)}}
+.bdin{animation:bdIn 1.1s var(--ez) backwards}
+@keyframes bdIn{from{opacity:0;transform:scale(1.06)}}
+/* navigazione: indicatore liquido + icona animata per voce */
+.nb{z-index:1}
+.nb.act{color:#fff}.root.dark .nb.act{color:#042f2a}
+.nb.act:hover{background:transparent!important}
+.nb.act svg{animation:var(--ia,none) .75s var(--ez);transform-origin:50% 30%}
+.nind{position:absolute;z-index:0;border-radius:12px;background:var(--ac);box-shadow:0 10px 24px -10px color-mix(in srgb,var(--ac) 80%,transparent);pointer-events:none;opacity:0;overflow:hidden;transition:top .55s var(--ez) var(--da,0ms),bottom .55s var(--ez) var(--db,0ms),left .55s var(--ez) var(--da,0ms),right .55s var(--ez) var(--db,0ms),opacity .3s}
+.nind.v{left:0;right:0;top:var(--a,0px);bottom:var(--b,100%)}
+.nind.h{top:0;bottom:0;left:var(--a,0px);right:var(--b,100%)}
+.nind:after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.4) 50%,transparent 65%);transform:translateX(-120%);animation:shine 4s ease-in-out 1s infinite}
+@keyframes shine{0%,65%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
+@keyframes icHome{from{transform:scale(.4) rotate(-180deg)}}
+@keyframes icWrite{0%,100%{transform:none}20%{transform:rotate(-22deg) translate(-2px,1px)}40%{transform:rotate(12deg) translate(2px,-1px)}60%{transform:rotate(-12deg)}80%{transform:rotate(6deg)}}
+@keyframes icMine{0%{transform:translateY(-12px);opacity:0}55%{transform:translateY(3px) scaleY(.85);opacity:1}100%{transform:none}}
+@keyframes icRead{0%{transform:scaleX(.1)}45%{transform:scale(1.3,1.4)}100%{transform:none}}
+@keyframes icPodio{0%,100%{transform:none}20%{transform:rotate(18deg) translateY(-3px)}40%{transform:rotate(-14deg)}60%{transform:rotate(8deg)}80%{transform:rotate(-4deg)}}
+@keyframes icAuth{0%{transform:scale(1)}30%{transform:scale(1.4) translateY(-4px)}60%{transform:scale(.88)}100%{transform:none}}
+/* selettori a pillola scorrevole */
+.seg-ind{position:absolute;top:4px;bottom:4px;left:4px;border-radius:12px;background:var(--ac);box-shadow:0 8px 18px -8px color-mix(in srgb,var(--ac) 75%,transparent);transition:transform .6s var(--spring)}
+.seg.soft .seg-ind{background:var(--pn);box-shadow:var(--sh1)}
+.seg .bt{transition:color .3s,transform .3s var(--ez)}
+.seg-on{color:#fff!important}.root.dark .seg-on{color:#042f2a!important}.seg.soft .seg-on{color:var(--ink)!important}
+.seg-on svg{animation:segP .5s var(--spring)}
+@keyframes segP{from{transform:scale(.4) rotate(-40deg)}}
+/* overlay e modali: ognuno con ingresso e uscita unici */
+.ov{animation:ovIn .4s var(--ez) backwards}
+.ov.out{animation:ovOut .34s var(--ez) forwards;pointer-events:none}
+@keyframes ovIn{from{background-color:transparent;-webkit-backdrop-filter:blur(0);backdrop-filter:blur(0)}}
+@keyframes ovOut{to{background-color:transparent;-webkit-backdrop-filter:blur(0);backdrop-filter:blur(0)}}
+.m-doc{animation:docIn .6s var(--out) backwards}
+.out .m-doc{animation:docOut .34s var(--snap) forwards}
+@keyframes docIn{from{opacity:0;transform:translate(var(--ox,0px),var(--oy,60px)) scale(var(--sx,.92),var(--sy,.92));border-radius:26px}35%{opacity:1}}
+@keyframes docOut{to{opacity:0;transform:translate(var(--ox,0px),var(--oy,60px)) scale(var(--sx,.92),var(--sy,.92))}}
+.m-doc .doc-h{animation:hIn .55s var(--out) .22s backwards}
+@keyframes hIn{from{opacity:0;transform:translateY(-14px)}}
+.acts>*{flex:1}
+.print{position:relative;animation:print 1s var(--snap) .3s backwards}
+.print:before{content:"";position:absolute;left:0;right:0;top:0;height:2px;z-index:5;pointer-events:none;background:var(--ac);box-shadow:0 0 16px 3px var(--ac);opacity:0;animation:scan 1s var(--snap) .3s}
+@keyframes print{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes scan{0%{top:0;opacity:1}85%{opacity:1}100%{top:100%;opacity:0}}
+.m-card{animation:cardIn .75s var(--out) backwards;transform-origin:50% 100%}
+.out .m-card{animation:cardOut .3s var(--snap) forwards}
+@keyframes cardIn{from{opacity:0;transform:perspective(1200px) rotateX(-32deg) rotateY(16deg) translateY(70px) scale(.88)}}
+@keyframes cardOut{to{opacity:0;transform:perspective(1200px) rotateX(18deg) translateY(50px) scale(.92)}}
+.m-crt{animation:crtOn .65s var(--snap) backwards}
+.out .m-crt{animation:crtOff .4s var(--snap) forwards}
+.m-crt .cas{--cb:.38s}
+@keyframes crtOn{0%{opacity:0;transform:scale(.5,.006);filter:brightness(3)}40%{opacity:1;transform:scale(1,.006);filter:brightness(2.2)}100%{transform:none;filter:none}}
+@keyframes crtOff{0%{transform:none}55%{opacity:1;transform:scale(1,.006);filter:brightness(2.5)}100%{opacity:0;transform:scale(0,.006)}}
+.m-warn{animation:warnIn .65s var(--ez) backwards}
+.out .m-warn{animation:implode .36s var(--snap) forwards}
+.m-warn .wi{animation:wiPulse 1.4s ease-in-out .6s infinite}
+@keyframes warnIn{0%{opacity:0;transform:scale(.85)}30%{opacity:1;transform:scale(1.03) translateX(-10px);box-shadow:0 0 0 6px rgba(220,38,38,.35),var(--sh2)}45%{transform:translateX(8px)}60%{transform:translateX(-6px)}75%{transform:translateX(3px)}100%{transform:none}}
+@keyframes implode{to{opacity:0;transform:scale(.3) rotate(-10deg);filter:blur(6px)}}
+@keyframes wiPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.45)}50%{box-shadow:0 0 0 12px rgba(220,38,38,0)}}
+.m-vault{animation:vaultIn .6s var(--out) backwards}
+.out .m-vault{animation:vaultOut .3s var(--snap) forwards}
+.m-vault .key{animation:keyT 1s var(--spring) .2s backwards}
+@keyframes vaultIn{from{opacity:0;transform:scale(1.3);filter:blur(12px)}}
+@keyframes vaultOut{to{opacity:0;transform:scale(1.2);filter:blur(10px)}}
+@keyframes keyT{from{opacity:0;transform:rotate(-220deg) scale(.2)}}
+.shk{animation:shk .45s var(--ez)}
+@keyframes shk{20%{transform:translateX(-9px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+.m-done{animation:doneIn .7s var(--spring) backwards}
+.out .m-done{animation:doneOut .35s var(--snap) forwards}
+@keyframes doneIn{from{opacity:0;transform:scale(.4) translateY(40px)}}
+@keyframes doneOut{to{opacity:0;transform:translateY(-60px) scale(.9)}}
+.burst{position:relative;width:76px;height:76px;margin:0 auto .9rem}
+.burst svg{position:relative;width:100%;height:100%}
+.burst .rg{position:absolute;inset:0;border-radius:50%;border:2px solid var(--ac);opacity:0;animation:rg 1s var(--out) .35s}
+.burst .rg+.rg{border-color:var(--am);animation-delay:.5s}
+.burst i{position:absolute;left:50%;top:50%;width:4px;height:12px;margin:-6px 0 0 -2px;border-radius:3px;background:var(--c);opacity:0;animation:spark .8s var(--out) .4s}
+@keyframes rg{from{opacity:.9;transform:scale(.5)}to{opacity:0;transform:scale(2.3)}}
+@keyframes spark{0%{opacity:1;transform:rotate(var(--a)) translateY(-22px) scaleY(1.2)}100%{opacity:0;transform:rotate(var(--a)) translateY(-72px) scaleY(.3)}}
+.toast{animation:tIn .55s var(--spring) backwards;overflow:hidden}
+.toast.out{animation:tOut .3s var(--snap) forwards}
+.toast:after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,var(--ac),var(--am));transform-origin:0 50%;animation:tBar 3.2s linear forwards}
+@keyframes tIn{from{opacity:0;transform:translate(-50%,-160%) scale(.85)}}
+@keyframes tOut{to{opacity:0;transform:translate(-50%,-160%) scale(.9)}}
+@keyframes tBar{to{transform:scaleX(0)}}
+.selbar{animation:selIn .6s var(--out) backwards}
+.selbar.out{animation:selOut .3s var(--snap) forwards;pointer-events:none}
+@keyframes selIn{from{opacity:0;clip-path:inset(0 46% 0 46% round 18px);transform:translate(-50%,24px)}to{clip-path:inset(0 0 0 0 round 18px)}}
+@keyframes selOut{to{opacity:0;clip-path:inset(0 46% 0 46% round 18px);transform:translate(-50%,24px)}}
+@keyframes cpIn{from{opacity:0;transform:translateY(-8px) scale(.9);clip-path:inset(0 0 100% 0 round 18px)}to{clip-path:inset(0 0 0 0 round 18px)}}
+.cp.out{animation:cpOut .22s var(--snap) forwards}
+.cpov.out{animation:fdo .22s forwards;pointer-events:none}
+@keyframes cpOut{to{opacity:0;transform:translateY(-6px) scale(.94)}}
+@keyframes fdo{to{opacity:0}}
+.cp .sw{animation:swIn .45s var(--spring) backwards;animation-delay:calc(.08s + var(--i,0)*16ms)}
+@keyframes swIn{from{transform:scale(0) rotate(-90deg)}}
+@keyframes sheetUp{from{transform:translateY(100%)}}
+@keyframes sheetDown{to{transform:translateY(100%)}}
+@keyframes cardUpM{from{transform:translateY(100%) scale(.92);border-radius:44px}}
+@media (max-width:767px){
+.m-card{animation:cardUpM .6s var(--out) backwards}
+.m-crt{animation:sheetUp .55s var(--out) backwards}
+.out .m-card,.out .m-crt{animation:sheetDown .3s var(--snap) forwards}
+.m-crt .cas{--cb:.18s}
+.cp.out{animation:sheetDown .28s var(--snap) forwards}}
+/* micro-interazioni */
+@keyframes shred{to{opacity:0;transform:scale(.7,.05) skewX(24deg);filter:blur(6px)}}
+.st-on{animation:stPop .55s var(--spring) backwards;animation-delay:calc(var(--n,0)*55ms)}
+@keyframes stPop{from{transform:scale(0) rotate(-120deg)}}
+.bm-pop{animation:bmPop .55s var(--ez)}
+@keyframes bmPop{0%{transform:translateY(-10px) scale(.4)}60%{transform:translateY(2px) scale(1.3)}100%{transform:none}}
+.tb.on svg{animation:tbOn .45s var(--spring)}
+@keyframes tbOn{from{transform:scale(.5) rotate(-20deg)}}
+.tb-t{animation:tbT .4s var(--out) backwards}.tb-d{animation:tbD .4s var(--out) backwards}
+@keyframes tbT{from{opacity:0;transform:translateX(-24px)}}
+@keyframes tbD{from{opacity:0;transform:translateX(24px)}}
+.pf-bn{animation:bnIn .9s var(--snap) backwards}
+@keyframes bnIn{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0 0 0 0)}}
+.pf-bn .bd-p{animation:bnPan 22s linear infinite}
+@keyframes bnPan{to{-webkit-mask-position:160px 160px;mask-position:160px 160px}}
+.pf-av{display:inline-block;animation:avIn .9s var(--spring) .3s backwards}
+@keyframes avIn{from{opacity:0;transform:scale(.2) rotate(-160deg)}}
+.badge{animation:bdgIn .55s var(--spring) backwards;animation-delay:calc(.7s + var(--i,0)*90ms)}
+@keyframes bdgIn{from{opacity:0;transform:scale(.3) translateY(10px)}}
+.msr{animation:msr .55s var(--out) backwards}.msl{animation:msl .55s var(--out) backwards}
+@keyframes msr{from{opacity:0;transform:translateX(70px)}}
+@keyframes msl{from{opacity:0;transform:translateX(-70px)}}
+.mlab{display:inline-block;animation:mlab .5s var(--spring) backwards}
+@keyframes mlab{from{opacity:0;transform:perspective(400px) rotateX(-90deg)}}
+.medal{animation:medal 1.1s var(--out) backwards;animation-delay:calc(var(--md,0ms) + .45s)}
+@keyframes medal{from{opacity:0;transform:perspective(300px) rotateY(720deg) scale(.3)}}
+.wdw{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em}
+.wd{display:inline-block;animation:wdIn 1s var(--out) backwards;animation-delay:calc(.25s + var(--i,0)*65ms)}
+@keyframes wdIn{from{opacity:0;transform:translateY(115%) rotate(6deg)}}
+.ldr{display:inline-flex;gap:5px;align-items:center;height:30px}
+.ldr i{width:5px;height:100%;border-radius:3px;background:linear-gradient(var(--ac),var(--am));animation:eq 1s ease-in-out infinite}
+.ldr i:nth-child(2){animation-delay:-.85s}.ldr i:nth-child(3){animation-delay:-.7s}.ldr i:nth-child(4){animation-delay:-.55s}.ldr i:nth-child(5){animation-delay:-.4s}
+@keyframes eq{0%,100%{transform:scaleY(.25);opacity:.45}50%{transform:scaleY(1);opacity:1}}
+.empty{animation:empIn .7s var(--spring) backwards}
+.empty>svg:first-child{animation:bob 3.2s ease-in-out .7s infinite}
+@keyframes empIn{from{opacity:0;transform:translateY(30px) scale(.94)}}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px) rotate(-4deg)}}
+.root.nointro .cas>*,.root.nointro .pf-av,.root.nointro .pf-bn,.root.nointro .badge,.root.nointro .medal,.root.nointro .wd,.root.nointro .st-on{animation:none}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.tick{stroke-dashoffset:0}.rv{opacity:1;transform:none}.wl,.lg-n,.lg-amber{opacity:1}.lg-arc,.lg-line{stroke-dashoffset:0}}
 `;
 
@@ -293,21 +476,38 @@ const Stars = ({ v = 0, onSet, size = 16 }: any) => {
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((n) => (
         <El key={n} {...(onSet ? { type: "button", title: `${n} su 5`, onClick: (e: any) => { e.stopPropagation(); onSet(v === n ? 0 : n); } } : {})} className="transition-transform hover:scale-125 inline-flex">
-          <Star size={size} style={n <= v ? { fill: "var(--am)", color: "var(--am)" } : { color: "var(--mu)", opacity: 0.35 }} />
+          <Star key={n <= v ? "on" : "off"} size={size} className={n <= v ? "st-on" : ""} style={n <= v ? { fill: "var(--am)", color: "var(--am)", ["--n" as any]: n } : { color: "var(--mu)", opacity: 0.35 }} />
         </El>
       ))}
     </div>
   );
 };
 
+// mantiene montato un elemento il tempo necessario per la sua animazione d'uscita
+let LITE = false;
+const usePresence = (v: any, ms = 320): [any, boolean] => {
+  const [keep, setKeep] = useState<any>(v || null);
+  const [out, setOut] = useState(false);
+  useEffect(() => {
+    if (v) { setKeep(v); setOut(false); return; }
+    if (!keep) return;
+    if (LITE) { setKeep(null); return; }
+    setOut(true);
+    const t = setTimeout(() => { setKeep(null); setOut(false); }, ms);
+    return () => clearTimeout(t);
+  }, [v]); // eslint-disable-line react-hooks/exhaustive-deps
+  return [v || keep || null, out && !v];
+};
+
 const Pop = ({ label, trigger, cls = "bt", wrap = "", right, children }: any) => {
   const [o, setO] = useState(false);
+  const [show, out] = usePresence(o ? 1 : null, 240);
   return (
     <div className={`relative ${wrap}`}>
       <button type="button" className={cls} onClick={() => setO(!o)} title={label} aria-label={label}>{trigger}</button>
-      {o && (<>
-        <div className="cpov" onClick={() => setO(false)} />
-        <div className={`cp pn p-5 ${right ? "cp-r" : ""}`}>
+      {show && (<>
+        <div className={`cpov ${out ? "out" : ""}`} onClick={() => setO(false)} />
+        <div className={`cp pn p-5 ${right ? "cp-r" : ""} ${out ? "out" : ""}`}>
           <div className="flex items-center justify-between mb-4"><span className="hd font-bold text-lg">{label}</span><button type="button" className="bt !p-2 md:hidden" onClick={() => setO(false)} aria-label="Chiudi"><X size={16} /></button></div>
           {typeof children === "function" ? children(() => setO(false)) : children}
         </div>
@@ -317,7 +517,7 @@ const Pop = ({ label, trigger, cls = "bt", wrap = "", right, children }: any) =>
 };
 const Swatches = ({ value, onPick, cols = "grid-cols-7" }: any) => (
   <div className={`grid ${cols} gap-3`}>
-    {INK_COLORS.map((c) => <button type="button" key={c.id} aria-label={c.name} title={c.name} onClick={() => onPick(c.id)} className="sw aspect-square w-full rounded-full" style={{ background: c.id, boxShadow: value === c.id ? `0 0 0 2px var(--pn),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />)}
+    {INK_COLORS.map((c, i) => <button type="button" key={c.id} aria-label={c.name} title={c.name} onClick={() => onPick(c.id)} className="sw aspect-square w-full rounded-full" style={{ ["--i" as any]: i, background: c.id, boxShadow: value === c.id ? `0 0 0 2px var(--pn),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />)}
   </div>
 );
 const ColorPicker = ({ value, onPick, label, cls = "bt", wrap = "", children }: any) => (
@@ -326,7 +526,7 @@ const ColorPicker = ({ value, onPick, label, cls = "bt", wrap = "", children }: 
   </Pop>
 );
 const TB = ({ on, fn, icon: Icon, label }: any) => (
-  <button type="button" title={label} aria-label={label} onClick={fn} className={`bt !min-w-0 !px-0 ${on ? "on" : ""}`}><Icon size={18} /></button>
+  <button type="button" title={label} aria-label={label} onClick={fn} className={`bt tb !min-w-0 !px-0 ${on ? "on" : ""}`}><Icon size={18} /></button>
 );
 
 const BANNERS = [
@@ -424,13 +624,33 @@ const Sw = ({ on, set, label, hint, off }: any) => (
     <span className="relative w-12 h-7 rounded-full shrink-0" style={{ background: on && !off ? "var(--ac)" : "var(--ln)", transition: "background .25s" }}><span className="absolute top-1 w-5 h-5 rounded-full bg-white" style={{ left: on && !off ? 24 : 4, transition: "left .25s var(--ez)" }} /></span>
   </button>
 );
-const Seg = ({ v, set, items }: any) => (
-  <div className="grid gap-1 p-1 rounded-2xl" style={{ background: "var(--ln)", gridTemplateColumns: `repeat(${items.length},1fr)` }}>
-    {items.map(([id, label]: any) => <button type="button" key={String(id)} onClick={(e) => set(id, e)} className={`bt !border-0 !px-1 !text-xs ${v === id ? "on" : "!bg-transparent"}`}>{label}</button>)}
-  </div>
-);
+// selettore con pillola che scorre (con rimbalzo) sotto l'opzione attiva
+const Seg = ({ v, set, items, big, soft }: any) => {
+  const n = items.length, idx = Math.max(0, items.findIndex(([id]: any) => id === v));
+  return (
+    <div className={`seg relative grid gap-1 p-1 rounded-2xl ${soft ? "soft" : ""}`} style={{ background: soft ? "var(--sf)" : "var(--ln)", border: soft ? "1px solid var(--ln)" : undefined, gridTemplateColumns: `repeat(${n},1fr)` }}>
+      <span className="seg-ind" style={{ width: `calc((100% - ${8 + (n - 1) * 4}px) / ${n})`, transform: `translateX(calc(${idx} * (100% + 4px)))` }} />
+      {items.map(([id, label]: any) => <button type="button" key={String(id)} onClick={(e) => set(id, e)} className={`bt !border-0 !bg-transparent !px-1 ${big ? "" : "!text-xs"} ${v === id ? "seg-on" : "mu"}`}>{label}</button>)}
+    </div>
+  );
+};
 
-const Reveal = ({ children, delay = 0, className = "" }: any) => {
+// numeri che "contano" fino al valore (con easing esponenziale)
+const CountUp = ({ v, on }: any) => {
+  const [n, setN] = useState(on ? 0 : v);
+  const from = useRef(on ? 0 : v);
+  useEffect(() => {
+    if (!on || LITE) { setN(v); from.current = v; return; }
+    const a = from.current, t0 = performance.now(), D = 1200; let raf = 0;
+    const step = (t: number) => { const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, 4), x = Math.round(a + (v - a) * e); setN(x); from.current = x; if (k < 1) raf = requestAnimationFrame(step); };
+    raf = requestAnimationFrame(step); return () => cancelAnimationFrame(raf);
+  }, [v, on]);
+  return <>{Number(n).toLocaleString("it-IT")}</>;
+};
+// caricamento a "segnale" (barre stile equalizzatore)
+const Loading = ({ cls = "py-24" }: any) => <div className={`${cls} flex justify-center`} role="status" aria-label="Caricamento"><span className="ldr"><i /><i /><i /><i /><i /></span></div>;
+
+const Reveal = ({ children, delay = 0, className = "", fx = "", style }: any) => {
   const ref = useRef<HTMLDivElement>(null);
   const [on, setOn] = useState(false);
   useEffect(() => {
@@ -439,7 +659,7 @@ const Reveal = ({ children, delay = 0, className = "" }: any) => {
     const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setOn(true); io.disconnect(); } }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
     io.observe(el); return () => io.disconnect();
   }, []);
-  return <div ref={ref} className={`rv ${on ? "in" : ""} ${className}`} style={{ transitionDelay: `${delay}ms` }}>{children}</div>;
+  return <div ref={ref} className={`rv ${fx ? `fx-${fx}` : ""} ${on ? "in" : ""} ${className}`} style={{ animationDelay: `${delay}ms`, ...style }}>{children}</div>;
 };
 
 export default function App() {
