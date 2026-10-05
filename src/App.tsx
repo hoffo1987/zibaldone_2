@@ -10,7 +10,7 @@ import {
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, KeyRound, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff
 } from "lucide-react";
 
 // --- FIREBASE ---
@@ -233,13 +233,14 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .hdr{backdrop-filter:blur(8px)}
 .card:hover{transform:none;box-shadow:var(--sh1)}
 .rv{transform:translateY(16px)}}
+@keyframes pgf{from{opacity:0}}
 @keyframes pg{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes pop{from{opacity:0;transform:translateY(16px) scale(.95)}to{opacity:1;transform:none}}
 @keyframes popx{from{opacity:0;transform:translate(-50%,12px) scale(.95)}to{opacity:1;transform:translate(-50%,0)}}
 @keyframes fd{from{opacity:0}to{opacity:1}}
 @keyframes dash{to{stroke-dashoffset:0}}
-.pg{animation:pg .6s var(--ez) both} .up{animation:up .7s var(--ez) both}
+.pg,.fadein{animation:pgf .45s ease-out backwards} .up{animation:up .7s var(--ez) both}
 .pop{animation:pop .45s var(--ez) both} .popx{animation:popx .4s var(--ez) both} .fade{animation:fd .3s ease-out both}
 .tick{stroke-dasharray:60;stroke-dashoffset:60;animation:dash .7s .25s ease-out forwards}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.tick{stroke-dashoffset:0}.rv{opacity:1;transform:none}.wl,.lg-n,.lg-amber{opacity:1}.lg-arc,.lg-line{stroke-dashoffset:0}}
@@ -312,6 +313,8 @@ export default function App() {
   const [monthFilter, setMonthFilter] = useState("all");
   const [onlyMarked, setOnlyMarked] = useState(false);
   const [visible, setVisible] = useState(18);
+  const [kb, setKb] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const [toast, setToast] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminModal, setAdminModal] = useState(false);
@@ -323,6 +326,21 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   useEffect(() => { setVisible(18); }, [search, sortBy, monthFilter, onlyMarked, tab]);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
+  useEffect(() => { try { setIsAdmin(!!user && localStorage.getItem("circuito:admin") === user.uid); } catch {} }, [user]);
+  useEffect(() => {
+    const i = (e: any) => { const t = e.target; setKb(!!t?.isContentEditable || t?.tagName === "TEXTAREA" || (t?.tagName === "INPUT" && !["range", "checkbox", "file"].includes(t.type))); };
+    const o = () => setKb(false);
+    window.addEventListener("focusin", i); window.addEventListener("focusout", o);
+    return () => { window.removeEventListener("focusin", i); window.removeEventListener("focusout", o); };
+  }, []);
+  useEffect(() => {
+    history.replaceState({ tab: "home" }, "");
+    const pop = (e: PopStateEvent) => { setSel(null); setTab(e.state?.tab || "home"); };
+    const esc = (e: KeyboardEvent) => { if (e.key !== "Escape") return; if (history.state?.v) history.back(); else { setSel(null); setToDelete(null); setAdminModal(false); } };
+    window.addEventListener("popstate", pop); window.addEventListener("keydown", esc);
+    return () => { window.removeEventListener("popstate", pop); window.removeEventListener("keydown", esc); };
+  }, []);
   const [sel, setSel] = useState<any>(null);
   const [selMode, setSelMode] = useState(false);
   const [ids, setIds] = useState<string[]>([]);
@@ -392,7 +410,7 @@ export default function App() {
     if (!draftKey) return;
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) || "null");
-      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setStrokes(d.strokes || []); setHeight(d.height || 600); setLoadTick((n) => n + 1); }
+      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setStrokes(d.strokes || []); setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
     } catch {}
   }, [draftKey]);
   useEffect(() => {
@@ -434,10 +452,10 @@ export default function App() {
     } catch { err("Il link è scaduto o non è valido."); }
     setAuthLoading(false);
   };
-  const logout = async () => { await signOut(auth); setIsAdmin(false); setTab("home"); };
+  const logout = async () => { await signOut(auth); try { localStorage.removeItem("circuito:admin"); } catch {} setIsAdmin(false); setTab("home"); };
   const adminLogin = (e: any) => {
     e.preventDefault();
-    if (adminPw.toLowerCase() === "infinito") { setIsAdmin(true); setTab("home"); setAdminModal(false); setAdminPw(""); } else setAdminErr(true);
+    if (adminPw.toLowerCase() === "infinito") { setIsAdmin(true); try { localStorage.setItem("circuito:admin", user.uid); } catch {} setTab("home"); setAdminModal(false); setAdminPw(""); } else setAdminErr(true);
   };
 
   // --- editor handlers ---
@@ -548,8 +566,8 @@ export default function App() {
     catch { notify("Operazione non riuscita."); }
     setIds([]); setSelMode(false);
   };
-  const rate = async (t: any, n: number) => { if (!isAdmin) return; await updateDoc(doc(db, "pensieri", t.id), { rating: n }); if (sel?.id === t.id) setSel({ ...sel, rating: n }); };
-  const star = async (t: any) => { if (isAdmin) { await updateDoc(doc(db, "pensieri", t.id), { isStarred: !t.isStarred }); if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
+  const rate = async (t: any, n: number) => { if (!isAdmin) return; navigator.vibrate?.(12); await updateDoc(doc(db, "pensieri", t.id), { rating: n }); if (sel?.id === t.id) setSel({ ...sel, rating: n }); };
+  const star = async (t: any) => { if (isAdmin) { navigator.vibrate?.(12); await updateDoc(doc(db, "pensieri", t.id), { isStarred: !t.isStarred }); if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
   const confirmDelete = async () => {
     const list = toDelete!; setToDelete(null); setSel(null); setGone(list);
     setTimeout(async () => {
@@ -558,7 +576,9 @@ export default function App() {
       setGone([]); setIds([]); setSelMode(false);
     }, 300);
   };
-  const go = (t: string) => { setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); };
+  const openView = (t: any) => { history.pushState({ tab, v: 1 }, ""); setSel(t); };
+  const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
+  const go = (t: string) => { if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); };
 
   const prepared = useMemo(() => items.map((t) => ({ ...t, _tx: plain(t.content), _img: /<img/.test(t.content || "") })), [items]);
   const shown = useMemo(() => {
@@ -607,8 +627,8 @@ export default function App() {
                 )}
                 {Msg}
                 {authMode === "register" && <input className="inp" required placeholder="Nome operatore" value={f.name} onChange={set("name")} />}
-                <input className="inp" type="email" required placeholder="Email" value={f.email} onChange={set("email")} />
-                {authMode !== "reset" && <input className="inp" type="password" required placeholder="Password" value={f.pw} onChange={set("pw")} />}
+                <input className="inp" type="email" required placeholder="Email" autoComplete="email" inputMode="email" autoCapitalize="none" value={f.email} onChange={set("email")} />
+                {authMode !== "reset" && <div className="relative"><input className="inp !pr-12" type={showPw ? "text" : "password"} required placeholder="Password" autoComplete={authMode === "register" ? "new-password" : "current-password"} value={f.pw} onChange={set("pw")} /><div className="absolute right-1.5 inset-y-0 flex items-center"><button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? "Nascondi password" : "Mostra password"} className="bt !border-0 !bg-transparent !p-2">{showPw ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></div>}
                 <button className="bt pri w-full py-3">{authMode === "login" ? "Entra" : authMode === "register" ? "Crea profilo" : "Invia link di recupero"}</button>
                 {authMode === "login" && <button type="button" className="mu text-sm lk" onClick={() => { setAuthMode("reset"); setAuthMsg(null); }}>Password dimenticata?</button>}
                 {authMode === "reset" && <button type="button" className="mu text-sm lk" onClick={() => { setAuthMode("login"); setAuthMsg(null); }}>Torna all'accesso</button>}
@@ -635,7 +655,7 @@ export default function App() {
   const first = (user.displayName || "Operatore").split(" ")[0];
   const wc = (t: any) => plain(t.content).trim().split(/\s+/).filter(Boolean).length;
   const Row = ({ t, rank }: any) => (
-    <button key={t.id} onClick={() => setSel(t)} className="nv w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-colors">
+    <button key={t.id} onClick={() => openView(t)} className="nv w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-colors">
       {rank && <span className="hd w-8 text-center font-bold mu">{rank}</span>}
       <div className="flex-1 min-w-0"><div className="font-semibold truncate">{t.title}</div><div className="mu text-xs">{t.author} · {fmtDate(t.timestamp)}</div></div>
       {isAdmin && <Stars v={t.rating || 0} size={14} />}
@@ -696,7 +716,7 @@ export default function App() {
             {[1, 0, 2].map((k) => { const t = top[k]; if (!t) return <div key={k} className="hidden md:block" />;
               return (
                 <Reveal key={t.id} delay={k * 120}>
-                  <div onClick={() => setSel(t)} className={`pn card cursor-pointer p-6 ${k === 0 ? "md:pt-10 md:pb-16 !border-[var(--am)]" : ""}`}>
+                  <div onClick={() => openView(t)} className={`pn card cursor-pointer p-6 ${k === 0 ? "md:pt-10 md:pb-16 !border-[var(--am)]" : ""}`}>
                     <div className="flex items-center justify-between">
                       <span className="hd w-11 h-11 rounded-full flex items-center justify-center text-lg font-bold" style={{ background: k === 0 ? "var(--am)" : "var(--sf)", color: k === 0 ? "#3b2a00" : "var(--ink)" }}>{k + 1}</span>
                       <Stars v={t.rating || 0} size={16} />
@@ -748,7 +768,7 @@ export default function App() {
         </div>
         {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt !justify-start w-full ${tab === n.id ? "on" : "!border-transparent !bg-transparent"} nv`}><n.icon size={16} />{n.label}</button>)}
         <div className="mt-auto space-y-2">
-          {isAdmin && <button onClick={() => { setIsAdmin(false); setTab("home"); }} className="bt w-full !justify-start"><Unlock size={16} />Esci da admin</button>}
+          {isAdmin && <button onClick={() => { try { localStorage.removeItem("circuito:admin"); } catch {} setIsAdmin(false); setTab("home"); }} className="bt w-full !justify-start"><Unlock size={16} />Esci da admin</button>}
           <div className="flex items-center gap-2">
             <div className="flex-1 min-w-0 text-sm"><div className="font-semibold truncate">{user.displayName || "Operatore"}</div><div className="mu text-xs truncate">{user.email}</div></div>
             <button className="bt !p-2" onClick={() => setDark(!dark)} title="Cambia tema">{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
@@ -765,7 +785,7 @@ export default function App() {
           <button className="bt !p-2" onClick={logout}><LogOut size={16} /></button>
         </div>
       </header>
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))" }}>
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))", display: kb ? "none" : undefined }}>
         {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} aria-label={n.label} className={`bt flex-col flex-1 min-w-0 !gap-1 !px-0 !py-2 !text-[10px] ${tab === n.id ? "on" : "!border-transparent !bg-transparent"}`}><n.icon size={18} /><span className="truncate max-w-full">{n.s || n.label}</span></button>)}
       </nav>
 
@@ -775,7 +795,7 @@ export default function App() {
             <div><h1 className="hd text-3xl md:text-5xl font-bold">{titles[tab]}</h1>{isList && !loading && <p className="mu text-sm mt-1.5">{shown.length} {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
             {isList && (
               <div className="flex flex-wrap gap-2 items-center">
-                <div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+                <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>
                 <select className="inp !w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>{Object.keys(SORTS).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}</select>
                 <select className="inp !w-auto" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}><option value="all">Tutti i mesi</option>{monthOpts.map((k) => <option key={k} value={k}>{mLabel(k)}</option>)}</select>
                 {isAdmin && tab === "read" && <button className={`bt ${onlyMarked ? "on" : ""}`} onClick={() => setOnlyMarked(!onlyMarked)}><Bookmark size={15} style={onlyMarked ? { fill: "currentColor" } : {}} />Segnalati{items.some((t) => t.isStarred) ? ` (${items.filter((t) => t.isStarred).length})` : ""}</button>}
@@ -802,7 +822,7 @@ export default function App() {
               {shown.slice(0, visible).map((t, i) => {
                 const picked = ids.includes(t.id), { w, h } = dims(t);
                 return (
-                  <Reveal key={t.id} delay={(i % 3) * 90} className="h-full"><article onClick={() => selMode ? setIds((p) => p.includes(t.id) ? p.filter((x) => x !== t.id) : [...p, t.id]) : setSel(t)}
+                  <Reveal key={t.id} delay={(i % 3) * 90} className="h-full"><article onClick={() => selMode ? setIds((p) => p.includes(t.id) ? p.filter((x) => x !== t.id) : [...p, t.id]) : openView(t)}
                     className={`pn card h-full overflow-hidden cursor-pointer ${gone.includes(t.id) ? "gone" : ""} ${picked ? "!border-[var(--ac)] ring-2 ring-[var(--ac)]" : ""}`}>
                     <div className="paper mm sm relative h-40 overflow-hidden">
                       <div className="thumb absolute inset-0">
@@ -827,7 +847,7 @@ export default function App() {
 
           {/* EDITOR */}
           {tab === "write" && (
-            <form onSubmit={submit} className="space-y-4 up">
+            <form onSubmit={submit} className="space-y-4 fadein">
               <input className="inp !text-xl !py-3 hd font-bold" placeholder="Nome del progetto" value={title} onChange={(e) => setTitle(e.target.value)} required />
               <div className="pn">
                 <div className={`p-2 border-b space-y-2 rounded-t-[17px] ${!drawing ? "sticky top-[64px] md:top-0 z-[35]" : ""}`} style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { if ((e.target as any).tagName !== "INPUT" && (e.target as any).tagName !== "SELECT") e.preventDefault(); }}>
@@ -910,7 +930,7 @@ export default function App() {
       {sel && (() => {
         const { w, h } = dims(sel);
         return (
-          <div className="fade fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm" onClick={() => setSel(null)}>
+          <div className="fade fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm" onClick={closeView}>
             <div className="pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden pop" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
                 <div className="flex-1 min-w-0"><h2 className="hd text-2xl font-bold truncate">{sel.title}</h2><div className="mu text-xs">{sel.author} · {fmtDate(sel.timestamp)}</div></div>
@@ -918,7 +938,7 @@ export default function App() {
                 {isAdmin && <button className="bt !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /></button>}
                 {canEdit(sel) && <button className="bt !p-2" onClick={() => startEdit(sel)} title="Modifica"><Pencil size={15} /></button>}
                 {canEdit(sel) && <button className="bt dng !p-2" onClick={() => setToDelete([sel.id])} title="Elimina"><Trash2 size={15} /></button>}
-                <button className="bt !p-2" onClick={() => setSel(null)}><X size={15} /></button>
+                <button className="bt !p-2" onClick={closeView}><X size={15} /></button>
               </div>
               {isAdmin && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={(n: number) => rate(sel, n)} size={22} /></div>}
               <div className="overflow-y-auto">
