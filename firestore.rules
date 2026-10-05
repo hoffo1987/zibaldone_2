@@ -1,0 +1,101 @@
+rules_version = '2';
+
+// Regole definitive di Firestore per "Il Circuito".
+// Raccolte usate dall'app: pensieri, profili, app_config (+ admins, gestita solo a mano).
+// Tutto ciò che non è elencato qui sotto è NEGATO.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- funzioni di supporto ----------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Admin = chi ha un documento  admins/{uid}  (si crea SOLO a mano dalla console Firebase).
+    // La parola d'ordine dell'app è nel codice del sito, quindi non basta da sola a proteggere i dati:
+    // la vera barriera è questo documento.
+    function isAdmin() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // ---------- PROGETTI (scritti) ----------
+    match /pensieri/{id} {
+      // Lo legge solo il proprietario o un admin (vale anche per le query).
+      allow read: if signedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Si può creare solo a proprio nome, senza voto e senza segnalibro.
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred'])
+        && request.resource.data.keys().hasAll(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.isStarred == false
+        && request.resource.data.title is string
+        && request.resource.data.content is string
+        && request.resource.data.strokes is list
+        && request.resource.data.author is string
+        && request.resource.data.w is number
+        && request.resource.data.h is number
+        && request.resource.data.timestamp is number;
+
+      // Il proprietario può modificare solo il contenuto (non voto, segnalibro, autore o proprietario).
+      // L'admin può modificare il contenuto e assegnare voto (0-5) e segnalibro.
+      allow update: if signedIn() && (
+        (
+          resource.data.userId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'updatedAt'])
+          && request.resource.data.title is string
+          && request.resource.data.content is string
+          && request.resource.data.strokes is list
+        ) || (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'updatedAt', 'rating', 'isStarred'])
+          && (!('rating' in request.resource.data)
+              || (request.resource.data.rating is int && request.resource.data.rating >= 0 && request.resource.data.rating <= 5))
+          && (!('isStarred' in request.resource.data) || request.resource.data.isStarred is bool)
+        )
+      );
+
+      // Elimina il proprietario o un admin.
+      allow delete: if signedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // ---------- PROFILI ----------
+    // L'app legge tutta la raccolta per mostrare nomi e avatar: la vede chi ha fatto l'accesso.
+    // Qui NON c'è l'email, solo nome, handle, stato, bio, avatar e colore del banner.
+    match /profili/{uid} {
+      allow read: if signedIn();
+
+      // Ognuno scrive solo il proprio profilo.
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['displayName', 'handle', 'status', 'bio', 'avatar', 'banner', 'createdAt', 'updatedAt'])
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 60
+        && request.resource.data.handle is string && request.resource.data.handle.size() <= 40
+        && request.resource.data.status is string && request.resource.data.status.size() <= 80
+        && request.resource.data.bio is string && request.resource.data.bio.size() <= 320
+        && request.resource.data.avatar is string && request.resource.data.avatar.size() <= 200000
+        && (request.resource.data.avatar == '' || request.resource.data.avatar.matches('data:image/.*'))
+        && request.resource.data.banner in ['teal', 'amber', 'indigo', 'rose', 'sky', 'slate']
+        && request.resource.data.createdAt is number
+        && request.resource.data.updatedAt is number;
+
+      allow delete: if false;
+    }
+
+    // ---------- LINK ALL'APP ANDROID ----------
+    // Pubblico (serve anche prima del login). Si modifica solo dalla console Firebase.
+    match /app_config/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ---------- ELENCO ADMIN ----------
+    // Nessun accesso dall'app: si gestisce solo dalla console (le regole stesse lo leggono con exists()).
+    match /admins/{uid} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -159,7 +159,8 @@ const skipApk = () => {
     return !!w.Capacitor?.isNativePlatform?.() || window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true || /iPad|iPhone|iPod/.test(ua) || /; wv\)/.test(ua);
   } catch { return false; }
 };
-const ApkDownload = ({ compact, divider, className = "" }: { compact?: boolean; divider?: boolean; className?: string }) => {
+// icon = piccolo pulsante quadrato con sola icona (barre dell'app); senza icon = pulsante largo con testo
+const ApkDownload = ({ icon, divider, className = "" }: { icon?: boolean; divider?: boolean; className?: string }) => {
   const [info, setInfo] = useState<{ url: string; version?: string } | null>(null);
   useEffect(() => {
     let on = true;
@@ -167,12 +168,16 @@ const ApkDownload = ({ compact, divider, className = "" }: { compact?: boolean; 
     return () => { on = false; };
   }, []);
   if (!info || skipApk()) return null;
+  const label = `Scarica l'app Android${info.version ? ` (v${info.version})` : ""}`;
+  if (icon) return (
+    <a href={info.url} download rel="noopener noreferrer" className={`bt !p-2 no-underline ${className}`} title={label} aria-label={label}><Download size={18} /></a>
+  );
   return (
     <div className={`${divider ? "mt-6 pt-6" : ""} ${className}`} style={divider ? { borderTop: "1px solid var(--ln)" } : undefined}>
-      <a href={info.url} download rel="noopener noreferrer" className={`bt pri w-full no-underline ${compact ? "" : "py-3"}`} title={info.version ? `Versione ${info.version}` : undefined}>
-        <Download size={16} />{compact ? "Scarica app Android" : `Scarica l'app Android${info.version ? ` · v${info.version}` : ""}`}
+      <a href={info.url} download rel="noopener noreferrer" className="bt pri w-full py-3 no-underline">
+        <Download size={16} />{`Scarica l'app Android${info.version ? ` · v${info.version}` : ""}`}
       </a>
-      {!compact && <p className="mu text-xs mt-2 text-center">Dopo il download apri il file .apk e, se richiesto, consenti l'installazione da questa fonte.</p>}
+      <p className="mu text-xs mt-2 text-center">Dopo il download apri il file .apk e, se richiesto, consenti l'installazione da questa fonte.</p>
     </div>
   );
 };
@@ -1312,10 +1317,10 @@ export default function App() {
         </div>
         {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt !justify-start w-full ${tab === n.id ? "on" : "!border-transparent !bg-transparent"} nv`}><n.icon size={16} />{n.label}</button>)}
         <div className="mt-auto space-y-2">
-          <ApkDownload compact />
           {isAdmin && <button onClick={() => { try { localStorage.removeItem("circuito:admin"); } catch {} setIsAdmin(false); setTab("home"); }} className="bt w-full !justify-start"><Unlock size={16} />Esci da admin</button>}
           <div className="flex items-center gap-2">
             <button onClick={() => go("profile")} className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{user.email}</span></span></button>
+            <ApkDownload icon />
             <button className="bt !p-2" onClick={() => setOptOpen(true)} title="Opzioni" aria-label="Opzioni"><Settings size={18} /></button>
             <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
           </div>
@@ -1325,7 +1330,7 @@ export default function App() {
       {/* barra mobile */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
         <div className="flex items-center gap-2" onDoubleClick={() => !isAdmin && setAdminModal(true)}><Wordmark size={40} fs={19} tag={false} /></div>
-        <div className="flex items-center gap-2"><button className="bt !p-2" onClick={() => setOptOpen(true)} aria-label="Opzioni"><Settings size={18} /></button><button onClick={() => go("profile")} aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
+        <div className="flex items-center gap-2"><ApkDownload icon /><button className="bt !p-2" onClick={() => setOptOpen(true)} aria-label="Opzioni"><Settings size={18} /></button><button onClick={() => go("profile")} aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
       </header>
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))", display: kb || (tab === "write" && drawing) ? "none" : undefined }}>
         {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} aria-label={n.label} className={`bt flex-col flex-1 min-w-0 !gap-1 !px-0 !py-2 !text-[10px] ${tab === n.id ? "on" : "!border-transparent !bg-transparent"}`}><n.icon size={18} /><span className="truncate max-w-full">{n.s || n.label}</span></button>)}
