@@ -149,24 +149,24 @@ background:var(--bg)}
 .inp:hover{border-color:color-mix(in srgb,var(--ac) 45%,var(--ln))}
 .inp:focus,.bt:focus-visible{border-color:var(--ac);box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 20%,transparent)}
 .bt{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.55rem .95rem;border-radius:12px;font-size:.85rem;font-weight:600;border:1px solid var(--ln);background:var(--pn);color:var(--ink);outline:none;cursor:pointer;
-transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,border-color .2s,filter .2s}
-.bt svg{transition:transform .3s var(--ez)}
-.bt:hover{transform:translate(var(--tx,0px),calc(var(--ty,0px) - 2px));border-color:var(--ac);box-shadow:var(--sh1)}
-.bt:hover svg{transform:scale(1.15) rotate(-4deg)}
-.bt:active{transform:translateY(0) scale(.97);box-shadow:none}
+transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .3s,border-color .3s,filter .3s,letter-spacing .3s}
+.bt svg{transition:transform .4s var(--spring),fill .3s}
+.bt:hover{transform:translate(var(--tx,0px),calc(var(--ty,0px) - 4px)) scale(1.03);border-color:var(--ac);box-shadow:0 10px 20px -8px color-mix(in srgb,var(--ac) 50%,transparent),var(--sh1);letter-spacing:.02em}
+.bt:hover svg{transform:scale(1.25) rotate(-8deg);fill:color-mix(in srgb,var(--ac) 20%,transparent)}
+.bt:active{transform:translateY(2px) scale(.94);box-shadow:none;letter-spacing:0}
 .bt:disabled{opacity:.4;pointer-events:none}
-.bt.on{background:var(--ac);border-color:var(--ac);color:#fff} .root.dark .bt.on{color:#042f2a}
-.bt.on:hover{filter:brightness(1.08);box-shadow:0 12px 26px -8px color-mix(in srgb,var(--ac) 65%,transparent)}
+.bt.on{background:linear-gradient(135deg,var(--ac),color-mix(in srgb,var(--ac) 80%,#000));border-color:var(--ac);color:#fff} .root.dark .bt.on{color:#042f2a}
+.bt.on:hover{filter:brightness(1.15);box-shadow:0 14px 30px -6px color-mix(in srgb,var(--ac) 80%,transparent);transform:translate(var(--tx,0px),calc(var(--ty,0px) - 4px)) scale(1.05)}
 .bt.pri{background:var(--ink);color:var(--bg);border-color:var(--ink)} .bt.pri:hover{box-shadow:var(--sh2)}
 .bt.dng{color:#dc2626;border-color:#fca5a5} .bt.dng:hover{background:#fef2f2;border-color:#dc2626}
 .nv:hover{background:var(--sf)!important} .nv:hover svg{transform:translateX(3px)}
 .lk{background:linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat;transition:background-size .4s var(--ez),color .2s;cursor:pointer}
 .lk:hover{background-size:100% 1px;color:var(--ink)}
 .mu{color:var(--mu)}
-.card{position:relative;transition:transform .45s var(--ez),box-shadow .45s var(--ez),border-color .3s,opacity .3s}
-.card:hover{transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(-6px);box-shadow:var(--sh2);border-color:color-mix(in srgb,var(--ac) 55%,var(--ln))}
-.card:active{transform:translateY(-2px) scale(.99)}
-.card:after{content:"";position:absolute;left:0;bottom:0;height:3px;width:100%;background:var(--ac);transform:scaleX(0);transform-origin:left;transition:transform .5s var(--ez)}
+.card{position:relative;transition:transform .5s var(--spring),box-shadow .5s var(--spring),border-color .4s,opacity .3s}
+.card:hover{transform:perspective(1200px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(-8px) scale(1.02);box-shadow:0 30px 60px -20px color-mix(in srgb,var(--ac) 40%,transparent),var(--sh2);border-color:color-mix(in srgb,var(--ac) 70%,var(--ln))}
+.card:active{transform:perspective(1200px) rotateX(calc(var(--rx,0deg)*0.5)) rotateY(calc(var(--ry,0deg)*0.5)) translateY(2px) scale(.97);box-shadow:var(--sh1)}
+.card:after{content:"";position:absolute;left:0;bottom:0;height:4px;width:100%;background:linear-gradient(90deg,var(--ac),var(--am));transform:scaleX(0);transform-origin:center;transition:transform .6s var(--spring);border-radius:0 0 18px 18px}
 .card:hover:after{transform:scaleX(1)}
 .card .thumb{transition:transform .8s var(--ez)} .card:hover .thumb{transform:scale(1.05)}
 .card.gone{animation:shred .32s var(--snap) forwards;pointer-events:none}
@@ -225,7 +225,7 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 @media (max-width:767px){.root:has(.cpov) nav.hdr{display:none}}
 .cp{position:absolute;top:100%;left:0;margin-top:.5rem;width:336px;z-index:50;box-shadow:var(--sh2);animation:cpIn .4s var(--out) backwards;transform-origin:0 0}
 .cp-r{left:auto;right:0;transform-origin:100% 0}
-@keyframes sheet{from{transform:translateY(100%)}to{transform:none}}
+@keyframes sheet{0%{transform:translateY(100%) scale(.95);opacity:0;border-radius:40px}100%{transform:none;opacity:1;border-radius:24px 24px 0 0}}
 .root{min-height:100dvh;-webkit-tap-highlight-color:transparent}
 .bt{touch-action:manipulation}
 .inp{font-size:16px}
@@ -272,10 +272,10 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 .root.lite .wl,.root.lite .lg-n,.root.lite .lg-amber{opacity:1}
 .root.lite .lg-arc,.root.lite .lg-line,.root.lite .tick{stroke-dashoffset:0}
 .root.lite .hdr,.root.lite .backdrop-blur-sm{backdrop-filter:none!important}
-@keyframes pg{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-@keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-@keyframes pop{from{opacity:0;transform:translateY(16px) scale(.95)}to{opacity:1;transform:none}}
-@keyframes popx{from{opacity:0;transform:translate(-50%,12px) scale(.95)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes pg{from{opacity:0;transform:translateY(20px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{opacity:0;transform:perspective(1000px) rotateX(-15deg) translateY(30px) scale(.85)}100%{opacity:1;transform:none}}
+@keyframes popx{0%{opacity:0;transform:perspective(1000px) rotateX(-15deg) translate(-50%,30px) scale(.85)}100%{opacity:1;transform:translate(-50%,0)}}
 @keyframes fd{from{opacity:0}to{opacity:1}}
 @keyframes dash{to{stroke-dashoffset:0}}
 .up{animation:up .7s var(--ez) both}
@@ -306,23 +306,23 @@ transition:transform .3s var(--ez),box-shadow .3s var(--ez),background .2s,borde
 @keyframes swapIn{from{opacity:0;transform:translateY(10px);filter:blur(6px)}}
 @keyframes fldIn{from{opacity:0;transform:scaleY(.5) translateY(-10px)}}
 /* pagine: ogni sezione entra in modo diverso */
-.pg{position:relative;animation:.65s var(--out) backwards}
-.pg-home{animation-name:pgHome}
-.pg-write{animation-name:pgWrite;transform-origin:50% 0}
-.pg-my_pages{animation-name:pgMine}
+.pg{position:relative;animation:.8s var(--spring) backwards}
+.pg-home{animation-name:pgHome;animation-duration:1s;animation-timing-function:var(--out)}
+.pg-write{animation-name:pgWrite;transform-origin:50% 0;animation-duration:.9s;animation-timing-function:var(--spring)}
+.pg-my_pages{animation-name:pgMine;animation-duration:.8s}
 .pg-read{animation-name:pgRead;animation-duration:.8s;animation-timing-function:var(--snap)}
-.pg-podio{animation-name:pgPodio;animation-duration:.85s;animation-timing-function:var(--ez)}
-.pg-authors{animation-name:pgAuth}
-.pg-profile{animation-name:pgProf;animation-duration:.85s;animation-timing-function:var(--snap)}
+.pg-podio{animation-name:pgPodio;animation-duration:1.1s;animation-timing-function:var(--spring)}
+.pg-authors{animation-name:pgAuth;animation-duration:1s;animation-timing-function:var(--spring)}
+.pg-profile{animation-name:pgProf;animation-duration:1s;animation-timing-function:var(--snap)}
 @media (min-width:768px){.pg-profile{animation-name:pgProfD}}
-@keyframes pgHome{from{opacity:0;transform:scale(.965);filter:blur(6px)}}
-@keyframes pgWrite{from{opacity:0;transform:perspective(1400px) rotateX(12deg) translateY(60px)}}
-@keyframes pgMine{from{opacity:0;transform:translateX(56px) skewX(-5deg)}}
-@keyframes pgRead{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
-@keyframes pgPodio{0%{opacity:0;transform:translateY(-60px)}55%{opacity:1;transform:translateY(10px)}78%{transform:translateY(-4px)}100%{transform:none}}
-@keyframes pgAuth{from{opacity:0;transform:scale(1.07);filter:blur(6px)}}
-@keyframes pgProf{from{clip-path:circle(0% at 100% 0)}to{clip-path:circle(150% at 100% 0)}}
-@keyframes pgProfD{from{clip-path:circle(0% at 0 100%)}to{clip-path:circle(150% at 0 100%)}}
+@keyframes pgHome{0%{opacity:0;transform:scale(0.8) translateY(40px) rotate(-2deg);filter:blur(10px)}100%{opacity:1;transform:none;filter:blur(0)}}
+@keyframes pgWrite{0%{opacity:0;transform:perspective(1600px) rotateX(35deg) translateY(120px) scale(0.9);filter:blur(8px)}100%{opacity:1;transform:none;filter:blur(0)}}
+@keyframes pgMine{0%{opacity:0;transform:perspective(1000px) rotateY(-20deg) translateX(80px) skewX(-8deg);filter:drop-shadow(0 0 20px var(--ac))}100%{opacity:1;transform:none;filter:drop-shadow(0 0 0 transparent)}}
+@keyframes pgRead{0%{clip-path:polygon(50% 100%, 50% 100%, 50% 100%, 50% 100%);transform:scale(0.95);opacity:0}100%{clip-path:polygon(0 0, 100% 0, 100% 100%, 0 100%);transform:none;opacity:1}}
+@keyframes pgPodio{0%{opacity:0;transform:translateY(-100px) scale(0.8) rotate(-5deg);filter:drop-shadow(0 30px 40px var(--am))}100%{opacity:1;transform:none;filter:drop-shadow(0 0 0 transparent)}}
+@keyframes pgAuth{0%{opacity:0;transform:perspective(1200px) translateZ(200px) rotateY(15deg) scale(1.2);filter:blur(15px)}100%{opacity:1;transform:none;filter:blur(0)}}
+@keyframes pgProf{0%{clip-path:circle(0% at 50% 50%);transform:scale(0.8) rotate(-10deg);opacity:0}100%{clip-path:circle(150% at 50% 50%);transform:none;opacity:1}}
+@keyframes pgProfD{0%{clip-path:circle(0% at 50% 50%);transform:scale(0.8) rotate(-10deg);opacity:0}100%{clip-path:circle(150% at 50% 50%);transform:none;opacity:1}}
 .trace{position:absolute;top:0;left:1rem;right:1rem;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--ac) 20%,var(--am) 80%,transparent);box-shadow:0 0 12px var(--ac);transform-origin:0 50%;opacity:0;pointer-events:none;animation:trace 1s var(--snap) .05s}
 @keyframes trace{0%{opacity:1;transform:scaleX(0)}65%{opacity:1;transform:scaleX(1)}100%{opacity:0;transform:scaleX(1)}}
 .bdin{animation:bdIn 1.1s var(--ez) backwards}
@@ -1117,7 +1117,7 @@ export default function App() {
       <div>
         <div className="relative h-32 md:h-40" style={{ background: bn.g }}><div className="bd-p w" /></div>
         <div className="px-5 md:px-8 pb-7">
-          <div className="flex items-end justify-between -mt-12">
+          <div className="relative z-10 flex items-end justify-between -mt-12">
             <span className="spinring"><span className="block rounded-full p-1" style={{ background: "var(--pn)" }}><Avatar p={shownAvatar} name={name} size={96} /></span></span>
             {own && !editProf && <button className="bt" onClick={startEditProf}><Pencil size={15} />Modifica profilo</button>}
           </div>
@@ -1328,7 +1328,7 @@ export default function App() {
                     </div>
                     <div className="p-5 border-t" style={{ borderColor: "var(--ln)" }}>
                       <h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
-                      <div className="mt-2 flex items-center gap-2 mu text-xs"><Avatar p={profiles[t.userId]} name={t.author} size={22} /><span className="truncate flex-1">{dn(t.userId, t.author)}</span><span>{fmtDate(t.timestamp)}</span></div>
+                      <div className="mt-2 flex items-center gap-2 mu text-xs"><Avatar p={profiles[t.userId]} name={t.author} size={22} /><span className="truncate flex-1">{dn(t.userId, t.author)}</span><span className="shrink-0">{fmtDate(t.timestamp)}</span></div>
                       {isAdmin && <div className="mt-3"><Stars v={t.rating || 0} onSet={(n: number) => rate(t, n)} size={15} /></div>}
                     </div>
                   </article></Reveal>
@@ -1431,14 +1431,18 @@ export default function App() {
         return (
           <div className="fade fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm" onClick={closeView}>
             <div className="pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden pop" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
-                <button type="button" onClick={() => setViewProf(sel.userId)} className="shrink-0" aria-label="Apri profilo"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></button>
-                <div className="flex-1 min-w-0"><h2 className="hd text-2xl font-bold truncate">{sel.title}</h2><div className="mu text-xs">{dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
-                <button className="bt !p-2" title="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>
-                {isAdmin && <button className="bt !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /></button>}
-                {canEdit(sel) && <button className="bt !p-2" onClick={() => startEdit(sel)} title="Modifica"><Pencil size={15} /></button>}
-                {canEdit(sel) && <button className="bt dng !p-2" onClick={() => setToDelete([sel.id])} title="Elimina"><Trash2 size={15} /></button>}
-                <button className="bt !p-2" onClick={closeView}><X size={15} /></button>
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
+                <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
+                  <button type="button" onClick={() => setViewProf(sel.userId)} className="shrink-0" aria-label="Apri profilo"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></button>
+                  <div className="flex-1 min-w-0"><h2 className="hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end self-end md:self-auto w-full md:w-auto">
+                  <button className="bt flex-1 md:flex-none justify-center !p-2" title="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /><span className="md:hidden text-xs">Copia</span></button>
+                  {isAdmin && <button className="bt flex-1 md:flex-none justify-center !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /><span className="md:hidden text-xs">Salva</span></button>}
+                  {canEdit(sel) && <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={() => startEdit(sel)} title="Modifica"><Pencil size={15} /><span className="md:hidden text-xs">Modifica</span></button>}
+                  {canEdit(sel) && <button className="bt dng flex-1 md:flex-none justify-center !p-2" onClick={() => setToDelete([sel.id])} title="Elimina"><Trash2 size={15} /><span className="md:hidden text-xs">Elimina</span></button>}
+                  <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={closeView}><X size={15} /><span className="md:hidden text-xs">Chiudi</span></button>
+                </div>
               </div>
               {isAdmin && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={(n: number) => rate(sel, n)} size={22} /></div>}
               <div className="overflow-y-auto">
