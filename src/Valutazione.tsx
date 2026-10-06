@@ -32,7 +32,7 @@ export function PannelloAdmin({ db, id, notify }: { db: any; id: string; notify?
   return (
     <div className="px-4 py-3 border-b space-y-3" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
       <div className="flex items-center justify-between">
-        <span className="mu text-xs">Stato e nota privata (solo admin)</span>
+        <span className="mu text-xs">Visibile solo agli admin</span>
         {busy && <Loader2 size={14} className="animate-spin" style={{ color: "var(--ac)" }} />}
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
