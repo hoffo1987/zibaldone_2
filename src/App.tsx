@@ -10,7 +10,7 @@ import {
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 
@@ -247,11 +247,11 @@ const BgArt = ({ kind, dark }: { kind: string; dark: boolean }) => {
   }, [kind, dark]);
   return <canvas ref={ref} className="bd-art" aria-hidden="true" />;
 };
-const Backdrop = ({ tab, fx, dark, art = true }: { tab: string; fx: boolean; dark: boolean; art?: boolean }) => {
+const Backdrop = ({ tab, fx, dark, art = true, g }: { tab: string; fx: boolean; dark: boolean; art?: boolean; g: any }) => {
   const k = tab === "profile" ? "authors" : ["home", "write", "podio", "authors"].includes(tab) ? tab : "archive";
   return (<>
     <div key={k} className={`bd bd-${k} bdin fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" /><div className="au a1" /><div className="au a2" /><div className="au a3" />{k === "podio" && <div className="bd-p" />}{art && <BgArt kind={k} dark={dark} />}</div>
-    {fx && <FX dark={dark} />}
+    {fx && <FX dark={dark} g={g} />}
   </>);
 };
 
@@ -460,21 +460,21 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--pn
 .bt:before,.card:before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s}
 .bt:before{background:radial-gradient(90px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,currentColor 22%,transparent),transparent 70%)}
 .card:before{z-index:1;background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--ac) 26%,transparent),transparent 65%)}
-.bt:hover:before,.card:hover:before,.card:active:before{opacity:1}
+.bt:hover:before,.card:hover:before,.card:active:before{opacity:var(--gi,1)}
 .bt.rip:after{content:"";position:absolute;left:var(--px,50%);top:var(--py,50%);width:8px;height:8px;margin:-4px;border-radius:50%;background:color-mix(in srgb,currentColor 40%,transparent);pointer-events:none;animation:ripl .65s var(--ez) forwards}
 @keyframes ripl{to{transform:scale(32);opacity:0}}
-.au{position:absolute;width:62vmax;height:62vmax;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 44%,transparent),transparent);will-change:transform}
+.au{position:absolute;width:62vmax;height:62vmax;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 44%,transparent),transparent);will-change:transform;opacity:var(--ai,1)}
 .a1{--c:var(--ac);left:-18vmax;top:-24vmax;animation:aur1 21s ease-in-out infinite}
 .a2{--c:var(--am);right:-24vmax;top:14vh;animation:aur2 27s ease-in-out infinite}
-.a3{--c:#6366F1;left:18vw;bottom:-34vmax;opacity:.75;animation:aur3 33s ease-in-out infinite}
+.a3{--c:#6366F1;left:18vw;bottom:-34vmax;opacity:calc(.75*var(--ai,1));animation:aur3 33s ease-in-out infinite}
 @keyframes aur1{0%,100%{transform:translate(0,0) scale(1)}25%{transform:translate(36vw,16vh) scale(1.2)}50%{transform:translate(20vw,40vh) scale(.88)}75%{transform:translate(-6vw,22vh) scale(1.14)}}
 @keyframes aur2{0%,100%{transform:translate(0,0) scale(1)}30%{transform:translate(-40vw,20vh) scale(1.16)}60%{transform:translate(-20vw,-14vh) scale(.86)}80%{transform:translate(-34vw,34vh) scale(1.1)}}
 @keyframes aur3{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30vw,-22vh) scale(1.18)}66%{transform:translate(-18vw,-34vh) scale(.9)}}
 .bd .bd-w{inset:-12%;animation:bdw 24s ease-in-out infinite alternate}
 @keyframes bdw{from{transform:translate(-4%,3%) scale(1)}to{transform:translate(4%,-4%) scale(1.1)}}
 .root.noaurora .bd-w{animation:none}
-.bd-art{position:absolute;left:0;top:-25vh;width:100%;height:150vh;opacity:.24;transform:translateY(calc(var(--sy,0)*-.12px))}
-.root.dark .bd-art{opacity:.32}
+.bd-art{position:absolute;left:0;top:-25vh;width:100%;height:150vh;opacity:calc(.24*var(--ao,1));transform:translateY(calc(var(--sy,0)*-.12px))}
+.root.dark .bd-art{opacity:calc(.32*var(--ao,1))}
 .bd-p{inset:-25vh 0;transform:translateY(calc(var(--sy,0)*-.12px))}
 .bd-podio .bd-p{inset:0;transform:none}
 .prog{position:fixed;top:0;left:0;right:0;height:3px;z-index:90;transform-origin:0 50%;transform:scaleX(var(--sp,0));background:linear-gradient(90deg,var(--ac),var(--am));box-shadow:0 0 12px var(--ac);pointer-events:none}
@@ -485,16 +485,24 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--pn
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
 ::view-transition-new(root){animation:vtr .75s var(--ez)}
 @keyframes vtr{from{clip-path:circle(0 at var(--vx,50%) var(--vy,50%))}to{clip-path:circle(150vmax at var(--vx,50%) var(--vy,50%))}}
-.root.nointro .rv{opacity:1;transform:none}.root.nointro .rv.in{animation:none}
-.root.nointro .wl,.root.nointro .lg-n,.root.nointro .lg-amber{animation:none;opacity:1}.root.nointro .lg-arc,.root.nointro .lg-line{animation:none;stroke-dashoffset:0}
+.root.noreveal .rv{opacity:1;transform:none}.root.noreveal .rv.in{animation:none}
+.root.notitles .wl{animation:none;opacity:1}
+.root.nologo .lg-n,.root.nologo .lg-amber{animation:none;opacity:1}.root.nologo .lg-arc,.root.nologo .lg-line{animation:none;stroke-dashoffset:0}.root.nologo .lgf{animation:none}
 .root.noaurora .au{display:none}
-.noglow .bt:before,.noglow .card:before,.noglow .bt.rip:after{display:none}
-.root.lite *,.root.lite *:before,.root.lite *:after{animation:none!important;transition:none!important}
+.noglow .bt:before,.noglow .card:before,.noglow .bt.rip:after,.noripple .bt.rip:after{display:none}
+.root.nopages .pg{animation:none!important}
+.root.noscan .hero:after{display:none}
+.root.noprog .prog{display:none}
+.root.nolift .card:hover{transform:perspective(1200px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg))}
+.root.nolift .card:active{transform:perspective(1200px) rotateX(calc(var(--rx,0deg)*.5)) rotateY(calc(var(--ry,0deg)*.5)) scale(.98)}
+.root.nolift .bt:hover,.root.nolift .bt.on:hover{transform:translate(var(--tx,0px),var(--ty,0px))}
+.root.lite *,.root.lite *:before,.root.lite *:after,.root.nomotion *,.root.nomotion *:before,.root.nomotion *:after{animation:none!important;transition:none!important}
 .root.lite .bd,.root.lite .prog{display:none}
-.root.lite .rv{opacity:1;transform:none}
-.root.lite .wl,.root.lite .lg-n,.root.lite .lg-amber{opacity:1}
-.root.lite .lg-arc,.root.lite .lg-line,.root.lite .tick{stroke-dashoffset:0}
-.root.lite .hdr,.root.lite .backdrop-blur-sm{backdrop-filter:none!important}
+.root.lite .rv,.root.nomotion .rv{opacity:1;transform:none}
+.root.lite .wl,.root.lite .lg-n,.root.lite .lg-amber,.root.nomotion .wl,.root.nomotion .lg-n,.root.nomotion .lg-amber{opacity:1}
+.root.lite .lg-arc,.root.lite .lg-line,.root.lite .tick,.root.nomotion .lg-arc,.root.nomotion .lg-line,.root.nomotion .tick{stroke-dashoffset:0}
+.root.lite .hdr,.root.lite .backdrop-blur-sm,.root.noblur .hdr,.root.noblur .backdrop-blur-sm{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.rng{display:block;width:100%;height:24px;margin-top:4px;accent-color:var(--ac);cursor:pointer;background:transparent}
 @keyframes pg{from{opacity:0;transform:translateY(20px) scale(.98)}to{opacity:1;transform:none}}
 @keyframes up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
 @keyframes pop{0%{opacity:0;transform:perspective(1000px) rotateX(-15deg) translateY(30px) scale(.85)}100%{opacity:1;transform:none}}
@@ -686,7 +694,7 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--pn
 .empty>svg:first-child{animation:bob 3.2s ease-in-out .7s infinite}
 @keyframes empIn{from{opacity:0;transform:translateY(30px) scale(.94)}}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px) rotate(-4deg)}}
-.root.nointro .cas>*,.root.nointro .pf-av,.root.nointro .pf-bn,.root.nointro .badge,.root.nointro .medal,.root.nointro .wd,.root.nointro .st-on{animation:none}
+.root.noreveal .cas>*,.root.noreveal .pf-av,.root.noreveal .pf-bn,.root.noreveal .badge,.root.noreveal .medal,.root.noreveal .wd,.root.noreveal .st-on{animation:none}
 .rvl-av{position:relative;display:inline-flex;flex-shrink:0}
 .rvl-av .rg{position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--ac);opacity:0;animation:rg 1s var(--out) .25s}
 .rvl-av .rg+.rg{border-color:var(--am);animation-delay:.45s}
@@ -723,7 +731,7 @@ const usePresence = (v: any, ms = 320): [any, boolean] => {
     if (!keep) return;
     if (LITE) { setKeep(null); return; }
     setOut(true);
-    const t = setTimeout(() => { setKeep(null); setOut(false); }, ms);
+    const t = setTimeout(() => { setKeep(null); setOut(false); }, ms / GSPD);
     return () => clearTimeout(t);
   }, [v]);
   return [v || keep || null, out && !v];
@@ -781,24 +789,60 @@ const avatarFrom = (file: File): Promise<string> => new Promise((res, rej) => {
   r.onerror = rej; r.readAsDataURL(file);
 });
 
-const DEF = { level: "full", fx: true, glow: true, aurora: true, intro: true, sound: false, vibrate: true, text: 1 };
+const DEF = { level: "full", fx: true, glow: true, aurora: true, intro: true, sound: false, vibrate: true, text: 1, vol: 1, vib: 1 };
+
+// Modalità "Personalizzato": ogni effetto si accende o spegne da solo e ogni intensità si regola a piacere.
+// I valori qui sotto sono quelli del preset "Spettacolo".
+const CDEF: any = {
+  motion: true,                                                        // animazioni e transizioni dell'interfaccia
+  pulses: true, sparks: true, aurora: true, art: true, parallax: true, prog: true, // sfondo
+  rain: true, scan: true,                                              // riquadro iniziale
+  glow: true, tilt: true, ripple: true, lift: true,                    // pulsanti e card
+  titles: true, logo: true, reveal: true, pages: true, theme: true, blur: true,    // ingressi e transizioni
+  spd: 1, dens: 14, rainD: 1, auroraI: 1, artI: 1, glowI: 1, tiltI: 1, fps: 30,    // intensità
+};
+const OFF: any = { motion: false, pulses: false, sparks: false, aurora: false, art: false, parallax: false, prog: false, rain: false, scan: false, glow: false, tilt: false, ripple: false, lift: false, titles: false, logo: false, reveal: false, pages: false, theme: false, blur: false };
+const CBASE: any = {
+  full: { ...CDEF },
+  mid: { ...CDEF, pulses: false, sparks: false, rain: false, glow: false, tilt: false, ripple: false, aurora: false },
+  lite: { ...CDEF, ...OFF },
+};
+const CBOOL = Object.keys(CDEF).filter((k) => typeof CDEF[k] === "boolean");
+// configurazione grafica effettiva: i preset vengono tradotti negli stessi interruttori del "Personalizzato"
+const resolveG = (o: any): any => {
+  if (o.level === "custom") {
+    const c = { ...CDEF, ...(o.c || {}) };
+    return { ...c, lite: false, nomotion: !c.motion };
+  }
+  const lite = o.level === "lite", on = o.level !== "lite" && o.level !== "mid";
+  return {
+    ...CDEF, lite, nomotion: lite, motion: !lite,
+    pulses: on && !!o.fx, sparks: on && !!o.fx, rain: on && !!o.fx,
+    glow: on && !!o.glow, tilt: on && !!o.glow, ripple: on && !!o.glow,
+    aurora: on && !!o.aurora,
+    art: !lite, parallax: !lite, prog: !lite, theme: !lite, blur: !lite,
+    titles: !lite && !!o.intro, logo: !lite && !!o.intro, reveal: !lite && !!o.intro,
+  };
+};
+let GSPD = 1;  // velocità globale delle animazioni (serve anche ai timer fuori da React)
 let actx: any = null;
-const blip = (f = 660) => { try { const AC = (window as any).AudioContext || (window as any).webkitAudioContext; actx = actx || new AC(); const o = actx.createOscillator(), g = actx.createGain(); o.type = "square"; o.frequency.value = f; g.gain.setValueAtTime(0.03, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.08); o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.09); } catch {} };
+const blip = (f = 660, vol = 1) => { try { const AC = (window as any).AudioContext || (window as any).webkitAudioContext; actx = actx || new AC(); const o = actx.createOscillator(), g = actx.createGain(); o.type = "square"; o.frequency.value = f; g.gain.setValueAtTime(0.03 * vol, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.08); o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.09); } catch {} };
 
 const Scramble = ({ text, on }: any) => {
   const [t, setT] = useState(text);
   useEffect(() => {
     if (!on) { setT(text); return; }
     const chars = "01/|<>_#=+*"; let f = 0; const N = 20;
-    const id = setInterval(() => { f++; setT(text.split("").map((c: string, i: number) => (c === " " || i < (f / N) * text.length ? c : chars[Math.floor(Math.random() * chars.length)])).join("")); if (f >= N) { clearInterval(id); setT(text); } }, 32);
+    const id = setInterval(() => { f++; setT(text.split("").map((c: string, i: number) => (c === " " || i < (f / N) * text.length ? c : chars[Math.floor(Math.random() * chars.length)])).join("")); if (f >= N) { clearInterval(id); setT(text); } }, Math.max(8, Math.round(32 / GSPD)));
     return () => clearInterval(id);
   }, [text, on]);
   return <>{t}</>;
 };
 
-const FX = ({ dark }: { dark: boolean }) => {
+const FX = ({ dark, g }: { dark: boolean; g: any }) => {
   const bg = useRef<HTMLCanvasElement>(null);
   const fg = useRef<HTMLCanvasElement>(null);
+  const gr = useRef(g); gr.current = g; // le impostazioni si leggono a ogni frame: cambiarle non riavvia l'animazione
   useEffect(() => {
     const a = bg.current, b = fg.current; if (!a || !b) return;
     const ca = a.getContext("2d")!, cb = b.getContext("2d")!;
@@ -807,21 +851,31 @@ const FX = ({ dark }: { dark: boolean }) => {
     const fit = () => { W = window.innerWidth; H = window.innerHeight; [a, b].forEach((c) => { c.width = W * dpr; c.height = H * dpr; c.style.width = W + "px"; c.style.height = H + "px"; c.getContext("2d")!.setTransform(dpr, 0, 0, dpr, 0, 0); }); };
     fit(); window.addEventListener("resize", fit);
     const pulses: any[] = [], sparks: any[] = [];
-    const spawn = (x = Math.random() * W, y = Math.random() * H) => { const h = Math.random() < 0.5, s = Math.random() < 0.5 ? 1 : -1; pulses.push({ x: Math.round(x / G) * G, y: Math.round(y / G) * G, dx: h ? s : 0, dy: h ? 0 : s, t: [], n: 0, max: 160 + Math.random() * 240, am: Math.random() < 0.25 }); };
-    for (let i = 0; i < (W < 600 ? 7 : 14); i++) spawn();
+    const spawn = (x = Math.random() * W, y = Math.random() * H, once = false) => { const h = Math.random() < 0.5, s = Math.random() < 0.5 ? 1 : -1; pulses.push({ x: Math.round(x / G) * G, y: Math.round(y / G) * G, dx: h ? s : 0, dy: h ? 0 : s, t: [], n: 0, max: 160 + Math.random() * 240, am: Math.random() < 0.25, once }); };
     const down = (e: PointerEvent) => {
-      for (let i = 0; i < 16; i++) { const an = (i / 16) * Math.PI * 2, v = 2 + Math.random() * 3.5; sparks.push({ x: e.clientX, y: e.clientY, vx: Math.cos(an) * v, vy: Math.sin(an) * v, l: 1 }); }
-      sparks.push({ x: e.clientX, y: e.clientY, r: 4, l: 1, ring: true }); spawn(e.clientX, e.clientY);
+      if (gr.current.sparks) {
+        for (let i = 0; i < 16; i++) { const an = (i / 16) * Math.PI * 2, v = 2 + Math.random() * 3.5; sparks.push({ x: e.clientX, y: e.clientY, vx: Math.cos(an) * v, vy: Math.sin(an) * v, l: 1 }); }
+        sparks.push({ x: e.clientX, y: e.clientY, r: 4, l: 1, ring: true });
+      }
+      if (gr.current.pulses) spawn(e.clientX, e.clientY, true); // l'impulso nato dal tocco si spegne da solo
     };
     window.addEventListener("pointerdown", down, { passive: true });
     const frame = (ts: number) => {
       raf = requestAnimationFrame(frame);
-      if (document.hidden || ts - last < 32) return; last = ts;
+      const cfg = gr.current;
+      if (document.hidden || ts - last < 1000 / (cfg.fps || 30) - 3) return; last = ts;
       const c = dark ? "45,212,191" : "15,139,122";
       ca.clearRect(0, 0, W, H); cb.clearRect(0, 0, W, H); ca.lineWidth = 1.6; ca.lineCap = "round";
+      // numero di impulsi voluto (su schermi piccoli la metà): si aggiunge o si toglie senza riavviare nulla
+      const want = cfg.pulses ? Math.max(1, Math.round(cfg.dens * (W < 600 ? 0.5 : 1))) : 0;
+      let nb = 0; for (const q of pulses) if (!q.once) nb++;
+      for (; nb < want; nb++) spawn();
+      for (; nb > want; nb--) { const k = pulses.findIndex((q) => !q.once); if (k >= 0) pulses.splice(k, 1); }
+      if (!cfg.pulses) pulses.length = 0;
+      const steps = Math.max(1, Math.round(2 * (cfg.spd || 1)));
       for (let i = pulses.length - 1; i >= 0; i--) {
         const p = pulses[i];
-        for (let k = 0; k < 2; k++) {
+        for (let k = 0; k < steps; k++) {
           p.x += p.dx * 2; p.y += p.dy * 2;
           if (p.x % G === 0 && p.y % G === 0 && Math.random() < 0.3) { if (p.dx) { p.dx = 0; p.dy = Math.random() < 0.5 ? 1 : -1; } else { p.dy = 0; p.dx = Math.random() < 0.5 ? 1 : -1; } }
         }
@@ -829,7 +883,7 @@ const FX = ({ dark }: { dark: boolean }) => {
         const col = p.am ? "251,191,36" : c;
         for (let k = 1; k < p.t.length; k++) { ca.strokeStyle = `rgba(${col},${(k / p.t.length) * 0.55})`; ca.beginPath(); ca.moveTo(p.t[k - 1][0], p.t[k - 1][1]); ca.lineTo(p.t[k][0], p.t[k][1]); ca.stroke(); }
         ca.fillStyle = `rgba(${col},.9)`; ca.beginPath(); ca.arc(p.x, p.y, 2.6, 0, 7); ca.fill();
-        if (p.n > p.max || p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50) { pulses.splice(i, 1); spawn(); }
+        if (p.n > p.max || p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50) { pulses.splice(i, 1); if (!p.once) spawn(); }
       }
       for (let i = sparks.length - 1; i >= 0; i--) {
         const s = sparks[i]; s.l -= s.ring ? 0.05 : 0.04;
@@ -855,15 +909,26 @@ const Sw = ({ on, set, label, hint, off }: any) => (
   </button>
 );
 // selettore con pillola che scorre (con rimbalzo) sotto l'opzione attiva
-const Seg = ({ v, set, items, big, soft }: any) => {
+const Seg = ({ v, set, items, big, soft, cols }: any) => {
   const n = items.length, idx = Math.max(0, items.findIndex(([id]: any) => id === v));
+  const c = cols || n, rows = Math.ceil(n / c), ci = idx % c, ri = Math.floor(idx / c); // "cols" dispone le opzioni su più righe
   return (
-    <div className={`seg relative grid gap-1 p-1 rounded-2xl ${soft ? "soft" : ""}`} style={{ background: soft ? "var(--sf)" : "var(--ln)", border: soft ? "1px solid var(--ln)" : undefined, gridTemplateColumns: `repeat(${n},1fr)` }}>
-      <span className="seg-ind" style={{ width: `calc((100% - ${8 + (n - 1) * 4}px) / ${n})`, transform: `translateX(calc(${idx} * (100% + 4px)))` }} />
+    <div className={`seg relative grid gap-1 p-1 rounded-2xl ${soft ? "soft" : ""}`} style={{ background: soft ? "var(--sf)" : "var(--ln)", border: soft ? "1px solid var(--ln)" : undefined, gridTemplateColumns: `repeat(${c},1fr)` }}>
+      <span className="seg-ind" style={{ width: `calc((100% - ${8 + (c - 1) * 4}px) / ${c})`, ...(rows > 1 ? { bottom: "auto", height: `calc((100% - ${8 + (rows - 1) * 4}px) / ${rows})` } : {}), transform: `translate(calc(${ci} * (100% + 4px)), calc(${ri} * (100% + 4px)))` }} />
       {items.map(([id, label]: any) => <button type="button" key={String(id)} onClick={(e) => set(id, e)} className={`bt !border-0 !bg-transparent !px-1 ${big ? "" : "!text-xs"} ${v === id ? "seg-on" : "mu"}`}>{label}</button>)}
     </div>
   );
 };
+
+// cursore per regolare un valore (velocità, intensità, densità…)
+const Rng = ({ label, hint, v, set, min, max, step, fmt }: any) => (
+  <label className="block py-2">
+    <span className="flex items-baseline justify-between gap-3 text-sm"><span className="font-semibold">{label}</span><span className="mu text-xs tabular-nums shrink-0">{fmt ? fmt(v) : v}</span></span>
+    {hint && <span className="block text-xs mu">{hint}</span>}
+    <input type="range" className="rng" min={min} max={max} step={step} value={v} onChange={(e) => set(Number(e.target.value))} aria-label={label} />
+  </label>
+);
+const Sub = ({ children }: any) => <h5 className="text-[11px] font-bold uppercase tracking-wider mu mt-5 mb-0.5">{children}</h5>;
 
 // numeri che "contano" fino al valore (con easing esponenziale)
 const CountUp = ({ v, on }: any) => {
@@ -871,7 +936,7 @@ const CountUp = ({ v, on }: any) => {
   const from = useRef(on ? 0 : v);
   useEffect(() => {
     if (!on || LITE) { setN(v); from.current = v; return; }
-    const a = from.current, t0 = performance.now(), D = 1200; let raf = 0;
+    const a = from.current, t0 = performance.now(), D = 1200 / GSPD; let raf = 0;
     const step = (t: number) => { const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, 4), x = Math.round(a + (v - a) * e); setN(x); from.current = x; if (k < 1) raf = requestAnimationFrame(step); };
     raf = requestAnimationFrame(step); return () => cancelAnimationFrame(raf);
   }, [v, on]);
@@ -881,8 +946,9 @@ const CountUp = ({ v, on }: any) => {
 const Loading = ({ cls = "py-24" }: any) => <div className={`${cls} flex justify-center`} role="status" aria-label="Caricamento"><span className="ldr"><i /><i /><i /><i /><i /></span></div>;
 
 // pioggia di codice del riquadro iniziale: colonne di 0/1 ed esadecimale che cadono, ogni tanto compare una parola; reagisce al mouse
-const HeroRain = ({ on }: { on: boolean }) => {
+const HeroRain = ({ on, speed = 1, dens = 1, fps = 30 }: { on: boolean; speed?: number; dens?: number; fps?: number }) => {
   const ref = useRef<HTMLCanvasElement>(null);
+  const pr = useRef({ speed, dens, fps }); pr.current = { speed, dens, fps }; // letti a ogni frame, senza riavviare la pioggia
   useEffect(() => {
     const cv = ref.current; if (!on || !cv) return;
     const host = cv.parentElement as HTMLElement, ctx = cv.getContext("2d"); if (!host || !ctx) return;
@@ -905,7 +971,7 @@ const HeroRain = ({ on }: { on: boolean }) => {
       W = host.clientWidth; H = host.clientHeight; if (!W || !H) return;
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       cw = W < 600 ? 14 : 16; lh = W < 600 ? 16 : 18; rows = Math.ceil(H / lh);
-      cols = Array.from({ length: Math.ceil(W / cw) }, (_, i) => { const c: any = { x: i * cw }; mk(c, true); return c; });
+      cols = Array.from({ length: Math.ceil(W / cw) }, (_, i) => { const c: any = { x: i * cw, r: Math.random() }; mk(c, true); return c; });
     };
     fit();
     const ro = "ResizeObserver" in window ? new ResizeObserver(fit) : null; ro?.observe(host);
@@ -916,13 +982,14 @@ const HeroRain = ({ on }: { on: boolean }) => {
     const frame = (ts: number) => {
       raf = requestAnimationFrame(frame);
       if (document.hidden || !vis || !W || !rows) return;
-      const el = ts - last; if (el < 33) return; last = ts;
+      const el = ts - last, P = pr.current; if (el < 1000 / (P.fps || 30) - 3) return; last = ts;
       const dt = Math.min(0.1, el / 1000);
       ctx.clearRect(0, 0, W, H);
       ctx.font = `600 ${lh - 4}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`; ctx.textBaseline = "top";
       for (const c of cols) {
+        if (c.r > P.dens) continue; // densità: solo una parte delle colonne è attiva
         const d = Math.abs(c.x + cw / 2 - ptr.x), near = d < 80 ? 1 - d / 80 : 0;
-        c.head += c.speed * (1 + near * 1.8) * dt;
+        c.head += c.speed * (1 + near * 1.8) * dt * P.speed;
         if (Math.random() < 0.04) c.ch[Math.floor(Math.random() * c.ch.length)] = rc();
         const h = Math.floor(c.head), base = near > 0.15 ? "251,191,36" : "190,255,240";
         for (let k = 0; k < c.len; k++) {
@@ -984,9 +1051,15 @@ export default function App() {
   const [dark, setDark] = useState(() => { try { return localStorage.getItem("circuito:dark") === "1"; } catch { return false; } });
   const [opts, setOpts] = useState<any>(() => { let o: any = {}; try { o = JSON.parse(localStorage.getItem("circuito:opts") || "{}"); } catch {} const red = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches; return { ...DEF, ...(red && !o.level ? { level: "lite" } : {}), ...o }; });
   const [optOpen, setOptOpen] = useState(false);
-  const lite = opts.level === "lite", mid = opts.level === "mid";
-  const E = { fx: !lite && !mid && !!opts.fx, glow: !lite && !mid && !!opts.glow, aurora: !lite && !mid && !!opts.aurora, intro: !lite && !!opts.intro };
+  const G = resolveG(opts); // configurazione grafica effettiva (preset o "Personalizzato")
+  const lite = G.lite;
+  LITE = G.nomotion; GSPD = G.spd;
   const setOpt = (k: string, v: any) => setOpts((o: any) => ({ ...o, [k]: v }));
+  const setC = (k: string, v: any) => setOpts((o: any) => ({ ...o, level: "custom", c: { ...CDEF, ...(o.c || {}), [k]: v } }));
+  // passando a "Personalizzato" la prima volta si parte da ciò che si vede adesso; le volte dopo si ritrova la propria scelta
+  const setLevel = (v: string) => setOpts((o: any) => { if (v === "custom" && !o.c) { const g: any = resolveG(o), c: any = {}; Object.keys(CDEF).forEach((k) => { c[k] = g[k]; }); return { ...o, level: v, c }; } return { ...o, level: v }; });
+  const baseOn = (p: string) => setOpts((o: any) => ({ ...o, level: "custom", c: { ...CBASE[p] } }));
+  const buzz = (p: number | number[]) => { if (!opts.vibrate) return; const k = opts.vib || 1; navigator.vibrate?.(Array.isArray(p) ? p.map((x, i) => (i % 2 ? x : Math.round(x * k))) : Math.round(p * k)); };
   const [tab, setTab] = useState("home");
   const [month, setMonth] = useState(() => mKey(Date.now()));
   const [monthFilter, setMonthFilter] = useState("all");
@@ -1136,41 +1209,54 @@ export default function App() {
   const setTheme = (next: boolean, e?: any) => {
     const d: any = document;
     if (next === dark) return;
-    if (!d.startViewTransition || lite || !e) { setDark(next); return; }
+    if (!d.startViewTransition || lite || !G.theme || !e) { setDark(next); return; }
     const h = document.documentElement; h.style.setProperty("--vx", `${e.clientX}px`); h.style.setProperty("--vy", `${e.clientY}px`);
     d.startViewTransition(() => new Promise<void>((res) => { setDark(next); setTimeout(res, 80); }));
   };
   useEffect(() => {
     if (lite) return;
     let raf = 0;
-    const f = () => { raf = 0; const h = document.documentElement; const y = window.scrollY, m = h.scrollHeight - window.innerHeight; h.style.setProperty("--sy", String(y)); h.style.setProperty("--sp", m > 0 ? String(Math.min(1, y / m)) : "0"); };
+    // parallasse e barra di avanzamento si spengono da sole: la variabile resta a zero
+    const f = () => { raf = 0; const h = document.documentElement; const y = window.scrollY, m = h.scrollHeight - window.innerHeight; h.style.setProperty("--sy", G.parallax ? String(y) : "0"); h.style.setProperty("--sp", G.prog && m > 0 ? String(Math.min(1, y / m)) : "0"); };
     const on = () => { if (!raf) raf = requestAnimationFrame(f); };
     window.addEventListener("scroll", on, { passive: true }); f();
     return () => { window.removeEventListener("scroll", on); cancelAnimationFrame(raf); };
-  }, [lite]);
+  }, [lite, G.parallax, G.prog]);
+  // velocità globale: rallenta o accelera ogni animazione e transizione CSS (anche quelle che nascono dopo)
   useEffect(() => {
-    if (!E.glow && !opts.sound) return;
+    const doc: any = document;
+    if (typeof doc.getAnimations !== "function") return;
+    let raf = 0;
+    const apply = () => { raf = 0; try { doc.getAnimations().forEach((a: any) => { if (a.playState !== "finished" && a.playbackRate !== G.spd) a.playbackRate = G.spd; }); } catch {} };
+    const sched = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    apply();
+    if (G.spd !== 1) { document.addEventListener("animationstart", sched, true); document.addEventListener("transitionrun", sched, true); }
+    return () => { document.removeEventListener("animationstart", sched, true); document.removeEventListener("transitionrun", sched, true); cancelAnimationFrame(raf); };
+  }, [G.spd]);
+  useEffect(() => {
+    if (!G.glow && !G.tilt && !G.ripple && !opts.sound) return;
     let raf = 0, el: any = null, ev: any = null;
     const run = () => {
       raf = 0; if (!el || !ev) return;
       const r = el.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
-      el.style.setProperty("--mx", `${x}px`); el.style.setProperty("--my", `${y}px`);
-      if (ev.pointerType !== "mouse") return;
-      if (el.classList.contains("card")) { el.style.setProperty("--rx", `${((y / r.height - 0.5) * -7).toFixed(2)}deg`); el.style.setProperty("--ry", `${((x / r.width - 0.5) * 7).toFixed(2)}deg`); }
-      else { el.style.setProperty("--tx", `${((x / r.width - 0.5) * 6).toFixed(1)}px`); el.style.setProperty("--ty", `${((y / r.height - 0.5) * 4).toFixed(1)}px`); }
+      if (G.glow) { el.style.setProperty("--mx", `${x}px`); el.style.setProperty("--my", `${y}px`); }
+      if (!G.tilt || ev.pointerType !== "mouse") return;
+      const k = G.tiltI;
+      if (el.classList.contains("card")) { el.style.setProperty("--rx", `${((y / r.height - 0.5) * -7 * k).toFixed(2)}deg`); el.style.setProperty("--ry", `${((x / r.width - 0.5) * 7 * k).toFixed(2)}deg`); }
+      else { el.style.setProperty("--tx", `${((x / r.width - 0.5) * 6 * k).toFixed(1)}px`); el.style.setProperty("--ty", `${((y / r.height - 0.5) * 4 * k).toFixed(1)}px`); }
     };
-    const mv = (e: any) => { if (!E.glow) return; const t = e.target?.closest?.(".card,.bt"); if (!t) return; el = t; ev = e; if (!raf) raf = requestAnimationFrame(run); };
+    const mv = (e: any) => { if (!G.glow && !G.tilt) return; const t = e.target?.closest?.(".card,.bt"); if (!t) return; el = t; ev = e; if (!raf) raf = requestAnimationFrame(run); };
     const out = (e: any) => { const t = e.target?.closest?.(".card,.bt"); if (t) ["--rx", "--ry", "--tx", "--ty"].forEach((k) => t.style.removeProperty(k)); };
     const dn = (e: any) => {
       const t = e.target?.closest?.(".card,.bt"); if (!t) return;
-      if (opts.sound) blip(480 + Math.random() * 360);
-      if (!E.glow) return;
-      const r = t.getBoundingClientRect(); t.style.setProperty("--mx", `${e.clientX - r.left}px`); t.style.setProperty("--my", `${e.clientY - r.top}px`);
-      if (t.classList.contains("bt")) { t.style.setProperty("--px", `${e.clientX - r.left}px`); t.style.setProperty("--py", `${e.clientY - r.top}px`); t.classList.remove("rip"); void t.offsetWidth; t.classList.add("rip"); }
+      if (opts.sound) blip(480 + Math.random() * 360, opts.vol ?? 1);
+      const r = t.getBoundingClientRect();
+      if (G.glow) { t.style.setProperty("--mx", `${e.clientX - r.left}px`); t.style.setProperty("--my", `${e.clientY - r.top}px`); }
+      if (G.ripple && t.classList.contains("bt")) { t.style.setProperty("--px", `${e.clientX - r.left}px`); t.style.setProperty("--py", `${e.clientY - r.top}px`); t.classList.remove("rip"); void t.offsetWidth; t.classList.add("rip"); }
     };
     document.addEventListener("pointermove", mv, { passive: true }); document.addEventListener("pointerout", out, { passive: true }); document.addEventListener("pointerdown", dn, { passive: true });
     return () => { document.removeEventListener("pointermove", mv); document.removeEventListener("pointerout", out); document.removeEventListener("pointerdown", dn); cancelAnimationFrame(raf); };
-  }, [E.glow, opts.sound]);
+  }, [G.glow, G.tilt, G.ripple, G.tiltI, opts.sound, opts.vol]);
   useEffect(() => {
     const lock = sel || toDelete || done || viewProf;
     document.body.style.overflow = lock ? "hidden" : "";
@@ -1363,26 +1449,26 @@ export default function App() {
       b.update(doc(db, "pensieri", t.id), { svelato: true, rating: t.rating });
       b.set(doc(collection(db, "notifiche")), { userId: t.userId, pensieroId: t.id, titolo: t.title, voto: t.rating, timestamp: Date.now(), letta: false });
       await b.commit();
-      if (opts.vibrate) navigator.vibrate?.([20, 40, 30]);
+      buzz([20, 40, 30]);
       setRvl(t.id); setSel({ ...sel, svelato: true });
     } catch { notify("Svelamento non riuscito: pubblica le nuove regole di Firestore."); }
     setConfirmRvl(false);
   };
   const rate = async (t: any, n: number) => {
     if (!isAdmin || t.svelato) return;
-    if (opts.vibrate) navigator.vibrate?.(12);
+    buzz(12);
     try { await setDoc(doc(db, "valutazioni", t.id), { voto: n, updatedAt: Date.now() }, { merge: true }); }
     catch { return notify("Voto non salvato: pubblica le nuove regole di Firestore."); }
     if (sel?.id === t.id) setSel({ ...sel, rating: n });
   };
-  const star = async (t: any) => { if (isAdmin) { if (opts.vibrate) navigator.vibrate?.(12); try { await setDoc(doc(db, "valutazioni", t.id), { segnalibro: !t.isStarred, updatedAt: Date.now() }, { merge: true }); } catch { return notify("Segnalibro non salvato: pubblica le nuove regole di Firestore."); } if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
+  const star = async (t: any) => { if (isAdmin) { buzz(12); try { await setDoc(doc(db, "valutazioni", t.id), { segnalibro: !t.isStarred, updatedAt: Date.now() }, { merge: true }); } catch { return notify("Segnalibro non salvato: pubblica le nuove regole di Firestore."); } if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
   const confirmDelete = async () => {
     const list = toDelete!; setToDelete(null); setSel(null); setGone(list);
     setTimeout(async () => {
       try { const b = writeBatch(db); list.forEach((id) => b.delete(doc(db, "pensieri", id))); await b.commit(); notify(list.length > 1 ? `${list.length} progetti eliminati.` : "Progetto eliminato."); }
       catch { notify("Eliminazione non riuscita: controlla i permessi."); }
       setGone([]); setIds([]); setSelMode(false);
-    }, 300);
+    }, 300 / GSPD);
   };
   const openView = (t: any) => { history.pushState({ tab, v: 1 }, ""); setSel(t); };
   const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
@@ -1398,7 +1484,9 @@ export default function App() {
   const words = plain(content).trim().split(/\s+/).filter(Boolean).length;
 
   // ================= RENDER =================
-  const shell = (children: any) => <div className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${E.glow ? "" : "noglow"} ${E.aurora ? "" : "noaurora"} ${E.intro ? "" : "nointro"} min-h-screen`}><style>{CSS}</style><div className="prog" />{children}</div>;
+  const no = (k: string, cls: string) => (G[k] ? "" : cls);
+  const gStyle: any = { "--gi": G.glowI, "--ai": G.auroraI, "--ao": G.artI };
+  const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} min-h-screen`}><style>{CSS}</style><div className="prog" />{children}</div>;
 
   if (authLoading || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
@@ -1406,7 +1494,7 @@ export default function App() {
     const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
     const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
     return shell(<>
-      <Backdrop tab="home" fx={E.fx} dark={dark} art={!lite} />
+      <Backdrop tab="home" fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
       <div className="relative z-10 min-h-screen grid md:grid-cols-2">
         <div className="brandpanel hidden md:flex flex-col justify-between p-12"><div className="bd-p w" />
           <Wordmark light size={56} fs={26} />
@@ -1581,7 +1669,7 @@ export default function App() {
   const toRate = thisMonth.filter((t) => !t.rating).length;
   const homeView = (
     <div className="space-y-8">
-      <Reveal><div className="pn brandpanel hero p-8 md:p-12" onPointerMove={heroMove} onPointerLeave={heroLeave}><HeroRain on={E.fx} /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className="hero-logo block"><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
+      <Reveal><div className="pn brandpanel hero p-8 md:p-12" onPointerMove={heroMove} onPointerLeave={heroLeave}><HeroRain on={G.rain} speed={G.spd} dens={G.rainD} fps={G.fps} /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className="hero-logo block"><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
         <div><span className="hero-term"><i className="hero-led" />{(isAdmin ? "admin" : first.toLowerCase().replace(/[^a-z0-9]/g, "") || "utente") + "@circuito:~$ " + (isAdmin ? "ls --nuovi" : "scrivi --nuovo")}<b className="caret" /></span></div>
         <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight">Ciao {first}, {isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}</h2>
         <p className="mu mt-3 max-w-md">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
@@ -1675,7 +1763,7 @@ export default function App() {
 
   return shell(
     <>
-      <Backdrop tab={tab} fx={E.fx} dark={dark} art={!lite} />
+      <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
       {/* sidebar desktop */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col p-5 gap-1 pn !rounded-none !border-y-0 !border-l-0 z-20">
         <div className="flex items-center gap-2.5 mb-8 cursor-pointer select-none" title="Il Circuito">
@@ -1705,7 +1793,7 @@ export default function App() {
       <div className="md:ml-60 pb-28 md:pb-12 relative">
         <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div><h1 className="hd text-3xl md:text-5xl font-bold"><Scramble text={titles[tab]} on={E.intro} /></h1>{isList && !loading && <p className="mu text-sm mt-1.5">{shown.length} {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
+            <div><h1 className="hd text-3xl md:text-5xl font-bold"><Scramble text={titles[tab]} on={G.titles} /></h1>{isList && !loading && <p className="mu text-sm mt-1.5">{shown.length} {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
             {isList && (
               <div className="flex flex-wrap gap-2 items-center">
                 <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>
@@ -1914,17 +2002,72 @@ export default function App() {
             <div className="h-2" />
             <Seg v={opts.text} set={(v: number) => setOpt("text", v)} items={[[0.9, "Testo piccolo"], [1, "Normale"], [1.12, "Grande"]]} />
             <h4 className="text-xs mu mt-6 mb-2">Effetti e animazioni</h4>
-            <Seg v={opts.level} set={(v: string) => setOpt("level", v)} items={[["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"]]} />
-            <p className="text-xs mu mt-2">{({ full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, aurora e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria." } as any)[opts.level]}</p>
-            <div className="mt-2">
-              <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="Impulsi di corrente sullo sfondo, scintille al tocco e pioggia di codice nel riquadro iniziale" />
-              <Sw on={opts.glow} off={opts.level !== "full"} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
-              <Sw on={opts.aurora} off={opts.level !== "full"} set={(v: boolean) => setOpt("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
-              <Sw on={opts.intro} off={lite} set={(v: boolean) => setOpt("intro", v)} label="Titoli, logo e card animati" hint="Titoli che si decodificano, card che si accendono" />
-            </div>
+            <Seg cols={2} v={opts.level} set={(v: string) => setLevel(v)} items={[["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"], ["custom", <><SlidersHorizontal size={13} />Personalizzato</>]]} />
+            <p className="text-xs mu mt-2">{({ full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, aurora e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria.", custom: `Scegli tu ogni effetto e quanto deve essere intenso · ${CBOOL.filter((k) => G[k]).length} di ${CBOOL.length} attivi.` } as any)[opts.level]}</p>
+            {opts.level !== "custom" ? (
+              <div className="mt-2">
+                <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="Impulsi di corrente sullo sfondo, scintille al tocco e pioggia di codice nel riquadro iniziale" />
+                <Sw on={opts.glow} off={opts.level !== "full"} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
+                <Sw on={opts.aurora} off={opts.level !== "full"} set={(v: boolean) => setOpt("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
+                <Sw on={opts.intro} off={lite} set={(v: boolean) => setOpt("intro", v)} label="Titoli, logo e card animati" hint="Titoli che si decodificano, card che si accendono" />
+                <button type="button" className="bt w-full mt-2" onClick={() => setLevel("custom")}><SlidersHorizontal size={15} />Regola ogni dettaglio</button>
+              </div>
+            ) : (
+              <div className="mt-1">
+                <div className="flex items-center gap-2 mt-2 mb-1">
+                  <span className="text-xs mu shrink-0">Parti da</span>
+                  <div className="flex gap-1.5 flex-1">
+                    {([["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"]] as any).map(([id, l]: any) => <button type="button" key={id} className="bt flex-1 !text-xs !px-1 !py-1.5" onClick={() => baseOn(id)}>{l}</button>)}
+                  </div>
+                </div>
+                <Sw on={G.motion} set={(v: boolean) => setC("motion", v)} label="Animazioni dell'interfaccia" hint="Se lo spegni nessun elemento si muove: tutto compare subito" />
+
+                <Sub>Sfondo</Sub>
+                <Sw on={G.pulses} set={(v: boolean) => setC("pulses", v)} label="Impulsi di corrente" hint="Scintille di luce che corrono lungo le piste del circuito" />
+                {G.pulses && <Rng label="Quantità di impulsi" hint="Sugli schermi piccoli sono la metà" v={G.dens} set={(v: number) => setC("dens", v)} min={2} max={40} step={1} />}
+                <Sw on={G.sparks} set={(v: boolean) => setC("sparks", v)} label="Scintille al tocco" hint="Una raggiera di scintille dove clicchi o tocchi" />
+                <Sw on={G.aurora} set={(v: boolean) => setC("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
+                {G.aurora && <Rng label="Intensità aurora" v={G.auroraI} set={(v: number) => setC("auroraI", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <Sw on={G.art} set={(v: boolean) => setC("art", v)} label="Disegno di circuiti" hint="Schema elettronico che cambia a ogni sezione" />
+                {G.art && <Rng label="Visibilità del disegno" v={G.artI} set={(v: number) => setC("artI", v)} min={0.2} max={2.5} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <Sw on={G.parallax} set={(v: boolean) => setC("parallax", v)} label="Parallasse" hint="Lo sfondo scorre più piano della pagina" />
+                <Sw on={G.prog} set={(v: boolean) => setC("prog", v)} label="Barra di avanzamento" hint="Linea luminosa in alto che segue lo scorrimento" />
+
+                <Sub>Riquadro iniziale</Sub>
+                <Sw on={G.rain} set={(v: boolean) => setC("rain", v)} label="Pioggia di codice" hint="Colonne di 0, 1 ed esadecimale che cadono e reagiscono al mouse" />
+                {G.rain && <Rng label="Densità della pioggia" v={G.rainD} set={(v: number) => setC("rainD", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <Sw on={G.scan} set={(v: boolean) => setC("scan", v)} label="Linee di scansione" hint="Righe sottili e fascio di luce che scende sul riquadro" />
+
+                <Sub>Pulsanti e card</Sub>
+                <Sw on={G.glow} set={(v: boolean) => setC("glow", v)} label="Bagliore" hint="Luce che segue il dito o il mouse" />
+                {G.glow && <Rng label="Intensità bagliore" v={G.glowI} set={(v: number) => setC("glowI", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <Sw on={G.tilt} set={(v: boolean) => setC("tilt", v)} label="Inclinazione 3D" hint="Card e pulsanti si inclinano verso il mouse" />
+                {G.tilt && <Rng label="Forza dell'inclinazione" v={G.tiltI} set={(v: number) => setC("tiltI", v)} min={0.2} max={2.5} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <Sw on={G.ripple} set={(v: boolean) => setC("ripple", v)} label="Onde sui pulsanti" hint="Un'onda parte dal punto in cui premi" />
+                <Sw on={G.lift} set={(v: boolean) => setC("lift", v)} label="Sollevamento" hint="Card e pulsanti si alzano e ingrandiscono al passaggio" />
+
+                <Sub>Ingressi e transizioni</Sub>
+                <Sw on={G.titles} set={(v: boolean) => setC("titles", v)} label="Titoli che si decodificano" hint="Le scritte si compongono lettera per lettera" />
+                <Sw on={G.logo} set={(v: boolean) => setC("logo", v)} label="Logo animato" hint="Il logo si disegna e fluttua" />
+                <Sw on={G.reveal} set={(v: boolean) => setC("reveal", v)} label="Card e sezioni che compaiono" hint="Ogni elemento entra con la sua animazione mentre scorri" />
+                <Sw on={G.pages} set={(v: boolean) => setC("pages", v)} label="Transizione tra le pagine" hint="Ogni sezione entra in modo diverso quando la apri" />
+                <Sw on={G.theme} set={(v: boolean) => setC("theme", v)} label="Onda al cambio tema" hint="Il passaggio chiaro/scuro si allarga dal punto in cui tocchi" />
+                <Sw on={G.blur} set={(v: boolean) => setC("blur", v)} label="Sfocature" hint="Barra in alto e finestre semitrasparenti. Spegnile se lo schermo scatta" />
+
+                <Sub>Velocità e prestazioni</Sub>
+                <Rng label="Velocità delle animazioni" hint="Vale per animazioni, transizioni, circuito e pioggia di codice" v={G.spd} set={(v: number) => setC("spd", v)} min={0.25} max={2} step={0.05} fmt={(v: number) => `×${v.toFixed(2).replace(/0$/, "")}`} />
+                <div className="py-2">
+                  <span className="block text-sm font-semibold">Fluidità degli effetti</span>
+                  <span className="block text-xs mu mb-2">Fotogrammi al secondo di circuito e pioggia di codice: meno scatti con più, meno batteria con meno</span>
+                  <Seg v={G.fps} set={(v: number) => setC("fps", v)} items={[[20, "20 fps"], [30, "30 fps"], [60, "60 fps"]]} />
+                </div>
+              </div>
+            )}
             <h4 className="text-xs mu mt-4 mb-1">Altro</h4>
             <Sw on={opts.sound} set={(v: boolean) => setOpt("sound", v)} label="Suoni" hint="Piccoli bip elettronici al tocco" />
+            {opts.sound && <Rng label="Volume dei suoni" v={opts.vol ?? 1} set={(v: number) => setOpt("vol", v)} min={0.1} max={2} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
             <Sw on={opts.vibrate} set={(v: boolean) => setOpt("vibrate", v)} label="Vibrazione" hint="Feedback tattile su segnalibro e voti" />
+            {opts.vibrate && <div className="py-2"><span className="block text-xs font-semibold mb-1.5">Forza della vibrazione</span><Seg v={opts.vib ?? 1} set={(v: number) => setOpt("vib", v)} items={[[0.6, "Leggera"], [1, "Normale"], [1.6, "Forte"]]} /></div>}
             <div className="flex gap-2 mt-5">
               <button className="bt flex-1" onClick={() => setOpts({ ...DEF })}><RotateCcw size={15} />Ripristina</button>
               <button className="bt on flex-1" onClick={() => setOpt("level", "lite")}><Zap size={15} />Elimina effetti</button>
