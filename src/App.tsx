@@ -10,7 +10,7 @@ import {
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 
@@ -857,6 +857,7 @@ export default function App() {
   const [sel, setSel] = useState<any>(null);
   const [rvl, setRvl] = useState<string | null>(null);
   const [confirmRvl, setConfirmRvl] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   useEffect(() => { setConfirmRvl(false); if (rvl && sel?.id !== rvl) setRvl(null); }, [sel?.id]);
   const [selMode, setSelMode] = useState(false);
   const [ids, setIds] = useState<string[]>([]);
@@ -1611,22 +1612,28 @@ export default function App() {
                   <div className="flex-1 min-w-0"><h2 className="hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end self-end md:self-auto w-full md:w-auto">
-                  <button className="bt flex-1 md:flex-none justify-center !p-2" title="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /><span className="md:hidden text-xs">Copia</span></button>
-                  {isAdmin && <button className="bt flex-1 md:flex-none justify-center !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /><span className="md:hidden text-xs">Salva</span></button>}
-                  {canEdit(sel) && <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={() => startEdit(sel)} title="Modifica"><Pencil size={15} /><span className="md:hidden text-xs">Modifica</span></button>}
-                  {canEdit(sel) && <button className="bt dng flex-1 md:flex-none justify-center !p-2" onClick={() => setToDelete([sel.id])} title="Elimina"><Trash2 size={15} /><span className="md:hidden text-xs">Elimina</span></button>}
+                  <button className="bt flex-1 md:flex-none justify-center !p-2" title="Copia testo" aria-label="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>
+                  {isAdmin && <button className="bt flex-1 md:flex-none justify-center !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} aria-label="Segnalibro" onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /></button>}
+                  {canEdit(sel) && <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={() => startEdit(sel)} title="Modifica" aria-label="Modifica"><Pencil size={15} /></button>}
+                  {canEdit(sel) && <button className="bt dng flex-1 md:flex-none justify-center !p-2" onClick={() => setToDelete([sel.id])} title="Elimina" aria-label="Elimina"><Trash2 size={15} /></button>}
                   {si >= 0 && shown.length > 1 && <><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si <= 0} onClick={() => setSel(shown[si - 1])} aria-label="Scritto precedente"><ChevronLeft size={15} /></button><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si >= shown.length - 1} onClick={() => setSel(shown[si + 1])} aria-label="Scritto successivo"><ChevronRight size={15} /></button></>}
-                  <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={closeView}><X size={15} /><span className="md:hidden text-xs">Chiudi</span></button>
+                  <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={closeView} title="Chiudi" aria-label="Chiudi"><X size={15} /></button>
                 </div>
               </div>
-              {isAdmin && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
-              {hidS && <div className="flex items-center justify-between gap-3 px-4 py-3 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
+              <div key={sel.id} className="overflow-y-auto">
+              {isAdmin && <div className="flex items-center gap-3 px-4 py-2 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
+              {hidS && <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 py-2.5 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
                 <div className="text-sm min-w-0"><b>Autore nascosto.</b> <span className="mu">{sel.rating > 0 ? "Puoi svelarlo: dopo lo svelamento il voto non si cambia più." : "Dai da 1 a 5 stelle per poterlo svelare."}</span></div>
-                <button type="button" className={`bt shrink-0 ${confirmRvl ? "on" : ""}`} disabled={!(sel.rating > 0)} onClick={() => confirmRvl ? reveal(sel) : setConfirmRvl(true)}><Eye size={15} />{confirmRvl ? "Conferma: voto definitivo" : "Svela autore"}</button>
+                <button type="button" className={`bt w-full sm:w-auto shrink-0 ${confirmRvl ? "on" : ""}`} disabled={!(sel.rating > 0)} onClick={() => confirmRvl ? reveal(sel) : setConfirmRvl(true)}><Eye size={15} />{confirmRvl ? "Conferma: voto definitivo" : "Svela autore"}</button>
               </div>}
               {!isAdmin && sel.svelato && sel.rating > 0 && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Il tuo voto</span><Stars v={sel.rating} size={22} /></div>}
-              {isAdmin && <PannelloAdmin db={db} id={sel.id} notify={notify} />}
-              <div key={sel.id} className="overflow-y-auto">
+              {isAdmin && <>
+                <button type="button" onClick={() => setPanelOpen(!panelOpen)} aria-expanded={panelOpen} className="w-full flex items-center justify-between gap-3 px-4 py-2.5 border-b text-sm text-left" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
+                  <span className="mu">Stato e nota privata <span className="font-semibold" style={{ color: "var(--ink)" }}>· {(STATI.find(([k]) => k === (vals[sel.id]?.stato || "da_leggere")) || ["", "Da leggere"])[1]}{vals[sel.id]?.nota ? " · con nota" : ""}</span></span>
+                  <ChevronDown size={16} className="mu shrink-0" style={{ transform: panelOpen ? "rotate(180deg)" : "none", transition: "transform .25s" }} />
+                </button>
+                {panelOpen && <PannelloAdmin db={db} id={sel.id} notify={notify} />}
+              </>}
                 <div className="paper mm relative" style={{ aspectRatio: `${w}/${h}` }}>
                   {sel.strokes?.length > 0 && <Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" />}
                   <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: clean(sel.content) }} />
