@@ -282,7 +282,7 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 .cpov{background:rgba(0,0,0,.4);animation:fd .25s both}
 .cp{position:fixed;left:0;right:0;bottom:0;top:auto;margin:0;width:auto;border-radius:24px 24px 0 0;padding-bottom:calc(1.5rem + env(safe-area-inset-bottom))!important;animation:sheet .4s var(--ez) both;max-height:80dvh;overflow-y:auto}
 .backdrop-blur-sm{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
-.hdr{backdrop-filter:blur(8px)}
+header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--pn)}
 .card:hover{transform:none;box-shadow:var(--sh1)}
 }
 @keyframes pgf{from{opacity:0}}
