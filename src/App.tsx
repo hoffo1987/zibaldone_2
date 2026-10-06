@@ -789,6 +789,31 @@ const avatarFrom = (file: File): Promise<string> => new Promise((res, rej) => {
   r.onerror = rej; r.readAsDataURL(file);
 });
 
+// copertina del profilo da un'immagine: scalata e compressa per stare nei limiti di Firestore (come l'avatar)
+const bannerFrom = (file: File): Promise<string> => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = (ev: any) => {
+    const im = new Image();
+    im.onload = () => {
+      const draw = (W: number) => {
+        const k = W / im.width, H = Math.min(Math.round(im.height * k), Math.round(W * 0.67)), sh = Math.min(im.height, H / k);
+        const c = document.createElement("canvas"); c.width = W; c.height = H;
+        const g = c.getContext("2d"); if (!g) return "";
+        g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+        g.drawImage(im, 0, Math.max(0, (im.height - sh) / 2), im.width, sh, 0, 0, W, H);
+        let q = 0.82, out = c.toDataURL("image/jpeg", q);
+        while (out.length > 300000 && q > 0.45) { q -= 0.07; out = c.toDataURL("image/jpeg", q); }
+        return out;
+      };
+      let W = Math.min(1200, im.width), out = draw(W);
+      while (out.length > 380000 && W > 480) { W = Math.round(W * 0.8); out = draw(W); }
+      if (!out || out.length > 380000) rej(new Error("immagine troppo pesante")); else res(out);
+    };
+    im.onerror = rej; im.src = ev.target.result;
+  };
+  r.onerror = rej; r.readAsDataURL(file);
+});
+
 const DEF = { level: "full", fx: true, glow: true, aurora: true, intro: true, sound: false, vibrate: true, text: 1, vol: 1, vib: 1 };
 
 // Modalità "Personalizzato": ogni effetto si accende o spegne da solo e ogni intensità si regola a piacere.
@@ -1575,8 +1600,13 @@ export default function App() {
 
   const startEditProf = () => {
     const p = profiles[user.uid] || {};
-    setPf({ displayName: p.displayName || user.displayName || "", handle: p.handle || "", status: p.status || "", bio: p.bio || "", avatar: p.avatar || "", banner: p.banner || "teal" });
+    setPf({ displayName: p.displayName || user.displayName || "", handle: p.handle || "", status: p.status || "", bio: p.bio || "", avatar: p.avatar || "", banner: p.banner || "teal", bannerImg: p.bannerImg || "", bannerY: typeof p.bannerY === "number" ? p.bannerY : 50 });
     setEditProf(true);
+  };
+  const pickBanner = async (e: any) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    try { const img = await bannerFrom(f); setPf((q: any) => ({ ...q, bannerImg: img, bannerY: 50 })); } catch { notify("Immagine non valida o troppo pesante."); }
+    e.target.value = "";
   };
   const pickAvatar = async (e: any) => {
     const f = e.target.files?.[0]; if (!f) return;
@@ -1587,9 +1617,11 @@ export default function App() {
     e.preventDefault();
     const name = (pf.displayName || "").trim() || "Operatore";
     const data = { displayName: name, handle: (pf.handle || "").trim(), status: (pf.status || "").trim(), bio: (pf.bio || "").trim(), avatar: pf.avatar || "", banner: pf.banner || "teal",
-      createdAt: profiles[user.uid]?.createdAt || Date.now(), updatedAt: Date.now() };
+      createdAt: profiles[user.uid]?.createdAt || Date.now(), updatedAt: Date.now() } as any;
+    // l'immagine della copertina si scrive solo se c'è: senza, il documento resta valido anche con le vecchie regole
+    if (pf.bannerImg) { data.bannerImg = pf.bannerImg; data.bannerY = Math.max(0, Math.min(100, Number(pf.bannerY ?? 50))); }
     try { await setDoc(doc(db, "profili", user.uid), data); if (name !== user.displayName) await updateProfile(user, { displayName: name }); setEditProf(false); notify("Profilo aggiornato."); }
-    catch { notify("Salvataggio del profilo non riuscito."); }
+    catch { notify(pf.bannerImg ? "Salvataggio non riuscito: pubblica le nuove regole di Firestore per usare una copertina personale." : "Salvataggio del profilo non riuscito."); }
   };
   const fld = (label: string, key: string, ph = "", max = 60, fmt?: (v: string) => string) => (
     <label className="block"><span className="text-xs mu">{label}</span>
@@ -1605,9 +1637,13 @@ export default function App() {
     const bn = BANNERS.find((b) => b.id === (own && editProf ? pf.banner : p.banner)) || BANNERS[0];
     const ts = own ? (user.metadata?.creationTime ? new Date(user.metadata.creationTime).getTime() : 0) : p.createdAt;
     const shownAvatar = own && editProf ? { avatar: pf.avatar } : p;
+    const src = own && editProf ? pf : p;
+    const bImg = typeof src.bannerImg === "string" && /^data:image\//.test(src.bannerImg) ? src.bannerImg : "";
     return (
       <div>
-        <div className="relative h-32 md:h-40" style={{ background: bn.g }}><div className="bd-p w" /></div>
+        <div className="relative h-32 md:h-40 overflow-hidden" style={{ background: bn.g }}>
+          {bImg && <img src={bImg} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: `50% ${typeof src.bannerY === "number" ? src.bannerY : 50}%` }} />}
+        </div>
         <div className="px-5 md:px-8 pb-7">
           <div className="relative z-10 flex items-end justify-between -mt-12">
             <span className="spinring"><span className="block rounded-full p-1" style={{ background: "var(--pn)" }}><Avatar p={shownAvatar} name={name} size={96} /></span></span>
@@ -1620,7 +1656,12 @@ export default function App() {
                 {pf.avatar && <button type="button" className="bt dng" onClick={() => setPf({ ...pf, avatar: "" })}>Rimuovi</button>}
               </div>
               <div><span className="text-xs mu">Copertina</span>
-                <div className="flex flex-wrap gap-3 mt-2">{BANNERS.map((b) => <button type="button" key={b.id} aria-label={`Copertina ${b.id}`} onClick={() => setPf({ ...pf, banner: b.id })} className="sw w-11 h-11 rounded-xl" style={{ background: b.g, boxShadow: pf.banner === b.id ? "0 0 0 2px var(--pn),0 0 0 4px var(--ac)" : "none" }} />)}</div></div>
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <label className="bt cursor-pointer"><ImageIcon size={15} />{pf.bannerImg ? "Cambia immagine" : "Carica immagine"}<input type="file" accept="image/*" className="hidden" onChange={pickBanner} /></label>
+                  {pf.bannerImg && <button type="button" className="bt dng" onClick={() => setPf({ ...pf, bannerImg: "", bannerY: 50 })}>Rimuovi</button>}
+                </div>
+                {pf.bannerImg && <Rng label="Posizione dell'immagine" hint="Sposta su o giù la parte che resta visibile" v={pf.bannerY ?? 50} set={(v: number) => setPf({ ...pf, bannerY: v })} min={0} max={100} step={1} fmt={(v: number) => (v <= 5 ? "In alto" : v >= 95 ? "In basso" : `${v}%`)} />}
+                <div className="flex flex-wrap gap-3 mt-3">{BANNERS.map((b) => <button type="button" key={b.id} aria-label={`Copertina ${b.id}`} onClick={() => setPf({ ...pf, banner: b.id, bannerImg: "", bannerY: 50 })} className="sw w-11 h-11 rounded-xl" style={{ background: b.g, boxShadow: !pf.bannerImg && pf.banner === b.id ? "0 0 0 2px var(--pn),0 0 0 4px var(--ac)" : "none" }} />)}</div></div>
               {fld("Nome visualizzato", "displayName", "Il tuo nome", 30)}
               {fld("Handle", "handle", "es. mario.rossi", 20, (v) => v.toLowerCase().replace(/[^a-z0-9_.]/g, ""))}
               {fld("Stato", "status", "es. Scrivo di notte ✍️", 40)}

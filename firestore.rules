@@ -108,7 +108,7 @@ service cloud.firestore {
       allow read: if signedIn();
 
       allow create, update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['displayName', 'handle', 'status', 'bio', 'avatar', 'banner', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['displayName', 'handle', 'status', 'bio', 'avatar', 'banner', 'bannerImg', 'bannerY', 'createdAt', 'updatedAt'])
         && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 60
         && request.resource.data.handle is string && request.resource.data.handle.size() <= 40
         && request.resource.data.status is string && request.resource.data.status.size() <= 80
@@ -116,6 +116,14 @@ service cloud.firestore {
         && request.resource.data.avatar is string && request.resource.data.avatar.size() <= 200000
         && (request.resource.data.avatar == '' || request.resource.data.avatar.matches('data:image/.*'))
         && request.resource.data.banner in ['teal', 'amber', 'indigo', 'rose', 'sky', 'slate']
+        // Copertina personale (facoltativa): immagine come data URL e posizione verticale in percentuale.
+        && (!('bannerImg' in request.resource.data)
+            || (request.resource.data.bannerImg is string
+                && request.resource.data.bannerImg.size() <= 400000
+                && request.resource.data.bannerImg.matches('data:image/.*')))
+        && (!('bannerY' in request.resource.data)
+            || (request.resource.data.bannerY is number
+                && request.resource.data.bannerY >= 0 && request.resource.data.bannerY <= 100))
         && request.resource.data.createdAt is number
         && request.resource.data.updatedAt is number;
 
