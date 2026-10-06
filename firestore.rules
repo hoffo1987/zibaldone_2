@@ -43,7 +43,8 @@ service cloud.firestore {
         ) || (
           isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'updatedAt', 'rating', 'isStarred', 'svelato'])
-          && (!('isStarred' in request.resource.data) || request.resource.data.isStarred is bool)
+          // Il segnalibro vive in valutazioni/{id}.segnalibro (privato): nello scritto si può solo azzerare il vecchio campo.
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isStarred']) || request.resource.data.isStarred == false)
 
           // Il voto vive in valutazioni/{id}.voto (privato). Nello scritto entra solo allo svelamento,
           // identico al voto privato; prima dello svelamento si può solo togliere il vecchio campo rating.
@@ -90,15 +91,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Voto, stato e nota privata di ogni scritto: solo admin, l'autore non li vede mai.
+    // Voto, segnalibro, stato e nota privata di ogni scritto: solo admin, l'autore non li vede mai.
     match /valutazioni/{id} {
       allow read, delete: if isAdmin();
       allow create, update: if isAdmin()
-        && request.resource.data.keys().hasOnly(['stato', 'nota', 'voto', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['stato', 'nota', 'voto', 'segnalibro', 'updatedAt'])
         && request.resource.data.get('stato', 'da_leggere') in ['da_leggere', 'letto', 'shortlist', 'scelto']
         && request.resource.data.get('nota', '') is string && request.resource.data.get('nota', '').size() <= 2000
         && request.resource.data.get('voto', 0) is int
         && request.resource.data.get('voto', 0) >= 0 && request.resource.data.get('voto', 0) <= 5
+        && request.resource.data.get('segnalibro', false) is bool
         && request.resource.data.updatedAt is number;
     }
 

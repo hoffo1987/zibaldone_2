@@ -777,31 +777,46 @@ export default function App() {
     if (!user || !db || !isAdmin) { setVals({}); setValsReady(false); return; }
     return onSnapshot(collection(db, "valutazioni"), (s: any) => { const m: any = {}; s.forEach((d: any) => { m[d.id] = d.data(); }); setVals(m); setValsReady(true); }, () => {});
   }, [user, isAdmin]);
-  // Il voto resta privato in valutazioni/{id}.voto (solo admin) fino allo svelamento: solo allora viene copiato nello scritto.
-  // Per l'admin sovrappongo il voto privato a quello dello scritto; chi non è admin vede solo i voti già svelati.
+  // Voto e segnalibro restano privati in valutazioni/{id} (solo admin): l'autore non li legge mai.
+  // Il voto viene copiato nello scritto solo allo svelamento; il segnalibro non esce mai da lì.
+  // Per l'admin sovrappongo i valori privati a quelli dello scritto; chi non è admin vede solo i voti già svelati.
   const items = useMemo(
-    () => (isAdmin ? rawItems.map((t) => (!t.svelato && vals[t.id]?.voto != null ? { ...t, rating: vals[t.id].voto } : t)) : rawItems),
+    () => (!isAdmin ? rawItems : rawItems.map((t) => {
+      const v = vals[t.id];
+      if (!v) return t;
+      const o = { ...t };
+      if (!t.svelato && v.voto != null) o.rating = v.voto;
+      if (v.segnalibro != null) o.isStarred = v.segnalibro;
+      return o;
+    })),
     [rawItems, vals, isAdmin]
   );
-  // Migrazione una tantum: i voti già dati e non ancora svelati stanno ancora nello scritto (leggibili dall'autore).
+  // Migrazione una tantum: i voti non ancora svelati e i segnalibri già dati stanno ancora nello scritto (leggibili dall'autore).
   // Li sposto in valutazioni e li tolgo dallo scritto, appena l'admin apre l'app.
   const migTried = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!db || !isAdmin || !valsReady) return;
-    const todo = rawItems.filter((t) => t.rating !== undefined && !t.svelato && !migTried.current.has(t.id));
+    const oldVote = (t: any) => t.rating !== undefined && !t.svelato;
+    const todo = rawItems.filter((t) => (oldVote(t) || t.isStarred === true) && !migTried.current.has(t.id));
     if (!todo.length) return;
     todo.forEach((t) => migTried.current.add(t.id));
     (async () => {
       try {
-        for (let i = 0; i < todo.length; i += 200) {
+        for (let i = 0; i < todo.length; i += 150) {
           const b = writeBatch(db);
-          todo.slice(i, i + 200).forEach((t) => {
-            if (t.rating > 0 && vals[t.id]?.voto == null) b.set(doc(db, "valutazioni", t.id), { voto: t.rating, updatedAt: Date.now() }, { merge: true });
-            b.update(doc(db, "pensieri", t.id), { rating: deleteField() });
+          todo.slice(i, i + 150).forEach((t) => {
+            const patch: any = {};
+            if (oldVote(t) && t.rating > 0 && vals[t.id]?.voto == null) patch.voto = t.rating;
+            if (t.isStarred === true && vals[t.id]?.segnalibro == null) patch.segnalibro = true;
+            if (Object.keys(patch).length) b.set(doc(db, "valutazioni", t.id), { ...patch, updatedAt: Date.now() }, { merge: true });
+            const upd: any = {};
+            if (oldVote(t)) upd.rating = deleteField();
+            if (t.isStarred === true) upd.isStarred = false;
+            b.update(doc(db, "pensieri", t.id), upd);
           });
           await b.commit();
         }
-      } catch (e) { console.warn("Migrazione dei voti non riuscita (controlla le regole di Firestore)", e); }
+      } catch (e) { console.warn("Migrazione di voti e segnalibri non riuscita (controlla le regole di Firestore)", e); }
     })();
   }, [rawItems, vals, valsReady, isAdmin]);
   const [notifs, setNotifs] = useState<any[]>([]);
@@ -1098,7 +1113,7 @@ export default function App() {
   const canEdit = (t: any) => isAdmin || t.userId === user?.uid;
   const bulkMark = async () => {
     const chosen = items.filter((t) => ids.includes(t.id)); const val = !chosen.every((t) => t.isStarred);
-    try { const b = writeBatch(db); chosen.forEach((t) => b.update(doc(db, "pensieri", t.id), { isStarred: val })); await b.commit(); notify(val ? "Segnalibro aggiunto." : "Segnalibro rimosso."); }
+    try { const b = writeBatch(db); chosen.forEach((t) => b.set(doc(db, "valutazioni", t.id), { segnalibro: val, updatedAt: Date.now() }, { merge: true })); await b.commit(); notify(val ? "Segnalibro aggiunto." : "Segnalibro rimosso."); }
     catch { notify("Operazione non riuscita."); }
     setIds([]); setSelMode(false);
   };
@@ -1122,7 +1137,7 @@ export default function App() {
     catch { return notify("Voto non salvato: pubblica le nuove regole di Firestore."); }
     if (sel?.id === t.id) setSel({ ...sel, rating: n });
   };
-  const star = async (t: any) => { if (isAdmin) { if (opts.vibrate) navigator.vibrate?.(12); await updateDoc(doc(db, "pensieri", t.id), { isStarred: !t.isStarred }); if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
+  const star = async (t: any) => { if (isAdmin) { if (opts.vibrate) navigator.vibrate?.(12); try { await setDoc(doc(db, "valutazioni", t.id), { segnalibro: !t.isStarred, updatedAt: Date.now() }, { merge: true }); } catch { return notify("Segnalibro non salvato: pubblica le nuove regole di Firestore."); } if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
   const confirmDelete = async () => {
     const list = toDelete!; setToDelete(null); setSel(null); setGone(list);
     setTimeout(async () => {
