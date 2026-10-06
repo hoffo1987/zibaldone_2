@@ -1,4 +1,4 @@
-limport React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -39,7 +39,7 @@ const TOOLS = [
   { id: "rect", label: "Rettangolo", icon: Square }, { id: "ellipse", label: "Ellisse", icon: Circle },
   { id: "fill", label: "Forma piena", icon: PaintBucket }, { id: "eraser", label: "Gomma", icon: Eraser }, { id: "hand", label: "Scorri", icon: Hand },
 ];
-const SORTS: any = { newest: "Pi羅 recenti", rated: "Voto pi羅 alto", oldest: "Pi羅 vecchi", longest: "Pi羅 lunghi", shortest: "Pi羅 brevi" };
+const SORTS: any = { newest: "Più recenti", rated: "Voto più alto", oldest: "Più vecchi", longest: "Più lunghi", shortest: "Più brevi" };
 
 // --- UTIL ---
 const clean = (h: string) => {
@@ -137,7 +137,7 @@ const Drawing = ({ strokes, w, h, className = "" }: any) => (
 //   apkUrl  (testo, obbligatorio)  link https diretto al file .apk
 //   version (testo, facoltativo)   es. "1.0.3", mostrato sul pulsante
 // Per aggiornare l'app basta cambiare quel documento dalla console Firebase: nessun nuovo deploy del sito.
-// Se il documento non esiste (o non 癡 leggibile) il pulsante resta nascosto.
+// Se il documento non esiste (o non è leggibile) il pulsante resta nascosto.
 let apkCache: { url: string; version?: string } | null | undefined;
 const loadApk = async () => {
   if (apkCache !== undefined) return apkCache;
@@ -153,7 +153,7 @@ const loadApk = async () => {
     return null; // niente cache: riprova al prossimo montaggio (es. dopo il login)
   }
 };
-// Non ha senso proporre l'APK a chi usa gi� l'app installata o a chi 癡 su iPhone/iPad
+// Non ha senso proporre l'APK a chi usa già l'app installata o a chi è su iPhone/iPad
 const skipApk = () => {
   try {
     const w: any = window, ua = navigator.userAgent;
@@ -171,7 +171,7 @@ const ApkDownload = ({ compact, divider, className = "" }: { compact?: boolean; 
   return (
     <div className={`${divider ? "mt-6 pt-6" : ""} ${className}`} style={divider ? { borderTop: "1px solid var(--ln)" } : undefined}>
       <a href={info.url} download rel="noopener noreferrer" className={`bt pri w-full no-underline ${compact ? "" : "py-3"}`} title={info.version ? `Versione ${info.version}` : undefined}>
-        <Download size={16} />{compact ? "Scarica app Android" : `Scarica l'app Android${info.version ? ` 繚 v${info.version}` : ""}`}
+        <Download size={16} />{compact ? "Scarica app Android" : `Scarica l'app Android${info.version ? ` · v${info.version}` : ""}`}
       </a>
       {!compact && <p className="mu text-xs mt-2 text-center">Dopo il download apri il file .apk e, se richiesto, consenti l'installazione da questa fonte.</p>}
     </div>
@@ -729,7 +729,7 @@ const NotifPanel = ({ list, onRead, onOpen }: any) => {
       {list.map((n: any) => (
         <button type="button" key={n.id} onClick={onOpen} className="nv w-full text-left rounded-xl p-3 flex gap-3 items-start" style={{ background: fresh.includes(n.id) ? "color-mix(in srgb,var(--ac) 12%,transparent)" : "var(--sf)", border: "1px solid var(--ln)" }}>
           <Award size={18} style={{ color: "var(--am)" }} className="shrink-0 mt-0.5" />
-          <span className="min-w-0 flex-1"><span className="block text-sm font-semibold truncate">竄{n.titolo}罈</span><span className="block mu text-xs mb-1.5">Hai ricevuto un voto 繚 {fmtDate(n.timestamp)}</span><Stars v={n.voto} size={16} /></span>
+          <span className="min-w-0 flex-1"><span className="block text-sm font-semibold truncate">«{n.titolo}»</span><span className="block mu text-xs mb-1.5">Hai ricevuto un voto · {fmtDate(n.timestamp)}</span><Stars v={n.voto} size={16} /></span>
         </button>
       ))}
     </div>
@@ -949,7 +949,7 @@ export default function App() {
       else if (authMode === "register") { const c = await createUserWithEmailAndPassword(auth, f.email, f.pw); await updateProfile(c.user, { displayName: f.name.trim() || "Operatore" }); }
       else await signInWithEmailAndPassword(auth, f.email, f.pw);
     } catch (x: any) {
-      const m: any = { "auth/email-already-in-use": "Questa email 癡 gi� registrata.", "auth/invalid-credential": "Email o password errate.", "auth/weak-password": "La password deve avere almeno 6 caratteri.", "auth/invalid-email": "L'email non 癡 valida.", "auth/user-not-found": "Utente non trovato.", "auth/missing-email": "Inserisci un'email." };
+      const m: any = { "auth/email-already-in-use": "Questa email è già registrata.", "auth/invalid-credential": "Email o password errate.", "auth/weak-password": "La password deve avere almeno 6 caratteri.", "auth/invalid-email": "L'email non è valida.", "auth/user-not-found": "Utente non trovato.", "auth/missing-email": "Inserisci un'email." };
       err(m[x.code] || `Errore: ${x.message}`);
     }
     setAuthLoading(false);
@@ -961,7 +961,7 @@ export default function App() {
       setAuthMsg({ t: "ok", m: "Password aggiornata. Ora puoi accedere." });
       window.history.replaceState({}, document.title, window.location.pathname);
       setTimeout(() => { setResetCode(null); setAuthMode("login"); setAuthMsg(null); }, 2500);
-    } catch { err("Il link 癡 scaduto o non 癡 valido."); }
+    } catch { err("Il link è scaduto o non è valido."); }
     setAuthLoading(false);
   };
   const logout = async () => { await signOut(auth); setIsAdmin(false); setTab("home"); };
@@ -1193,7 +1193,7 @@ export default function App() {
     <button key={t.id} onClick={() => openView(t)} className="nv w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-colors">
       {rank && <span className="hd w-8 text-center font-bold mu">{rank}</span>}
       <Who t={t} size={36} />
-      <div className="flex-1 min-w-0"><div className="font-semibold truncate">{t.title}</div><div className="mu text-xs">{wn(t)} 繚 {fmtDate(t.timestamp)}</div></div>
+      <div className="flex-1 min-w-0"><div className="font-semibold truncate">{t.title}</div><div className="mu text-xs">{wn(t)} · {fmtDate(t.timestamp)}</div></div>
       {isAdmin && <Stars v={t.rating || 0} size={14} />}
     </button>
   );
@@ -1248,14 +1248,14 @@ export default function App() {
                 <div className="flex flex-wrap gap-3 mt-2">{BANNERS.map((b) => <button type="button" key={b.id} aria-label={`Copertina ${b.id}`} onClick={() => setPf({ ...pf, banner: b.id })} className="sw w-11 h-11 rounded-xl" style={{ background: b.g, boxShadow: pf.banner === b.id ? "0 0 0 2px var(--pn),0 0 0 4px var(--ac)" : "none" }} />)}</div></div>
               {fld("Nome visualizzato", "displayName", "Il tuo nome", 30)}
               {fld("Handle", "handle", "es. mario.rossi", 20, (v) => v.toLowerCase().replace(/[^a-z0-9_.]/g, ""))}
-              {fld("Stato", "status", "es. Scrivo di notte ��儭�", 40)}
+              {fld("Stato", "status", "es. Scrivo di notte ✍️", 40)}
               <label className="block"><span className="text-xs mu flex justify-between"><span>Bio</span><span>{(pf.bio || "").length}/160</span></span>
                 <textarea className="inp mt-1 min-h-[96px]" maxLength={160} placeholder="Raccontati in poche righe" value={pf.bio || ""} onChange={(e) => setPf({ ...pf, bio: e.target.value })} /></label>
               <div className="flex gap-2 justify-end pt-2"><button type="button" className="bt" onClick={() => setEditProf(false)}>Annulla</button><button className="bt on !px-6">Salva profilo</button></div>
             </form>
           ) : (<>
             <h2 className="hd text-2xl md:text-3xl font-bold mt-3">{name}</h2>
-            <div className="mu text-sm">{p.handle ? `@${p.handle}` : own ? "Aggiungi un handle" : ""}{p.status ? ` 繚 ${p.status}` : ""}</div>
+            <div className="mu text-sm">{p.handle ? `@${p.handle}` : own ? "Aggiungi un handle" : ""}{p.status ? ` · ${p.status}` : ""}</div>
             {p.bio ? <p className="mt-4 whitespace-pre-line">{p.bio}</p> : own && <p className="mu mt-4 text-sm">Aggiungi una bio per presentarti.</p>}
             <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-sm mu">
               {ts ? <span className="inline-flex items-center gap-1.5"><CalendarDays size={15} />Membro da {mLabel(mKey(ts))}</span> : null}
@@ -1283,7 +1283,7 @@ export default function App() {
   const homeView = (
     <div className="space-y-8">
       <Reveal><div className="pn brandpanel p-8 md:p-12"><div className="bd-p w" /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><Logo size={170} /></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
-        <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight">Ciao {first}, {isAdmin ? "ecco cosa 癡 arrivato." : "cosa vuoi scrivere oggi?"}</h2>
+        <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight">Ciao {first}, {isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}</h2>
         <p className="mu mt-3 max-w-md">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
         <div className="flex flex-wrap gap-2 mt-7">
           <button className="bt !px-5 !py-3" onClick={() => go("write")}><Pen size={16} />Scrivi un progetto</button>
@@ -1296,7 +1296,7 @@ export default function App() {
       <Reveal><div className="pn p-2">
         <h3 className="hd text-lg font-bold px-4 pt-4 pb-2">Ultimi progetti</h3>
         {loading ? <div className="p-6 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
-          : recent.length === 0 ? <p className="mu text-sm px-4 pb-5">Ancora niente qui. Il primo progetto comparir� in questa lista.</p>
+          : recent.length === 0 ? <p className="mu text-sm px-4 pb-5">Ancora niente qui. Il primo progetto comparirà in questa lista.</p>
           : recent.map((t) => <Row key={t.id} t={t} />)}
       </div></Reveal>
     </div>
@@ -1315,7 +1315,7 @@ export default function App() {
           <button className="bt !p-2.5" onClick={() => shiftM(1)} aria-label="Mese successivo"><ChevronRight size={16} /></button>
         </div>
         <div className="flex items-center gap-3 text-sm mu">
-          <span>{mItems.length} scritti 繚 {mItems.filter((t) => !t.rating).length} da valutare</span>
+          <span>{mItems.length} scritti · {mItems.filter((t) => !t.rating).length} da valutare</span>
           <button className="bt" onClick={() => { setTab("read"); setMonthFilter(month); setSortBy("newest"); }}>Valuta ora</button>
         </div>
       </div>
@@ -1323,7 +1323,7 @@ export default function App() {
         : ranked.length === 0 ? (
           <div className="pn p-12 text-center max-w-md mx-auto"><Trophy className="mx-auto mb-4 mu" size={36} />
             <h3 className="hd text-xl font-bold mb-1">Nessun finalista per {mLabel(month)}</h3>
-            <p className="mu text-sm mb-5">Dai un voto da 1 a 5 stelle agli scritti: i pi羅 votati salgono qui sul podio.</p>
+            <p className="mu text-sm mb-5">Dai un voto da 1 a 5 stelle agli scritti: i più votati salgono qui sul podio.</p>
             <button className="bt pri" onClick={() => { setTab("read"); setMonthFilter(month); }}>Apri gli scritti del mese</button></div>
         ) : (<>
           <div className="grid md:grid-cols-3 gap-5 items-end">
@@ -1492,12 +1492,12 @@ export default function App() {
                     <div className="flex items-center gap-1.5">
                       <Pop label="Colore e spessore" wrap="flex-1 min-w-0" cls="bt w-full !justify-start" trigger={<>
                         <span className="w-5 h-5 rounded-full shrink-0" style={tool === "eraser" ? { border: "2px solid currentColor" } : { background: color, boxShadow: "inset 0 0 0 1px rgba(128,128,128,.5)" }} />
-                        <span className="truncate">{TOOLS.find((t) => t.id === tool)?.label}{tool !== "hand" && ` 繚 ${tool === "eraser" ? eraser : size}px`}</span></>}>
+                        <span className="truncate">{TOOLS.find((t) => t.id === tool)?.label}{tool !== "hand" && ` · ${tool === "eraser" ? eraser : size}px`}</span></>}>
                         <div className="space-y-5">
                           {tool !== "eraser" && tool !== "hand" && <div><span className="text-xs mu">Colore</span><div className="mt-2"><Swatches value={color} onPick={setColor} /></div></div>}
                           {tool !== "hand" && <label className="block"><span className="flex justify-between text-sm"><span>Spessore</span><b>{tool === "eraser" ? eraser : size}px</b></span>
                             <input type="range" className="w-full h-9 accent-teal-600" min={tool === "eraser" ? 5 : 1} max={tool === "eraser" ? 100 : 40} value={tool === "eraser" ? eraser : size} onChange={(e) => tool === "eraser" ? setEraser(+e.target.value) : setSize(+e.target.value)} /></label>}
-                          {tool !== "eraser" && tool !== "hand" && <label className="block"><span className="flex justify-between text-sm"><span>Opacit�</span><b>{opacity}%</b></span>
+                          {tool !== "eraser" && tool !== "hand" && <label className="block"><span className="flex justify-between text-sm"><span>Opacità</span><b>{opacity}%</b></span>
                             <input type="range" className="w-full h-9 accent-teal-600" min={5} max={100} value={opacity} onChange={(e) => setOpacity(+e.target.value)} /></label>}
                           {(tool === "rect" || tool === "ellipse") && <label className="flex items-center justify-between text-sm"><span>Riempi la forma</span><input type="checkbox" className="w-6 h-6 accent-teal-600" checked={filled} onChange={(e) => setFilled(e.target.checked)} /></label>}
                           {tool === "hand" ? <p className="mu text-sm">Con "Scorri" il dito sposta la pagina senza disegnare.</p>
@@ -1516,14 +1516,14 @@ export default function App() {
                     {strokes.map((s, i) => <Shape key={i} s={s} />)}
                     {cur && <Shape s={cur} />}
                   </svg>
-                  <div ref={editorRef} contentEditable={!drawing} suppressContentEditableWarning data-ph="Scrivi appunti, formule, note di cablaggio��"
+                  <div ref={editorRef} contentEditable={!drawing} suppressContentEditableWarning data-ph="Scrivi appunti, formule, note di cablaggio…"
                     className="rt relative p-6 outline-none" style={{ minHeight: height, caretColor: "#0F8B7A" }}
                     onInput={(e: any) => setContent(e.currentTarget.innerHTML)} onClick={pickImg} onKeyUp={readFmt} onMouseUp={readFmt}
                     onKeyDown={(e) => { if (e.key === "Enter") document.execCommand("formatBlock", false, "div"); }} />
                   {drawing && <div className="absolute inset-0 z-30" style={{ touchAction: tool === "hand" ? "pan-y" : "none", cursor: tool === "hand" ? "grab" : tool === "eraser" ? "cell" : "crosshair" }} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp} />}
                 </div>
                 <div className="flex justify-between items-center px-4 py-2 text-xs mu border-t" style={{ borderColor: "var(--ln)" }}>
-                  <span className="truncate">{drawing ? `${strokes.length} tratti` : `${words} parole`}{!editingId && " 繚 bozza automatica"}</span>
+                  <span className="truncate">{drawing ? `${strokes.length} tratti` : `${words} parole`}{!editingId && " · bozza automatica"}</span>
                   <div className="flex gap-1.5 shrink-0"><button type="button" className={`bt !p-2 ${grid ? "on" : ""}`} onClick={() => setGrid(!grid)} aria-label="Griglia"><Grid3x3 size={16} /></button><button type="button" className="bt !text-xs" onClick={() => setHeight((h) => h + 300)}><Plus size={14} />Spazio</button></div>
                 </div>
               </div>
@@ -1559,7 +1559,7 @@ export default function App() {
                 {fresh && <span className="rvl-sweep" />}
                 <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
                   {hidS ? <Who t={sel} size={44} /> : <button type="button" onClick={() => setViewProf(sel.userId)} className="shrink-0" aria-label="Apri profilo">{fresh ? <span className="rvl-av"><i className="rg" /><i className="rg" /><span className="pf-av"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></span></span> : <Avatar p={profiles[sel.userId]} name={sel.author} size={44} />}</button>}
-                  <div className="flex-1 min-w-0"><h2 className="hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} 繚 {fmtDate(sel.timestamp)}</div></div>
+                  <div className="flex-1 min-w-0"><h2 className="hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end self-end md:self-auto w-full md:w-auto">
                   <button className="bt flex-1 md:flex-none justify-center !p-2" title="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /><span className="md:hidden text-xs">Copia</span></button>
@@ -1572,7 +1572,7 @@ export default function App() {
               </div>
               {isAdmin && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
               {hidS && <div className="flex items-center justify-between gap-3 px-4 py-3 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
-                <div className="text-sm min-w-0"><b>Autore nascosto.</b> <span className="mu">{sel.rating > 0 ? "Puoi svelarlo: dopo lo svelamento il voto non si cambia pi羅." : "Dai da 1 a 5 stelle per poterlo svelare."}</span></div>
+                <div className="text-sm min-w-0"><b>Autore nascosto.</b> <span className="mu">{sel.rating > 0 ? "Puoi svelarlo: dopo lo svelamento il voto non si cambia più." : "Dai da 1 a 5 stelle per poterlo svelare."}</span></div>
                 <button type="button" className={`bt shrink-0 ${confirmRvl ? "on" : ""}`} disabled={!(sel.rating > 0)} onClick={() => confirmRvl ? reveal(sel) : setConfirmRvl(true)}><Eye size={15} />{confirmRvl ? "Conferma: voto definitivo" : "Svela autore"}</button>
               </div>}
               {!isAdmin && sel.svelato && sel.rating > 0 && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Il tuo voto</span><Stars v={sel.rating} size={22} /></div>}
@@ -1607,7 +1607,7 @@ export default function App() {
             <Seg v={opts.text} set={(v: number) => setOpt("text", v)} items={[[0.9, "Testo piccolo"], [1, "Normale"], [1.12, "Grande"]]} />
             <h4 className="text-xs mu mt-6 mb-2">Effetti e animazioni</h4>
             <Seg v={opts.level} set={(v: string) => setOpt("level", v)} items={[["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"]]} />
-            <p className="text-xs mu mt-2">{({ full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, aurora e inclinazione: pi羅 leggero.", lite: "Nessuna animazione n矇 effetto: massima velocit� e batteria." } as any)[opts.level]}</p>
+            <p className="text-xs mu mt-2">{({ full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, aurora e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria." } as any)[opts.level]}</p>
             <div className="mt-2">
               <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="Impulsi di corrente sullo sfondo e scintille quando tocchi" />
               <Sw on={opts.glow} off={opts.level !== "full"} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
@@ -1630,7 +1630,7 @@ export default function App() {
         <div className="fade fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60" onClick={() => setToDelete(null)}>
           <div className="pn p-6 max-w-sm w-full pop" onClick={(e) => e.stopPropagation()}>
             <h3 className="hd text-xl font-bold mb-1">{toDelete.length > 1 ? `Eliminare ${toDelete.length} progetti?` : "Eliminare il progetto?"}</h3>
-            <p className="mu text-sm mb-5">L'operazione non si pu簷 annullare.</p>
+            <p className="mu text-sm mb-5">L'operazione non si può annullare.</p>
             <div className="flex gap-2 justify-end"><button className="bt" onClick={() => setToDelete(null)}>Annulla</button><button className="bt on !bg-red-600 !border-red-600 !text-white" onClick={confirmDelete}>Elimina</button></div>
           </div>
         </div>
@@ -1654,4 +1654,3 @@ export default function App() {
     </>
   );
 }
-
