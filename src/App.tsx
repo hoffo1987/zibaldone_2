@@ -10,7 +10,7 @@ import {
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 
@@ -250,6 +250,22 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 .brandpanel{position:relative;overflow:hidden;color:#fff;background:radial-gradient(620px 420px at 100% 0,rgba(251,191,36,.2),transparent 60%),linear-gradient(155deg,#0E7468,#08403C 55%,#052321);border-color:transparent}
 .brandpanel>:not(.bd-p){position:relative}
 .brandpanel .mu{color:rgba(255,255,255,.75)}
+.pn.hero{border:1px solid rgba(255,255,255,.28);background:radial-gradient(520px 340px at 100% 0,rgba(251,191,36,.38),transparent 62%),radial-gradient(640px 420px at 0 100%,rgba(45,212,191,.35),transparent 65%),linear-gradient(135deg,#19B7A2 0%,#0C7468 48%,#08403C 100%);box-shadow:0 34px 80px -28px rgba(23,195,174,.65),0 0 0 1px rgba(23,195,174,.18),inset 0 1px 0 rgba(255,255,255,.3);transition:box-shadow .5s var(--ez)}
+.pn.hero:hover{box-shadow:0 40px 90px -26px rgba(23,195,174,.8),0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.35)}
+.hero:before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(360px circle at var(--hx,70%) var(--hy,0%),rgba(255,255,255,.2),transparent 62%);opacity:0;transition:opacity .4s}
+.hero:hover:before{opacity:1}
+.hero .mu{color:rgba(255,255,255,.85)}
+.hero-logo{transition:transform .35s var(--out);transform:translate(calc(var(--nx,0)*-16px),calc(var(--ny,0)*-12px)) rotate(calc(var(--nx,0)*4deg));filter:drop-shadow(0 18px 30px rgba(0,0,0,.35))}
+.hero .bt.cta{background:#fff;color:#08403C;border-color:#fff}
+.hero .bt.cta:hover{background:var(--am);border-color:var(--am);color:#3b2a00}
+.hero .bt.ghost{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.38)}
+.hero .bt.ghost:hover{background:rgba(255,255,255,.26);border-color:#fff}
+.root.lite .hero:before,.noglow .hero:before{display:none}
+.stat{font:inherit;color:inherit;text-align:left;display:block;cursor:pointer;-webkit-appearance:none;appearance:none}
+.stat .go{position:absolute;top:1rem;right:1rem;color:var(--ac);opacity:0;transform:translate(-6px,6px);transition:opacity .3s,transform .4s var(--spring)}
+.stat:hover .go,.stat:focus-visible .go{opacity:1;transform:none}
+.stat:focus-visible{outline:2px solid var(--ac);outline-offset:3px}
+@media (hover:none){.stat .go{opacity:.55;transform:none}}
 .bd-p.w{background:#fff;opacity:.09;--m:var(--m-circuit);--ts:160px}
 @media (hover:none){.bt:hover{transform:none;box-shadow:none}}
 .wm{font-family:'Unbounded','Bricolage Grotesque',sans-serif;font-weight:600;white-space:nowrap;letter-spacing:-.01em}
@@ -755,6 +771,7 @@ export default function App() {
   const [month, setMonth] = useState(() => mKey(Date.now()));
   const [monthFilter, setMonthFilter] = useState("all");
   const [onlyMarked, setOnlyMarked] = useState(false);
+  const [unrated, setUnrated] = useState(false);
   const [statoF, setStatoF] = useState("all");
   const [visible, setVisible] = useState(18);
   const [kb, setKb] = useState(false);
@@ -824,7 +841,7 @@ export default function App() {
     if (!user || !db) { setNotifs([]); return; }
     return onSnapshot(query(collection(db, "notifiche"), where("userId", "==", user.uid)), (s: any) => setNotifs(s.docs.map((d: any) => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => b.timestamp - a.timestamp)), () => {});
   }, [user]);
-  useEffect(() => { setVisible(18); }, [search, sortBy, monthFilter, onlyMarked, tab]);
+  useEffect(() => { setVisible(18); }, [search, sortBy, monthFilter, onlyMarked, unrated, tab]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
   useEffect(() => {
     if (!user || !db) return;
@@ -1149,15 +1166,15 @@ export default function App() {
   };
   const openView = (t: any) => { history.pushState({ tab, v: 1 }, ""); setSel(t); };
   const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
-  const go = (t: string) => { if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setStatoF("all"); };
+  const go = (t: string) => { if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
 
   const prepared = useMemo(() => items.map((t) => ({ ...t, _tx: plain(t.content), _img: /<img/.test(t.content || "") })), [items]);
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     return prepared
-      .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!onlyMarked || t.isStarred) && (statoF === "all" || (vals[t.id]?.stato || "da_leggere") === statoF) && (!q || `${t.title} ${isAdmin && !t.svelato && t.userId !== user?.uid ? "" : t.author} ${t._tx}`.toLowerCase().includes(q)))
+      .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!onlyMarked || t.isStarred) && (!unrated || !t.rating) && (statoF === "all" || (vals[t.id]?.stato || "da_leggere") === statoF) && (!q || `${t.title} ${isAdmin && !t.svelato && t.userId !== user?.uid ? "" : t.author} ${t._tx}`.toLowerCase().includes(q)))
       .sort((a, b) => sortBy === "rated" ? (b.rating || 0) - (a.rating || 0) || b.timestamp - a.timestamp : sortBy === "oldest" ? a.timestamp - b.timestamp : sortBy === "longest" ? (b.content?.length || 0) - (a.content?.length || 0) : sortBy === "shortest" ? (a.content?.length || 0) - (b.content?.length || 0) : b.timestamp - a.timestamp);
-  }, [prepared, search, sortBy, monthFilter, onlyMarked, statoF, vals, isAdmin, user]);
+  }, [prepared, search, sortBy, monthFilter, onlyMarked, unrated, statoF, vals, isAdmin, user]);
   const words = plain(content).trim().split(/\s+/).filter(Boolean).length;
 
   // ================= RENDER =================
@@ -1327,24 +1344,37 @@ export default function App() {
   );
 
   const stats = isAdmin
-    ? [{ l: "Scritti ricevuti", v: items.length, i: Cpu }, { l: "Autori", v: new Set(items.map((t) => t.userId)).size, i: Users }, { l: "Questo mese", v: thisMonth.length, i: Activity }, { l: "Da valutare", v: thisMonth.filter((t) => !t.rating).length, i: Star }]
-    : [{ l: "I tuoi progetti", v: items.length, i: Bookmark }, { l: "Questo mese", v: thisMonth.length, i: Activity }, { l: "Parole scritte", v: items.reduce((a, t) => a + wc(t), 0), i: Pen }];
+    ? [{ l: "Scritti ricevuti", v: items.length, i: Cpu, a: () => go("read") },
+      { l: "Autori", v: new Set(items.map((t) => t.userId)).size, i: Users, a: () => go("authors") },
+      { l: "Questo mese", v: thisMonth.length, i: Activity, a: () => { go("read"); setMonthFilter(monthNow); } },
+      { l: "Da valutare", v: thisMonth.filter((t) => !t.rating).length, i: Star, a: () => { go("read"); setMonthFilter(monthNow); setUnrated(true); } }]
+    : [{ l: "I tuoi progetti", v: items.length, i: Bookmark, a: () => go("my_pages") },
+      { l: "Questo mese", v: thisMonth.length, i: Activity, a: () => { go("my_pages"); setMonthFilter(monthNow); } },
+      { l: "Parole scritte", v: items.reduce((a, t) => a + wc(t), 0), i: Pen, a: () => go("my_pages") }];
   const recent = [...items].sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
+  const heroMove = (e: any) => {
+    const el = e.currentTarget, r = el.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    el.style.setProperty("--hx", `${x}px`); el.style.setProperty("--hy", `${y}px`);
+    el.style.setProperty("--nx", String((x / r.width - 0.5) * 2)); el.style.setProperty("--ny", String((y / r.height - 0.5) * 2));
+  };
+  const heroLeave = (e: any) => { ["--nx", "--ny"].forEach((k) => e.currentTarget.style.removeProperty(k)); };
+  const toRate = thisMonth.filter((t) => !t.rating).length;
   const homeView = (
     <div className="space-y-8">
-      <Reveal><div className="pn brandpanel p-8 md:p-12"><div className="bd-p w" /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><Logo size={170} /></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
+      <Reveal><div className="pn brandpanel hero p-8 md:p-12" onPointerMove={heroMove} onPointerLeave={heroLeave}><div className="bd-p w" /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className="hero-logo block"><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
         <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight">Ciao {first}, {isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}</h2>
         <p className="mu mt-3 max-w-md">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
         <div className="flex flex-wrap gap-2 mt-7">
-          <button className="bt !px-5 !py-3" onClick={() => go("write")}><Pen size={16} />Scrivi un progetto</button>
-          {isAdmin && <button className="bt !px-5 !py-3" onClick={() => go("podio")}><Trophy size={16} />Vai al podio</button>}
+          <button className="bt cta !px-5 !py-3" onClick={() => go("write")}><Pen size={16} />Scrivi un progetto</button>
+          {isAdmin && toRate > 0 && <button className="bt ghost !px-5 !py-3" onClick={() => { go("read"); setMonthFilter(monthNow); setUnrated(true); }}><Star size={16} />Valuta ora ({toRate})</button>}
+          {isAdmin && <button className="bt ghost !px-5 !py-3" onClick={() => go("podio")}><Trophy size={16} />Vai al podio</button>}
         </div>
       </div></Reveal>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((x, i) => <Reveal key={x.l} delay={i * 70} className="h-full"><div className="pn card p-5 h-full"><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3">{x.v}</div><div className="mu text-sm">{x.l}</div></div></Reveal>)}
+        {stats.map((x, i) => <Reveal key={x.l} delay={i * 70} className="h-full"><button type="button" onClick={x.a} className="pn card stat p-5 h-full w-full"><ArrowUpRight size={18} className="go" aria-hidden="true" /><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3">{x.v}</div><div className="mu text-sm">{x.l}</div></button></Reveal>)}
       </div>
       <Reveal><div className="pn p-2">
-        <h3 className="hd text-lg font-bold px-4 pt-4 pb-2">Ultimi progetti</h3>
+        <div className="flex items-center justify-between px-4 pt-4 pb-2"><h3 className="hd text-lg font-bold">Ultimi progetti</h3><button type="button" className="mu text-sm lk inline-flex items-center gap-1" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>
         {loading ? <div className="p-6 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
           : recent.length === 0 ? <p className="mu text-sm px-4 pb-5">Ancora niente qui. Il primo progetto comparirà in questa lista.</p>
           : recent.map((t) => <Row key={t.id} t={t} />)}
@@ -1462,6 +1492,7 @@ export default function App() {
                 <select className="inp !w-auto" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}><option value="all">Tutti i mesi</option>{monthOpts.map((k) => <option key={k} value={k}>{mLabel(k)}</option>)}</select>
                 {isAdmin && tab === "read" && <select className="inp !w-auto" value={statoF} onChange={(e) => setStatoF(e.target.value)}><option value="all">Tutti gli stati</option>{STATI.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
                 {isAdmin && tab === "read" && <button className={`bt ${onlyMarked ? "on" : ""}`} onClick={() => setOnlyMarked(!onlyMarked)}><Bookmark size={15} style={onlyMarked ? { fill: "currentColor" } : {}} />Segnalati{items.some((t) => t.isStarred) ? ` (${items.filter((t) => t.isStarred).length})` : ""}</button>}
+                {isAdmin && tab === "read" && <button className={`bt ${unrated ? "on" : ""}`} onClick={() => setUnrated(!unrated)}><Star size={15} style={unrated ? { fill: "currentColor" } : {}} />Da valutare</button>}
                 {items.length > 0 && <button className={`bt ${selMode ? "on" : ""}`} onClick={() => { setSelMode(!selMode); setIds([]); }}><ListChecks size={15} />{selMode ? "Fine" : "Seleziona"}</button>}
               </div>
             )}
