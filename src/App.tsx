@@ -8,9 +8,9 @@ import {
   getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, setDoc, getDoc
 } from "firebase/firestore";
 import {
-  Cpu, Bookmark, Loader2, Activity, Star, X, KeyRound, Trash2, ListChecks, CheckCircle2, Circle,
+  Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Unlock, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 
@@ -738,9 +738,7 @@ export default function App() {
   const [showPw, setShowPw] = useState(false);
   const [toast, setToast] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminModal, setAdminModal] = useState(false);
-  const [adminPw, setAdminPw] = useState("");
-  const [adminErr, setAdminErr] = useState(false);
+  const [adminChecked, setAdminChecked] = useState(false);
   // list
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -757,7 +755,17 @@ export default function App() {
     if (!user || !db) return;
     return onSnapshot(collection(db, "profili"), (snap: any) => { const m: any = {}; snap.forEach((d: any) => { m[d.id] = d.data(); }); setProfiles(m); }, () => {});
   }, [user]);
-  useEffect(() => { try { setIsAdmin(!!user && localStorage.getItem("circuito:admin") === user.uid); } catch {} }, [user]);
+  // Admin = chi ha il documento  admins/{uid}  su Firestore (creato a mano dalla console): nessuna password nel sito.
+  useEffect(() => {
+    if (!user || !db) { setIsAdmin(false); setAdminChecked(false); return; }
+    let on = true;
+    setAdminChecked(false);
+    getDoc(doc(db, "admins", user.uid))
+      .then((s: any) => { if (on) setIsAdmin(s.exists()); })
+      .catch(() => { if (on) setIsAdmin(false); })
+      .finally(() => { if (on) setAdminChecked(true); });
+    return () => { on = false; };
+  }, [user]);
   useEffect(() => {
     const i = (e: any) => { const t = e.target; setKb(!!t?.isContentEditable || t?.tagName === "TEXTAREA" || (t?.tagName === "INPUT" && !["range", "checkbox", "file"].includes(t.type))); };
     const o = () => setKb(false);
@@ -767,7 +775,7 @@ export default function App() {
   useEffect(() => {
     history.replaceState({ tab: "home" }, "");
     const pop = (e: PopStateEvent) => { setSel(null); setTab(e.state?.tab || "home"); };
-    const esc = (e: KeyboardEvent) => { if (e.key !== "Escape") return; if (history.state?.v) history.back(); else { setSel(null); setToDelete(null); setAdminModal(false); setViewProf(null); } };
+    const esc = (e: KeyboardEvent) => { if (e.key !== "Escape") return; if (history.state?.v) history.back(); else { setSel(null); setToDelete(null); setViewProf(null); } };
     window.addEventListener("popstate", pop); window.addEventListener("keydown", esc);
     return () => { window.removeEventListener("popstate", pop); window.removeEventListener("keydown", esc); };
   }, []);
@@ -848,10 +856,10 @@ export default function App() {
     return () => { document.removeEventListener("pointermove", mv); document.removeEventListener("pointerout", out); document.removeEventListener("pointerdown", dn); cancelAnimationFrame(raf); };
   }, [E.glow, opts.sound]);
   useEffect(() => {
-    const lock = sel || adminModal || toDelete || done || viewProf;
+    const lock = sel || toDelete || done || viewProf;
     document.body.style.overflow = lock ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [sel, adminModal, toDelete, done, viewProf]);
+  }, [sel, toDelete, done, viewProf]);
 
   // auth state + link reset password
   useEffect(() => {
@@ -921,11 +929,7 @@ export default function App() {
     } catch { err("Il link è scaduto o non è valido."); }
     setAuthLoading(false);
   };
-  const logout = async () => { await signOut(auth); try { localStorage.removeItem("circuito:admin"); } catch {} setIsAdmin(false); setTab("home"); };
-  const adminLogin = (e: any) => {
-    e.preventDefault();
-    if (adminPw.toLowerCase() === "infinito") { setIsAdmin(true); try { localStorage.setItem("circuito:admin", user.uid); } catch {} setTab("home"); setAdminModal(false); setAdminPw(""); } else setAdminErr(true);
-  };
+  const logout = async () => { await signOut(auth); setIsAdmin(false); setTab("home"); };
 
   // --- editor handlers ---
   const cmd = (c: string, v?: string) => {
@@ -1061,7 +1065,7 @@ export default function App() {
   // ================= RENDER =================
   const shell = (children: any) => <div className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${E.glow ? "" : "noglow"} ${E.aurora ? "" : "noaurora"} ${E.intro ? "" : "nointro"} min-h-screen`}><style>{CSS}</style><div className="prog" />{children}</div>;
 
-  if (authLoading) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
+  if (authLoading || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
   if (!user || resetCode) {
     const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
@@ -1314,13 +1318,12 @@ export default function App() {
       <Backdrop tab={tab} fx={E.fx} dark={dark} />
       {/* sidebar desktop */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col p-5 gap-1 pn !rounded-none !border-y-0 !border-l-0 z-20">
-        <div className="flex items-center gap-2.5 mb-8 cursor-pointer select-none" onDoubleClick={() => !isAdmin && setAdminModal(true)} title="Il Circuito">
+        <div className="flex items-center gap-2.5 mb-8 cursor-pointer select-none" title="Il Circuito">
           <Wordmark stack size={52} fs={22} />
         </div>
         {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt !justify-start w-full ${tab === n.id ? "on" : "!border-transparent !bg-transparent"} nv`}><n.icon size={16} />{n.label}</button>)}
         <div className="mt-auto space-y-2">
           <ApkDownload compact />
-          {isAdmin && <button onClick={() => { try { localStorage.removeItem("circuito:admin"); } catch {} setIsAdmin(false); setTab("home"); }} className="bt w-full !justify-start"><Unlock size={16} />Esci da admin</button>}
           <div className="flex items-center gap-2">
             <button onClick={() => go("profile")} className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{user.email}</span></span></button>
             <button className="bt !p-2" onClick={() => setOptOpen(true)} title="Opzioni" aria-label="Opzioni"><Settings size={18} /></button>
@@ -1331,7 +1334,7 @@ export default function App() {
 
       {/* barra mobile */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
-        <div className="flex items-center gap-2" onDoubleClick={() => !isAdmin && setAdminModal(true)}><Wordmark size={40} fs={19} tag={false} /></div>
+        <div className="flex items-center gap-2"><Wordmark size={40} fs={19} tag={false} /></div>
         <div className="flex items-center gap-2"><button className="bt !p-2" onClick={() => setOptOpen(true)} aria-label="Opzioni"><Settings size={18} /></button><button onClick={() => go("profile")} aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
       </header>
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))", display: kb || (tab === "write" && drawing) ? "none" : undefined }}>
@@ -1562,19 +1565,6 @@ export default function App() {
             <p className="mu text-sm mb-5">L'operazione non si può annullare.</p>
             <div className="flex gap-2 justify-end"><button className="bt" onClick={() => setToDelete(null)}>Annulla</button><button className="bt on !bg-red-600 !border-red-600 !text-white" onClick={confirmDelete}>Elimina</button></div>
           </div>
-        </div>
-      )}
-
-      {/* admin */}
-      {adminModal && (
-        <div className="fade fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60" onClick={() => setAdminModal(false)}>
-          <form onSubmit={adminLogin} className="pn p-6 max-w-sm w-full pop" onClick={(e) => e.stopPropagation()}>
-            <KeyRound className="mb-3" style={{ color: "var(--ac)" }} />
-            <h3 className="hd text-xl font-bold mb-3">Accesso amministratore</h3>
-            <input type="password" autoFocus className="inp mb-1" style={adminErr ? { borderColor: "#dc2626" } : {}} placeholder="Password" value={adminPw} onChange={(e) => { setAdminPw(e.target.value); setAdminErr(false); }} />
-            <p className="text-xs text-red-600 h-4 mb-3">{adminErr ? "Password errata." : ""}</p>
-            <div className="flex gap-2 justify-end"><button type="button" className="bt" onClick={() => setAdminModal(false)}>Annulla</button><button className="bt pri" disabled={!adminPw.trim()}>Sblocca</button></div>
-          </form>
         </div>
       )}
 
