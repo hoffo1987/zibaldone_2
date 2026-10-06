@@ -250,7 +250,7 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 .brandpanel{position:relative;overflow:hidden;color:#fff;background:radial-gradient(620px 420px at 100% 0,rgba(251,191,36,.2),transparent 60%),linear-gradient(155deg,#0E7468,#08403C 55%,#052321);border-color:transparent}
 .brandpanel>:not(.bd-p){position:relative}
 .brandpanel .mu{color:rgba(255,255,255,.75)}
-.pn.hero{border:1px solid rgba(255,255,255,.28);background:radial-gradient(520px 340px at 100% 0,rgba(251,191,36,.38),transparent 62%),radial-gradient(640px 420px at 0 100%,rgba(45,212,191,.35),transparent 65%),linear-gradient(135deg,#19B7A2 0%,#0C7468 48%,#08403C 100%);box-shadow:0 34px 80px -28px rgba(23,195,174,.65),0 0 0 1px rgba(23,195,174,.18),inset 0 1px 0 rgba(255,255,255,.3);transition:box-shadow .5s var(--ez)}
+.pn.hero{border:1px solid rgba(255,255,255,.28);background:radial-gradient(rgba(255,255,255,.17) 1px,transparent 1.4px) 0 0/18px 18px,radial-gradient(520px 340px at 100% 0,rgba(251,191,36,.38),transparent 62%),radial-gradient(640px 420px at 0 100%,rgba(45,212,191,.35),transparent 65%),linear-gradient(135deg,#19B7A2 0%,#0C7468 48%,#08403C 100%);box-shadow:0 34px 80px -28px rgba(23,195,174,.65),0 0 0 1px rgba(23,195,174,.18),inset 0 1px 0 rgba(255,255,255,.3);transition:box-shadow .5s var(--ez)}
 .pn.hero:hover{box-shadow:0 40px 90px -26px rgba(23,195,174,.8),0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.35)}
 .hero:before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(360px circle at var(--hx,70%) var(--hy,0%),rgba(255,255,255,.2),transparent 62%);opacity:0;transition:opacity .4s}
 .hero:hover:before{opacity:1}
@@ -261,6 +261,15 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 .hero .bt.ghost{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.38)}
 .hero .bt.ghost:hover{background:rgba(255,255,255,.26);border-color:#fff}
 .root.lite .hero:before,.noglow .hero:before{display:none}
+.pn.hero>.hrain{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.9;-webkit-mask-image:linear-gradient(100deg,transparent 0,rgba(0,0,0,.22) 38%,#000 72%);mask-image:linear-gradient(100deg,transparent 0,rgba(0,0,0,.22) 38%,#000 72%)}
+@media (max-width:767px){.pn.hero>.hrain{opacity:.5;-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.6));mask-image:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.6))}}
+.hero:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,transparent,rgba(255,255,255,.09),transparent) 0 -140px/100% 140px no-repeat,repeating-linear-gradient(0deg,rgba(0,0,0,.07) 0 1px,transparent 1px 3px);animation:heroScan 6s linear infinite}
+@keyframes heroScan{from{background-position:0 -140px,0 0}to{background-position:0 calc(100% + 140px),0 0}}
+.hero-term{display:inline-flex;align-items:center;gap:.55rem;font:600 .72rem/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.04em;color:rgba(255,255,255,.9);background:rgba(4,26,24,.45);border:1px solid rgba(255,255,255,.2);padding:.5rem .75rem;border-radius:999px;margin-bottom:1.1rem;max-width:100%}
+.hero-led{flex:none;width:7px;height:7px;border-radius:50%;background:#34D399;box-shadow:0 0 8px #34D399;animation:ledP 1.8s ease-in-out infinite}
+.hero-term .caret{flex:none;width:7px;height:12px;background:var(--am);display:inline-block;animation:blink 1s steps(2) infinite}
+@keyframes ledP{50%{opacity:.35}}
+@keyframes blink{50%{opacity:0}}
 .stat{font:inherit;color:inherit;text-align:left;display:block;cursor:pointer;-webkit-appearance:none;appearance:none}
 .stat .go{position:absolute;top:1rem;right:1rem;color:var(--ac);opacity:0;transform:translate(-6px,6px);transition:opacity .3s,transform .4s var(--spring)}
 .stat:hover .go,.stat:focus-visible .go{opacity:1;transform:none}
@@ -719,6 +728,66 @@ const CountUp = ({ v, on }: any) => {
 };
 // caricamento a "segnale" (barre stile equalizzatore)
 const Loading = ({ cls = "py-24" }: any) => <div className={`${cls} flex justify-center`} role="status" aria-label="Caricamento"><span className="ldr"><i /><i /><i /><i /><i /></span></div>;
+
+// pioggia di codice del riquadro iniziale: colonne di 0/1 ed esadecimale che cadono, ogni tanto compare una parola; reagisce al mouse
+const HeroRain = ({ on }: { on: boolean }) => {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const cv = ref.current; if (!on || !cv) return;
+    const host = cv.parentElement as HTMLElement, ctx = cv.getContext("2d"); if (!host || !ctx) return;
+    const GL = "0101010101ABCDEF<>/{}[]=+#", WORDS = ["CIRCUITO", "SCRIVI", "LEGGI", "SCEGLI", "IDEE", "MESE"];
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let W = 0, H = 0, cw = 16, lh = 18, rows = 0, raf = 0, last = 0, vis = true;
+    let cols: any[] = [];
+    const ptr = { x: -999 };
+    const rc = () => GL[Math.floor(Math.random() * GL.length)];
+    const mk = (c: any, init: boolean) => {
+      c.speed = 5 + Math.random() * 11;
+      c.len = 8 + Math.floor(Math.random() * 16);
+      c.word = Math.random() < 0.1 ? WORDS[Math.floor(Math.random() * WORDS.length)] : "";
+      if (c.word) c.len = Math.max(c.len, c.word.length + 3);
+      c.top = c.word ? Math.floor(Math.random() * Math.max(1, rows - c.word.length)) : 0;
+      c.head = init ? Math.random() * rows : -Math.random() * rows * 0.6 - 1;
+      c.ch = Array.from({ length: rows + 2 }, rc);
+    };
+    const fit = () => {
+      W = host.clientWidth; H = host.clientHeight; if (!W || !H) return;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cw = W < 600 ? 14 : 16; lh = W < 600 ? 16 : 18; rows = Math.ceil(H / lh);
+      cols = Array.from({ length: Math.ceil(W / cw) }, (_, i) => { const c: any = { x: i * cw }; mk(c, true); return c; });
+    };
+    fit();
+    const ro = "ResizeObserver" in window ? new ResizeObserver(fit) : null; ro?.observe(host);
+    const mv = (e: PointerEvent) => { ptr.x = e.clientX - host.getBoundingClientRect().left; };
+    const lv = () => { ptr.x = -999; };
+    host.addEventListener("pointermove", mv, { passive: true }); host.addEventListener("pointerleave", lv, { passive: true });
+    const io = "IntersectionObserver" in window ? new IntersectionObserver(([e]) => { vis = e.isIntersecting; }) : null; io?.observe(cv);
+    const frame = (ts: number) => {
+      raf = requestAnimationFrame(frame);
+      if (document.hidden || !vis || !W || !rows) return;
+      const el = ts - last; if (el < 33) return; last = ts;
+      const dt = Math.min(0.1, el / 1000);
+      ctx.clearRect(0, 0, W, H);
+      ctx.font = `600 ${lh - 4}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`; ctx.textBaseline = "top";
+      for (const c of cols) {
+        const d = Math.abs(c.x + cw / 2 - ptr.x), near = d < 80 ? 1 - d / 80 : 0;
+        c.head += c.speed * (1 + near * 1.8) * dt;
+        if (Math.random() < 0.04) c.ch[Math.floor(Math.random() * c.ch.length)] = rc();
+        const h = Math.floor(c.head), base = near > 0.15 ? "251,191,36" : "190,255,240";
+        for (let k = 0; k < c.len; k++) {
+          const r = h - k; if (r < 0 || r >= rows) continue;
+          const wi = c.word ? r - c.top : -1, inW = wi >= 0 && wi < c.word.length, f = 1 - k / c.len, a = f * f * 0.5;
+          ctx.fillStyle = k === 0 ? `rgba(255,255,255,${0.85 + near * 0.15})` : inW ? `rgba(251,191,36,${Math.max(a * 1.6, 0.6)})` : `rgba(${base},${a})`;
+          ctx.fillText(inW ? c.word[wi] : c.ch[r], c.x, r * lh);
+        }
+        if (h - c.len > rows) mk(c, false);
+      }
+    };
+    raf = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(raf); ro?.disconnect(); io?.disconnect(); host.removeEventListener("pointermove", mv); host.removeEventListener("pointerleave", lv); };
+  }, [on]);
+  return on ? <canvas ref={ref} className="hrain" aria-hidden="true" /> : null;
+};
 
 const Reveal = ({ children, delay = 0, className = "", fx = "", style }: any) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -1361,7 +1430,8 @@ export default function App() {
   const toRate = thisMonth.filter((t) => !t.rating).length;
   const homeView = (
     <div className="space-y-8">
-      <Reveal><div className="pn brandpanel hero p-8 md:p-12" onPointerMove={heroMove} onPointerLeave={heroLeave}><div className="bd-p w" /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className="hero-logo block"><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
+      <Reveal><div className="pn brandpanel hero p-8 md:p-12" onPointerMove={heroMove} onPointerLeave={heroLeave}><HeroRain on={E.fx} /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className="hero-logo block"><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
+        <div><span className="hero-term"><i className="hero-led" />{(isAdmin ? "admin" : first.toLowerCase().replace(/[^a-z0-9]/g, "") || "utente") + "@circuito:~$ " + (isAdmin ? "ls --nuovi" : "scrivi --nuovo")}<b className="caret" /></span></div>
         <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight">Ciao {first}, {isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}</h2>
         <p className="mu mt-3 max-w-md">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
         <div className="flex flex-wrap gap-2 mt-7">
@@ -1696,7 +1766,7 @@ export default function App() {
             <Seg v={opts.level} set={(v: string) => setOpt("level", v)} items={[["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"]]} />
             <p className="text-xs mu mt-2">{({ full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, aurora e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria." } as any)[opts.level]}</p>
             <div className="mt-2">
-              <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="Impulsi di corrente sullo sfondo e scintille quando tocchi" />
+              <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="Impulsi di corrente sullo sfondo, scintille al tocco e pioggia di codice nel riquadro iniziale" />
               <Sw on={opts.glow} off={opts.level !== "full"} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
               <Sw on={opts.aurora} off={opts.level !== "full"} set={(v: boolean) => setOpt("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
               <Sw on={opts.intro} off={lite} set={(v: boolean) => setOpt("intro", v)} label="Titoli, logo e card animati" hint="Titoli che si decodificano, card che si accendono" />
