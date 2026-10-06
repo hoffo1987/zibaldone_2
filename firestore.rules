@@ -1,0 +1,134 @@
+rules_version = '2';
+
+// Regole di Firestore per "Il Circuito". Si incollano in Firebase → Firestore Database → Regole → Pubblica.
+// Tutto ciò che non è elencato qui sotto è NEGATO.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /pensieri/{id} {
+      allow read: if signedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred'])
+        && request.resource.data.keys().hasAll(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.isStarred == false
+        && request.resource.data.title is string
+        && request.resource.data.content is string
+        && request.resource.data.strokes is list
+        && request.resource.data.author is string
+        && request.resource.data.w is number
+        && request.resource.data.h is number
+        && request.resource.data.timestamp is number;
+
+      allow update: if signedIn() && (
+        (
+          // L'autore modifica solo il contenuto.
+          resource.data.userId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'updatedAt'])
+          && request.resource.data.title is string
+          && request.resource.data.content is string
+          && request.resource.data.strokes is list
+        ) || (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'updatedAt', 'rating', 'isStarred', 'svelato'])
+          && (!('isStarred' in request.resource.data) || request.resource.data.isStarred is bool)
+
+          // Il voto vive in valutazioni/{id}.voto (privato). Nello scritto entra solo allo svelamento,
+          // identico al voto privato; prima dello svelamento si può solo togliere il vecchio campo rating.
+          // Dopo lo svelamento non si cambia più.
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['rating'])
+              || (resource.data.get('svelato', false) != true
+                  && (!('rating' in request.resource.data)
+                      || (request.resource.data.get('svelato', false) == true
+                          && request.resource.data.rating is int
+                          && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+                          && request.resource.data.rating == get(/databases/$(database)/documents/valutazioni/$(id)).data.get('voto', 0)))))
+
+          // Lo svelamento si fa una sola volta e solo insieme a un voto.
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['svelato'])
+              || (request.resource.data.svelato == true
+                  && resource.data.get('svelato', false) != true
+                  && request.resource.data.get('rating', 0) > 0))
+        )
+      );
+
+      allow delete: if signedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Notifica "hai ricevuto un voto": la crea l'admin allo svelamento, la legge e la segna come letta solo l'autore.
+    match /notifiche/{id} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['userId', 'pensieroId', 'titolo', 'voto', 'timestamp', 'letta'])
+        && request.resource.data.keys().hasAll(['userId', 'pensieroId', 'titolo', 'voto', 'timestamp', 'letta'])
+        && request.resource.data.userId is string
+        && request.resource.data.pensieroId is string
+        && request.resource.data.titolo is string
+        && request.resource.data.voto is int
+        && request.resource.data.voto >= 1 && request.resource.data.voto <= 5
+        && request.resource.data.timestamp is number
+        && request.resource.data.letta == false;
+
+      allow update: if signedIn() && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['letta'])
+        && request.resource.data.letta == true;
+
+      allow delete: if false;
+    }
+
+    // Voto, stato e nota privata di ogni scritto: solo admin, l'autore non li vede mai.
+    match /valutazioni/{id} {
+      allow read, delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['stato', 'nota', 'voto', 'updatedAt'])
+        && request.resource.data.get('stato', 'da_leggere') in ['da_leggere', 'letto', 'shortlist', 'scelto']
+        && request.resource.data.get('nota', '') is string && request.resource.data.get('nota', '').size() <= 2000
+        && request.resource.data.get('voto', 0) is int
+        && request.resource.data.get('voto', 0) >= 0 && request.resource.data.get('voto', 0) <= 5
+        && request.resource.data.updatedAt is number;
+    }
+
+    match /profili/{uid} {
+      allow read: if signedIn();
+
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['displayName', 'handle', 'status', 'bio', 'avatar', 'banner', 'createdAt', 'updatedAt'])
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 60
+        && request.resource.data.handle is string && request.resource.data.handle.size() <= 40
+        && request.resource.data.status is string && request.resource.data.status.size() <= 80
+        && request.resource.data.bio is string && request.resource.data.bio.size() <= 320
+        && request.resource.data.avatar is string && request.resource.data.avatar.size() <= 200000
+        && (request.resource.data.avatar == '' || request.resource.data.avatar.matches('data:image/.*'))
+        && request.resource.data.banner in ['teal', 'amber', 'indigo', 'rose', 'sky', 'slate']
+        && request.resource.data.createdAt is number
+        && request.resource.data.updatedAt is number;
+
+      allow delete: if false;
+    }
+
+    match /app_config/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Ognuno può leggere solo il proprio documento: serve all'app per sapere se sei admin davvero.
+    match /admins/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list, write: if false;
+    }
+  }
+}

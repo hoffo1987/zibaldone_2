@@ -5,7 +5,7 @@ import {
   signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset
 } from "firebase/auth";
 import {
-  getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, setDoc, getDoc
+  getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, setDoc, getDoc, deleteField
 } from "firebase/firestore";
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
@@ -767,15 +767,43 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
   // list
-  const [items, setItems] = useState<any[]>([]);
+  const [rawItems, setRawItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   const [vals, setVals] = useState<any>({});
+  const [valsReady, setValsReady] = useState(false);
   useEffect(() => {
-    if (!user || !db || !isAdmin) { setVals({}); return; }
-    return onSnapshot(collection(db, "valutazioni"), (s: any) => { const m: any = {}; s.forEach((d: any) => { m[d.id] = d.data(); }); setVals(m); }, () => {});
+    if (!user || !db || !isAdmin) { setVals({}); setValsReady(false); return; }
+    return onSnapshot(collection(db, "valutazioni"), (s: any) => { const m: any = {}; s.forEach((d: any) => { m[d.id] = d.data(); }); setVals(m); setValsReady(true); }, () => {});
   }, [user, isAdmin]);
+  // Il voto resta privato in valutazioni/{id}.voto (solo admin) fino allo svelamento: solo allora viene copiato nello scritto.
+  // Per l'admin sovrappongo il voto privato a quello dello scritto; chi non è admin vede solo i voti già svelati.
+  const items = useMemo(
+    () => (isAdmin ? rawItems.map((t) => (!t.svelato && vals[t.id]?.voto != null ? { ...t, rating: vals[t.id].voto } : t)) : rawItems),
+    [rawItems, vals, isAdmin]
+  );
+  // Migrazione una tantum: i voti già dati e non ancora svelati stanno ancora nello scritto (leggibili dall'autore).
+  // Li sposto in valutazioni e li tolgo dallo scritto, appena l'admin apre l'app.
+  const migTried = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!db || !isAdmin || !valsReady) return;
+    const todo = rawItems.filter((t) => t.rating !== undefined && !t.svelato && !migTried.current.has(t.id));
+    if (!todo.length) return;
+    todo.forEach((t) => migTried.current.add(t.id));
+    (async () => {
+      try {
+        for (let i = 0; i < todo.length; i += 200) {
+          const b = writeBatch(db);
+          todo.slice(i, i + 200).forEach((t) => {
+            if (t.rating > 0 && vals[t.id]?.voto == null) b.set(doc(db, "valutazioni", t.id), { voto: t.rating, updatedAt: Date.now() }, { merge: true });
+            b.update(doc(db, "pensieri", t.id), { rating: deleteField() });
+          });
+          await b.commit();
+        }
+      } catch (e) { console.warn("Migrazione dei voti non riuscita (controlla le regole di Firestore)", e); }
+    })();
+  }, [rawItems, vals, valsReady, isAdmin]);
   const [notifs, setNotifs] = useState<any[]>([]);
   useEffect(() => {
     if (!user || !db) { setNotifs([]); return; }
@@ -910,9 +938,9 @@ export default function App() {
     if (isAdmin && ["read", "home", "podio", "authors"].includes(tab)) q = collection(db, "pensieri");
     else if (tab === "my_pages" || tab === "home" || tab === "profile") q = query(collection(db, "pensieri"), where("userId", "==", user.uid));
     else return;
-    setLoading(true); setItems([]);
+    setLoading(true); setRawItems([]);
     return onSnapshot(q, (s: any) => {
-      setItems(s.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+      setRawItems(s.docs.map((d: any) => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, () => { setLoading(false); notify("Impossibile leggere i progetti."); });
   }, [user, isAdmin, tab]);
@@ -1079,7 +1107,7 @@ export default function App() {
     if (!isAdmin || t.svelato || !(t.rating > 0)) return;
     try {
       const b = writeBatch(db);
-      b.update(doc(db, "pensieri", t.id), { svelato: true });
+      b.update(doc(db, "pensieri", t.id), { svelato: true, rating: t.rating });
       b.set(doc(collection(db, "notifiche")), { userId: t.userId, pensieroId: t.id, titolo: t.title, voto: t.rating, timestamp: Date.now(), letta: false });
       await b.commit();
       if (opts.vibrate) navigator.vibrate?.([20, 40, 30]);
@@ -1087,7 +1115,13 @@ export default function App() {
     } catch { notify("Svelamento non riuscito: pubblica le nuove regole di Firestore."); }
     setConfirmRvl(false);
   };
-  const rate = async (t: any, n: number) => { if (!isAdmin || t.svelato) return; if (opts.vibrate) navigator.vibrate?.(12); await updateDoc(doc(db, "pensieri", t.id), { rating: n }); if (sel?.id === t.id) setSel({ ...sel, rating: n }); };
+  const rate = async (t: any, n: number) => {
+    if (!isAdmin || t.svelato) return;
+    if (opts.vibrate) navigator.vibrate?.(12);
+    try { await setDoc(doc(db, "valutazioni", t.id), { voto: n, updatedAt: Date.now() }, { merge: true }); }
+    catch { return notify("Voto non salvato: pubblica le nuove regole di Firestore."); }
+    if (sel?.id === t.id) setSel({ ...sel, rating: n });
+  };
   const star = async (t: any) => { if (isAdmin) { if (opts.vibrate) navigator.vibrate?.(12); await updateDoc(doc(db, "pensieri", t.id), { isStarred: !t.isStarred }); if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
   const confirmDelete = async () => {
     const list = toDelete!; setToDelete(null); setSel(null); setGone(list);

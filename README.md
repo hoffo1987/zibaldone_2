@@ -23,18 +23,8 @@ cambiare un documento dalla console Firebase, senza rifare il deploy del sito.
    - ID documento: `android`
    - campo `apkUrl` (string): il link del punto 1
    - campo `version` (string, facoltativo): per esempio `1.0.0`
-3. **Permetti la lettura pubblica** di quel documento (serve anche a chi non ha ancora fatto l'accesso).
-   In Firestore → Regole, aggiungi questo blocco *dentro* `match /databases/{database}/documents { ... }`,
-   senza togliere le regole che ci sono già, poi premi Pubblica:
-
-   ```
-   match /app_config/{docId} {
-     allow read: if true;
-     allow write: if false;
-   }
-   ```
-
-   Le modifiche fatte a mano dalla console non sono bloccate da `allow write: if false`.
+3. **Regole**: la lettura pubblica di `app_config` (serve anche a chi non ha ancora fatto l'accesso) è già prevista
+   in `firestore.rules`. Le modifiche fatte a mano dalla console non sono bloccate da `allow write: if false`.
 4. **Aggiornare l'app in futuro**: carica il nuovo APK e cambia `apkUrl` (e `version`) nel documento `app_config/android`.
 
 Nota sul piano: i bucket Storage nuovi (`…firebasestorage.app`, come quello di questo progetto) richiedono il piano

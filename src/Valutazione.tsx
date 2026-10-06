@@ -24,7 +24,7 @@ export function PannelloAdmin({ db, id, notify }: { db: any; id: string; notify?
 
   const save = async (st: string, nt: string) => {
     setBusy(true);
-    try { await setDoc(doc(db, "valutazioni", id), { stato: st, nota: nt.trim(), updatedAt: Date.now() }); }
+    try { await setDoc(doc(db, "valutazioni", id), { stato: st, nota: nt.trim(), updatedAt: Date.now() }, { merge: true }); }
     catch { notify?.("Nota non salvata: pubblica le nuove regole di Firestore."); }
     setBusy(false);
   };
