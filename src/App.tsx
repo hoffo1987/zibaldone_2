@@ -105,10 +105,152 @@ const Wordmark = ({ size = 38, fs, light, center, stack, tag = true }: any) => (
     </div>
   </div>
 );
-const Backdrop = ({ tab, fx, dark }: { tab: string; fx: boolean; dark: boolean }) => {
+// --- SFONDI GENERATIVI: ogni pagina ha un disegno diverso, mai a tessere ripetute, ricalcolato a ogni apertura ---
+type ArtFn = (g: CanvasRenderingContext2D, W: number, H: number, R: () => number, c: string, am: string) => void;
+const mulberry = (a: number) => () => { let t = (a += 0x6d2b79f5); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const DIR8 = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+// scheda elettronica: piste a 45°, piazzole, chip con piedini e piste che ne escono
+const artCircuit: ArtFn = (g, W, H, R, c, am) => {
+  const G = 22, pick = () => (R() < 0.13 ? `rgb(${am})` : `rgb(${c})`);
+  g.lineJoin = "round"; g.lineCap = "round";
+  const pad = (x: number, y: number) => { g.beginPath(); g.arc(x, y, R() < 0.3 ? 5 : 3.4, 0, 7); g.stroke(); if (R() < 0.4) { g.beginPath(); g.arc(x, y, 1.5, 0, 7); g.fill(); } };
+  const walk = (x: number, y: number, d: number, segs: number) => {
+    const pts = [[x, y]];
+    for (let i = 0; i < segs; i++) {
+      const n = 2 + Math.floor(R() * 7);
+      x += DIR8[d][0] * n * G; y += DIR8[d][1] * n * G; pts.push([x, y]);
+      if (x < -60 || y < -60 || x > W + 60 || y > H + 60) break;
+      d = (d + (R() < 0.82 ? (R() < 0.5 ? 1 : 7) : (R() < 0.5 ? 2 : 6))) % 8;
+    }
+    g.beginPath(); pts.forEach(([px, py], i) => (i ? g.lineTo(px, py) : g.moveTo(px, py))); g.stroke();
+    return pts;
+  };
+  g.lineWidth = 1.4;
+  const nT = Math.floor((W * H) / 36000);
+  for (let i = 0; i < nT; i++) {
+    g.strokeStyle = g.fillStyle = pick();
+    const pts = walk(Math.round((R() * W) / G) * G, Math.round((R() * H) / G) * G, Math.floor(R() * 8), 2 + Math.floor(R() * 5));
+    pad(pts[0][0], pts[0][1]); if (R() < 0.8) pad(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+  }
+  const nC = Math.max(2, Math.floor((W * H) / 420000));
+  for (let i = 0; i < nC; i++) {
+    g.strokeStyle = g.fillStyle = pick();
+    const w = G * (4 + Math.floor(R() * 5)), h = G * (3 + Math.floor(R() * 4)), x = Math.round((R() * (W - w)) / G) * G, y = Math.round((R() * (H - h)) / G) * G;
+    g.lineWidth = 1.6; g.strokeRect(x, y, w, h);
+    g.beginPath(); g.arc(x + 9, y + 9, 3, 0, 7); g.stroke();
+    g.lineWidth = 1.2;
+    const pin = (px: number, py: number, dx: number, dy: number) => { g.beginPath(); g.moveTo(px, py); g.lineTo(px + dx * 8, py + dy * 8); g.stroke(); };
+    for (let px = x + 14; px < x + w - 6; px += 11) { pin(px, y, 0, -1); pin(px, y + h, 0, 1); }
+    for (let py = y + 14; py < y + h - 6; py += 11) { pin(x, py, -1, 0); pin(x + w, py, 1, 0); }
+    g.lineWidth = 1.4;
+    const nF = 3 + Math.floor(R() * 4);
+    for (let k = 0; k < nF; k++) {
+      const side = Math.floor(R() * 4), nx = Math.max(1, Math.floor((w - 20) / 11)), ny = Math.max(1, Math.floor((h - 20) / 11));
+      const ox = x + 14 + 11 * Math.floor(R() * nx), oy = y + 14 + 11 * Math.floor(R() * ny);
+      const st = [[ox, y - 8, 6], [x + w + 8, oy, 0], [ox, y + h + 8, 2], [x - 8, oy, 4]][side];
+      const pts = walk(st[0], st[1], st[2], 2 + Math.floor(R() * 3)); pad(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+    }
+  }
+};
+// cartiglio da disegno tecnico: crocette sparse, cerchi tratteggiati e quote
+const artBlueprint: ArtFn = (g, W, H, R, c, am) => {
+  g.lineCap = "round"; g.lineWidth = 1.2;
+  const cross = (x: number, y: number, s: number) => { g.beginPath(); g.moveTo(x - s, y); g.lineTo(x + s, y); g.moveTo(x, y - s); g.lineTo(x, y + s); g.stroke(); };
+  for (let gx = 0; gx < W; gx += 46) for (let gy = 0; gy < H; gy += 46) {
+    if (R() < 0.45) continue;
+    g.strokeStyle = `rgb(${R() < 0.08 ? am : c})`; cross(gx + R() * 46, gy + R() * 46, 3 + R() * 6);
+  }
+  g.strokeStyle = `rgb(${c})`; g.setLineDash([6, 9]);
+  const nCi = Math.max(3, Math.floor((W * H) / 260000));
+  for (let i = 0; i < nCi; i++) {
+    const x = R() * W, y = R() * H, r = 40 + R() * 150;
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
+    g.setLineDash([]); cross(x, y, 9); g.setLineDash([6, 9]);
+  }
+  g.setLineDash([]);
+  g.font = "10px ui-monospace, Menlo, Consolas, monospace"; g.fillStyle = `rgb(${c})`; g.textAlign = "center";
+  const nQ = Math.max(3, Math.floor((W * H) / 300000));
+  for (let i = 0; i < nQ; i++) {
+    const x = R() * W, y = R() * H, len = 80 + R() * 220, vert = R() < 0.4;
+    g.save(); g.translate(x, y); if (vert) g.rotate(Math.PI / 2);
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(len, 0); g.moveTo(0, -6); g.lineTo(0, 6); g.moveTo(len, -6); g.lineTo(len, 6); g.stroke();
+    g.fillText(`${Math.round(len)} mm`, len / 2, -7); g.restore();
+  }
+};
+// curve di livello: archivio come una mappa topografica
+const artContour: ArtFn = (g, W, H, R, c, am) => {
+  g.lineWidth = 1.2; g.lineJoin = "round";
+  const nB = Math.max(3, Math.floor((W * H) / 380000));
+  for (let b = 0; b < nB; b++) {
+    const cx = R() * W, cy = R() * H, base = 30 + R() * 50, step = 14 + R() * 10, rings = 6 + Math.floor(R() * 9), sx = 0.8 + R() * 0.8;
+    const a1 = 0.12 + R() * 0.14, a2 = 0.08 + R() * 0.1, a3 = 0.04 + R() * 0.06, p1 = R() * 6.28, p2 = R() * 6.28, p3 = R() * 6.28;
+    g.strokeStyle = `rgb(${R() < 0.12 ? am : c})`;
+    for (let r = 0; r < rings; r++) {
+      const rad = base + r * step;
+      g.beginPath();
+      for (let k = 0; k <= 90; k++) {
+        const t = (k / 90) * Math.PI * 2, rr = rad * (1 + a1 * Math.sin(2 * t + p1 + r * 0.15) + a2 * Math.sin(3 * t + p2) + a3 * Math.sin(5 * t + p3 + r * 0.2));
+        const x = cx + Math.cos(t) * rr * sx, y = cy + Math.sin(t) * rr;
+        if (k) g.lineTo(x, y); else g.moveTo(x, y);
+      }
+      g.closePath(); g.stroke();
+    }
+  }
+};
+// rete di nodi collegati ai vicini più prossimi
+const artNetwork: ArtFn = (g, W, H, R, c, am) => {
+  const n = Math.max(14, Math.floor((W * H) / 42000)), P: number[][] = [];
+  for (let i = 0; i < n; i++) P.push([R() * W, R() * H, R()]);
+  const maxD = Math.max(160, Math.sqrt((W * H) / n) * 1.9);
+  g.lineWidth = 1.1; g.strokeStyle = `rgb(${c})`;
+  P.forEach((p, i) => {
+    const near = P.map((q, j) => [j, Math.hypot(p[0] - q[0], p[1] - q[1])]).filter((x) => x[0] !== i && x[1] < maxD).sort((a, b) => a[1] - b[1]).slice(0, 2 + Math.floor(R() * 2));
+    near.forEach((x) => { g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(P[x[0]][0], P[x[0]][1]); g.stroke(); });
+  });
+  P.forEach((p) => {
+    const big = p[2] > 0.88; g.fillStyle = g.strokeStyle = `rgb(${p[2] < 0.1 ? am : c})`;
+    g.beginPath(); g.arc(p[0], p[1], big ? 8 : 2.6 + p[2] * 2, 0, 7); if (big) g.stroke(); else g.fill();
+    if (big) { g.beginPath(); g.arc(p[0], p[1], 2.6, 0, 7); g.fill(); }
+  });
+};
+// cielo di puntini e scintille per il podio
+const artStars: ArtFn = (g, W, H, R, c, am) => {
+  const n = Math.floor((W * H) / 7000);
+  for (let i = 0; i < n; i++) {
+    const x = R() * W, y = R() * H, s = R();
+    g.fillStyle = `rgba(${s < 0.2 ? am : c},${0.35 + R() * 0.65})`;
+    g.beginPath(); g.arc(x, y, 0.7 + s * 1.7, 0, 7); g.fill();
+    if (s > 0.96) { g.strokeStyle = g.fillStyle; g.lineWidth = 1.2; const l = 6 + R() * 8; g.beginPath(); g.moveTo(x - l, y); g.lineTo(x + l, y); g.moveTo(x, y - l); g.lineTo(x, y + l); g.stroke(); }
+  }
+};
+const ART: Record<string, ArtFn> = { home: artCircuit, write: artBlueprint, archive: artContour, authors: artNetwork, podio: artStars };
+const BgArt = ({ kind, dark }: { kind: string; dark: boolean }) => {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const seed = useRef(Math.floor(Math.random() * 2147483647));
+  useEffect(() => {
+    const cv = ref.current; if (!cv) return;
+    const g = cv.getContext("2d"); if (!g) return;
+    let w0 = 0, h0 = 0, timer = 0;
+    const draw = () => {
+      const W = window.innerWidth, H = Math.round(window.innerHeight * 1.5);
+      if (w0 && Math.abs(W - w0) < 40 && H < h0 * 1.3 && H > h0 * 0.7) return; // la barra del browser su telefono non deve rigenerare il disegno
+      w0 = W; h0 = H;
+      const dpr = W > 1400 ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+      ART[kind]?.(g, W, H, mulberry(seed.current), dark ? "45,212,191" : "15,139,122", dark ? "251,191,36" : "202,138,4");
+    };
+    draw();
+    const on = () => { clearTimeout(timer); timer = window.setTimeout(draw, 200); };
+    window.addEventListener("resize", on);
+    return () => { clearTimeout(timer); window.removeEventListener("resize", on); };
+  }, [kind, dark]);
+  return <canvas ref={ref} className="bd-art" aria-hidden="true" />;
+};
+const Backdrop = ({ tab, fx, dark, art = true }: { tab: string; fx: boolean; dark: boolean; art?: boolean }) => {
   const k = tab === "profile" ? "authors" : ["home", "write", "podio", "authors"].includes(tab) ? tab : "archive";
   return (<>
-    <div key={k} className={`bd bd-${k} bdin fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" /><div className="au a1" /><div className="au a2" /><div className="au a3" /><div className="bd-p" /></div>
+    <div key={k} className={`bd bd-${k} bdin fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" /><div className="au a1" /><div className="au a2" /><div className="au a3" />{k === "podio" && <div className="bd-p" />}{art && <BgArt kind={k} dark={dark} />}</div>
     {fx && <FX dark={dark} />}
   </>);
 };
@@ -321,9 +463,18 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--pn
 .bt:hover:before,.card:hover:before,.card:active:before{opacity:1}
 .bt.rip:after{content:"";position:absolute;left:var(--px,50%);top:var(--py,50%);width:8px;height:8px;margin:-4px;border-radius:50%;background:color-mix(in srgb,currentColor 40%,transparent);pointer-events:none;animation:ripl .65s var(--ez) forwards}
 @keyframes ripl{to{transform:scale(32);opacity:0}}
-.au{position:absolute;width:60vmax;height:60vmax;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 34%,transparent),transparent);will-change:transform;animation:aur 24s ease-in-out infinite alternate}
-.a1{--c:var(--ac);left:-18vmax;top:-24vmax}.a2{--c:var(--am);right:-24vmax;top:22vh;animation-duration:30s}.a3{--c:#6366F1;left:18vw;bottom:-34vmax;animation-duration:36s;opacity:.7}
-@keyframes aur{to{transform:translate(9vw,7vh) scale(1.22) rotate(35deg)}}
+.au{position:absolute;width:62vmax;height:62vmax;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 44%,transparent),transparent);will-change:transform}
+.a1{--c:var(--ac);left:-18vmax;top:-24vmax;animation:aur1 21s ease-in-out infinite}
+.a2{--c:var(--am);right:-24vmax;top:14vh;animation:aur2 27s ease-in-out infinite}
+.a3{--c:#6366F1;left:18vw;bottom:-34vmax;opacity:.75;animation:aur3 33s ease-in-out infinite}
+@keyframes aur1{0%,100%{transform:translate(0,0) scale(1)}25%{transform:translate(36vw,16vh) scale(1.2)}50%{transform:translate(20vw,40vh) scale(.88)}75%{transform:translate(-6vw,22vh) scale(1.14)}}
+@keyframes aur2{0%,100%{transform:translate(0,0) scale(1)}30%{transform:translate(-40vw,20vh) scale(1.16)}60%{transform:translate(-20vw,-14vh) scale(.86)}80%{transform:translate(-34vw,34vh) scale(1.1)}}
+@keyframes aur3{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30vw,-22vh) scale(1.18)}66%{transform:translate(-18vw,-34vh) scale(.9)}}
+.bd .bd-w{inset:-12%;animation:bdw 24s ease-in-out infinite alternate}
+@keyframes bdw{from{transform:translate(-4%,3%) scale(1)}to{transform:translate(4%,-4%) scale(1.1)}}
+.root.noaurora .bd-w{animation:none}
+.bd-art{position:absolute;left:0;top:-25vh;width:100%;height:150vh;opacity:.24;transform:translateY(calc(var(--sy,0)*-.12px))}
+.root.dark .bd-art{opacity:.32}
 .bd-p{inset:-25vh 0;transform:translateY(calc(var(--sy,0)*-.12px))}
 .bd-podio .bd-p{inset:0;transform:none}
 .prog{position:fixed;top:0;left:0;right:0;height:3px;z-index:90;transform-origin:0 50%;transform:scaleX(var(--sp,0));background:linear-gradient(90deg,var(--ac),var(--am));box-shadow:0 0 12px var(--ac);pointer-events:none}
@@ -1255,7 +1406,7 @@ export default function App() {
     const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
     const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
     return shell(<>
-      <Backdrop tab="home" fx={E.fx} dark={dark} />
+      <Backdrop tab="home" fx={E.fx} dark={dark} art={!lite} />
       <div className="relative z-10 min-h-screen grid md:grid-cols-2">
         <div className="brandpanel hidden md:flex flex-col justify-between p-12"><div className="bd-p w" />
           <Wordmark light size={56} fs={26} />
@@ -1524,7 +1675,7 @@ export default function App() {
 
   return shell(
     <>
-      <Backdrop tab={tab} fx={E.fx} dark={dark} />
+      <Backdrop tab={tab} fx={E.fx} dark={dark} art={!lite} />
       {/* sidebar desktop */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col p-5 gap-1 pn !rounded-none !border-y-0 !border-l-0 z-20">
         <div className="flex items-center gap-2.5 mb-8 cursor-pointer select-none" title="Il Circuito">
