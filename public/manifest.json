@@ -1,0 +1,13 @@
+{
+  "short_name": "Il Circuito",
+  "name": "Il Circuito · Archivio di scrittura",
+  "description": "Il diario della classe: ognuno scrive, ogni mese i testi migliori vengono letti e premiati.",
+  "lang": "it",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0A4F49",
+  "theme_color": "#0A4F49",
+  "icons": [
+    { "src": "favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" }
+  ]
+}

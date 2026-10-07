@@ -13,6 +13,7 @@ import {
   Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
+import { clean, plain } from "./sanitize";
 
 // --- FIREBASE ---
 const firebaseConfig = {
@@ -42,19 +43,17 @@ const TOOLS = [
 const SORTS: any = { newest: "Più recenti", rated: "Voto più alto", oldest: "Più vecchi", longest: "Più lunghi", shortest: "Più brevi" };
 
 // --- UTIL ---
-const clean = (h: string) => {
-  const d = new DOMParser().parseFromString(h || "", "text/html");
-  d.querySelectorAll("script,iframe,object,embed,style,link").forEach((n) => n.remove());
-  d.body.querySelectorAll("img").forEach((i) => { i.setAttribute("loading", "lazy"); i.setAttribute("decoding", "async"); });
-  d.body.querySelectorAll("*").forEach((el) => {
-    Array.from(el.attributes).forEach((a) => {
-      const n = a.name.toLowerCase();
-      if (n.startsWith("on") || (["href", "src"].includes(n) && /^\s*javascript:/i.test(a.value))) el.removeAttribute(a.name);
-    });
-  });
-  return d.body.innerHTML;
-};
-const plain = (h: string) => { const d = document.createElement("div"); d.innerHTML = clean(h); return d.textContent || ""; };
+// clean() e plain() vivono in sanitize.ts (pulizia dell'HTML degli scritti)
+
+// Nome e cognome: spazi sistemati e iniziali maiuscole (solo se la parola è tutta minuscola o tutta maiuscola: "De Luca" e "D'Angelo" restano com'erano)
+// (le espressioni con \p{L} sono costruite con new RegExp perché i TypeScript recenti non accettano il flag "u" nei letterali con questo target)
+const RE_LETTER = new RegExp("\\p{L}", "gu"), RE_MARK = new RegExp("\\p{M}", "gu"), RE_INITIAL = new RegExp("(^|['\u2019-])(\\p{L})", "gu");
+const tidyName = (s: string) => s.trim().replace(/\s+/g, " ").split(" ").filter(Boolean)
+  .map((w) => (w.length > 1 && (w === w.toLowerCase() || w === w.toUpperCase()) ? w.toLowerCase().replace(RE_INITIAL, (_m, a, b) => a + b.toUpperCase()) : w)).join(" ");
+// un nome vero: almeno 2 lettere, niente numeri né simboli
+const okName = (s: string) => s.length >= 2 && s.length <= 30 && !/[\d_@#$%^&*()+=<>[\]{}|\\/!?~`":;,]/.test(s) && (s.match(RE_LETTER) || []).length >= 2;
+// handle di partenza ricavato dal nome ("Mario Rossi" → "mario.rossi"), poi modificabile dal profilo
+const toHandle = (s: string) => s.normalize("NFD").replace(RE_MARK, "").toLowerCase().trim().split(/\s+/).join(".").replace(/[^a-z0-9_.]/g, "").slice(0, 20).replace(/\.+$/, "");
 const dims = (t: any) => ({
   w: t.w || 900,
   h: t.h || (t.strokes || []).reduce((m: number, s: any) => s.points.reduce((mm: number, p: any) => Math.max(mm, p.y + 80), m), 400),
@@ -773,11 +772,13 @@ const BANNERS = [
   { id: "sky", g: "linear-gradient(135deg,#38BDF8,#1E3A8A)" }, { id: "slate", g: "linear-gradient(135deg,#94A3B8,#0F172A)" },
 ];
 const AV = ["#0F8B7A", "#C2410C", "#4F46E5", "#DB2777", "#0284C7", "#CA8A04", "#7E22CE"];
+// iniziali di nome e cognome ("Mario Rossi" → "MR"); con una sola parola, le prime due lettere
+const initials = (name: string) => { const w = name.trim().split(/\s+/).filter(Boolean); return w.length > 1 ? Array.from(w[0])[0] + Array.from(w[w.length - 1])[0] : Array.from(w[0] || "?").slice(0, 2).join(""); };
 const Avatar = ({ p, name = "?", size = 40 }: any) => {
   const h = Array.from(String(name)).reduce((a, c) => a + c.charCodeAt(0), 0);
   return p?.avatar
     ? <img src={p.avatar} alt="" className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />
-    : <span className="rounded-full shrink-0 inline-flex items-center justify-center font-bold text-white uppercase" style={{ width: size, height: size, background: AV[h % AV.length], fontSize: size * 0.4 }}>{String(name).slice(0, 2)}</span>;
+    : <span className="rounded-full shrink-0 inline-flex items-center justify-center font-bold text-white uppercase" style={{ width: size, height: size, background: AV[h % AV.length], fontSize: size * 0.4 }}>{initials(String(name))}</span>;
 };
 const avatarFrom = (file: File): Promise<string> => new Promise((res, rej) => {
   const r = new FileReader();
@@ -1069,7 +1070,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authMode, setAuthMode] = useState("login");
-  const [f, setF] = useState({ email: "", pw: "", name: "", newPw: "" });
+  const [f, setF] = useState({ email: "", pw: "", name: "", surname: "", newPw: "" });
   const [authMsg, setAuthMsg] = useState<{ t: "err" | "ok"; m: string } | null>(null);
   const [resetCode, setResetCode] = useState<string | null>(null);
   // ui
@@ -1311,6 +1312,8 @@ export default function App() {
 
   // bozza: ripristino + salvataggio automatico
   useEffect(() => {
+    // a ogni cambio di account riparto da un foglio vuoto: altrimenti il testo di chi è uscito finirebbe nella bozza di chi entra
+    setEditingId(null); setTitle(""); setContent(""); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
     if (!draftKey) return;
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) || "null");
@@ -1335,13 +1338,28 @@ export default function App() {
 
   // --- auth handlers ---
   const submitAuth = async (e: any) => {
-    e.preventDefault(); setAuthMsg(null); setAuthLoading(true);
+    e.preventDefault(); setAuthMsg(null);
+    const email = f.email.trim(); // la tastiera del telefono aggiunge spesso uno spazio in fondo
+    let full = "";
+    if (authMode === "register") {
+      // nome e cognome veri e obbligatori: servono per riconoscere chi scrive (l'handle si cambia poi dal profilo)
+      const n = tidyName(f.name), c = tidyName(f.surname);
+      if (!okName(n) || !okName(c)) return err("Inserisci il tuo nome e il tuo cognome: almeno 2 lettere ciascuno, senza numeri o simboli.");
+      full = `${n} ${c}`;
+    }
+    setAuthLoading(true);
     try {
-      if (authMode === "reset") { await sendPasswordResetEmail(auth, f.email); setAuthMsg({ t: "ok", m: "Link di recupero inviato. Controlla la posta." }); }
-      else if (authMode === "register") { const c = await createUserWithEmailAndPassword(auth, f.email, f.pw); await updateProfile(c.user, { displayName: f.name.trim() || "Operatore" }); }
-      else await signInWithEmailAndPassword(auth, f.email, f.pw);
+      if (authMode === "reset") { await sendPasswordResetEmail(auth, email); setAuthMsg({ t: "ok", m: "Link di recupero inviato. Controlla la posta." }); }
+      else if (authMode === "register") {
+        const c = await createUserWithEmailAndPassword(auth, email, f.pw);
+        // da qui l'account esiste già: un intoppo sul profilo non deve far sembrare fallita la registrazione
+        try { await updateProfile(c.user, { displayName: full }); } catch (x) { console.warn("Nome non salvato nell'account", x); }
+        try { const now = Date.now(); await setDoc(doc(db, "profili", c.user.uid), { displayName: full, handle: toHandle(full), status: "", bio: "", avatar: "", banner: "teal", createdAt: now, updatedAt: now }); }
+        catch (x) { console.warn("Profilo non creato (controlla le regole di Firestore)", x); }
+      }
+      else await signInWithEmailAndPassword(auth, email, f.pw);
     } catch (x: any) {
-      const m: any = { "auth/email-already-in-use": "Questa email è già registrata.", "auth/invalid-credential": "Email o password errate.", "auth/weak-password": "La password deve avere almeno 6 caratteri.", "auth/invalid-email": "L'email non è valida.", "auth/user-not-found": "Utente non trovato.", "auth/missing-email": "Inserisci un'email." };
+      const m: any = { "auth/email-already-in-use": "Questa email è già registrata.", "auth/invalid-credential": "Email o password errate.", "auth/wrong-password": "Email o password errate.", "auth/weak-password": "La password deve avere almeno 6 caratteri.", "auth/invalid-email": "L'email non è valida.", "auth/user-not-found": "Utente non trovato.", "auth/missing-email": "Inserisci un'email.", "auth/missing-password": "Inserisci la password.", "auth/too-many-requests": "Troppi tentativi. Aspetta qualche minuto e riprova.", "auth/network-request-failed": "Connessione assente o instabile. Controlla la rete e riprova.", "auth/user-disabled": "Questo account è stato disattivato.", "auth/operation-not-allowed": "La registrazione con email non è attiva: avvisa chi gestisce il sito." };
       err(m[x.code] || `Errore: ${x.message}`);
     }
     setAuthLoading(false);
@@ -1356,7 +1374,11 @@ export default function App() {
     } catch { err("Il link è scaduto o non è valido."); }
     setAuthLoading(false);
   };
-  const logout = async () => { await signOut(auth); setIsAdmin(false); setTab("home"); };
+  const logout = async () => {
+    // chiudo ogni finestra aperta: sui PC condivisi non deve restare nulla dell'account che esce
+    setSel(null); setViewProf(null); setEditProf(false); setOptOpen(false); setToDelete(null); setDone(null); setSelMode(false); setIds([]);
+    await signOut(auth); setIsAdmin(false); setTab("home");
+  };
 
   // --- editor handlers ---
   const cmd = (c: string, v?: string) => {
@@ -1448,7 +1470,8 @@ export default function App() {
     if (!user || !(plain(html).trim() || /<img/.test(html) || strokes.length)) return;
     const st = strokes.map((s) => ({ ...s, points: s.points.map((p: any) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 })) }));
     const data = { title: title.trim() || "Senza titolo", content: html, strokes: st, w: Math.round(canvasRef.current?.clientWidth || 900), h: Math.round(height) };
-    if (JSON.stringify(data).length > 950000) return notify("Progetto troppo pesante: riduci le immagini o il disegno.");
+    // il limite di Firestore è di ~1 MB in byte (non in caratteri: accenti ed emoji ne pesano di più)
+    if (new Blob([JSON.stringify(data)]).size > 950000) return notify("Progetto troppo pesante: riduci le immagini o il disegno.");
     setSaving(true);
     try {
       if (editingId) await updateDoc(doc(db, "pensieri", editingId), { ...data, updatedAt: Date.now() });
@@ -1547,7 +1570,13 @@ export default function App() {
                   </div>
                 )}
                 {Msg}
-                {authMode === "register" && <input className="inp" required placeholder="Nome operatore" value={f.name} onChange={set("name")} />}
+                {authMode === "register" && <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="inp" required maxLength={30} placeholder="Nome" autoComplete="given-name" aria-label="Nome" value={f.name} onChange={set("name")} />
+                    <input className="inp" required maxLength={30} placeholder="Cognome" autoComplete="family-name" aria-label="Cognome" value={f.surname} onChange={set("surname")} />
+                  </div>
+                  <p className="mu text-xs -mt-1">Scrivi il tuo vero nome e cognome, così sai chi sei tra i compagni. L'handle (@nome) lo potrai cambiare dal profilo.</p>
+                </>}
                 <input className="inp" type="email" required placeholder="Email" autoComplete="email" inputMode="email" autoCapitalize="none" value={f.email} onChange={set("email")} />
                 {authMode !== "reset" && <div className="relative"><input className="inp !pr-12" type={showPw ? "text" : "password"} required placeholder="Password" autoComplete={authMode === "register" ? "new-password" : "current-password"} value={f.pw} onChange={set("pw")} /><div className="absolute right-1.5 inset-y-0 flex items-center"><button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? "Nascondi password" : "Mostra password"} className="bt !border-0 !bg-transparent !p-2">{showPw ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></div>}
                 <button className="bt pri w-full py-3">{authMode === "login" ? "Entra" : authMode === "register" ? "Crea profilo" : "Invia link di recupero"}</button>
@@ -1615,7 +1644,11 @@ export default function App() {
   };
   const saveProf = async (e: any) => {
     e.preventDefault();
-    const name = (pf.displayName || "").trim() || "Operatore";
+    const name = tidyName(pf.displayName || "");
+    const prev = (profiles[user.uid]?.displayName || user.displayName || "").trim();
+    // nome e cognome si possono correggere, ma non sostituire con un soprannome; chi ha già un nome salvato può lasciarlo com'è
+    if (!name) return notify("Il nome non può essere vuoto.");
+    if (name !== prev && (name.split(" ").length < 2 || !okName(name.replace(/ /g, "")))) return notify("Scrivi nome e cognome, senza numeri o simboli.");
     const data = { displayName: name, handle: (pf.handle || "").trim(), status: (pf.status || "").trim(), bio: (pf.bio || "").trim(), avatar: pf.avatar || "", banner: pf.banner || "teal",
       createdAt: profiles[user.uid]?.createdAt || Date.now(), updatedAt: Date.now() } as any;
     // l'immagine della copertina si scrive solo se c'è: senza, il documento resta valido anche con le vecchie regole
@@ -1662,7 +1695,7 @@ export default function App() {
                 </div>
                 {pf.bannerImg && <Rng label="Posizione dell'immagine" hint="Sposta su o giù la parte che resta visibile" v={pf.bannerY ?? 50} set={(v: number) => setPf({ ...pf, bannerY: v })} min={0} max={100} step={1} fmt={(v: number) => (v <= 5 ? "In alto" : v >= 95 ? "In basso" : `${v}%`)} />}
                 <div className="flex flex-wrap gap-3 mt-3">{BANNERS.map((b) => <button type="button" key={b.id} aria-label={`Copertina ${b.id}`} onClick={() => setPf({ ...pf, banner: b.id, bannerImg: "", bannerY: 50 })} className="sw w-11 h-11 rounded-xl" style={{ background: b.g, boxShadow: !pf.bannerImg && pf.banner === b.id ? "0 0 0 2px var(--pn),0 0 0 4px var(--ac)" : "none" }} />)}</div></div>
-              {fld("Nome visualizzato", "displayName", "Il tuo nome", 30)}
+              {fld("Nome e cognome", "displayName", "es. Mario Rossi", 60)}
               {fld("Handle", "handle", "es. mario.rossi", 20, (v) => v.toLowerCase().replace(/[^a-z0-9_.]/g, ""))}
               {fld("Stato", "status", "es. Scrivo di notte ✍️", 40)}
               <label className="block"><span className="text-xs mu flex justify-between"><span>Bio</span><span>{(pf.bio || "").length}/160</span></span>
