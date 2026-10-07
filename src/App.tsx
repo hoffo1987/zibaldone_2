@@ -626,12 +626,14 @@ background:var(--bg)}
 .bt{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.55rem .95rem;border-radius:12px;font-size:.85rem;font-weight:600;border:1px solid var(--ln);background:var(--pn);color:var(--ink);outline:none;cursor:pointer;
 transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .3s,border-color .3s,filter .3s,letter-spacing .3s}
 .bt svg{transition:transform .4s var(--spring),fill .3s}
+@media (hover:hover){
 .bt:hover{transform:translate(var(--tx,0px),calc(var(--ty,0px) - 4px)) scale(1.03);border-color:var(--ac);box-shadow:0 10px 20px -8px color-mix(in srgb,var(--ac) 50%,transparent),var(--sh1);letter-spacing:.02em}
 .bt:hover svg{transform:scale(1.25) rotate(-8deg);fill:color-mix(in srgb,var(--ac) 20%,transparent)}
+}
 .bt:active{transform:translateY(2px) scale(.94);box-shadow:none;letter-spacing:0}
 .bt:disabled{opacity:.4;pointer-events:none}
 .bt.on{background:linear-gradient(135deg,var(--ac),color-mix(in srgb,var(--ac) 80%,#000));border-color:var(--ac);color:#fff} .root.dark .bt.on{color:#042f2a}
-.bt.on:hover{filter:brightness(1.15);box-shadow:0 14px 30px -6px color-mix(in srgb,var(--ac) 80%,transparent);transform:translate(var(--tx,0px),calc(var(--ty,0px) - 4px)) scale(1.05)}
+@media (hover:hover){.bt.on:hover{filter:brightness(1.15);box-shadow:0 14px 30px -6px color-mix(in srgb,var(--ac) 80%,transparent);transform:translate(var(--tx,0px),calc(var(--ty,0px) - 4px)) scale(1.05)}}
 .bt.pri{background:var(--ink);color:var(--bg);border-color:var(--ink)} .bt.pri:hover{box-shadow:var(--sh2)}
 .bt.dng{color:#dc2626;border-color:#fca5a5} .bt.dng:hover{background:#fef2f2;border-color:#dc2626}
 .nv:hover{background:var(--sf)!important} .nv:hover svg{transform:translateX(3px)}
@@ -707,8 +709,13 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 @media (hover:none){.stat .go{opacity:.55;transform:none}}
 .bd-p.w{background:#fff;opacity:.09;--m:var(--m-circuit);--ts:160px}
 @media (hover:none){.bt:hover{transform:none;box-shadow:none}.bt.on:hover{transform:none;filter:none;box-shadow:none}}
-.tb[data-open="true"]{border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 28%,transparent)}
-.tb.on{box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 40%,transparent)}
+/* toolbar editor: risposta immediata (niente molla), stati distinti.
+   acceso = pieno colorato | pannello aperto = bordo e tinta | entrambi = pieno + anello */
+.tb{transition:background .12s,border-color .12s,color .12s,box-shadow .12s,transform .1s;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.tb svg{transition:none}
+.tb:active{transform:scale(.95)}
+.tb[data-open="true"]:not(.on){border-color:var(--ac);color:var(--ac);background:color-mix(in srgb,var(--ac) 14%,var(--pn))}
+.tb.on[data-open="true"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 35%,transparent)}
 .rt span[style*="font-size"]{line-height:1.25}
 .wm{font-family:'Unbounded','Bricolage Grotesque',sans-serif;font-weight:600;white-space:nowrap;letter-spacing:-.01em}
 .wl{display:inline-block;color:var(--wc);opacity:0;animation:wl .7s var(--ez) calc(var(--i)*60ms + .2s) forwards,lw 7s ease-in-out calc(2.4s + var(--i)*90ms) infinite}
@@ -751,7 +758,8 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--pn
 .bt:before,.card:before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s}
 .bt:before{background:radial-gradient(90px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,currentColor 22%,transparent),transparent 70%)}
 .card:before{z-index:1;background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--ac) 26%,transparent),transparent 65%)}
-.bt:hover:before,.card:hover:before,.card:active:before{opacity:var(--gi,1)}
+.card:hover:before,.card:active:before{opacity:var(--gi,1)}
+@media (hover:hover){.bt:hover:before{opacity:var(--gi,1)}}
 .bt.rip:after{content:"";position:absolute;left:var(--px,50%);top:var(--py,50%);width:8px;height:8px;margin:-4px;border-radius:50%;background:color-mix(in srgb,currentColor 40%,transparent);pointer-events:none;animation:ripl .65s var(--ez) forwards}
 @keyframes ripl{to{transform:scale(32);opacity:0}}
 .au{position:absolute;width:62vmax;height:62vmax;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 44%,transparent),transparent);will-change:transform;opacity:var(--ai,1)}
@@ -1760,16 +1768,21 @@ export default function App() {
     if (!ed || !sel || !r || !ed.contains(r.commonAncestorContainer)) return false;
     sel.removeAllRanges(); sel.addRange(r); return true;
   };
-  const withSel = (fn: () => void) => {
+  // probe: cosa confrontare prima/dopo per capire se il comando ha avuto effetto (di base l'HTML)
+  const withSel = (fn: () => void, probe?: () => string) => {
     const ed = editorRef.current; if (!ed || drawing) return;
+    const snap = probe || (() => ed.innerHTML);
     const focused = document.activeElement === ed;
     if (!focused) restoreSel();
-    const before = ed.innerHTML;
+    const before = snap();
     fn();
-    if (!focused && ed.innerHTML === before) { ed.focus(); restoreSel(); fn(); }
+    if (!focused && snap() === before) { ed.focus(); restoreSel(); fn(); }
     setContent(ed.innerHTML); readFmt();
   };
-  const cmd = (c: string, v?: string) => withSel(() => { document.execCommand(c, false, v); });
+  // con il solo cursore grassetto/corsivo/ecc. non cambiano l'HTML ma cambiano lo stato: va controllato anche quello,
+  // altrimenti il comando veniva rieseguito e quindi annullato (serviva toccare due volte)
+  const cmd = (c: string, v?: string) => withSel(() => { document.execCommand(c, false, v); },
+    () => { let s = ""; try { s = String(document.queryCommandState(c)); } catch {} return (editorRef.current?.innerHTML || "") + "|" + s; });
   // toglie dimensione o colore da tutto ciò che la selezione tocca (così non si accumulano e si può sempre tornare al normale)
   const stripFmt = (kind: "size" | "color") => {
     const ed = editorRef.current, sel = window.getSelection(); if (!ed || !sel || !sel.rangeCount) return;
