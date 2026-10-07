@@ -2,7 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from "re
 import { initializeApp } from "firebase/app";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset
+  signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset, signInAnonymously
 } from "firebase/auth";
 import {
   getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, setDoc, getDoc, deleteField
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
+import { AccessoProf } from "./AccessoProf";
 
 // --- FIREBASE ---
 const firebaseConfig = {
@@ -1102,6 +1103,12 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
+  // Titolare = admin creato a mano dalla console. Il professore entra con un link monouso: sessione anonima, senza email né password.
+  const [isOwner, setIsOwner] = useState(false);
+  const isProf = !!user?.isAnonymous;
+  const [profToken, setProfToken] = useState<string | null>(null);
+  const [redeeming, setRedeeming] = useState(false);
+  const redeemRef = useRef(false);
   // list
   const [rawItems, setRawItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1157,23 +1164,25 @@ export default function App() {
   }, [rawItems, vals, valsReady, isAdmin]);
   const [notifs, setNotifs] = useState<any[]>([]);
   useEffect(() => {
-    if (!user || !db) { setNotifs([]); return; }
+    if (!user || !db || isProf) { setNotifs([]); return; }
     return onSnapshot(query(collection(db, "notifiche"), where("userId", "==", user.uid)), (s: any) => setNotifs(s.docs.map((d: any) => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => b.timestamp - a.timestamp)), () => {});
   }, [user]);
   useEffect(() => { setVisible(18); }, [search, sortBy, monthFilter, onlyMarked, unrated, tab]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
+  const profOk = !isProf || isAdmin;
   useEffect(() => {
-    if (!user || !db) return;
+    if (!user || !db || !profOk) return;
     return onSnapshot(collection(db, "profili"), (snap: any) => { const m: any = {}; snap.forEach((d: any) => { m[d.id] = d.data(); }); setProfiles(m); }, () => {});
-  }, [user]);
+  }, [user, profOk]);
   // Admin = chi ha il documento  admins/{uid}  su Firestore (creato a mano dalla console): nessuna password nel sito.
   useEffect(() => {
-    if (!user || !db) { setIsAdmin(false); setAdminChecked(false); return; }
+    if (!user || !db) { setIsAdmin(false); setIsOwner(false); setAdminChecked(false); return; }
+    if (redeemRef.current) return; // durante l'attivazione del link ci pensa redeemProf
     let on = true;
     setAdminChecked(false);
     getDoc(doc(db, "admins", user.uid))
-      .then((s: any) => { if (on) setIsAdmin(s.exists()); })
-      .catch(() => { if (on) setIsAdmin(false); })
+      .then((s: any) => { if (on) { setIsAdmin(s.exists()); setIsOwner(s.exists() && s.data()?.ruolo !== "professore"); } })
+      .catch(() => { if (on) { setIsAdmin(false); setIsOwner(false); } })
       .finally(() => { if (on) setAdminChecked(true); });
     return () => { on = false; };
   }, [user]);
@@ -1289,6 +1298,23 @@ export default function App() {
     return () => { document.body.style.overflow = ""; };
   }, [sel, toDelete, done, viewProf]);
 
+  // link del professore:  https://sito/#prof=<64 caratteri>  Il token sta dopo il # (non viene mai inviato a nessun server)
+  // e lo tolgo subito dall'indirizzo, tenendolo solo in memoria.
+  useEffect(() => {
+    const m = /^#prof=([0-9a-fA-F]{64})$/.exec(window.location.hash);
+    if (!m) return;
+    setProfToken(m[1].toLowerCase());
+    window.history.replaceState(window.history.state, document.title, window.location.pathname + window.location.search);
+  }, []);
+  // chi è già dentro con il proprio account non usa il link: lo scarto senza consumarlo
+  useEffect(() => {
+    if (profToken && user && !user.isAnonymous && !redeeming) { setProfToken(null); notify("Per usare un link professore devi prima uscire dal tuo account."); }
+  }, [profToken, user, redeeming]);
+  // una sessione anonima senza accesso valido (link scaduto, accesso revocato) non deve restare aperta
+  useEffect(() => {
+    if (user?.isAnonymous && adminChecked && !isAdmin && !redeeming) signOut(auth).catch(() => {});
+  }, [user, adminChecked, isAdmin, redeeming]);
+
   // auth state + link reset password
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -1298,7 +1324,7 @@ export default function App() {
 
   // dati
   useEffect(() => {
-    if (!user || !db) return;
+    if (!user || !db || (isProf && !isAdmin)) return;
     let q: any;
     if (isAdmin && ["read", "home", "podio", "authors"].includes(tab)) q = collection(db, "pensieri");
     else if (tab === "my_pages" || tab === "home" || tab === "profile") q = query(collection(db, "pensieri"), where("userId", "==", user.uid));
@@ -1374,10 +1400,38 @@ export default function App() {
     } catch { err("Il link è scaduto o non è valido."); }
     setAuthLoading(false);
   };
+  // Attivazione del link: accesso anonimo + un'unica scrittura atomica (crea admins/{uid} e brucia l'invito).
+  // Le regole di Firestore controllano che l'invito esista, non sia scaduto e venga eliminato nella stessa operazione.
+  const redeemProf = async () => {
+    if (!profToken || redeemRef.current) return;
+    const token = profToken;
+    redeemRef.current = true; setRedeeming(true); setAuthMsg(null);
+    try {
+      const cred = await signInAnonymously(auth);
+      const b = writeBatch(db);
+      b.set(doc(db, "admins", cred.user.uid), { ruolo: "professore", invito: token, creatoIl: Date.now() });
+      b.delete(doc(db, "inviti", token));
+      await b.commit();
+      const s = await getDoc(doc(db, "admins", cred.user.uid));
+      if (!s.exists()) throw new Error("accesso non registrato");
+      setIsAdmin(true); setIsOwner(false); setAdminChecked(true);
+      setProfToken(null);
+    } catch (x: any) {
+      setProfToken(null);
+      try { if (auth.currentUser?.isAnonymous) await signOut(auth); } catch {}
+      setIsAdmin(false); setIsOwner(false); setAdminChecked(false);
+      const off = x?.code === "auth/operation-not-allowed" || x?.code === "auth/admin-restricted-operation";
+      err(off ? "L'accesso professore non è ancora attivato su Firebase. Avvisa chi ti ha dato il link." : "Il link non è valido, è già stato usato oppure è scaduto. Chiedi un nuovo link.");
+    }
+    redeemRef.current = false; setRedeeming(false);
+  };
   const logout = async () => {
+    if (isProf && !window.confirm("Se esci, per rientrare serve un nuovo link dal titolare. Vuoi uscire?")) return;
     // chiudo ogni finestra aperta: sui PC condivisi non deve restare nulla dell'account che esce
     setSel(null); setViewProf(null); setEditProf(false); setOptOpen(false); setToDelete(null); setDone(null); setSelMode(false); setIds([]);
-    await signOut(auth); setIsAdmin(false); setTab("home");
+    // il professore che esce toglie anche il proprio accesso: nell'elenco del titolare non resta un dispositivo fantasma
+    if (isProf) { try { await deleteDoc(doc(db, "admins", user.uid)); } catch {} }
+    await signOut(auth); setIsAdmin(false); setIsOwner(false); setTab("home");
   };
 
   // --- editor handlers ---
@@ -1520,7 +1574,7 @@ export default function App() {
   };
   const openView = (t: any) => { history.pushState({ tab, v: 1 }, ""); setSel(t); };
   const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
-  const go = (t: string) => { if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
+  const go = (t: string) => { if (isProf && (t === "my_pages" || t === "profile" || (t === "write" && !editingId))) return; if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
 
   const prepared = useMemo(() => items.map((t) => ({ ...t, _tx: plain(t.content), _img: /<img/.test(t.content || "") })), [items]);
   const shown = useMemo(() => {
@@ -1536,7 +1590,7 @@ export default function App() {
   const gStyle: any = { "--gi": G.glowI, "--ai": G.auroraI, "--ao": G.artI };
   const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} min-h-screen`}><style>{CSS}</style><div className="prog" />{children}</div>;
 
-  if (authLoading || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
+  if (authLoading || redeeming || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
   if (!user || resetCode) {
     const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
@@ -1561,6 +1615,14 @@ export default function App() {
                 <input className="inp" type="password" minLength={6} required autoFocus placeholder="Almeno 6 caratteri" value={f.newPw} onChange={set("newPw")} />
                 <button className="bt pri w-full py-3">Aggiorna password</button>
               </form>
+            ) : profToken ? (
+              <div className="space-y-4">
+                <h2 className="hd text-3xl font-bold">Accesso professore</h2>
+                {Msg}
+                <p className="mu text-sm">Questo link ti apre la modalità professore, senza account né password. Funziona una sola volta: dopo l'uso si disattiva e questo dispositivo resta collegato.</p>
+                <button type="button" className="bt pri w-full py-3" onClick={redeemProf}>Entra come professore</button>
+                <button type="button" className="mu text-sm lk" onClick={() => { setProfToken(null); setAuthMsg(null); }}>Annulla</button>
+              </div>
             ) : (
               <form onSubmit={submitAuth} className="space-y-4">
                 <h2 className="hd text-3xl font-bold">{authMode === "login" ? "Bentornato" : authMode === "register" ? "Crea il tuo profilo" : "Recupera l'accesso"}</h2>
@@ -1584,14 +1646,14 @@ export default function App() {
                 {authMode === "reset" && <button type="button" className="mu text-sm lk" onClick={() => { setAuthMode("login"); setAuthMsg(null); }}>Torna all'accesso</button>}
               </form>
             )}
-            {!resetCode && <ApkDownload divider />}
+            {!resetCode && !profToken && <ApkDownload divider />}
           </div>
         </div>
       </div>
     </>);
   }
 
-  const nav: any[] = [
+  const nav: any[] = ([
     { id: "home", label: "Panoramica", s: "Home", icon: LayoutDashboard },
     { id: "write", label: editingId ? "Modifica" : "Nuovo progetto", s: editingId ? "Modifica" : "Nuovo", icon: Pen },
     { id: "my_pages", label: "I miei progetti", s: "Miei", icon: Bookmark },
@@ -1599,11 +1661,11 @@ export default function App() {
       { id: "read", label: "Tutti gli scritti", s: "Tutti", icon: Activity },
       { id: "podio", label: "Podio del mese", s: "Podio", icon: Trophy }, { id: "authors", label: "Autori", icon: Users },
     ] : []),
-  ];
+  ]).filter((n: any) => !isProf || (n.id !== "my_pages" && (n.id !== "write" || !!editingId))); // il professore non scrive progetti suoi: può solo correggere
   const monthOpts: string[] = Array.from(new Set<string>(items.map((t: any) => mKey(t.timestamp)))).sort().reverse();
   const monthNow = mKey(Date.now());
   const thisMonth = items.filter((t) => mKey(t.timestamp) === monthNow);
-  const myName = profiles[user.uid]?.displayName || user.displayName || "Operatore";
+  const myName = isProf ? "Professore" : (profiles[user.uid]?.displayName || user.displayName || "Operatore");
   const first = myName.split(" ")[0];
   const dn = (uid: string, fb: string) => profiles[uid]?.displayName || fb;
   const hid = (t: any) => isAdmin && !t.svelato && t.userId !== user.uid;
@@ -1848,7 +1910,7 @@ export default function App() {
         <div className="mt-auto space-y-2">
           <ApkDownload compact />
           <div className="flex items-center gap-2">
-            <button onClick={() => go("profile")} className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{user.email}</span></span></button>
+            <button onClick={() => go("profile")} className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{isProf ? "Accesso professore" : user.email}</span></span></button>
             <button className="bt !p-2" onClick={() => setOptOpen(true)} title="Opzioni" aria-label="Opzioni"><Settings size={18} /></button>
             <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
           </div>
@@ -2142,6 +2204,7 @@ export default function App() {
             {opts.sound && <Rng label="Volume dei suoni" v={opts.vol ?? 1} set={(v: number) => setOpt("vol", v)} min={0.1} max={2} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
             <Sw on={opts.vibrate} set={(v: boolean) => setOpt("vibrate", v)} label="Vibrazione" hint="Feedback tattile su segnalibro e voti" />
             {opts.vibrate && <div className="py-2"><span className="block text-xs font-semibold mb-1.5">Forza della vibrazione</span><Seg v={opts.vib ?? 1} set={(v: number) => setOpt("vib", v)} items={[[0.6, "Leggera"], [1, "Normale"], [1.6, "Forte"]]} /></div>}
+            {isOwner && <AccessoProf db={db} notify={notify} />}
             <div className="flex gap-2 mt-5">
               <button className="bt flex-1" onClick={() => setOpts({ ...DEF })}><RotateCcw size={15} />Ripristina</button>
               <button className="bt on flex-1" onClick={() => setOpt("level", "lite")}><Zap size={15} />Elimina effetti</button>
