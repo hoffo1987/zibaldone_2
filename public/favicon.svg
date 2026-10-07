@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64" fill="none" aria-label="Il Circuito">
+  <defs>
+    <linearGradient id="lg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17C3AE"/>
+      <stop offset="1" stop-color="#0A4F49"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="17" fill="url(#lg)"/>
+  <rect x=".75" y=".75" width="62.5" height="62.5" rx="16.25" stroke="#fff" stroke-opacity=".22" stroke-width="1.5"/>
+  <path d="M43.5 22.4A15 15 0 1 0 43.5 41.6" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <path d="M31 32H47" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M31 32H47" stroke="#FBBF24" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2 5"/>
+  <circle cx="43.5" cy="22.4" r="4.2" fill="#fff"/>
+  <circle cx="43.5" cy="41.6" r="4.2" fill="#FBBF24"/>
+  <circle cx="31" cy="32" r="3.2" fill="#fff"/>
+</svg>
