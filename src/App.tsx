@@ -260,6 +260,287 @@ const Backdrop = ({ tab, fx, dark, art = true, g }: { tab: string; fx: boolean; 
   </>);
 };
 
+// --- PANNELLO VERDE DEL LOGIN: schema elettrotecnico generato a caso (diverso a ogni apertura), con correnti che scorrono ---
+// Stesso principio degli sfondi delle altre pagine: disegno procedurale con seme casuale, mai a tessere ripetute.
+type PPath = { p: number[][]; c: number[]; L: number; a: number };
+type PScene = { paths: PPath[]; lamps: number[][]; sw: number[][]; waves: number[][] };
+const mkPPath = (p: number[][], a = 1): PPath => {
+  const c = [0];
+  for (let i = 1; i < p.length; i++) c.push(c[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
+  return { p, c, L: c[c.length - 1] || 1, a };
+};
+const atPPath = (q: PPath, d: number): number[] => {
+  d = ((d % q.L) + q.L) % q.L;
+  let i = 1; while (i < q.c.length - 1 && q.c[i] < d) i++;
+  const a = q.p[i - 1], b = q.p[i], s = (d - q.c[i - 1]) / (q.c[i] - q.c[i - 1] || 1);
+  return [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s];
+};
+const SL = 40; // lunghezza di ogni simbolo bipolare
+const SYMS: Record<string, (g: CanvasRenderingContext2D) => void> = {
+  res: (g) => { g.beginPath(); g.rect(0, -6, SL, 12); g.stroke(); },
+  ind: (g) => { g.beginPath(); g.moveTo(0, 0); g.lineTo(2, 0); for (let k = 0; k < 3; k++) g.arc(8 + 12 * k, 0, 6, Math.PI, Math.PI * 2); g.lineTo(SL, 0); g.stroke(); },
+  cap: (g) => { g.beginPath(); g.moveTo(0, 0); g.lineTo(16, 0); g.moveTo(24, 0); g.lineTo(SL, 0); g.moveTo(16, -10); g.lineTo(16, 10); g.moveTo(24, -10); g.lineTo(24, 10); g.stroke(); },
+  dio: (g) => { g.beginPath(); g.moveTo(0, 0); g.lineTo(12, 0); g.moveTo(28, 0); g.lineTo(SL, 0); g.moveTo(12, -8); g.lineTo(12, 8); g.lineTo(28, 0); g.closePath(); g.moveTo(28, -8); g.lineTo(28, 8); g.stroke(); },
+  lamp: (g) => { g.beginPath(); g.moveTo(0, 0); g.lineTo(10, 0); g.moveTo(30, 0); g.lineTo(SL, 0); g.moveTo(30, 0); g.arc(20, 0, 10, 0, Math.PI * 2); g.moveTo(13, -7); g.lineTo(27, 7); g.moveTo(13, 7); g.lineTo(27, -7); g.stroke(); },
+  src: (g) => { g.beginPath(); g.moveTo(0, 0); g.lineTo(9, 0); g.moveTo(31, 0); g.lineTo(SL, 0); g.moveTo(31, 0); g.arc(20, 0, 11, 0, Math.PI * 2); g.moveTo(14, 0); g.quadraticCurveTo(17, -8, 20, 0); g.quadraticCurveTo(23, 8, 26, 0); g.stroke(); },
+  sw: (g) => { g.beginPath(); g.moveTo(0, 0); g.lineTo(10, 0); g.moveTo(30, 0); g.lineTo(SL, 0); g.moveTo(10, 0); g.lineTo(29, -11); g.stroke(); g.beginPath(); g.arc(10, 0, 2.2, 0, 7); g.arc(30, 0, 2.2, 0, 7); g.stroke(); },
+  fuse: (g) => { g.beginPath(); g.moveTo(0, 0); g.lineTo(SL, 0); g.rect(8, -5, 24, 10); g.stroke(); },
+  bat: (g) => { g.beginPath(); g.moveTo(0, 0); g.lineTo(14, 0); g.moveTo(32, 0); g.lineTo(SL, 0); g.moveTo(14, -10); g.lineTo(14, 10); g.moveTo(20, -5); g.lineTo(20, 5); g.moveTo(26, -10); g.lineTo(26, 10); g.moveTo(32, -5); g.lineTo(32, 5); g.stroke(); },
+};
+const COMPS = ["res", "ind", "cap", "dio", "lamp", "src", "sw", "fuse", "bat"];
+const FORMS = ["V = R·I", "P = V·I·cosφ", "XL = 2πfL", "XC = 1/2πfC", "Z = √(R²+X²)", "50 Hz", "230 V", "400 V", "I = Q/t", "Φ = B·S", "e = −dΦ/dt", "W = ½·C·V²", "τ = R·C", "cosφ = P/S", "L1 L2 L3 N PE", "Vmax = √2·Veff", "η = Pu/Pa"];
+
+const drawPanelArt = (g: CanvasRenderingContext2D, W: number, H: number, R: () => number): PScene => {
+  const S: PScene = { paths: [], lamps: [], sw: [], waves: [] };
+  const WH = "255,255,255", AM = "251,191,36";
+  const st = (a: number, am = false) => { g.strokeStyle = g.fillStyle = `rgba(${am ? AM : WH},${a})`; };
+  const ri = (a: number, b: number) => a + Math.floor(R() * (b - a + 1));
+  const pk = (a: any[]): any => a[Math.floor(R() * a.length)];
+  const reg = (p: number[][], a = 1) => { S.paths.push(mkPPath(p, a)); };
+  const dot = (x: number, y: number) => { g.beginPath(); g.arc(x, y, 2.8, 0, 7); g.fill(); };
+  const txt = (s: string, x: number, y: number, size = 11, a = 0.26) => { st(a); g.font = `${size}px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace`; g.fillText(s, x, y); };
+  g.lineCap = "round"; g.lineJoin = "round";
+  // filo da (x1,y1) a (x2,y2) con un componente al centro
+  const seg = (x1: number, y1: number, x2: number, y2: number, type?: string) => {
+    const L = Math.hypot(x2 - x1, y2 - y1), a = Math.atan2(y2 - y1, x2 - x1);
+    if (!type || L < SL + 12) { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); return; }
+    const s = (L - SL) / 2;
+    g.save(); g.translate(x1, y1); g.rotate(a);
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(s, 0); g.moveTo(s + SL, 0); g.lineTo(L, 0); g.stroke();
+    g.translate(s, 0); SYMS[type](g); g.restore();
+    const cx = x1 + Math.cos(a) * (s + SL / 2), cy = y1 + Math.sin(a) * (s + SL / 2);
+    if (type === "lamp" || type === "src") S.lamps.push([cx, cy]);
+    if (type === "sw") S.sw.push([x1 + Math.cos(a) * (s + 30), y1 + Math.sin(a) * (s + 30)]);
+  };
+  const gnd = (x: number, y: number) => {
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8);
+    g.moveTo(x - 9, y + 8); g.lineTo(x + 9, y + 8); g.moveTo(x - 6, y + 12); g.lineTo(x + 6, y + 12); g.moveTo(x - 3, y + 16); g.lineTo(x + 3, y + 16); g.stroke();
+  };
+  const tag = () => pk(["R", "C", "L", "D", "V", "T", "Q", "F"]) + ri(1, 9);
+
+  // 1) anello RLC con eventuale ramo in parallelo
+  const loop = (x: number, y: number, w: number, h: number) => {
+    const x2 = x + w, y2 = y + h; st(0.22); g.lineWidth = 1.5;
+    seg(x, y, x2, y, pk(COMPS)); seg(x2, y, x2, y2, pk(COMPS)); seg(x2, y2, x, y2, pk(COMPS)); seg(x, y2, x, y, pk(COMPS));
+    reg([[x, y], [x2, y], [x2, y2], [x, y2], [x, y]]);
+    if (R() < 0.6 && w >= 150) {
+      const mx = Math.round((x + w / 2) / 10) * 10; seg(mx, y, mx, y2, pk(COMPS)); dot(mx, y); dot(mx, y2); reg([[mx, y], [mx, y2]]);
+    }
+    dot(x, y); dot(x2, y2); txt(tag(), x + 4, y - 9);
+  };
+  // 2) quadro elettrico: sbarra e partenze con interruttori verso terra
+  const bus = (x: number, y: number, w: number, h: number) => {
+    const by = y + 14; st(0.26); g.lineWidth = 3.4; seg(x, by, x + w, by); reg([[x, by], [x + w, by]], 0.8);
+    g.lineWidth = 1.5; st(0.22);
+    const n = Math.max(2, Math.floor(w / 58));
+    for (let i = 0; i < n; i++) {
+      const fx = Math.round((x + 26 + (i * (w - 52)) / (n - 1)) / 2) * 2, fy = y + h - 22 - ri(0, 14);
+      dot(fx, by); seg(fx, by, fx, fy, pk(["sw", "fuse", "res", "lamp", "ind"])); gnd(fx, fy); reg([[fx, by], [fx, fy]]);
+    }
+    txt("L1 L2 L3", x, by - 9);
+  };
+  // 3) trasformatore monofase con sorgente e carico
+  const trafo = (x: number, y: number, w: number, h: number) => {
+    const cx = x + w / 2, cy = y + h / 2, px = cx - 14, sx = cx + 14, ty = y + 8, by = y + h - 8, lx = x + 10, rx = x + w - 10;
+    st(0.22); g.lineWidth = 1.5;
+    for (let k = 0; k < 4; k++) {
+      const yy = cy - 21 + 14 * k;
+      g.beginPath(); g.arc(px, yy, 7, Math.PI / 2, Math.PI * 1.5); g.stroke();
+      g.beginPath(); g.arc(sx, yy, 7, -Math.PI / 2, Math.PI / 2); g.stroke();
+    }
+    g.beginPath(); g.moveTo(cx - 3, cy - 31); g.lineTo(cx - 3, cy + 31); g.moveTo(cx + 3, cy - 31); g.lineTo(cx + 3, cy + 31); g.stroke();
+    seg(px, cy - 28, px, ty); seg(px, ty, lx, ty); seg(lx, ty, lx, by, "src"); seg(lx, by, px, by); seg(px, by, px, cy + 28);
+    seg(sx, cy - 28, sx, ty); seg(sx, ty, rx, ty); seg(rx, ty, rx, by, pk(["lamp", "res", "ind", "lamp"])); seg(rx, by, sx, by); seg(sx, by, sx, cy + 28);
+    reg([[px, cy - 28], [px, ty], [lx, ty], [lx, by], [px, by], [px, cy + 28]]);
+    reg([[sx, cy + 28], [sx, by], [rx, by], [rx, ty], [sx, ty], [sx, cy - 28]]);
+    txt(pk(["230/12 V", "400/230 V", "20kV/400V", "1:10"]), cx - 28, y - 2);
+  };
+  // 4) tre tensioni sfasate di 120° (le onde vengono disegnate in animazione)
+  const phases = (x: number, y: number, w: number, h: number) => {
+    st(0.2); g.lineWidth = 1.2; g.strokeRect(x, y, w, h);
+    g.lineWidth = 1; st(0.12);
+    g.beginPath(); g.moveTo(x, y + h / 2); g.lineTo(x + w, y + h / 2);
+    for (let tx = x + 20; tx < x + w; tx += 20) { g.moveTo(tx, y); g.lineTo(tx, y + 5); g.moveTo(tx, y + h - 5); g.lineTo(tx, y + h); }
+    g.stroke();
+    S.waves.push([x, y, w, h, R() * 6.28]); txt("L1 L2 L3 · 50 Hz", x + 2, y + h + 13);
+  };
+  // 5) linea ad alta tensione: tralicci a traliccio e conduttori con catenaria
+  const pylon = (x: number, y: number, w: number, h: number) => {
+    const n = w > 240 ? 3 : 2, th = Math.min(h - 16, 150), y2 = y + h, tops = y2 - th, xs: number[] = [];
+    st(0.2); g.lineWidth = 1.3;
+    for (let i = 0; i < n; i++) {
+      const tx = Math.round(x + 22 + (i * (w - 44)) / (n - 1)); xs.push(tx);
+      g.beginPath(); g.moveTo(tx - 13, y2); g.lineTo(tx - 3, tops); g.moveTo(tx + 13, y2); g.lineTo(tx + 3, tops);
+      const lv = 6;
+      for (let k = 0; k <= lv; k++) {
+        const yy = y2 - (th * k) / lv, hw = 13 - (10 * k) / lv;
+        g.moveTo(tx - hw, yy); g.lineTo(tx + hw, yy);
+        if (k < lv) { const y3 = y2 - (th * (k + 1)) / lv, hw2 = 13 - (10 * (k + 1)) / lv; g.moveTo(tx - hw, yy); g.lineTo(tx + hw2, y3); }
+      }
+      g.moveTo(tx - 18, tops + 8); g.lineTo(tx + 18, tops + 8); g.moveTo(tx - 14, tops + 26); g.lineTo(tx + 14, tops + 26); g.stroke();
+      [[-18, 8], [18, 8], [-14, 26], [14, 26]].forEach(([ox, oy]) => { g.beginPath(); g.moveTo(tx + ox, tops + oy); g.lineTo(tx + ox, tops + oy + 5); g.stroke(); });
+    }
+    st(0.2); g.lineWidth = 1.1;
+    for (let i = 0; i + 1 < n; i++) {
+      [[-18, 13], [18, 13], [-14, 31], [14, 31]].forEach(([ox, oy], j) => {
+        const ax = xs[i] + ox, bx = xs[i + 1] + ox, ay = tops + oy, sag = 12 + (j > 1 ? 4 : 0), pts: number[][] = [];
+        g.beginPath(); g.moveTo(ax, ay); g.quadraticCurveTo((ax + bx) / 2, ay + sag * 2, bx, ay); g.stroke();
+        for (let k = 0; k <= 12; k++) { const u = k / 12; pts.push([ax + (bx - ax) * u, ay + sag * 4 * u * (1 - u)]); }
+        reg(pts, 0.9);
+      });
+    }
+    txt(pk(["380 kV", "132 kV", "220 kV", "20 kV"]), x + 2, y + 10);
+  };
+  // 6) ponte di Graetz: quattro diodi
+  const bridge = (x: number, y: number, w: number, h: number) => {
+    const d = Math.min(56, Math.floor((h - 36) / 2)), cx = x + w / 2, cy = y + h / 2;
+    st(0.22); g.lineWidth = 1.5;
+    seg(cx - d, cy, cx, cy - d, "dio"); seg(cx + d, cy, cx, cy - d, "dio"); seg(cx, cy + d, cx - d, cy, "dio"); seg(cx, cy + d, cx + d, cy, "dio");
+    seg(cx - d, cy, x + 8, cy); seg(cx + d, cy, x + w - 8, cy); seg(cx, cy - d, cx, y + 6); seg(cx, cy + d, cx, y + h - 6);
+    dot(cx - d, cy); dot(cx + d, cy); dot(cx, cy - d); dot(cx, cy + d);
+    reg([[cx - d, cy], [cx, cy - d], [cx + d, cy], [cx, cy + d], [cx - d, cy]]); reg([[x + 8, cy], [cx - d, cy]], 0.8); reg([[cx, y + h - 6], [cx, cy + d]], 0.8);
+    txt("~", x + 10, cy - 7, 14); txt("~", x + w - 20, cy - 7, 14); txt("+", cx + 7, y + 14, 13); txt("−", cx + 7, y + h - 6, 13);
+  };
+  // 7) motore trifase alimentato da tre linee con sezionatori
+  const motor = (x: number, y: number, w: number, h: number) => {
+    const cy = y + h / 2, mx = x + w - 36, r = 27; st(0.22); g.lineWidth = 1.5;
+    g.beginPath(); g.arc(mx, cy, r, 0, Math.PI * 2); g.stroke();
+    txt("M", mx - 8, cy + 1, 17, 0.3); txt("3~", mx - 7, cy + 15, 11, 0.3);
+    [-15, 0, 15].forEach((o, i) => {
+      const ex = mx - Math.sqrt(r * r - o * o); seg(x, cy + o, ex, cy + o, "sw"); reg([[x, cy + o], [ex, cy + o]]);
+      txt("L" + (i + 1), x - 1, cy + o - 4, 9, 0.24);
+    });
+  };
+
+  // posizionamento a caso senza sovrapposizioni
+  const boxes: number[][] = [];
+  const free = (x: number, y: number, w: number, h: number, m = 18) => x >= 12 && y >= 12 && x + w <= W - 12 && y + h <= H - 12 && boxes.every((b) => x > b[0] + b[2] + m || x + w + m < b[0] || y > b[1] + b[3] + m || y + h + m < b[1]);
+  const MOTIFS: any[] = [[loop, 170, 270, 100, 150, 3], [bus, 180, 270, 120, 170, 2], [trafo, 190, 250, 110, 150, 2], [phases, 170, 240, 80, 110, 2], [pylon, 210, 300, 130, 190, 2], [bridge, 150, 200, 140, 170, 2], [motor, 190, 250, 90, 110, 2]];
+  const used = MOTIFS.map(() => 0); // quante copie di ogni schema: niente ripetizioni a tappeto
+  if (W > 220 && H > 220) {
+    for (let i = 0; i < 700; i++) {
+      const mi = Math.floor(R() * MOTIFS.length), m = MOTIFS[mi]; if (used[mi] >= m[5]) continue;
+      const w = ri(m[1], m[2]), h = ri(m[3], m[4]);
+      const x = Math.round(ri(12, Math.max(12, W - w - 12)) / 10) * 10, y = Math.round(ri(12, Math.max(12, H - h - 12)) / 10) * 10;
+      if (!free(x, y, w, h)) continue;
+      used[mi]++; boxes.push([x - 2, y - 14, w + 4, h + 30]); m[0](x, y, w, h);
+    }
+    // piste ortogonali negli spazi rimasti
+    const inBox = (x: number, y: number) => x < 12 || y < 12 || x > W - 12 || y > H - 12 || boxes.some((b) => x > b[0] - 10 && x < b[0] + b[2] + 10 && y > b[1] - 10 && y < b[1] + b[3] + 10);
+    const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1], G = 20, nT = Math.floor((W * H) / 14000);
+    g.lineWidth = 1.2;
+    for (let i = 0; i < nT; i++) {
+      let x = Math.round((R() * W) / G) * G, y = Math.round((R() * H) / G) * G, d = ri(0, 3); if (inBox(x, y)) continue;
+      const pts = [[x, y]];
+      for (let s = ri(2, 5); s > 0; s--) {
+        const n = ri(2, 7); let ok = 0;
+        for (let k = 1; k <= n; k++) { if (inBox(x + DX[d] * k * G, y + DY[d] * k * G)) break; ok = k; }
+        if (!ok) break;
+        x += DX[d] * ok * G; y += DY[d] * ok * G; pts.push([x, y]); d = (d + (R() < 0.5 ? 1 : 3)) % 4;
+      }
+      if (pts.length < 2) continue;
+      st(0.1); g.beginPath(); pts.forEach(([px, py], j) => (j ? g.lineTo(px, py) : g.moveTo(px, py))); g.stroke();
+      [pts[0], pts[pts.length - 1]].forEach(([px, py]) => { g.beginPath(); g.arc(px, py, 3.4, 0, 7); g.stroke(); });
+      if (R() < 0.45) reg(pts, 0.55);
+    }
+    // formule e grandezze nei vuoti
+    const deck: string[] = [];
+    const peekForm = (): string => { // mazzo rimescolato: ogni formula compare una sola volta
+      if (!deck.length) { const a = FORMS.slice(); for (let k = a.length - 1; k > 0; k--) { const j = Math.floor(R() * (k + 1)); const tmp = a[k]; a[k] = a[j]; a[j] = tmp; } deck.push(...a); }
+      return deck[deck.length - 1];
+    };
+    for (let i = 0, nF = Math.min(FORMS.length, Math.floor((W * H) / 52000)), tries = 0; i < nF && tries < 200; tries++) {
+      const s = peekForm(), w = s.length * 7 + 6, x = ri(14, Math.max(14, W - w - 14)), y = ri(30, Math.max(30, H - 30));
+      if (!free(x, y - 14, w, 22, 10)) continue;
+      deck.pop();
+      boxes.push([x, y - 14, w, 22]); txt(s, x, y, 12, 0.22); i++;
+    }
+  }
+  return S;
+};
+
+// disegna ciò che si muove: cariche nei fili, bagliori delle lampade, onde trifase, scintille sugli interruttori
+const animPanelArt = (g: CanvasRenderingContext2D, S: PScene, t: number, speed: number, moving: boolean) => {
+  g.lineCap = "round";
+  if (moving) {
+    S.paths.forEach((q, qi) => {
+      const n = Math.max(1, Math.round(q.L / 130)), v = 44 + (qi % 5) * 9;
+      for (let k = 0; k < n; k++) {
+        const d0 = t * v * speed + (k / n) * q.L + qi * 37;
+        for (let j = 0; j < 4; j++) {
+          const p = atPPath(q, d0 - j * 6);
+          g.fillStyle = `rgba(251,191,36,${(0.92 - j * 0.22) * q.a})`;
+          g.beginPath(); g.arc(p[0], p[1], 2.5 - j * 0.38, 0, 7); g.fill();
+        }
+      }
+    });
+    S.lamps.forEach((p, i) => {
+      const a = 0.12 + 0.1 * Math.sin(t * speed * 2.2 + i * 1.7), gr = g.createRadialGradient(p[0], p[1], 0, p[0], p[1], 28);
+      gr.addColorStop(0, `rgba(251,191,36,${a * 2})`); gr.addColorStop(1, "rgba(251,191,36,0)");
+      g.fillStyle = gr; g.beginPath(); g.arc(p[0], p[1], 28, 0, 7); g.fill();
+    });
+    S.sw.forEach((p, i) => {
+      const per = 5 + (i % 5) * 2.3, ph = (t * speed + i * 1.9) % per; if (ph > 0.35) return;
+      const a = 1 - ph / 0.35, seed = Math.floor((t * speed + i * 1.9) / per) * 7 + i;
+      g.strokeStyle = `rgba(255,236,170,${a})`; g.lineWidth = 1.3; g.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const an = Math.sin(seed * 12.9898 + k * 78.233) * 6.28, l = 6 + ((Math.sin(seed * 3.1 + k * 5.7) + 1) * 5);
+        g.moveTo(p[0], p[1]); g.lineTo(p[0] + Math.cos(an) * l * 0.5 + Math.sin(an * 3) * 2, p[1] + Math.sin(an) * l * 0.5); g.lineTo(p[0] + Math.cos(an) * l, p[1] + Math.sin(an) * l);
+      }
+      g.stroke();
+    });
+  }
+  S.waves.forEach((w) => {
+    g.lineWidth = 1.4;
+    for (let ph = 0; ph < 3; ph++) {
+      g.strokeStyle = ph === 2 ? "rgba(251,191,36,.62)" : ph === 1 ? "rgba(190,255,240,.5)" : "rgba(255,255,255,.5)";
+      g.beginPath();
+      for (let x = 4; x <= w[2] - 4; x += 3) {
+        const y = w[1] + w[3] / 2 + Math.sin((x / (w[2] / 2.2)) * Math.PI * 2 - (moving ? t * speed * 3 : 0) + ph * 2.094 + w[4]) * (w[3] / 2 - 8);
+        if (x === 4) g.moveTo(w[0] + x, y); else g.lineTo(w[0] + x, y);
+      }
+      g.stroke();
+    }
+  });
+};
+
+const PanelArt = ({ art, anim, speed = 1, fps = 30 }: { art: boolean; anim: boolean; speed?: number; fps?: number }) => {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const seed = useRef(Math.floor(Math.random() * 2147483647)); // nuovo disegno a ogni apertura
+  const pr = useRef({ speed, fps }); pr.current = { speed, fps }; // letti a ogni frame, senza rigenerare il disegno
+  useEffect(() => {
+    const cv = ref.current; if (!art || !cv) return;
+    const host = cv.parentElement as HTMLElement | null, ctx = cv.getContext("2d"); if (!host || !ctx) return;
+    const stat = document.createElement("canvas"), sg = stat.getContext("2d"); if (!sg) return;
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches), moving = anim && !reduce;
+    let W = 0, H = 0, S: PScene | null = null, raf = 0, last = 0, vis = true, timer = 0;
+    const t0 = performance.now();
+    const paint = (t: number) => { if (!S) return; ctx.clearRect(0, 0, W, H); ctx.drawImage(stat, 0, 0, W, H); animPanelArt(ctx, S, t, pr.current.speed, moving); };
+    const build = () => {
+      const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return;
+      if (S && Math.abs(w - W) < 24 && Math.abs(h - H) < 24) return;
+      W = w; H = h;
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      cv.width = stat.width = Math.round(W * dpr); cv.height = stat.height = Math.round(H * dpr);
+      sg.setTransform(dpr, 0, 0, dpr, 0, 0); sg.clearRect(0, 0, W, H); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      S = drawPanelArt(sg, W, H, mulberry(seed.current));
+      paint((performance.now() - t0) / 1000);
+    };
+    const frame = (ts: number) => {
+      raf = requestAnimationFrame(frame);
+      if (document.hidden || !vis || !S) return;
+      const el = ts - last; if (el < 1000 / (pr.current.fps || 30) - 3) return; last = ts;
+      paint((performance.now() - t0) / 1000);
+    };
+    build();
+    if (moving) raf = requestAnimationFrame(frame);
+    const ro = "ResizeObserver" in window ? new ResizeObserver(() => { clearTimeout(timer); timer = window.setTimeout(build, 150); }) : null; ro?.observe(host);
+    const io = "IntersectionObserver" in window ? new IntersectionObserver(([e]) => { vis = e.isIntersecting; }) : null; io?.observe(cv);
+    return () => { cancelAnimationFrame(raf); clearTimeout(timer); ro?.disconnect(); io?.disconnect(); };
+  }, [art, anim]);
+  return art ? <canvas ref={ref} className="pnl-art" aria-hidden="true" /> : null;
+};
+
 const Shape = ({ s }: any) => {
   const p = s.points; if (!p?.length) return null;
   const a = p[0], b = p[p.length - 1];
@@ -396,6 +677,8 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 .bd-podio .bd-p{background:repeating-conic-gradient(from -45deg at 50% -8%,var(--am) 0 2.5deg,transparent 2.5deg 9deg);-webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 0,#000,transparent);mask-image:radial-gradient(ellipse 80% 70% at 50% 0,#000,transparent);opacity:.18}
 .brandpanel{position:relative;overflow:hidden;color:#fff;background:radial-gradient(620px 420px at 100% 0,rgba(251,191,36,.2),transparent 60%),linear-gradient(155deg,#0E7468,#08403C 55%,#052321);border-color:transparent}
 .brandpanel>:not(.bd-p){position:relative}
+.brandpanel>canvas.pnl-art{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.brandpanel h1,.brandpanel>div>p{text-shadow:0 0 22px rgba(5,35,33,.9),0 0 3px rgba(5,35,33,.5)}
 .brandpanel .mu{color:rgba(255,255,255,.75)}
 .pn.hero{border:1px solid rgba(255,255,255,.28);background:radial-gradient(rgba(255,255,255,.17) 1px,transparent 1.4px) 0 0/18px 18px,radial-gradient(520px 340px at 100% 0,rgba(251,191,36,.38),transparent 62%),radial-gradient(640px 420px at 0 100%,rgba(45,212,191,.35),transparent 65%),linear-gradient(135deg,#19B7A2 0%,#0C7468 48%,#08403C 100%);box-shadow:0 34px 80px -28px rgba(23,195,174,.65),0 0 0 1px rgba(23,195,174,.18),inset 0 1px 0 rgba(255,255,255,.3);transition:box-shadow .5s var(--ez)}
 .pn.hero:hover{box-shadow:0 40px 90px -26px rgba(23,195,174,.8),0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.35)}
@@ -1676,7 +1959,7 @@ export default function App() {
     return shell(<>
       <Backdrop tab="home" fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
       <div className="relative z-10 min-h-screen grid md:grid-cols-2">
-        <div className="brandpanel hidden md:flex flex-col justify-between p-12"><div className="bd-p w" />
+        <div className="brandpanel hidden md:flex flex-col justify-between p-12"><PanelArt art={G.art} anim={G.pulses} speed={G.spd} fps={G.fps} />
           <Wordmark light size={56} fs={26} />
           <div>
             <h1 className="hd text-5xl font-bold leading-tight max-w-md up">Scrivi senza limiti. Ogni mese emergono i testi migliori.</h1>
