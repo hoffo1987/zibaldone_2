@@ -1781,7 +1781,7 @@ export default function App() {
       if (!el.attributes.length) { while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el); el.remove(); }
     });
   };
-  const setSize = (id: string) => withSel(() => {
+  const setFmtSize = (id: string) => withSel(() => {
     const ed = editorRef.current, sel: any = window.getSelection(); if (!sel || !sel.rangeCount) return;
     // senza testo selezionato la dimensione vale per il paragrafo in cui si sta scrivendo
     const wasCollapsed = sel.isCollapsed;
@@ -1797,7 +1797,7 @@ export default function App() {
     });
     if (wasCollapsed) { try { sel.collapseToEnd(); } catch {} } // il cursore torna dove era: niente testo evidenziato
   });
-  const setColor = (c: string) => withSel(() => {
+  const setFmtColor = (c: string) => withSel(() => {
     stripFmt("color");
     if (c !== INK_COLORS[0].id) document.execCommand("foreColor", false, c); // l'inchiostro è il colore normale: basta togliere
   });
@@ -2372,10 +2372,10 @@ export default function App() {
                       <label className="bt !min-w-0 !px-0 cursor-pointer" title="Inserisci foto"><ImageIcon size={18} /><input type="file" accept="image/*" className="hidden" onChange={addImage} /></label>
                     </div>
                     {panel === "size" && <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Dimensione del testo">
-                      {SIZES.map((z) => <button type="button" key={z.id} aria-pressed={fmt.size === z.id} onClick={() => setSize(fmt.size === z.id ? "n" : z.id)} className={`bt tb !min-w-0 !px-1 !gap-1 flex-col !py-1 ${fmt.size === z.id ? "on" : ""}`}><span style={{ fontSize: z.px, fontWeight: 700, lineHeight: 1 }}>A</span><span className="text-[10px] leading-none opacity-80">{z.label}</span></button>)}
+                      {SIZES.map((z) => <button type="button" key={z.id} aria-pressed={fmt.size === z.id} onClick={() => setFmtSize(fmt.size === z.id ? "n" : z.id)} className={`bt tb !min-w-0 !px-1 !gap-1 flex-col !py-1 ${fmt.size === z.id ? "on" : ""}`}><span style={{ fontSize: z.px, fontWeight: 700, lineHeight: 1 }}>A</span><span className="text-[10px] leading-none opacity-80">{z.label}</span></button>)}
                     </div>}
                     {panel === "color" && <div className="grid grid-cols-7 gap-x-2 gap-y-2 py-1" role="group" aria-label="Colore del testo">
-                      {INK_COLORS.map((c) => { const cur = (fmt.color || INK_COLORS[0].id) === c.id; return <button type="button" key={c.id} aria-label={c.name} aria-pressed={cur} title={c.name} onClick={() => setColor(c.id)} className="rounded-full w-9 h-9 justify-self-center" style={{ background: c.id, boxShadow: cur ? `0 0 0 2px var(--sf),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />; })}
+                      {INK_COLORS.map((c) => { const cur = (fmt.color || INK_COLORS[0].id) === c.id; return <button type="button" key={c.id} aria-label={c.name} aria-pressed={cur} title={c.name} onClick={() => setFmtColor(c.id)} className="rounded-full w-9 h-9 justify-self-center" style={{ background: c.id, boxShadow: cur ? `0 0 0 2px var(--sf),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />; })}
                     </div>}
                     {img && <div className="flex items-center gap-1.5">
                       {["25%", "50%", "75%", "100%"].map((w) => <button type="button" key={w} className="bt flex-1 !min-w-0 !px-0 !text-xs" onClick={() => resizeImg(w)}>{w}</button>)}
