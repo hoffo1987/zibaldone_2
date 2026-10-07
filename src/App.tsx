@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -10,7 +10,7 @@ import {
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Heading2, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
@@ -81,10 +81,14 @@ const compressImage = (file: File): Promise<string> => new Promise((res, rej) =>
   r.onerror = rej; r.readAsDataURL(file);
 });
 
-const Logo = ({ size = 32 }: { size?: number }) => (
+// ogni logo ha il PROPRIO id di gradiente: con un id fisso, su mobile il riferimento puntava al logo della sidebar
+// (display:none) e il fondo del logo non veniva disegnato, lasciando solo i tratti bianchi su sfondo chiaro
+const Logo = ({ size = 32 }: { size?: number }) => {
+  const gid = "lg" + useId().replace(/[^a-zA-Z0-9]/g, "");
+  return (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-label="Il Circuito" className="lgf">
-    <defs><linearGradient id="lg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse"><stop stopColor="#17C3AE" /><stop offset="1" stopColor="#0A4F49" /></linearGradient></defs>
-    <rect width="64" height="64" rx="17" fill="url(#lg)" />
+    <defs><linearGradient id={gid} x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse"><stop stopColor="#17C3AE" /><stop offset="1" stopColor="#0A4F49" /></linearGradient></defs>
+    <rect width="64" height="64" rx="17" fill={`url(#${gid})`} />
     <rect x=".75" y=".75" width="62.5" height="62.5" rx="16.25" stroke="#fff" strokeOpacity=".22" strokeWidth="1.5" />
     <path className="lg-arc" pathLength={100} d="M43.5 22.4A15 15 0 1 0 43.5 41.6" stroke="#fff" strokeWidth="5" strokeLinecap="round" />
     <path className="lg-line" pathLength={100} d="M31 32H47" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
@@ -93,7 +97,8 @@ const Logo = ({ size = 32 }: { size?: number }) => (
     <circle className="lg-amber" cx="43.5" cy="41.6" r="4.2" fill="#FBBF24" />
     <circle className="lg-n" cx="31" cy="32" r="3.2" fill="#fff" />
   </svg>
-);
+  );
+};
 const Wordmark = ({ size = 38, fs, light, center, stack, tag = true }: any) => (
   <div className={`flex leading-none ${stack ? "flex-col gap-4" : "gap-3"} ${stack && !center ? "items-start" : "items-center"} ${center ? "text-center" : ""}`}>
     <span className="lgw inline-flex shrink-0"><Logo size={size} /></span>
@@ -418,7 +423,10 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 .stat:focus-visible{outline:2px solid var(--ac);outline-offset:3px}
 @media (hover:none){.stat .go{opacity:.55;transform:none}}
 .bd-p.w{background:#fff;opacity:.09;--m:var(--m-circuit);--ts:160px}
-@media (hover:none){.bt:hover{transform:none;box-shadow:none}}
+@media (hover:none){.bt:hover{transform:none;box-shadow:none}.bt.on:hover{transform:none;filter:none;box-shadow:none}}
+.tb[data-open="true"]{border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 28%,transparent)}
+.tb.on{box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 40%,transparent)}
+.rt span[style*="font-size"]{line-height:1.25}
 .wm{font-family:'Unbounded','Bricolage Grotesque',sans-serif;font-weight:600;white-space:nowrap;letter-spacing:-.01em}
 .wl{display:inline-block;color:var(--wc);opacity:0;animation:wl .7s var(--ez) calc(var(--i)*60ms + .2s) forwards,lw 7s ease-in-out calc(2.4s + var(--i)*90ms) infinite}
 @keyframes wl{from{opacity:0;transform:translateY(.7em) rotate(6deg)}to{opacity:1;transform:none}}
@@ -758,14 +766,19 @@ const Swatches = ({ value, onPick, cols = "grid-cols-7" }: any) => (
     {INK_COLORS.map((c, i) => <button type="button" key={c.id} aria-label={c.name} title={c.name} onClick={() => onPick(c.id)} className="sw aspect-square w-full rounded-full" style={{ ["--i" as any]: i, background: c.id, boxShadow: value === c.id ? `0 0 0 2px var(--pn),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />)}
   </div>
 );
-const ColorPicker = ({ value, onPick, label, cls = "bt", wrap = "", children }: any) => (
-  <Pop label={label} cls={cls} wrap={wrap} trigger={children}>
-    {(close: any) => <Swatches value={value} cols="grid-cols-5 md:grid-cols-7" onPick={(c: string) => { onPick(c); close(); }} />}
-  </Pop>
+// on = formattazione attiva (pulsante pieno); open = pannello aperto (bordo evidenziato); badge = piccolo indicatore (es. colore corrente)
+const TB = ({ on, fn, icon: Icon, label, open, badge }: any) => (
+  <button type="button" title={label} aria-label={label} aria-pressed={on === undefined ? undefined : !!on} aria-expanded={open === undefined ? undefined : !!open} data-open={open ? "true" : undefined} onClick={fn} className={`bt tb !min-w-0 !px-0 ${on ? "on" : ""}`}><Icon size={18} />{badge}</button>
 );
-const TB = ({ on, fn, icon: Icon, label }: any) => (
-  <button type="button" title={label} aria-label={label} onClick={fn} className={`bt tb !min-w-0 !px-0 ${on ? "on" : ""}`}><Icon size={18} /></button>
-);
+const AaIcon = ({ size = 18 }: any) => <span aria-hidden="true" style={{ fontSize: size * 0.95, fontWeight: 800, lineHeight: 1, letterSpacing: "-.02em" }}>Aa</span>;
+// dimensioni del testo: "n" = normale (nessuno stile salvato)
+const SIZES = [
+  { id: "s", em: 0.8, px: 12, label: "Piccolo" },
+  { id: "n", em: 1, px: 16, label: "Normale" },
+  { id: "l", em: 1.35, px: 20, label: "Grande" },
+  { id: "xl", em: 1.8, px: 25, label: "Enorme" },
+];
+const rgbHex = (c: string) => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c || ""); return m ? "#" + [m[1], m[2], m[3]].map((n) => (+n).toString(16).padStart(2, "0")).join("").toUpperCase() : ""; };
 
 const BANNERS = [
   { id: "teal", g: "linear-gradient(135deg,#17C3AE,#0A4F49)" }, { id: "amber", g: "linear-gradient(135deg,#FBBF24,#C2410C)" },
@@ -1225,7 +1238,9 @@ export default function App() {
   const [filled, setFilled] = useState(false);
   const [grid, setGrid] = useState(true);
   const [height, setHeight] = useState(600);
-  const [fmt, setFmt] = useState({ b: false, i: false, u: false });
+  const [fmt, setFmt] = useState({ b: false, i: false, u: false, size: "n", color: "" });
+  const [panel, setPanel] = useState<null | "size" | "color">(null);
+  const savedRange = useRef<Range | null>(null);
   const [colorOpen, setColorOpen] = useState(false);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [loadTick, setLoadTick] = useState(0);
@@ -1435,11 +1450,74 @@ export default function App() {
   };
 
   // --- editor handlers ---
-  const cmd = (c: string, v?: string) => {
-    document.execCommand(c, false, v);
-    editorRef.current?.focus(); setContent(editorRef.current.innerHTML); readFmt();
+  // Legge la formattazione sotto il cursore a ogni cambio di selezione (anche con il tocco su mobile) e ricorda l'ultima selezione
+  const readFmt = () => {
+    const ed = editorRef.current, sel = window.getSelection();
+    if (!ed || !sel || !sel.rangeCount || !sel.anchorNode || !ed.contains(sel.anchorNode)) return;
+    savedRange.current = sel.getRangeAt(0).cloneRange();
+    const start: any = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
+    let size = "n";
+    for (let e = start; e && e !== ed; e = e.parentElement) {
+      if (e.style && e.style.fontSize) { const v = parseFloat(e.style.fontSize); size = SIZES.reduce((a, b) => (Math.abs(b.em - v) < Math.abs(a.em - v) ? b : a)).id; break; }
+    }
+    const color = start ? rgbHex(getComputedStyle(start).color) : "";
+    const b = document.queryCommandState("bold"), i = document.queryCommandState("italic"), u = document.queryCommandState("underline");
+    setFmt((f) => (f.b === b && f.i === i && f.u === u && f.size === size && f.color === color ? f : { b, i, u, size, color }));
   };
-  const readFmt = () => setFmt({ b: document.queryCommandState("bold"), i: document.queryCommandState("italic"), u: document.queryCommandState("underline") });
+  useEffect(() => {
+    if (tab !== "write" || drawing) return;
+    document.addEventListener("selectionchange", readFmt);
+    return () => document.removeEventListener("selectionchange", readFmt);
+  }, [tab, drawing]);
+  useEffect(() => { setPanel(null); }, [tab, drawing]);
+  // Esegue un comando sul testo SENZA riaprire la tastiera: se l'editor non ha il focus si ripristina l'ultima selezione
+  // (il focus serve solo come ripiego se il browser non applica il comando senza)
+  const restoreSel = () => {
+    const ed = editorRef.current, sel = window.getSelection(), r = savedRange.current;
+    if (!ed || !sel || !r || !ed.contains(r.commonAncestorContainer)) return false;
+    sel.removeAllRanges(); sel.addRange(r); return true;
+  };
+  const withSel = (fn: () => void) => {
+    const ed = editorRef.current; if (!ed || drawing) return;
+    const focused = document.activeElement === ed;
+    if (!focused) restoreSel();
+    const before = ed.innerHTML;
+    fn();
+    if (!focused && ed.innerHTML === before) { ed.focus(); restoreSel(); fn(); }
+    setContent(ed.innerHTML); readFmt();
+  };
+  const cmd = (c: string, v?: string) => withSel(() => { document.execCommand(c, false, v); });
+  // toglie dimensione o colore da tutto ciò che la selezione tocca (così non si accumulano e si può sempre tornare al normale)
+  const stripFmt = (kind: "size" | "color") => {
+    const ed = editorRef.current, sel = window.getSelection(); if (!ed || !sel || !sel.rangeCount) return;
+    const r = sel.getRangeAt(0);
+    ed.querySelectorAll("span,font").forEach((el: any) => {
+      if (!r.intersectsNode(el)) return;
+      if (kind === "size") { el.style.removeProperty("font-size"); el.removeAttribute("size"); } else { el.style.removeProperty("color"); el.removeAttribute("color"); }
+      if (!el.getAttribute("style")) el.removeAttribute("style");
+      if (!el.attributes.length) { while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el); el.remove(); }
+    });
+  };
+  const setSize = (id: string) => withSel(() => {
+    const ed = editorRef.current, sel: any = window.getSelection(); if (!sel || !sel.rangeCount) return;
+    // senza testo selezionato la dimensione vale per il paragrafo in cui si sta scrivendo
+    const wasCollapsed = sel.isCollapsed;
+    if (wasCollapsed && sel.modify) { sel.modify("move", "backward", "paragraphboundary"); sel.modify("extend", "forward", "paragraphboundary"); }
+    stripFmt("size");
+    const sz = SIZES.find((x) => x.id === id);
+    if (!sz || id === "n" || sel.isCollapsed) return;
+    document.execCommand("fontSize", false, "7");
+    ed.querySelectorAll('font[size="7"]').forEach((f: any) => {
+      const sp = document.createElement("span"); sp.style.fontSize = sz.em + "em";
+      while (f.firstChild) sp.appendChild(f.firstChild);
+      f.replaceWith(sp);
+    });
+    if (wasCollapsed) { try { sel.collapseToEnd(); } catch {} } // il cursore torna dove era: niente testo evidenziato
+  });
+  const setColor = (c: string) => withSel(() => {
+    stripFmt("color");
+    if (c !== INK_COLORS[0].id) document.execCommand("foreColor", false, c); // l'inchiostro è il colore normale: basta togliere
+  });
   const addImage = async (e: any) => {
     const file = e.target.files?.[0]; if (!file) return;
     try {
@@ -1998,17 +2076,24 @@ export default function App() {
                     <button type="button" className={`bt !border-0 ${drawing ? "on" : "!bg-transparent"}`} onClick={() => { setDrawing(true); setImg(null); }}><Pencil size={16} />Disegno</button>
                   </div>
                 </div>
-                <div className="sticky top-[64px] md:top-0 z-[35] p-2 pt-0 space-y-2 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }}>
+                <div className="sticky top-[64px] md:top-0 z-[35] p-2 pt-0 space-y-2 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }} onMouseDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }}>
                   {!drawing ? (<>
                     <div className="grid grid-cols-7 gap-1.5 pt-2">
                       <TB on={fmt.b} fn={() => cmd("bold")} icon={Bold} label="Grassetto" />
                       <TB on={fmt.i} fn={() => cmd("italic")} icon={Italic} label="Corsivo" />
                       <TB on={fmt.u} fn={() => cmd("underline")} icon={Underline} label="Sottolineato" />
-                      <TB fn={() => cmd("formatBlock", "h2")} icon={Heading2} label="Titolo" />
+                      <TB on={fmt.size !== "n"} open={panel === "size"} fn={() => setPanel(panel === "size" ? null : "size")} icon={AaIcon} label="Dimensione del testo" />
                       <TB fn={() => cmd("insertUnorderedList")} icon={List} label="Elenco" />
-                      <ColorPicker value="" onPick={(c: string) => cmd("foreColor", c)} label="Colore del testo" cls="bt !min-w-0 !px-0 w-full" wrap="min-w-0"><Palette size={18} /></ColorPicker>
+                      <TB on={!!fmt.color && fmt.color !== INK_COLORS[0].id} open={panel === "color"} fn={() => setPanel(panel === "color" ? null : "color")} icon={Palette} label="Colore del testo"
+                        badge={fmt.color && fmt.color !== INK_COLORS[0].id ? <span className="absolute left-1/2 -translate-x-1/2 bottom-1 h-[3px] w-4 rounded-full" style={{ background: fmt.color, boxShadow: "0 0 0 1px rgba(255,255,255,.7)" }} /> : null} />
                       <label className="bt !min-w-0 !px-0 cursor-pointer" title="Inserisci foto"><ImageIcon size={18} /><input type="file" accept="image/*" className="hidden" onChange={addImage} /></label>
                     </div>
+                    {panel === "size" && <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Dimensione del testo">
+                      {SIZES.map((z) => <button type="button" key={z.id} aria-pressed={fmt.size === z.id} onClick={() => setSize(fmt.size === z.id ? "n" : z.id)} className={`bt tb !min-w-0 !px-1 !gap-1 flex-col !py-1 ${fmt.size === z.id ? "on" : ""}`}><span style={{ fontSize: z.px, fontWeight: 700, lineHeight: 1 }}>A</span><span className="text-[10px] leading-none opacity-80">{z.label}</span></button>)}
+                    </div>}
+                    {panel === "color" && <div className="grid grid-cols-7 gap-x-2 gap-y-2 py-1" role="group" aria-label="Colore del testo">
+                      {INK_COLORS.map((c) => { const cur = (fmt.color || INK_COLORS[0].id) === c.id; return <button type="button" key={c.id} aria-label={c.name} aria-pressed={cur} title={c.name} onClick={() => setColor(c.id)} className="rounded-full w-9 h-9 justify-self-center" style={{ background: c.id, boxShadow: cur ? `0 0 0 2px var(--sf),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />; })}
+                    </div>}
                     {img && <div className="flex items-center gap-1.5">
                       {["25%", "50%", "75%", "100%"].map((w) => <button type="button" key={w} className="bt flex-1 !min-w-0 !px-0 !text-xs" onClick={() => resizeImg(w)}>{w}</button>)}
                       <button type="button" className="bt dng !px-0 !min-w-0 w-11 shrink-0" onClick={removeImg} aria-label="Elimina immagine"><Trash2 size={16} /></button>
@@ -2044,7 +2129,7 @@ export default function App() {
                   </svg>
                   <div ref={editorRef} contentEditable={!drawing} suppressContentEditableWarning data-ph="Scrivi appunti, formule, note di cablaggio…"
                     className="rt relative p-6 outline-none" style={{ minHeight: height, caretColor: "#0F8B7A" }}
-                    onInput={(e: any) => setContent(e.currentTarget.innerHTML)} onClick={pickImg} onKeyUp={readFmt} onMouseUp={readFmt}
+                    onInput={(e: any) => setContent(e.currentTarget.innerHTML)} onClick={pickImg}
                     onKeyDown={(e) => { if (e.key === "Enter") document.execCommand("formatBlock", false, "div"); }} />
                   {drawing && <div className="absolute inset-0 z-30" style={{ touchAction: tool === "hand" ? "pan-y" : "none", cursor: tool === "hand" ? "grab" : tool === "eraser" ? "cell" : "crosshair" }} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp} />}
                 </div>
