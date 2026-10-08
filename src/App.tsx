@@ -1757,10 +1757,9 @@ export default function App() {
     if (!ed || !sel || !sel.rangeCount || !sel.anchorNode || !ed.contains(sel.anchorNode)) return;
     savedRange.current = sel.getRangeAt(0).cloneRange();
     const start: any = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
-    let size = "n";
-    for (let e = start; e && e !== ed; e = e.parentElement) {
-      if (e.style && e.style.fontSize) { const v = parseFloat(e.style.fontSize); size = SIZES.reduce((a, b) => (Math.abs(b.em - v) < Math.abs(a.em - v) ? b : a)).id; break; }
-    }
+    let size = sizeIdOf(sel.anchorNode);
+    // testo selezionato: se i pezzi hanno dimensioni diverse nessun pulsante è acceso ("" = misto)
+    if (!sel.isCollapsed) { const ids = new Set(textNodesIn(sel.getRangeAt(0)).map((n: any) => sizeIdOf(n))); if (ids.size === 1) size = Array.from(ids)[0] as string; else if (ids.size > 1) size = ""; }
     let color = start ? rgbHex(getComputedStyle(start).color) : "";
     // scelta appena fatta col solo cursore: vale finché il cursore non si sposta (poi si legge dal testo)
     const p = pendFmt.current;
@@ -1830,29 +1829,23 @@ export default function App() {
   // altrimenti il comando veniva rieseguito e quindi annullato (serviva toccare due volte)
   const cmd = (c: string, v?: string) => withSel(() => { document.execCommand(c, false, v); },
     () => { let s = ""; try { s = String(document.queryCommandState(c)); } catch {} return (editorRef.current?.innerHTML || "") + "|" + s; });
-  // toglie dimensione o colore da tutto ciò che la selezione tocca (così non si accumulano e si può sempre tornare al normale)
-  const stripFmt = (kind: "size" | "color") => {
-    const ed = editorRef.current, sel = window.getSelection(); if (!ed || !sel || !sel.rangeCount) return;
-    const r = sel.getRangeAt(0);
-    // spostando il testo fuori dallo span il browser azzera la selezione: senza di lei il comando che segue (nuova dimensione/colore)
-    // non trova nulla da formattare. Quindi la salvo come posizione nel testo e la rimetto dopo
-    let saved: [number, number] | null = null;
-    try { const pre = document.createRange(); pre.selectNodeContents(ed); pre.setEnd(r.startContainer, r.startOffset); const a = pre.toString().length; saved = [a, a + r.toString().length]; } catch {}
-    // l'elenco degli elementi toccati si fa prima di modificare: durante lo scarto il range cambia e i controlli successivi sbaglierebbero
-    const hit = Array.from(ed.querySelectorAll("span,font")).filter((el: any) => r.intersectsNode(el));
-    hit.forEach((el: any) => {
-      if (kind === "size") { el.style.removeProperty("font-size"); el.removeAttribute("size"); } else { el.style.removeProperty("color"); el.removeAttribute("color"); }
-      if (!el.getAttribute("style")) el.removeAttribute("style");
-      if (!el.attributes.length) { while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el); el.remove(); }
-    });
-    if (!saved) return;
+  // --- struttura del testo ---
+  // posizione della selezione come "numero di caratteri dall'inizio": resta valida anche quando i nodi vengono spostati o spezzati
+  const textOffsets = (r: Range): [number, number] | null => {
+    const ed = editorRef.current; if (!ed) return null;
+    try { const pre = document.createRange(); pre.selectNodeContents(ed); pre.setEnd(r.startContainer, r.startOffset); const a = pre.toString().length; return [a, a + r.toString().length]; } catch { return null; }
+  };
+  const setTextOffsets = (a: number, b: number) => {
+    const ed = editorRef.current, sel: any = window.getSelection(); if (!ed || !sel) return;
     try {
       const w = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT);
       let n: any, pos = 0, sn: any = null, so = 0, en: any = null, eo = 0, last: any = null;
+      // cursore semplice: resta in fondo al testo che ha appena scritto (non all'inizio del pezzo dopo, che può avere un'altra dimensione)
+      const coll = a === b;
       while ((n = w.nextNode())) {
         const len = n.length; last = n;
-        if (!sn && saved[0] < pos + len) { sn = n; so = saved[0] - pos; }
-        if (!en && saved[1] <= pos + len) { en = n; eo = saved[1] - pos; }
+        if (!sn && (coll ? a <= pos + len : a < pos + len)) { sn = n; so = a - pos; }
+        if (!en && b <= pos + len) { en = n; eo = b - pos; }
         pos += len;
       }
       if (!sn && last) { sn = last; so = last.length; }
@@ -1860,45 +1853,110 @@ export default function App() {
       if (sn && en) { const nr = document.createRange(); nr.setStart(sn, so); nr.setEnd(en, eo); sel.removeAllRanges(); sel.addRange(nr); }
     } catch {}
   };
+  const INLINE = new Set(["SPAN", "FONT", "B", "I", "U", "S", "STRONG", "EM", "STRIKE", "A", "CODE", "SUB", "SUP"]);
+  const nodeIndex = (n: Node) => Array.prototype.indexOf.call((n.parentNode as Node).childNodes, n) as number;
+  // spezza il testo e tutti gli elementi in linea (span, grassetto…) che passano da quel punto: dopo, il punto è un bordo netto
+  const splitAt = (node: Node, off: number) => {
+    const ed = editorRef.current; if (!ed) return;
+    let parent: any, idx: number;
+    if (node.nodeType === 3) {
+      const t: any = node;
+      if (off > 0 && off < t.length) t.splitText(off);
+      parent = t.parentNode; idx = nodeIndex(t) + (off > 0 ? 1 : 0);
+    } else { parent = node; idx = off; }
+    while (parent && parent !== ed && INLINE.has(parent.tagName)) {
+      const gp: any = parent.parentNode;
+      if (idx > 0 && idx < parent.childNodes.length) {
+        const clone = parent.cloneNode(false);
+        while (parent.childNodes.length > idx) clone.appendChild(parent.childNodes[idx]);
+        gp.insertBefore(clone, parent.nextSibling);
+        idx = nodeIndex(parent) + 1;
+      } else idx = nodeIndex(parent) + (idx > 0 ? 1 : 0);
+      parent = gp;
+    }
+  };
+  const isolate = (r: Range) => { const sc = r.startContainer, so = r.startOffset, ec = r.endContainer, eo = r.endOffset; splitAt(ec, eo); splitAt(sc, so); };
+  // dimensione (id di SIZES) di un nodo: quella dello span più vicino che ne ha una
+  const sizeIdOf = (n: Node) => {
+    const ed = editorRef.current;
+    for (let e: any = n.nodeType === 3 ? n.parentElement : n; e && e !== ed; e = e.parentElement) {
+      if (e.style && e.style.fontSize) { const v = parseFloat(e.style.fontSize); return SIZES.reduce((a, b) => (Math.abs(b.em - v) < Math.abs(a.em - v) ? b : a)).id; }
+    }
+    return "n";
+  };
+  const textNodesIn = (r: Range) => {
+    const ed = editorRef.current, out: any[] = []; if (!ed) return out;
+    const w = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT); let n: any;
+    while ((n = w.nextNode())) if (n.length && r.intersectsNode(n)) out.push(n);
+    return out;
+  };
+  const unwrapEl = (el: any) => { while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el); el.remove(); };
+  // unisce gli span di dimensione uguali e vicini (altrimenti ogni cambio ne lascia uno in più)
+  const mergeSizeSpans = () => {
+    const ed = editorRef.current; if (!ed) return;
+    const only = (el: any) => el && el.nodeType === 1 && el.tagName === "SPAN" && el.attributes.length === 1 && el.style.fontSize;
+    Array.from(ed.querySelectorAll("span")).forEach((el: any) => {
+      if (!el.isConnected || !only(el)) return;
+      let nx: any = el.nextSibling;
+      while (only(nx) && nx.style.fontSize === el.style.fontSize) { while (nx.firstChild) el.appendChild(nx.firstChild); const d = nx; nx = nx.nextSibling; d.remove(); }
+    });
+  };
+  // toglie dimensione o colore SOLO da ciò che la selezione tocca: prima si spezzano gli span ai suoi bordi, così il testo fuori non cambia
+  const stripFmt = (kind: "size" | "color") => {
+    const ed = editorRef.current, sel = window.getSelection(); if (!ed || !sel || !sel.rangeCount) return;
+    let r = sel.getRangeAt(0);
+    const offs = textOffsets(r);
+    if (offs) { isolate(r); setTextOffsets(offs[0], offs[1]); r = sel.getRangeAt(0); }
+    // l'elenco degli elementi toccati si fa prima di modificare: durante lo scarto il range cambia e i controlli successivi sbaglierebbero
+    const hit = Array.from(ed.querySelectorAll("span,font")).filter((el: any) => r.intersectsNode(el));
+    hit.forEach((el: any) => {
+      if (kind === "size") { el.style.removeProperty("font-size"); el.removeAttribute("size"); } else { el.style.removeProperty("color"); el.removeAttribute("color"); }
+      if (!el.getAttribute("style")) el.removeAttribute("style");
+      if (!el.attributes.length) unwrapEl(el);
+    });
+    // spostando il testo il browser azzera la selezione: senza di lei il comando che segue non troverebbe nulla da formattare
+    if (offs) setTextOffsets(offs[0], offs[1]);
+  };
+  // dimensione sul testo selezionato: ogni pezzo di testo toccato prende la dimensione scelta, il resto resta com'è
+  const sizeSelection = (em: number) => {
+    const ed = editorRef.current, sel: any = window.getSelection(); if (!ed || !sel || !sel.rangeCount) return;
+    stripFmt("size");
+    const r = sel.getRangeAt(0), offs = textOffsets(r); if (!offs) return;
+    if (em !== 1) textNodesIn(r).forEach((n: any) => {
+      const sp = document.createElement("span"); sp.style.fontSize = em + "em";
+      n.parentNode.insertBefore(sp, n); sp.appendChild(n);
+    });
+    mergeSizeSpans();
+    setTextOffsets(offs[0], offs[1]);
+  };
+  // una sola dimensione per volta: se span è dentro un altro span con dimensione, quello si spezza attorno a lui e perde la sua
+  // (le dimensioni sono in em: annidate si moltiplicherebbero, 0,8 dentro 1,8 darebbe 1,44)
+  const unnestSize = (sp: any) => {
+    const ed = editorRef.current; if (!ed) return;
+    const outer: any[] = [];
+    for (let a = sp.parentElement; a && a !== ed; a = a.parentElement) if (a.style && a.style.fontSize) outer.push(a);
+    if (!outer.length) return;
+    const r = document.createRange(); r.selectNode(sp); isolate(r);
+    for (let a = sp.parentElement; a && a !== ed; ) {
+      const up = a.parentElement;
+      if (a.style && a.style.fontSize) { a.style.removeProperty("font-size"); if (!a.getAttribute("style")) a.removeAttribute("style"); if (!a.attributes.length) unwrapEl(a); }
+      a = up;
+    }
+  };
   const setFmtSize = (id: string) => withSel(() => {
     const ed = editorRef.current, sel: any = window.getSelection(); if (!ed || !sel || !sel.rangeCount) return;
-    const sz = SIZES.find((x) => x.id === id);
-    const wasCollapsed = sel.isCollapsed;
-    const keepNode = sel.anchorNode, keepOff = sel.anchorOffset; // dov'era il cursore
-    // senza testo selezionato la dimensione vale per il paragrafo in cui si sta scrivendo
-    if (wasCollapsed && sel.modify) { sel.modify("move", "backward", "paragraphboundary"); sel.modify("extend", "forward", "paragraphboundary"); }
-    if (wasCollapsed && sel.isCollapsed) {
-      // riga ancora vuota: la dimensione vale per ciò che si scrive da qui in poi (i <font> creati dal browser li sistema fixFonts)
-      try { sel.collapse(keepNode, keepOff); } catch {}
-      if (sz) sizeEm.current = sz.em;
-      document.execCommand("fontSize", false, !sz || id === "n" ? "3" : "7");
+    const sz = SIZES.find((x) => x.id === id); if (!sz) return;
+    if (sel.isCollapsed) {
+      // solo il cursore: la dimensione vale per ciò che si scrive da qui in poi, il testo già scritto non cambia
+      // (i <font> creati dal browser mentre si scrive li sistema fixFonts)
+      sizeEm.current = sz.em;
+      document.execCommand("fontSize", false, id === "n" ? "3" : "7");
       pendFmt.current = { node: sel.anchorNode, off: sel.anchorOffset, size: id };
       return;
     }
-    sizeEm.current = 0; // niente dimensione "in attesa" di una scelta vecchia: qui la dimensione si applica subito al testo selezionato
-    stripFmt("size");
-    const made: HTMLElement[] = [];
-    if (sz && id !== "n" && !sel.isCollapsed) {
-      document.execCommand("fontSize", false, "7");
-      ed.querySelectorAll('font[size="7"]').forEach((f: any) => {
-        const sp = document.createElement("span"); sp.style.fontSize = sz.em + "em";
-        while (f.firstChild) sp.appendChild(f.firstChild);
-        f.replaceWith(sp); made.push(sp);
-      });
-    }
-    try {
-      if (wasCollapsed) { // il cursore torna dov'era (dentro il testo), così la scelta resta evidenziata e si continua a scrivere con quella dimensione
-        if (keepNode && ed.contains(keepNode)) sel.collapse(keepNode, Math.min(keepOff, keepNode.nodeType === 3 ? keepNode.length : keepNode.childNodes.length));
-        else sel.collapseToEnd();
-        pendFmt.current = { node: sel.anchorNode, off: sel.anchorOffset, size: id };
-      } else if (made.length) { // con testo selezionato la selezione resta com'era (la sostituzione dei <font> la faceva sparire)
-        const firstText: any = document.createTreeWalker(made[0], NodeFilter.SHOW_TEXT).nextNode();
-        const wl = document.createTreeWalker(made[made.length - 1], NodeFilter.SHOW_TEXT);
-        let lastText: any = null, t: any; while ((t = wl.nextNode())) lastText = t;
-        if (firstText && lastText) { const r = document.createRange(); r.setStart(firstText, 0); r.setEnd(lastText, lastText.length); sel.removeAllRanges(); sel.addRange(r); }
-        pendFmt.current = null;
-      }
-    } catch {}
+    sizeEm.current = 0; // niente dimensione "in attesa" di una scelta vecchia: qui si applica subito al testo selezionato
+    sizeSelection(sz.em);
+    pendFmt.current = null;
   });
   const setFmtColor = (c: string) => withSel(() => {
     const sel: any = window.getSelection(); if (!sel || !sel.rangeCount) return;
@@ -1919,20 +1977,19 @@ export default function App() {
     const ed = editorRef.current; if (!ed || fmtBusy.current) return;
     const list = ed.querySelectorAll('font[size="7"],font[size="3"]'); if (!list.length) return;
     const sel: any = window.getSelection();
-    const keep = sel && sel.rangeCount && sel.isCollapsed && ed.contains(sel.anchorNode) ? [sel.anchorNode, sel.anchorOffset] : null;
+    const offs = sel && sel.rangeCount && ed.contains(sel.anchorNode) ? textOffsets(sel.getRangeAt(0)) : null;
     list.forEach((f: any) => {
-      if (f.getAttribute("size") === "7") {
-        if (!sizeEm.current) return;
-        const sp = document.createElement("span"); sp.style.fontSize = sizeEm.current + "em";
-        const col = f.getAttribute("color"); if (col) sp.style.color = col;
-        while (f.firstChild) sp.appendChild(f.firstChild);
-        f.replaceWith(sp);
-      } else { // size 3 = "torna normale"
-        f.removeAttribute("size");
-        if (!f.attributes.length) { while (f.firstChild) f.parentNode.insertBefore(f.firstChild, f); f.remove(); }
-      }
+      const big = f.getAttribute("size") === "7";
+      if (big && !sizeEm.current) { f.removeAttribute("size"); if (!f.attributes.length) unwrapEl(f); return; } // nessuna dimensione scelta: non deve restare un testo gigante
+      const sp = document.createElement("span"); sp.style.fontSize = (big ? sizeEm.current : 1) + "em"; // size 3 = "torna normale"
+      const col = f.getAttribute("color"); if (col) sp.style.color = col;
+      while (f.firstChild) sp.appendChild(f.firstChild);
+      f.replaceWith(sp);
+      unnestSize(sp);
+      if (!big) { sp.style.removeProperty("font-size"); if (!sp.getAttribute("style")) sp.removeAttribute("style"); if (!sp.attributes.length) unwrapEl(sp); }
     });
-    if (keep && ed.contains(keep[0])) { try { sel.collapse(keep[0], keep[1]); } catch {} }
+    mergeSizeSpans();
+    if (offs) setTextOffsets(offs[0], offs[1]);
   };
   const addImage = async (e: any) => {
     const file = e.target.files?.[0]; if (!file) return;
