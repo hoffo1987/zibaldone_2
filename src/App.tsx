@@ -1539,6 +1539,7 @@ export default function App() {
   // scelta di colore/dimensione fatta col solo cursore (ancora nessun testo scritto): si mostra subito nella toolbar
   const pendFmt = useRef<{ node: Node | null; off: number; size?: string; color?: string } | null>(null);
   const sizeEm = useRef(0); // dimensione (em) scelta col solo cursore, usata quando si inizia a scrivere
+  const fmtBusy = useRef(false); // true mentre un comando di formattazione sta lavorando: l'evento input che execCommand scatena non deve toccare il risultato
   const tbTouch = useRef(0); // istante dell'ultimo tocco sulla toolbar: gli scroll subito dopo sono causati dal testo che cambia, non dall'utente
   const [tbHide, setTbHide] = useState(false); // su telefono la toolbar si nasconde scorrendo verso il basso
   const [colorOpen, setColorOpen] = useState(false);
@@ -1817,8 +1818,11 @@ export default function App() {
     const focused = document.activeElement === ed;
     if (!focused) restoreSel();
     const before = snap();
-    fn();
-    if (!focused && snap() === before) { ed.focus(); restoreSel(); fn(); }
+    fmtBusy.current = true;
+    try {
+      fn();
+      if (!focused && snap() === before) { ed.focus(); restoreSel(); fn(); }
+    } finally { fmtBusy.current = false; }
     setContent(ed.innerHTML); readFmt();
     tbTouch.current = Date.now(); // il layout cambia dopo il comando: gli scroll che seguono non sono dell'utente
   };
@@ -1830,12 +1834,31 @@ export default function App() {
   const stripFmt = (kind: "size" | "color") => {
     const ed = editorRef.current, sel = window.getSelection(); if (!ed || !sel || !sel.rangeCount) return;
     const r = sel.getRangeAt(0);
-    ed.querySelectorAll("span,font").forEach((el: any) => {
-      if (!r.intersectsNode(el)) return;
+    // spostando il testo fuori dallo span il browser azzera la selezione: senza di lei il comando che segue (nuova dimensione/colore)
+    // non trova nulla da formattare. Quindi la salvo come posizione nel testo e la rimetto dopo
+    let saved: [number, number] | null = null;
+    try { const pre = document.createRange(); pre.selectNodeContents(ed); pre.setEnd(r.startContainer, r.startOffset); const a = pre.toString().length; saved = [a, a + r.toString().length]; } catch {}
+    // l'elenco degli elementi toccati si fa prima di modificare: durante lo scarto il range cambia e i controlli successivi sbaglierebbero
+    const hit = Array.from(ed.querySelectorAll("span,font")).filter((el: any) => r.intersectsNode(el));
+    hit.forEach((el: any) => {
       if (kind === "size") { el.style.removeProperty("font-size"); el.removeAttribute("size"); } else { el.style.removeProperty("color"); el.removeAttribute("color"); }
       if (!el.getAttribute("style")) el.removeAttribute("style");
       if (!el.attributes.length) { while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el); el.remove(); }
     });
+    if (!saved) return;
+    try {
+      const w = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT);
+      let n: any, pos = 0, sn: any = null, so = 0, en: any = null, eo = 0, last: any = null;
+      while ((n = w.nextNode())) {
+        const len = n.length; last = n;
+        if (!sn && saved[0] < pos + len) { sn = n; so = saved[0] - pos; }
+        if (!en && saved[1] <= pos + len) { en = n; eo = saved[1] - pos; }
+        pos += len;
+      }
+      if (!sn && last) { sn = last; so = last.length; }
+      if (!en && last) { en = last; eo = last.length; }
+      if (sn && en) { const nr = document.createRange(); nr.setStart(sn, so); nr.setEnd(en, eo); sel.removeAllRanges(); sel.addRange(nr); }
+    } catch {}
   };
   const setFmtSize = (id: string) => withSel(() => {
     const ed = editorRef.current, sel: any = window.getSelection(); if (!ed || !sel || !sel.rangeCount) return;
@@ -1852,6 +1875,7 @@ export default function App() {
       pendFmt.current = { node: sel.anchorNode, off: sel.anchorOffset, size: id };
       return;
     }
+    sizeEm.current = 0; // niente dimensione "in attesa" di una scelta vecchia: qui la dimensione si applica subito al testo selezionato
     stripFmt("size");
     const made: HTMLElement[] = [];
     if (sz && id !== "n" && !sel.isCollapsed) {
@@ -1892,7 +1916,7 @@ export default function App() {
   }, () => { let v = ""; try { v = String(document.queryCommandValue("foreColor")); } catch {} return (editorRef.current?.innerHTML || "") + "|" + v; });
   // dopo ogni digitazione: i <font size> che il browser crea per la dimensione scelta col solo cursore diventano span con la dimensione giusta
   const fixFonts = () => {
-    const ed = editorRef.current; if (!ed) return;
+    const ed = editorRef.current; if (!ed || fmtBusy.current) return;
     const list = ed.querySelectorAll('font[size="7"],font[size="3"]'); if (!list.length) return;
     const sel: any = window.getSelection();
     const keep = sel && sel.rangeCount && sel.isCollapsed && ed.contains(sel.anchorNode) ? [sel.anchorNode, sel.anchorOffset] : null;
