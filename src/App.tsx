@@ -716,6 +716,10 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 .tb:active{transform:scale(.95)}
 .tb[data-open="true"]:not(.on){border-color:var(--ac);color:var(--ac);background:color-mix(in srgb,var(--ac) 14%,var(--pn))}
 .tb.on[data-open="true"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 35%,transparent)}
+.tbw{transition:transform .22s var(--ez),opacity .18s}
+.tbw[data-hide="1"]{transform:translateY(-110%);opacity:0;pointer-events:none}
+.swr{scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}.swr::-webkit-scrollbar{display:none}
+.sws{transition:transform .1s,box-shadow .12s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.sws:active{transform:scale(.86)}
 .rt span[style*="font-size"]{line-height:1.25}
 .wm{font-family:'Unbounded','Bricolage Grotesque',sans-serif;font-weight:600;white-space:nowrap;letter-spacing:-.01em}
 .wl{display:inline-block;color:var(--wc);opacity:0;animation:wl .7s var(--ez) calc(var(--i)*60ms + .2s) forwards,lw 7s ease-in-out calc(2.4s + var(--i)*90ms) infinite}
@@ -1532,6 +1536,10 @@ export default function App() {
   const [fmt, setFmt] = useState({ b: false, i: false, u: false, size: "n", color: "" });
   const [panel, setPanel] = useState<null | "size" | "color">(null);
   const savedRange = useRef<Range | null>(null);
+  // scelta di colore/dimensione fatta col solo cursore (ancora nessun testo scritto): si mostra subito nella toolbar
+  const pendFmt = useRef<{ node: Node | null; off: number; size?: string; color?: string } | null>(null);
+  const sizeEm = useRef(0); // dimensione (em) scelta col solo cursore, usata quando si inizia a scrivere
+  const [tbHide, setTbHide] = useState(false); // su telefono la toolbar si nasconde scorrendo verso il basso
   const [colorOpen, setColorOpen] = useState(false);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [loadTick, setLoadTick] = useState(0);
@@ -1751,7 +1759,13 @@ export default function App() {
     for (let e = start; e && e !== ed; e = e.parentElement) {
       if (e.style && e.style.fontSize) { const v = parseFloat(e.style.fontSize); size = SIZES.reduce((a, b) => (Math.abs(b.em - v) < Math.abs(a.em - v) ? b : a)).id; break; }
     }
-    const color = start ? rgbHex(getComputedStyle(start).color) : "";
+    let color = start ? rgbHex(getComputedStyle(start).color) : "";
+    // scelta appena fatta col solo cursore: vale finché il cursore non si sposta (poi si legge dal testo)
+    const p = pendFmt.current;
+    if (p) {
+      if (sel.isCollapsed && sel.anchorNode === p.node && sel.anchorOffset === p.off) { if (p.size) size = p.size; if (p.color) color = p.color; }
+      else pendFmt.current = null;
+    }
     const b = document.queryCommandState("bold"), i = document.queryCommandState("italic"), u = document.queryCommandState("underline");
     setFmt((f) => (f.b === b && f.i === i && f.u === u && f.size === size && f.color === color ? f : { b, i, u, size, color }));
   };
@@ -1761,6 +1775,24 @@ export default function App() {
     return () => document.removeEventListener("selectionchange", readFmt);
   }, [tab, drawing]);
   useEffect(() => { setPanel(null); }, [tab, drawing]);
+  useEffect(() => {
+    if (tab !== "write") { setTbHide(false); return; }
+    let last = window.scrollY, raf = 0;
+    const on = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const y = window.scrollY, d = y - last;
+        if (Math.abs(d) < 10) return;
+        last = y;
+        if (!window.matchMedia("(max-width:767px)").matches) { setTbHide(false); return; }
+        if (d > 0) { if (y > 140) { setTbHide(true); setPanel(null); } } else setTbHide(false);
+      });
+    };
+    window.addEventListener("scroll", on, { passive: true });
+    return () => { window.removeEventListener("scroll", on); cancelAnimationFrame(raf); };
+  }, [tab]);
+  const tbHidden = tbHide && !kb && !drawing; // con la tastiera aperta (si sta scrivendo) la toolbar resta sempre visibile
   // Esegue un comando sul testo SENZA riaprire la tastiera: se l'editor non ha il focus si ripristina l'ultima selezione
   // (il focus serve solo come ripiego se il browser non applica il comando senza)
   const restoreSel = () => {
@@ -1795,25 +1827,78 @@ export default function App() {
     });
   };
   const setFmtSize = (id: string) => withSel(() => {
-    const ed = editorRef.current, sel: any = window.getSelection(); if (!sel || !sel.rangeCount) return;
-    // senza testo selezionato la dimensione vale per il paragrafo in cui si sta scrivendo
-    const wasCollapsed = sel.isCollapsed;
-    if (wasCollapsed && sel.modify) { sel.modify("move", "backward", "paragraphboundary"); sel.modify("extend", "forward", "paragraphboundary"); }
-    stripFmt("size");
+    const ed = editorRef.current, sel: any = window.getSelection(); if (!ed || !sel || !sel.rangeCount) return;
     const sz = SIZES.find((x) => x.id === id);
-    if (!sz || id === "n" || sel.isCollapsed) return;
-    document.execCommand("fontSize", false, "7");
-    ed.querySelectorAll('font[size="7"]').forEach((f: any) => {
-      const sp = document.createElement("span"); sp.style.fontSize = sz.em + "em";
-      while (f.firstChild) sp.appendChild(f.firstChild);
-      f.replaceWith(sp);
-    });
-    if (wasCollapsed) { try { sel.collapseToEnd(); } catch {} } // il cursore torna dove era: niente testo evidenziato
+    const wasCollapsed = sel.isCollapsed;
+    const keepNode = sel.anchorNode, keepOff = sel.anchorOffset; // dov'era il cursore
+    // senza testo selezionato la dimensione vale per il paragrafo in cui si sta scrivendo
+    if (wasCollapsed && sel.modify) { sel.modify("move", "backward", "paragraphboundary"); sel.modify("extend", "forward", "paragraphboundary"); }
+    if (wasCollapsed && sel.isCollapsed) {
+      // riga ancora vuota: la dimensione vale per ciò che si scrive da qui in poi (i <font> creati dal browser li sistema fixFonts)
+      try { sel.collapse(keepNode, keepOff); } catch {}
+      if (sz) sizeEm.current = sz.em;
+      document.execCommand("fontSize", false, !sz || id === "n" ? "3" : "7");
+      pendFmt.current = { node: sel.anchorNode, off: sel.anchorOffset, size: id };
+      return;
+    }
+    stripFmt("size");
+    const made: HTMLElement[] = [];
+    if (sz && id !== "n" && !sel.isCollapsed) {
+      document.execCommand("fontSize", false, "7");
+      ed.querySelectorAll('font[size="7"]').forEach((f: any) => {
+        const sp = document.createElement("span"); sp.style.fontSize = sz.em + "em";
+        while (f.firstChild) sp.appendChild(f.firstChild);
+        f.replaceWith(sp); made.push(sp);
+      });
+    }
+    try {
+      if (wasCollapsed) { // il cursore torna dov'era (dentro il testo), così la scelta resta evidenziata e si continua a scrivere con quella dimensione
+        if (keepNode && ed.contains(keepNode)) sel.collapse(keepNode, Math.min(keepOff, keepNode.nodeType === 3 ? keepNode.length : keepNode.childNodes.length));
+        else sel.collapseToEnd();
+        pendFmt.current = { node: sel.anchorNode, off: sel.anchorOffset, size: id };
+      } else if (made.length) { // con testo selezionato la selezione resta com'era (la sostituzione dei <font> la faceva sparire)
+        const firstText: any = document.createTreeWalker(made[0], NodeFilter.SHOW_TEXT).nextNode();
+        const wl = document.createTreeWalker(made[made.length - 1], NodeFilter.SHOW_TEXT);
+        let lastText: any = null, t: any; while ((t = wl.nextNode())) lastText = t;
+        if (firstText && lastText) { const r = document.createRange(); r.setStart(firstText, 0); r.setEnd(lastText, lastText.length); sel.removeAllRanges(); sel.addRange(r); }
+        pendFmt.current = null;
+      }
+    } catch {}
   });
   const setFmtColor = (c: string) => withSel(() => {
+    const sel: any = window.getSelection(); if (!sel || !sel.rangeCount) return;
+    if (sel.isCollapsed) {
+      // solo il cursore: il colore vale per ciò che si scrive da qui in poi, il testo già colorato resta com'è
+      const a: any = sel.anchorNode, el = a && (a.nodeType === 3 ? a.parentElement : a);
+      const now = el ? rgbHex(getComputedStyle(el).color) : "";
+      if (c !== now) document.execCommand("foreColor", false, c);
+      pendFmt.current = { node: sel.anchorNode, off: sel.anchorOffset, color: c };
+      return;
+    }
     stripFmt("color");
     if (c !== INK_COLORS[0].id) document.execCommand("foreColor", false, c); // l'inchiostro è il colore normale: basta togliere
-  });
+    pendFmt.current = null;
+  }, () => { let v = ""; try { v = String(document.queryCommandValue("foreColor")); } catch {} return (editorRef.current?.innerHTML || "") + "|" + v; });
+  // dopo ogni digitazione: i <font size> che il browser crea per la dimensione scelta col solo cursore diventano span con la dimensione giusta
+  const fixFonts = () => {
+    const ed = editorRef.current; if (!ed) return;
+    const list = ed.querySelectorAll('font[size="7"],font[size="3"]'); if (!list.length) return;
+    const sel: any = window.getSelection();
+    const keep = sel && sel.rangeCount && sel.isCollapsed && ed.contains(sel.anchorNode) ? [sel.anchorNode, sel.anchorOffset] : null;
+    list.forEach((f: any) => {
+      if (f.getAttribute("size") === "7") {
+        if (!sizeEm.current) return;
+        const sp = document.createElement("span"); sp.style.fontSize = sizeEm.current + "em";
+        const col = f.getAttribute("color"); if (col) sp.style.color = col;
+        while (f.firstChild) sp.appendChild(f.firstChild);
+        f.replaceWith(sp);
+      } else { // size 3 = "torna normale"
+        f.removeAttribute("size");
+        if (!f.attributes.length) { while (f.firstChild) f.parentNode.insertBefore(f.firstChild, f); f.remove(); }
+      }
+    });
+    if (keep && ed.contains(keep[0])) { try { sel.collapse(keep[0], keep[1]); } catch {} }
+  };
   const addImage = async (e: any) => {
     const file = e.target.files?.[0]; if (!file) return;
     try {
@@ -2372,7 +2457,7 @@ export default function App() {
                     <button type="button" className={`bt !border-0 ${drawing ? "on" : "!bg-transparent"}`} onClick={() => { setDrawing(true); setImg(null); }}><Pencil size={16} />Disegno</button>
                   </div>
                 </div>
-                <div className="sticky top-[64px] md:top-0 z-[35] p-2 pt-0 space-y-2 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }} onMouseDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }}>
+                <div className="tbw sticky top-[64px] md:top-0 z-[35] p-2 pt-0 space-y-2 border-b" data-hide={tbHidden ? "1" : undefined} style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }} onMouseDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }}>
                   {!drawing ? (<>
                     <div className="grid grid-cols-7 gap-1.5 pt-2">
                       <TB on={fmt.b} fn={() => cmd("bold")} icon={Bold} label="Grassetto" />
@@ -2385,10 +2470,10 @@ export default function App() {
                       <label className="bt !min-w-0 !px-0 cursor-pointer" title="Inserisci foto"><ImageIcon size={18} /><input type="file" accept="image/*" className="hidden" onChange={addImage} /></label>
                     </div>
                     {panel === "size" && <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Dimensione del testo">
-                      {SIZES.map((z) => <button type="button" key={z.id} aria-pressed={fmt.size === z.id} onClick={() => setFmtSize(fmt.size === z.id ? "n" : z.id)} className={`bt tb !min-w-0 !px-1 !gap-1 flex-col !py-1 ${fmt.size === z.id ? "on" : ""}`}><span style={{ fontSize: z.px, fontWeight: 700, lineHeight: 1 }}>A</span><span className="text-[10px] leading-none opacity-80">{z.label}</span></button>)}
+                      {SIZES.map((z) => <button type="button" key={z.id} aria-pressed={fmt.size === z.id} onClick={() => { setFmtSize(fmt.size === z.id ? "n" : z.id); setPanel(null); }} className={`bt tb !min-w-0 !px-1 !gap-1 flex-col !py-1 ${fmt.size === z.id ? "on" : ""}`}><span style={{ fontSize: z.px, fontWeight: 700, lineHeight: 1 }}>A</span><span className="text-[10px] leading-none opacity-80">{z.label}</span></button>)}
                     </div>}
-                    {panel === "color" && <div className="grid grid-cols-7 gap-x-2 gap-y-2 py-1" role="group" aria-label="Colore del testo">
-                      {INK_COLORS.map((c) => { const cur = (fmt.color || INK_COLORS[0].id) === c.id; return <button type="button" key={c.id} aria-label={c.name} aria-pressed={cur} title={c.name} onClick={() => setFmtColor(c.id)} className="rounded-full w-9 h-9 justify-self-center" style={{ background: c.id, boxShadow: cur ? `0 0 0 2px var(--sf),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />; })}
+                    {panel === "color" && <div className="swr flex gap-2.5 overflow-x-auto py-1.5 px-1.5" role="group" aria-label="Colore del testo">
+                      {INK_COLORS.map((c) => { const cur = (fmt.color || INK_COLORS[0].id) === c.id; return <button type="button" key={c.id} aria-label={c.name} aria-pressed={cur} title={c.name} onClick={() => setFmtColor(c.id)} className="sws rounded-full w-9 h-9 shrink-0" style={{ background: c.id, boxShadow: cur ? `0 0 0 2px var(--sf),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />; })}
                     </div>}
                     {img && <div className="flex items-center gap-1.5">
                       {["25%", "50%", "75%", "100%"].map((w) => <button type="button" key={w} className="bt flex-1 !min-w-0 !px-0 !text-xs" onClick={() => resizeImg(w)}>{w}</button>)}
@@ -2425,7 +2510,7 @@ export default function App() {
                   </svg>
                   <div ref={editorRef} contentEditable={!drawing} suppressContentEditableWarning data-ph="Scrivi appunti, formule, note di cablaggio…"
                     className="rt relative p-6 outline-none" style={{ minHeight: height, caretColor: "#0F8B7A" }}
-                    onInput={(e: any) => setContent(e.currentTarget.innerHTML)} onClick={pickImg}
+                    onInput={(e: any) => { fixFonts(); setContent(e.currentTarget.innerHTML); }} onClick={pickImg}
                     onKeyDown={(e) => { if (e.key === "Enter") document.execCommand("formatBlock", false, "div"); }} />
                   {drawing && <div className="absolute inset-0 z-30" style={{ touchAction: tool === "hand" ? "pan-y" : "none", cursor: tool === "hand" ? "grab" : tool === "eraser" ? "cell" : "crosshair" }} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp} />}
                 </div>
