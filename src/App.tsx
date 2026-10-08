@@ -718,7 +718,7 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 .tb.on[data-open="true"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 35%,transparent)}
 .tbw{transition:transform .22s var(--ez),opacity .18s}
 .tbw[data-hide="1"]{transform:translateY(-110%);opacity:0;pointer-events:none}
-.swr{scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}.swr::-webkit-scrollbar{display:none}
+.swr{scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%)}.swr:before,.swr:after{content:"";flex:0 0 6px}.swr::-webkit-scrollbar{display:none}
 .sws{transition:transform .1s,box-shadow .12s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.sws:active{transform:scale(.86)}
 .rt span[style*="font-size"]{line-height:1.25}
 .wm{font-family:'Unbounded','Bricolage Grotesque',sans-serif;font-weight:600;white-space:nowrap;letter-spacing:-.01em}
@@ -1777,6 +1777,7 @@ export default function App() {
   useEffect(() => { setPanel(null); }, [tab, drawing]);
   useEffect(() => {
     if (tab !== "write") { setTbHide(false); return; }
+    if (kb || drawing) return; // si sta scrivendo o disegnando: la toolbar e i suoi pannelli non si toccano
     let last = window.scrollY, raf = 0;
     const on = () => {
       if (raf) return;
@@ -1791,7 +1792,12 @@ export default function App() {
     };
     window.addEventListener("scroll", on, { passive: true });
     return () => { window.removeEventListener("scroll", on); cancelAnimationFrame(raf); };
-  }, [tab]);
+  }, [tab, kb, drawing]);
+  useEffect(() => {
+    if (panel !== "color") return;
+    const box: any = document.querySelector(".swr"), el: any = box && box.querySelector('[aria-pressed="true"]');
+    if (box && el) box.scrollLeft = el.getBoundingClientRect().left - box.getBoundingClientRect().left + box.scrollLeft - (box.clientWidth - el.offsetWidth) / 2;
+  }, [panel]);
   const tbHidden = tbHide && !kb && !drawing; // con la tastiera aperta (si sta scrivendo) la toolbar resta sempre visibile
   // Esegue un comando sul testo SENZA riaprire la tastiera: se l'editor non ha il focus si ripristina l'ultima selezione
   // (il focus serve solo come ripiego se il browser non applica il comando senza)
@@ -2470,9 +2476,9 @@ export default function App() {
                       <label className="bt !min-w-0 !px-0 cursor-pointer" title="Inserisci foto"><ImageIcon size={18} /><input type="file" accept="image/*" className="hidden" onChange={addImage} /></label>
                     </div>
                     {panel === "size" && <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Dimensione del testo">
-                      {SIZES.map((z) => <button type="button" key={z.id} aria-pressed={fmt.size === z.id} onClick={() => { setFmtSize(fmt.size === z.id ? "n" : z.id); setPanel(null); }} className={`bt tb !min-w-0 !px-1 !gap-1 flex-col !py-1 ${fmt.size === z.id ? "on" : ""}`}><span style={{ fontSize: z.px, fontWeight: 700, lineHeight: 1 }}>A</span><span className="text-[10px] leading-none opacity-80">{z.label}</span></button>)}
+                      {SIZES.map((z) => <button type="button" key={z.id} aria-pressed={fmt.size === z.id} onClick={() => setFmtSize(fmt.size === z.id ? "n" : z.id)} className={`bt tb !min-w-0 !px-1 !gap-1 flex-col !py-1 ${fmt.size === z.id ? "on" : ""}`}><span style={{ fontSize: z.px, fontWeight: 700, lineHeight: 1 }}>A</span><span className="text-[10px] leading-none opacity-80">{z.label}</span></button>)}
                     </div>}
-                    {panel === "color" && <div className="swr flex gap-2.5 overflow-x-auto py-1.5 px-1.5" role="group" aria-label="Colore del testo">
+                    {panel === "color" && <div className="swr flex gap-2.5 overflow-x-auto py-1.5" role="group" aria-label="Colore del testo">
                       {INK_COLORS.map((c) => { const cur = (fmt.color || INK_COLORS[0].id) === c.id; return <button type="button" key={c.id} aria-label={c.name} aria-pressed={cur} title={c.name} onClick={() => setFmtColor(c.id)} className="sws rounded-full w-9 h-9 shrink-0" style={{ background: c.id, boxShadow: cur ? `0 0 0 2px var(--sf),0 0 0 4px ${c.id}` : "inset 0 0 0 1px rgba(128,128,128,.5)" }} />; })}
                     </div>}
                     {img && <div className="flex items-center gap-1.5">
