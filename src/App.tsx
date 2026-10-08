@@ -1539,6 +1539,7 @@ export default function App() {
   // scelta di colore/dimensione fatta col solo cursore (ancora nessun testo scritto): si mostra subito nella toolbar
   const pendFmt = useRef<{ node: Node | null; off: number; size?: string; color?: string } | null>(null);
   const sizeEm = useRef(0); // dimensione (em) scelta col solo cursore, usata quando si inizia a scrivere
+  const tbTouch = useRef(0); // istante dell'ultimo tocco sulla toolbar: gli scroll subito dopo sono causati dal testo che cambia, non dall'utente
   const [tbHide, setTbHide] = useState(false); // su telefono la toolbar si nasconde scorrendo verso il basso
   const [colorOpen, setColorOpen] = useState(false);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
@@ -1784,6 +1785,9 @@ export default function App() {
       raf = requestAnimationFrame(() => {
         raf = 0;
         const y = window.scrollY, d = y - last;
+        // cambiando dimensione/colore il testo si ridimensiona e il browser scrolla da solo per tenere visibile il cursore:
+        // non è l'utente che scorre, quindi la toolbar e il pannello aperto non vanno toccati
+        if (Date.now() - tbTouch.current < 1500) { last = y; return; }
         if (Math.abs(d) < 10) return;
         last = y;
         if (!window.matchMedia("(max-width:767px)").matches) { setTbHide(false); return; }
@@ -1816,6 +1820,7 @@ export default function App() {
     fn();
     if (!focused && snap() === before) { ed.focus(); restoreSel(); fn(); }
     setContent(ed.innerHTML); readFmt();
+    tbTouch.current = Date.now(); // il layout cambia dopo il comando: gli scroll che seguono non sono dell'utente
   };
   // con il solo cursore grassetto/corsivo/ecc. non cambiano l'HTML ma cambiano lo stato: va controllato anche quello,
   // altrimenti il comando veniva rieseguito e quindi annullato (serviva toccare due volte)
@@ -2463,7 +2468,7 @@ export default function App() {
                     <button type="button" className={`bt !border-0 ${drawing ? "on" : "!bg-transparent"}`} onClick={() => { setDrawing(true); setImg(null); }}><Pencil size={16} />Disegno</button>
                   </div>
                 </div>
-                <div className="tbw sticky top-[64px] md:top-0 z-[35] p-2 pt-0 space-y-2 border-b" data-hide={tbHidden ? "1" : undefined} style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }} onMouseDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }}>
+                <div className="tbw sticky top-[64px] md:top-0 z-[35] p-2 pt-0 space-y-2 border-b" data-hide={tbHidden ? "1" : undefined} style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { tbTouch.current = Date.now(); const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }} onMouseDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }}>
                   {!drawing ? (<>
                     <div className="grid grid-cols-7 gap-1.5 pt-2">
                       <TB on={fmt.b} fn={() => cmd("bold")} icon={Bold} label="Grassetto" />
