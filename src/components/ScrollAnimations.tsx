@@ -70,7 +70,7 @@ export const ScrollSection: React.FC<ScrollSectionProps> = ({
         markers: false, // Set to true for debugging
       },
     });
-  }, [animationType, triggerStart, triggerEnd, scrub]);
+  }, { dependencies: [animationType, triggerStart, triggerEnd, scrub] });
 
   return (
     <div ref={sectionRef} className={className}>
@@ -114,7 +114,7 @@ export const ParallaxLayer: React.FC<ParallaxLayerProps> = ({
         scrub: true,
       },
     });
-  }, [speed, direction]);
+  }, { dependencies: [speed, direction] });
 
   return (
     <div ref={layerRef} className={className}>
@@ -158,7 +158,7 @@ export const ScrollTextReveal: React.FC<ScrollTextRevealProps> = ({
         toggleActions: 'play none none reverse',
       },
     });
-  }, [text, stagger]);
+  }, { dependencies: [text, stagger] });
 
   const words = text.split(' ');
 
@@ -199,7 +199,7 @@ export const PinSection: React.FC<PinSectionProps> = ({
       pin: true,
       pinSpacing: pinSpacing,
     });
-  }, [pinSpacing]);
+  }, { dependencies: [pinSpacing] });
 
   return (
     <div ref={pinRef} className={className}>
