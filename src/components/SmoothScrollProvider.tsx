@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import Lenis from 'lenis';
 
 interface SmoothScrollProviderProps {
   children: React.ReactNode;
@@ -7,42 +6,62 @@ interface SmoothScrollProviderProps {
   smoothWheel?: boolean;
 }
 
+/**
+ * Smooth Scroll Provider - Implementazione leggera senza dipendenze esterne
+ * Per una versione con Lenis, installare: npm install lenis
+ */
 export const SmoothScrollProvider: React.FC<SmoothScrollProviderProps> = ({
   children,
   speed = 1,
   smoothWheel = true,
 }) => {
-  const lenisRef = useRef<Lenis | null>(null);
+  const scrollTargetRef = useRef(0);
+  const scrollCurrentRef = useRef(0);
+  const rafRef = useRef<number>();
 
   useEffect(() => {
-    // Initialize Lenis
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // Custom easing
-      orientation: 'vertical',
-      gestureOrientation: 'vertical',
-      smoothWheel,
-      wheelMultiplier: speed,
-      touchMultiplier: 2,
-      infinite: false,
-    });
+    if (!smoothWheel) return;
 
-    lenisRef.current = lenis;
+    let isScrolling = false;
 
-    // Animation loop
-    function raf(time: number) {
-      lenis.raf(time);
-      requestAnimationFrame(raf);
-    }
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      scrollTargetRef.current += e.deltaY * speed * 0.5;
 
-    requestAnimationFrame(raf);
+      // Clamp scroll value
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      scrollTargetRef.current = Math.max(0, Math.min(scrollTargetRef.current, maxScroll));
 
-    // Expose lenis instance globally for GSAP integration
-    (window as any).lenis = lenis;
+      if (!isScrolling) {
+        isScrolling = true;
+        animate();
+      }
+    };
+
+    const animate = () => {
+      // Smooth interpolation
+      const diff = scrollTargetRef.current - scrollCurrentRef.current;
+      scrollCurrentRef.current += diff * 0.1; // Smoothing factor
+
+      window.scrollTo(0, scrollCurrentRef.current);
+
+      if (Math.abs(diff) > 0.1) {
+        rafRef.current = requestAnimationFrame(animate);
+      } else {
+        isScrolling = false;
+        scrollCurrentRef.current = scrollTargetRef.current;
+      }
+    };
+
+    // Initialize current scroll position
+    scrollCurrentRef.current = window.scrollY;
+    scrollTargetRef.current = window.scrollY;
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
 
     return () => {
-      lenis.destroy();
-      (window as any).lenis = null;
+      window.removeEventListener('wheel', handleWheel);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [speed, smoothWheel]);
 
