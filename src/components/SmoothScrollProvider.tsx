@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import Lenis from '@studio-freight/lenis';
+import Lenis from 'lenis';
 
 interface SmoothScrollProviderProps {
   children: React.ReactNode;
@@ -23,7 +23,6 @@ export const SmoothScrollProvider: React.FC<SmoothScrollProviderProps> = ({
       gestureOrientation: 'vertical',
       smoothWheel,
       wheelMultiplier: speed,
-      smoothTouch: false,
       touchMultiplier: 2,
       infinite: false,
     });
