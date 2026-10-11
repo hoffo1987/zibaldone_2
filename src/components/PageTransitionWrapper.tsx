@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface PageTransitionWrapperProps {
@@ -49,20 +49,17 @@ export const PageTransitionWrapper: React.FC<PageTransitionWrapperProps> = ({
   const selectedVariant = variants[transitionType];
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={pageKey}
-        initial={selectedVariant.initial}
-        animate={selectedVariant.animate}
-        exit={selectedVariant.exit}
-        transition={{
-          duration: 0.3,
-          ease: [0.22, 1, 0.36, 1],
-        }}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <motion.div
+      key={pageKey}
+      initial={selectedVariant.initial}
+      animate={selectedVariant.animate}
+      transition={{
+        duration: 0.3,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+    >
+      {children}
+    </motion.div>
   );
 };
 
