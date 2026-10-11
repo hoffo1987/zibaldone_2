@@ -23,15 +23,29 @@ export const Text3D = ({ text, layers = 10, anim = true, className = "", delay =
 
 // Il terminale del Circuito: una finestra di vetro spessa che fluttua nello spazio. Il comando si batte un tasto alla volta
 // (ogni carattere cala dall'alto verso il vetro), poi la risposta riporta i numeri veri dell'archivio.
-export const Terminal3D = ({ user, cmd, out, run = true, delay = 0 }: { user: string; cmd: string; out: string; run?: boolean; delay?: number }) => {
+export const Terminal3D = ({ user, cmd: cmd0, out: out0, run = true, delay = 0 }: { user: string; cmd: string; out: string; run?: boolean; delay?: number }) => {
+  // quando qualcuno fa girare il logo 3D, il terminale lo registra con un comando suo; dopo qualche secondo di quiete
+  // torna a mostrare i numeri dell'archivio. Due righe sempre: l'altezza non cambia e la pagina non salta.
+  const [alt, setAlt] = useState<{ cmd: string; out: string } | null>(null);
+  useEffect(() => {
+    let t = 0;
+    const on = (e: any) => {
+      const k = Number(e.detail) || 1;
+      setAlt({ cmd: "gira --logo", out: `${k} ${k === 1 ? "spinta" : "spinte"} · la corrente accelera` });
+      clearTimeout(t); t = window.setTimeout(() => setAlt(null), 5200);
+    };
+    window.addEventListener("circuito:giro", on);
+    return () => { window.removeEventListener("circuito:giro", on); clearTimeout(t); };
+  }, []);
+  const cmd = alt ? alt.cmd : cmd0, out = alt ? alt.out : out0, fast = !!alt;
   const [n, setN] = useState(run ? 0 : cmd.length);
   const [done, setDone] = useState(!run);
   useEffect(() => {
     if (!run) { setN(cmd.length); setDone(true); return; }
     setN(0); setDone(false);
     let i = 0, t = 0;
-    const tick = () => { i++; setN(i); t = window.setTimeout(i < cmd.length ? tick : () => setDone(true), i < cmd.length ? 45 + Math.random() * 55 : 280); };
-    t = window.setTimeout(tick, delay);
+    const tick = () => { i++; setN(i); t = window.setTimeout(i < cmd.length ? tick : () => setDone(true), i < cmd.length ? (fast ? 22 : 45 + Math.random() * 55) : fast ? 120 : 280); };
+    t = window.setTimeout(tick, fast ? 0 : delay);
     return () => clearTimeout(t);
   }, [cmd, run]);
   return (
@@ -41,7 +55,7 @@ export const Terminal3D = ({ user, cmd, out, run = true, delay = 0 }: { user: st
       <div className="tm-face" aria-hidden="true">
         <div className="tm-bar"><i /><i /><i /><span>circuito — zsh</span></div>
         <div className="tm-line"><span className="tm-u">{user}@circuito</span><span className="tm-p">:~$</span> {cmd.slice(0, n).split("").map((c, j) => <span key={j} className="tm-c">{c}</span>)}{!done && <b className="tm-caret" />}</div>
-        {done && <div className="tm-out"><span className="tm-ar">→</span> {out}<b className="tm-caret" /></div>}
+        <div className="tm-out" style={done ? undefined : { visibility: "hidden", animation: "none" }} key={done ? out : "attesa"}><span className="tm-ar">{alt ? "↻" : "→"}</span> {out}<b className="tm-caret" /></div>
       </div>
     </div>
   );
@@ -63,7 +77,8 @@ export const D3_CSS = `
 /* colori: titoli delle pagine (inchiostro con fianchi verdi) e titolo del pannello (bianco con fianchi verde profondo) */
 .t3-ink{--t3a:var(--ac);--t3b:color-mix(in srgb,var(--ac) 25%,#000);--dz:1.35px;--bx:5deg;--by:-7deg}
 .root.dark .t3-ink{--t3a:#5EEAD4;--t3b:#0A5A51}
-.t3-hero{--t3a:#8FE8DA;--t3b:#03241F;--dz:1.45px;--bx:9deg;--by:-11deg}
+.t3-hero{--t3a:#C9FBF2;--t3b:#0B5E55;--dz:1.4px;--bx:9deg;--by:-11deg}
+.t3-hero .t3l:first-child{color:rgba(3,30,27,.45);transform:translateZ(calc(var(--k)*var(--dz)*-1 - 2px)) translate(1px,2px)} /* l'ultimo strato fa da ombra portata */
 .t3-hero .t3f{background:linear-gradient(180deg,#fff 30%,#D6FFF8);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
 .t3-glint .t3f{background:linear-gradient(105deg,#fff 42%,#FDE68A 50%,#fff 58%) 120% 0/260% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:t3glint 1.4s cubic-bezier(.65,0,.35,1) 1.5s backwards}
 @keyframes t3glint{from{background-position:120% 0}to{background-position:-20% 0}}
@@ -90,6 +105,8 @@ export const D3_CSS = `
 .tm-caret{display:inline-block;width:.5em;height:1em;margin-left:.15em;vertical-align:-.15em;background:#FBBF24;box-shadow:0 0 10px #FBBF24;animation:blink 1s steps(2) infinite}
 
 /* il logo 3D e i suoi contenitori */
+.logo3d{outline:none;border-radius:28px}
+.logo3d:focus-visible{box-shadow:0 0 0 2px rgba(251,191,36,.9),0 0 0 6px rgba(251,191,36,.25)}
 .logo3d>canvas{filter:drop-shadow(0 24px 30px rgba(0,0,0,.35))}
 .root.lite .t3l,.root.nomotion .t3l{transform:translateZ(calc(var(--k)*-1.3px))}
 @media (prefers-reduced-motion:reduce){.t3d,.term3d{transition:none}}
