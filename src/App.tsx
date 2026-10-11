@@ -16,6 +16,9 @@ import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
 import { AccessoProf } from "./AccessoProf";
 import { M, MOTION_CSS, Words, Sheets, useFlip, useRail, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
+import { Text3D, Terminal3D, D3_CSS } from "./d3";
+// il logo 3D (three.js) si carica a parte, solo quando serve: il resto del sito non lo scarica
+const Logo3D = React.lazy(() => import("./Logo3D"));
 
 // --- FIREBASE ---
 const firebaseConfig = {
@@ -952,7 +955,7 @@ const bannerFrom = (file: File): Promise<string> => new Promise((res, rej) => {
   r.onerror = rej; r.readAsDataURL(file);
 });
 
-const DEF = { level: "full", fx: true, glow: true, aurora: true, intro: true, sound: false, vibrate: true, text: 1, vol: 1, vib: 1 };
+const DEF = { level: "full", fx: true, glow: true, aurora: true, intro: true, d3: true, sound: false, vibrate: true, text: 1, vol: 1, vib: 1 };
 
 // Modalità "Personalizzato": ogni effetto si accende o spegne da solo e ogni intensità si regola a piacere.
 // I valori qui sotto sono quelli del preset "Spettacolo".
@@ -962,9 +965,10 @@ const CDEF: any = {
   rain: true, scan: true,                                              // riquadro iniziale
   glow: true, tilt: true, ripple: true, lift: true,                    // pulsanti e card
   titles: true, logo: true, reveal: true, pages: true, theme: true, blur: true,    // ingressi e transizioni
+  d3: true,                                                            // logo, titoli e terminale in 3D
   spd: 1, dens: 14, rainD: 1, auroraI: 1, artI: 1, glowI: 1, tiltI: 1, fps: 30,    // intensità
 };
-const OFF: any = { motion: false, pulses: false, sparks: false, aurora: false, art: false, parallax: false, prog: false, rain: false, scan: false, glow: false, tilt: false, ripple: false, lift: false, titles: false, logo: false, reveal: false, pages: false, theme: false, blur: false };
+const OFF: any = { motion: false, pulses: false, sparks: false, aurora: false, art: false, parallax: false, prog: false, rain: false, scan: false, glow: false, tilt: false, ripple: false, lift: false, titles: false, logo: false, reveal: false, pages: false, theme: false, blur: false, d3: false };
 const CBASE: any = {
   full: { ...CDEF },
   mid: { ...CDEF, pulses: false, sparks: false, rain: false, glow: false, tilt: false, ripple: false, aurora: false },
@@ -985,6 +989,7 @@ const resolveG = (o: any): any => {
     aurora: on && !!o.aurora,
     art: !lite, parallax: !lite, prog: !lite, theme: !lite, blur: !lite,
     titles: !lite && !!o.intro, logo: !lite && !!o.intro, reveal: !lite && !!o.intro,
+    d3: !lite && o.d3 !== false,
   };
 };
 let GSPD = 1;  // velocità globale delle animazioni (serve anche ai timer fuori da React)
@@ -1112,7 +1117,9 @@ const CountUp = ({ v, on, delay = 0 }: any) => {
 // caricamento a "segnale" (barre stile equalizzatore)
 const Loading = ({ cls = "py-24" }: any) => <div className={`${cls} flex justify-center`} role="status" aria-label="Caricamento"><span className="ldr"><i /><i /><i /><i /><i /></span></div>;
 
-// pioggia di codice del riquadro iniziale: colonne di 0/1 ed esadecimale che cadono, ogni tanto compare una parola; reagisce al mouse
+// pioggia di codice del riquadro iniziale, in profondità: le colonne stanno a distanze diverse (quelle vicine sono più grandi,
+// più veloci e più luminose, quelle lontane piccole e tenui) e scorrono in parallasse quando muovi il mouse.
+// Ogni tanto compare una parola; vicino al puntatore la pioggia accelera e si accende d'ambra.
 const HeroRain = ({ on, speed = 1, dens = 1, fps = 30 }: { on: boolean; speed?: number; dens?: number; fps?: number }) => {
   const ref = useRef<HTMLCanvasElement>(null);
   const pr = useRef({ speed, dens, fps }); pr.current = { speed, dens, fps }; // letti a ogni frame, senza riavviare la pioggia
@@ -1121,51 +1128,60 @@ const HeroRain = ({ on, speed = 1, dens = 1, fps = 30 }: { on: boolean; speed?: 
     const host = cv.parentElement as HTMLElement, ctx = cv.getContext("2d"); if (!host || !ctx) return;
     const GL = "0101010101ABCDEF<>/{}[]=+#", WORDS = ["CIRCUITO", "SCRIVI", "LEGGI", "SCEGLI", "IDEE", "MESE"];
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    let W = 0, H = 0, cw = 16, lh = 18, rows = 0, raf = 0, last = 0, vis = true;
+    let W = 0, H = 0, cw = 16, lh = 18, raf = 0, last = 0, vis = true;
     let cols: any[] = [];
-    const ptr = { x: -999 };
+    const ptr = { x: -999, nx: 0, ny: 0 }, cam = { x: 0, y: 0 };
     const rc = () => GL[Math.floor(Math.random() * GL.length)];
     const mk = (c: any, init: boolean) => {
-      c.speed = 5 + Math.random() * 11;
+      c.rows = Math.ceil(H / (lh * c.z)) + 2;
+      c.speed = (5 + Math.random() * 11) * (0.45 + c.z * 0.6);
       c.len = 8 + Math.floor(Math.random() * 16);
       c.word = Math.random() < 0.1 ? WORDS[Math.floor(Math.random() * WORDS.length)] : "";
       if (c.word) c.len = Math.max(c.len, c.word.length + 3);
-      c.top = c.word ? Math.floor(Math.random() * Math.max(1, rows - c.word.length)) : 0;
-      c.head = init ? Math.random() * rows : -Math.random() * rows * 0.6 - 1;
-      c.ch = Array.from({ length: rows + 2 }, rc);
+      c.top = c.word ? Math.floor(Math.random() * Math.max(1, c.rows - c.word.length)) : 0;
+      c.head = init ? Math.random() * c.rows : -Math.random() * c.rows * 0.6 - 1;
+      c.ch = Array.from({ length: c.rows + 2 }, rc);
     };
     const fit = () => {
       W = host.clientWidth; H = host.clientHeight; if (!W || !H) return;
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      cw = W < 600 ? 14 : 16; lh = W < 600 ? 16 : 18; rows = Math.ceil(H / lh);
-      cols = Array.from({ length: Math.ceil(W / cw) }, (_, i) => { const c: any = { x: i * cw, r: Math.random() }; mk(c, true); return c; });
+      cw = W < 600 ? 14 : 16; lh = W < 600 ? 16 : 18;
+      // tre piani di profondità mescolati: lontano (piccolo), medio, vicino (grande); si disegnano dal più lontano
+      cols = Array.from({ length: Math.ceil((W + 120) / cw) }, (_, i) => {
+        const p = Math.random(), z = p < 0.45 ? 0.45 + Math.random() * 0.2 : p < 0.85 ? 0.75 + Math.random() * 0.25 : 1.25 + Math.random() * 0.4;
+        const c: any = { x: i * cw - 60 + Math.random() * 6, z, r: Math.random() }; mk(c, true); return c;
+      }).sort((a, b) => a.z - b.z);
     };
     fit();
     const ro = "ResizeObserver" in window ? new ResizeObserver(fit) : null; ro?.observe(host);
-    const mv = (e: PointerEvent) => { ptr.x = e.clientX - host.getBoundingClientRect().left; };
-    const lv = () => { ptr.x = -999; };
+    const mv = (e: PointerEvent) => { const r = host.getBoundingClientRect(); ptr.x = e.clientX - r.left; ptr.nx = (e.clientX - r.left) / r.width - 0.5; ptr.ny = (e.clientY - r.top) / r.height - 0.5; };
+    const lv = () => { ptr.x = -999; ptr.nx = 0; ptr.ny = 0; };
     host.addEventListener("pointermove", mv, { passive: true }); host.addEventListener("pointerleave", lv, { passive: true });
     const io = "IntersectionObserver" in window ? new IntersectionObserver(([e]) => { vis = e.isIntersecting; }) : null; io?.observe(cv);
     const frame = (ts: number) => {
       raf = requestAnimationFrame(frame);
-      if (document.hidden || !vis || !W || !rows) return;
+      if (document.hidden || !vis || !W) return;
       const el = ts - last, P = pr.current; if (el < 1000 / (P.fps || 30) - 3) return; last = ts;
       const dt = Math.min(0.1, el / 1000);
-      ctx.clearRect(0, 0, W, H);
-      ctx.font = `600 ${lh - 4}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`; ctx.textBaseline = "top";
+      cam.x += (ptr.nx - cam.x) * Math.min(1, dt * 4); cam.y += (ptr.ny - cam.y) * Math.min(1, dt * 4);
+      ctx.clearRect(0, 0, W, H); ctx.textBaseline = "top";
+      let fz = 0;
       for (const c of cols) {
         if (c.r > P.dens) continue; // densità: solo una parte delle colonne è attiva
-        const d = Math.abs(c.x + cw / 2 - ptr.x), near = d < 80 ? 1 - d / 80 : 0;
+        const L = lh * c.z;
+        if (c.z !== fz) { fz = c.z; ctx.font = `600 ${Math.round((lh - 4) * c.z)}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`; }
+        const ox = -cam.x * 70 * (c.z - 0.7), oy = -cam.y * 40 * (c.z - 0.7), px = c.x + ox; // parallasse: i piani vicini si spostano di più
+        const d = Math.abs(px + (cw * c.z) / 2 - ptr.x), near = d < 80 ? 1 - d / 80 : 0;
         c.head += c.speed * (1 + near * 1.8) * dt * P.speed;
         if (Math.random() < 0.04) c.ch[Math.floor(Math.random() * c.ch.length)] = rc();
-        const h = Math.floor(c.head), base = near > 0.15 ? "251,191,36" : "190,255,240";
+        const h = Math.floor(c.head), base = near > 0.15 ? "251,191,36" : "190,255,240", dim = c.z < 0.7 ? 0.45 : c.z < 1.1 ? 0.85 : 1;
         for (let k = 0; k < c.len; k++) {
-          const r = h - k; if (r < 0 || r >= rows) continue;
-          const wi = c.word ? r - c.top : -1, inW = wi >= 0 && wi < c.word.length, f = 1 - k / c.len, a = f * f * 0.5;
-          ctx.fillStyle = k === 0 ? `rgba(255,255,255,${0.85 + near * 0.15})` : inW ? `rgba(251,191,36,${Math.max(a * 1.6, 0.6)})` : `rgba(${base},${a})`;
-          ctx.fillText(inW ? c.word[wi] : c.ch[r], c.x, r * lh);
+          const r = h - k; if (r < 0 || r >= c.rows) continue;
+          const wi = c.word ? r - c.top : -1, inW = wi >= 0 && wi < c.word.length, f = 1 - k / c.len, a = f * f * 0.5 * dim;
+          ctx.fillStyle = k === 0 ? `rgba(255,255,255,${(0.85 + near * 0.15) * dim})` : inW ? `rgba(251,191,36,${Math.max(a * 1.6, 0.6 * dim)})` : `rgba(${base},${a})`;
+          ctx.fillText(inW ? c.word[wi] : c.ch[r], px, r * L + oy);
         }
-        if (h - c.len > rows) mk(c, false);
+        if (h - c.len > c.rows) mk(c, false);
       }
     };
     raf = requestAnimationFrame(frame);
@@ -2013,11 +2029,28 @@ export default function App() {
     openSheet(sheetRef.current, o && o.id === view.id ? o.r : null);
   }, [view?.id]);
   useReadTrace(readRef, railRef, view?.id);
+  // 3D: le scritte estruse e il terminale si inclinano verso il puntatore (solo con il mouse; sui telefoni oscillano da sole)
+  useEffect(() => {
+    if (!G.d3 || G.nomotion) return;
+    let raf = 0, x = 0, y = 0;
+    const apply = () => { raf = 0; document.querySelectorAll<HTMLElement>(".t3d,.term3d").forEach((el) => { el.style.setProperty("--gx", x.toFixed(3)); el.style.setProperty("--gy", y.toFixed(3)); }); };
+    const mv = (e: PointerEvent) => { if (e.pointerType !== "mouse") return; x = (e.clientX / window.innerWidth) * 2 - 1; y = (e.clientY / window.innerHeight) * 2 - 1; if (!raf) raf = requestAnimationFrame(apply); };
+    window.addEventListener("pointermove", mv, { passive: true });
+    return () => { window.removeEventListener("pointermove", mv); cancelAnimationFrame(raf); };
+  }, [G.d3, G.nomotion]);
+  // un solo logo 3D alla volta (un solo contesto WebGL): quello grande su schermi larghi, quello piccolo su telefono
+  const [wide, setWide] = useState(() => !!window.matchMedia?.("(min-width:768px)").matches);
+  useEffect(() => {
+    const m = window.matchMedia?.("(min-width:768px)"); if (!m) return;
+    const on = () => setWide(m.matches);
+    m.addEventListener ? m.addEventListener("change", on) : m.addListener(on);
+    return () => { m.removeEventListener ? m.removeEventListener("change", on) : m.removeListener(on); };
+  }, []);
 
   // ================= RENDER =================
   const no = (k: string, cls: string) => (G[k] ? "" : cls);
   const gStyle: any = { "--gi": G.glowI, "--ai": G.auroraI, "--ao": G.artI };
-  const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} min-h-screen`}><style>{CSS + MOTION_CSS}</style><div className="prog" />{children}</div>;
+  const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} min-h-screen`}><style>{CSS + MOTION_CSS + D3_CSS}</style><div className="prog" />{children}</div>;
 
   if (authLoading || redeeming || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
@@ -2028,9 +2061,10 @@ export default function App() {
       <Backdrop tab="home" fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
       <div className="relative z-10 min-h-screen grid md:grid-cols-2">
         <div className={`brandpanel hidden md:flex flex-col justify-between p-12 ${G.reveal ? "boot" : ""}`}>{G.reveal && <i className="boot-run" aria-hidden="true" />}<PanelArt art={G.art} anim={G.pulses} speed={G.spd} fps={G.fps} />
+          {G.d3 && !G.nomotion && wide && <span className="block" style={{ position: "absolute", right: "5%", top: "3%", width: "min(250px, 36%)", aspectRatio: "1" }}><React.Suspense fallback={null}><Logo3D className="logo3d w-full h-full" intro={G.logo} spd={G.spd} fallback={null} /></React.Suspense></span>}
           <Wordmark light size={56} fs={26} />
           <div>
-            <h1 className="hd text-5xl font-bold leading-tight max-w-md"><Words text="Scrivi senza limiti. Ogni mese emergono i testi migliori." on={G.titles} /></h1>
+            <h1 className="hd text-5xl font-bold leading-tight max-w-md">{G.d3 ? <Text3D text="Scrivi senza limiti. Ogni mese emergono i testi migliori." layers={14} anim={G.titles} className="t3-hero t3-glint" delay={300} /> : <Words text="Scrivi senza limiti. Ogni mese emergono i testi migliori." on={G.titles} />}</h1>
             <p className="mu mt-4 max-w-sm b-2">Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
           </div>
           <span className="mu text-sm">Archivio di scrittura</span>
@@ -2234,11 +2268,24 @@ export default function App() {
   const toRate = thisMonth.filter((t) => !t.rating).length;
   // primo ingresso della sessione: la corrente percorre il bordo del pannello e lo accende; dopo, la home entra asciutta
   const boot = heroIntro.current && G.reveal;
+  // 3D nel pannello: il logo WebGL (non con le animazioni spente), il terminale che batte il comando e risponde con i numeri veri
+  const logo3d = G.d3 && !G.nomotion, heroLogoFresh = G.logo;
+  const termUser = isAdmin ? "admin" : first.toLowerCase().replace(/[^a-z0-9]/g, "") || "utente", termCmd = isAdmin ? "ls --nuovi" : "scrivi --nuovo";
+  const termOut = loading ? "lettura dell'archivio…" : isAdmin
+    ? `${thisMonth.length} ${thisMonth.length === 1 ? "scritto" : "scritti"} questo mese · ${toRate} da valutare`
+    : `${items.length} ${items.length === 1 ? "progetto" : "progetti"} · ${items.reduce((a, t) => a + wc(t), 0).toLocaleString("it-IT")} parole`;
+  const heroTitle = `Ciao ${first}, ${isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}`;
   const homeView = (
     <div className="space-y-8">
-      <Reveal fx={boot ? "still" : ""}><div className={`pn brandpanel hero p-8 md:p-12 ${boot ? "boot" : ""}`} onPointerMove={heroMove} onPointerLeave={heroLeave}>{boot && <i className="boot-run" aria-hidden="true" />}<HeroRain on={G.rain} speed={G.spd} dens={G.rainD} fps={G.fps} /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className={`hero-logo block ${boot ? "hero-logo-in" : ""}`}><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
-        <div className="b-1"><span className="hero-term"><i className="hero-led" />{(isAdmin ? "admin" : first.toLowerCase().replace(/[^a-z0-9]/g, "") || "utente") + "@circuito:~$ " + (isAdmin ? "ls --nuovi" : "scrivi --nuovo")}<b className="caret" /></span></div>
-        <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight"><Words text={`Ciao ${first}, ${isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}`} on={G.titles} /></h2>
+      <Reveal fx={boot ? "still" : ""}><div className={`pn brandpanel hero p-8 md:p-12 ${boot ? "boot" : ""}`} onPointerMove={heroMove} onPointerLeave={heroLeave}>{boot && <i className="boot-run" aria-hidden="true" />}<HeroRain on={G.rain} speed={G.spd} dens={G.rainD} fps={G.fps} />
+        {logo3d ? (wide
+          ? <span className="block w-[230px] h-[230px] lg:w-[340px] lg:h-[340px]" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)" }}><React.Suspense fallback={<span className="hero-logo block"><Logo size={170} /></span>}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<span className="hero-logo block"><Logo size={170} /></span>} /></React.Suspense></span>
+          : <span className="block -ml-5 -mt-6 mb-1 w-[150px] h-[150px]"><React.Suspense fallback={<Logo size={76} />}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<Logo size={76} />} /></React.Suspense></span>
+        ) : <><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className={`hero-logo block ${boot ? "hero-logo-in" : ""}`}><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span></>}
+        {G.d3
+          ? <div className="b-1 relative z-[1]"><Terminal3D user={termUser} cmd={termCmd} out={termOut} run={!G.nomotion} delay={boot ? 1150 : 380} /></div>
+          : <div className="b-1"><span className="hero-term"><i className="hero-led" />{termUser + "@circuito:~$ " + termCmd}<b className="caret" /></span></div>}
+        <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight relative z-[1]">{G.d3 ? <Text3D text={heroTitle} layers={14} anim={G.titles} className="t3-hero t3-glint" delay={boot ? 420 : 0} /> : <Words text={heroTitle} on={G.titles} />}</h2>
         <p className="mu mt-3 max-w-md b-2">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
         <div className="flex flex-wrap gap-2 mt-7 b-3">
           <button className="bt cta !px-5 !py-3" onClick={() => go("write")}><Pen size={16} />Scrivi un progetto</button>
@@ -2364,7 +2411,7 @@ export default function App() {
       <div className="md:ml-60 pb-28 md:pb-12 relative">
         <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12" style={{ ["--pdx" as any]: `${pdx.current}px` }}>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div><h1 className="hd text-3xl md:text-5xl font-bold"><Words text={titles[tab]} on={G.titles} /></h1>{isList && !loading && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
+            <div><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>{isList && !loading && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
             {isList && (
               <div className="flex flex-wrap gap-2 items-center">
                 <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>
@@ -2615,6 +2662,7 @@ export default function App() {
                 <Sw on={opts.glow} off={opts.level !== "full"} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
                 <Sw on={opts.aurora} off={opts.level !== "full"} set={(v: boolean) => setOpt("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
                 <Sw on={opts.intro} off={lite} set={(v: boolean) => setOpt("intro", v)} label="Titoli, logo e fogli animati" hint="Titoli che emergono dalla riga, fogli dell'archivio che si stampano" />
+                <Sw on={opts.d3 !== false} off={lite} set={(v: boolean) => setOpt("d3", v)} label="Logo e titoli in 3D" hint="Logo tridimensionale che segue il mouse (cliccalo), titoli in rilievo, terminale fluttuante" />
                 <button type="button" className="bt w-full mt-2" onClick={() => setLevel("custom")}><SlidersHorizontal size={15} />Regola ogni dettaglio</button>
               </div>
             ) : (
@@ -2654,6 +2702,7 @@ export default function App() {
                 <Sub>Ingressi e transizioni</Sub>
                 <Sw on={G.titles} set={(v: boolean) => setC("titles", v)} label="Titoli che emergono" hint="Le parole dei titoli salgono dalla propria riga, una dopo l'altra" />
                 <Sw on={G.logo} set={(v: boolean) => setC("logo", v)} label="Logo animato" hint="Il logo si disegna e la corrente lo attraversa" />
+                <Sw on={G.d3} set={(v: boolean) => setC("d3", v)} label="Logo e titoli in 3D" hint="Logo tridimensionale in WebGL, titoli estrusi e terminale fluttuante che seguono il mouse" />
                 <Sw on={G.reveal} set={(v: boolean) => setC("reveal", v)} label="Fogli e sezioni che compaiono" hint="L'ingresso nel Circuito, i fogli dell'archivio che si stampano, i numeri che si caricano" />
                 <Sw on={G.pages} set={(v: boolean) => setC("pages", v)} label="Transizione tra le pagine" hint="La pagina arriva dal lato verso cui ti sposti, e la pista sotto il titolo si traccia" />
                 <Sw on={G.theme} set={(v: boolean) => setC("theme", v)} label="Onda al cambio tema" hint="Il passaggio chiaro/scuro si allarga dal punto in cui tocchi" />
