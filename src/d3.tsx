@@ -9,6 +9,8 @@ export const Text3D = ({ text, layers = 10, anim = true, className = "", delay =
   const w = text.split(" ");
   return (
     <span key={text} className={`t3d ${anim ? "t3-in" : ""} ${className}`} style={{ ["--t3d0" as any]: `${delay}ms` }}>
+      {/* ombra portata: una copia sfocata del testo posata sul piano sotto le lettere, che si sposta con la parallasse */}
+      <span className="t3s" aria-hidden="true">{text}</span>
       {w.map((x, i) => (
         <React.Fragment key={i}>
           <span className="t3w" style={{ ["--i" as any]: i }}>
@@ -64,7 +66,7 @@ export const Terminal3D = ({ user, cmd: cmd0, out: out0, run = true, delay = 0 }
 export const D3_CSS = `
 /* ===== 3D: scritte estruse e terminale ===== */
 @property --dz{syntax:'<length>';inherits:true;initial-value:0px}
-.t3d{--dz:1.5px;display:inline-block;max-width:100%;transform-style:preserve-3d;transform:perspective(1100px) rotateX(calc(var(--bx,7deg) + var(--gy,0)*-9deg)) rotateY(calc(var(--by,-9deg) + var(--gx,0)*15deg));transition:transform .7s cubic-bezier(.16,1,.3,1)}
+.t3d{--dz:1.5px;position:relative;display:inline-block;max-width:100%;transform-style:preserve-3d;transform:perspective(1100px) rotateX(calc(var(--bx,7deg) + var(--gy,0)*-9deg)) rotateY(calc(var(--by,-9deg) + var(--gx,0)*15deg));transition:transform .7s cubic-bezier(.16,1,.3,1)}
 .t3w{position:relative;display:inline-block;transform-style:preserve-3d;white-space:nowrap}
 .t3d,.t3d *{text-shadow:none!important} /* le ombre del pannello, ripetute su ogni strato, impasterebbero le lettere */
 .t3f{position:relative;display:inline-block;transform:translateZ(.2px);color:var(--t3f,currentColor)}
@@ -74,11 +76,14 @@ export const D3_CSS = `
 @keyframes t3dz{from{--dz:0px}}
 .t3-in .t3w{animation:t3up .85s cubic-bezier(.2,.85,.3,1.2) backwards;animation-delay:calc(var(--t3d0,0ms) + var(--i,0)*75ms)}
 @keyframes t3up{from{transform:translateY(.6em) translateZ(-160px) rotateX(-88deg)}}
-/* colori: titoli delle pagine (inchiostro con fianchi verdi) e titolo del pannello (bianco con fianchi verde profondo) */
-.t3-ink{--t3a:var(--ac);--t3b:color-mix(in srgb,var(--ac) 25%,#000);--dz:1.35px;--bx:5deg;--by:-7deg}
-.root.dark .t3-ink{--t3a:#5EEAD4;--t3b:#0A5A51}
-.t3-hero{--t3a:#C9FBF2;--t3b:#0B5E55;--dz:1.4px;--bx:9deg;--by:-11deg}
-.t3-hero .t3l:first-child{color:rgba(3,30,27,.45);transform:translateZ(calc(var(--k)*var(--dz)*-1 - 2px)) translate(1px,2px)} /* l'ultimo strato fa da ombra portata */
+/* ombra portata del testo: sfocata, posata sul piano che sta sotto (--sz = distanza dal piano) */
+.t3s{position:absolute;left:0;top:0;width:100%;color:var(--t3s,rgba(1,25,22,.5));filter:blur(var(--t3sb,5px));transform:translateZ(var(--sz,-22px)) translate(var(--sx,5px),var(--sy,10px));-webkit-user-select:none;user-select:none;pointer-events:none}
+.t3-in .t3s{animation:t3sIn 1.1s ease backwards;animation-delay:calc(var(--t3d0,0ms) + 380ms)}
+@keyframes t3sIn{from{opacity:0}}
+/* colori: titoli delle pagine (inchiostro con fianchi verdi) e titoli dei pannelli (bianco con bordo chiaro e fianchi verdi) */
+.t3-ink{--t3a:var(--ac);--t3b:color-mix(in srgb,var(--ac) 35%,#000);--dz:1.1px;--bx:4deg;--by:-5deg;--sz:-24px;--sx:4px;--sy:8px;--t3sb:4px;--t3s:rgba(14,31,29,.2)}
+.root.dark .t3-ink{--t3a:#5EEAD4;--t3b:#0A5A51;--t3s:rgba(0,0,0,.55)}
+.t3-hero{--t3a:#E8FFFB;--t3b:#137568;--dz:1.15px;--bx:9deg;--by:-11deg;--sz:-30px}
 .t3-hero .t3f{background:linear-gradient(180deg,#fff 30%,#D6FFF8);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
 .t3-glint .t3f{background:linear-gradient(105deg,#fff 42%,#FDE68A 50%,#fff 58%) 120% 0/260% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:t3glint 1.4s cubic-bezier(.65,0,.35,1) 1.5s backwards}
 @keyframes t3glint{from{background-position:120% 0}to{background-position:-20% 0}}
@@ -104,10 +109,45 @@ export const D3_CSS = `
 .tm-ar{color:#5EEAD4}
 .tm-caret{display:inline-block;width:.5em;height:1em;margin-left:.15em;vertical-align:-.15em;background:#FBBF24;box-shadow:0 0 10px #FBBF24;animation:blink 1s steps(2) infinite}
 
+/* ===== DIORAMA: un solo spazio prospettico per pannello =====
+   Il pannello si inclina tutto insieme seguendo il mouse e gli elementi stanno a profondità diverse (--z):
+   pioggia di codice sulla superficie, testo qualche centimetro sopra, terminale più in alto, logo in primo piano.
+   Ogni elemento che galleggia proietta un'ombra morbida sul pannello: è la parallasse tra i piani a dare profondità. */
+.h3d{overflow:visible!important;transform-style:preserve-3d;transform:perspective(1600px) rotateX(calc(var(--ny,0)*-6deg)) rotateY(calc(var(--nx,0)*9deg));transition:transform .8s cubic-bezier(.16,1,.3,1),box-shadow .5s}
+.h3d>.hrain,.h3d:before,.h3d:after{border-radius:inherit}
+.h3d>.hrain{translate:0 0 1px}
+.h3d.boot{animation:h3dIn 1.25s cubic-bezier(.16,1,.3,1) .05s backwards}
+@keyframes h3dIn{from{transform:perspective(1600px) rotateX(26deg) rotateY(-9deg) translateY(50px) translateZ(-260px)}}
+.h3d .boot-run{display:none}
+.l3d{display:flex;flex-direction:column;justify-content:space-between;padding:3rem;transform-style:preserve-3d;transform:perspective(1500px) rotateX(calc(var(--ny,0)*-5deg)) rotateY(calc(var(--nx,0)*7deg));transition:transform .9s cubic-bezier(.16,1,.3,1)}
+.brandpanel>.l3d{position:absolute;inset:0}
+/* profondità di campo: lo schema sullo sfondo va appena fuori fuoco e si scurisce, ciò che galleggia davanti resta nitido */
+.brandpanel:has(>.l3d)>canvas.pnl-art{filter:blur(1.4px) brightness(.82);transform:scale(1.02)}
+.zl{transform-style:preserve-3d;translate:0 0 var(--z,0px)}
+.h3d .t3d,.l3d .t3d{transform:none;transition:none}
+.h3d .t3-hero{--dz:1.35px;--sz:-70px;--sx:10px;--sy:20px;--t3sb:9px;--t3s:rgba(0,14,12,.6)}
+.l3d .t3-hero{--dz:1.5px;--sz:-90px;--sx:12px;--sy:24px;--t3sb:10px;--t3s:rgba(0,12,10,.7)}
+.h3d .term3d{transform:rotateX(9deg) rotateY(-12deg) rotateZ(-1.5deg);animation-name:tmIn3}
+@keyframes tmIn3{from{transform:rotateX(70deg) rotateY(-30deg) translateZ(-160px)}}
+/* ombre portate sul piano del pannello */
+.zsh{position:absolute;pointer-events:none;border-radius:50%;background:radial-gradient(closest-side,rgba(1,22,19,.6),rgba(1,22,19,.25) 60%,transparent);filter:blur(8px);translate:0 0 2px}
+.zsh-rect{position:absolute;inset:0;border-radius:14px;background:rgba(1,22,19,.45);filter:blur(12px);transform:translateZ(var(--sd,-70px)) translate(14px,26px);pointer-events:none}
+@media (hover:none){
+.h3d{animation:h3dSway 11s ease-in-out infinite}
+.h3d .t3-hero,.l3d .t3-hero{animation:none}
+.h3d .t3-hero.t3-in,.l3d .t3-hero.t3-in{animation:t3dz 1.1s cubic-bezier(.16,1,.3,1) calc(var(--t3d0,0ms) + 320ms) backwards}
+}
+@keyframes h3dSway{0%,100%{transform:perspective(1600px) rotateX(3deg) rotateY(-5deg)}50%{transform:perspective(1600px) rotateX(-2deg) rotateY(4deg)}}
+/* la scheda di accesso galleggia anche lei, appena, nello stesso spazio; mentre scrivi resta ferma */
+.f3d{position:relative;padding:2rem;border-radius:24px;background:color-mix(in srgb,var(--pn) 84%,transparent);border:1px solid var(--ln);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 50px 90px -40px rgba(14,31,29,.45),0 16px 30px -18px rgba(14,31,29,.25);transform:perspective(1400px) rotateX(calc(var(--gy,0)*-2deg)) rotateY(calc(var(--gx,0)*3deg)) translateZ(0);transition:transform .9s cubic-bezier(.16,1,.3,1)}
+.f3d:focus-within{transform:none}
+.root.dark .f3d{box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 50px 90px -40px rgba(0,0,0,.8)}
+@media (max-width:767px){.f3d{padding:0;background:none;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;transform:none}}
+
 /* il logo 3D e i suoi contenitori */
 .logo3d{outline:none;border-radius:28px}
 .logo3d:focus-visible{box-shadow:0 0 0 2px rgba(251,191,36,.9),0 0 0 6px rgba(251,191,36,.25)}
-.logo3d>canvas{filter:drop-shadow(0 24px 30px rgba(0,0,0,.35))}
+.logo3d>canvas{filter:drop-shadow(0 14px 18px rgba(0,0,0,.22))}
 .root.lite .t3l,.root.nomotion .t3l{transform:translateZ(calc(var(--k)*-1.3px))}
 @media (prefers-reduced-motion:reduce){.t3d,.term3d{transition:none}}
 `;

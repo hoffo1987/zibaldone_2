@@ -2033,7 +2033,7 @@ export default function App() {
   useEffect(() => {
     if (!G.d3 || G.nomotion) return;
     let raf = 0, x = 0, y = 0;
-    const apply = () => { raf = 0; document.querySelectorAll<HTMLElement>(".t3d,.term3d").forEach((el) => { el.style.setProperty("--gx", x.toFixed(3)); el.style.setProperty("--gy", y.toFixed(3)); }); };
+    const apply = () => { raf = 0; document.querySelectorAll<HTMLElement>(".t3d,.term3d,.f3d").forEach((el) => { el.style.setProperty("--gx", x.toFixed(3)); el.style.setProperty("--gy", y.toFixed(3)); }); };
     const mv = (e: PointerEvent) => { if (e.pointerType !== "mouse") return; x = (e.clientX / window.innerWidth) * 2 - 1; y = (e.clientY / window.innerHeight) * 2 - 1; if (!raf) raf = requestAnimationFrame(apply); };
     window.addEventListener("pointermove", mv, { passive: true });
     return () => { window.removeEventListener("pointermove", mv); cancelAnimationFrame(raf); };
@@ -2054,23 +2054,43 @@ export default function App() {
 
   if (authLoading || redeeming || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
+  // diorama del pannello d'accesso: il puntatore inclina lo spazio (variabili --nx/--ny, da -1 a 1)
+  const d3live = G.d3 && !G.nomotion;
+  const stageMove = (e: any) => { if (!d3live || e.pointerType !== "mouse") return; const el = e.currentTarget, r = el.getBoundingClientRect(); el.style.setProperty("--nx", (((e.clientX - r.left) / r.width - 0.5) * 2).toFixed(3)); el.style.setProperty("--ny", (((e.clientY - r.top) / r.height - 0.5) * 2).toFixed(3)); };
+  const stageLeave = (e: any) => { ["--nx", "--ny"].forEach((k) => e.currentTarget.style.removeProperty(k)); };
+
   if (!user || resetCode) {
     const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
     const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
     return shell(<>
       <Backdrop tab="home" fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
       <div className="relative z-10 min-h-screen grid md:grid-cols-2">
-        <div className={`brandpanel hidden md:flex flex-col justify-between p-12 ${G.reveal ? "boot" : ""}`}>{G.reveal && <i className="boot-run" aria-hidden="true" />}<PanelArt art={G.art} anim={G.pulses} speed={G.spd} fps={G.fps} />
-          {G.d3 && !G.nomotion && wide && <span className="block" style={{ position: "absolute", right: "5%", top: "3%", width: "min(250px, 36%)", aspectRatio: "1" }}><React.Suspense fallback={null}><Logo3D className="logo3d w-full h-full" intro={G.logo} spd={G.spd} fallback={null} /></React.Suspense></span>}
-          <Wordmark light size={56} fs={26} />
-          <div>
-            <h1 className="hd text-5xl font-bold leading-tight max-w-md">{G.d3 ? <Text3D text="Scrivi senza limiti. Ogni mese emergono i testi migliori." layers={14} anim={G.titles} className="t3-hero t3-glint" delay={300} /> : <Words text="Scrivi senza limiti. Ogni mese emergono i testi migliori." on={G.titles} />}</h1>
-            <p className="mu mt-4 max-w-sm b-2">Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
-          </div>
-          <span className="mu text-sm">Archivio di scrittura</span>
+        <div className={`brandpanel hidden md:flex flex-col justify-between p-12 ${G.reveal ? "boot" : ""}`} onPointerMove={stageMove} onPointerLeave={stageLeave}>{G.reveal && <i className="boot-run" aria-hidden="true" />}<PanelArt art={G.art} anim={G.pulses} speed={G.spd} fps={G.fps} />
+          {d3live ? (
+            // diorama: lo schema elettrico resta sul fondo; marchio, logo, titolo e sottotitolo galleggiano a profondità diverse
+            <div className="l3d">
+              <span className="zl block" style={{ ["--z" as any]: "40px" }}><Wordmark light size={56} fs={26} /></span>
+              {wide && <span className="zl block" style={{ position: "absolute", right: "8%", top: "11%", width: "min(330px, 44%)", aspectRatio: "1", ["--z" as any]: "0px" }}>
+                <span className="zsh" style={{ left: "20%", width: "60%", bottom: "-6%", height: "15%" }} aria-hidden="true" />
+                <span className="zl block absolute inset-0" style={{ ["--z" as any]: "170px" }}><React.Suspense fallback={null}><Logo3D className="logo3d w-full h-full" intro={G.logo} spd={G.spd} fallback={null} /></React.Suspense></span>
+              </span>}
+              <div className="zl mt-auto mb-10" style={{ ["--z" as any]: "0px" }}>
+                <h1 className="zl hd text-5xl font-bold leading-tight max-w-md" style={{ ["--z" as any]: "90px" }}><Text3D text="Scrivi senza limiti. Ogni mese emergono i testi migliori." layers={12} anim={G.titles} className="t3-hero t3-glint" delay={300} /></h1>
+                <p className="zl mu mt-5 max-w-sm b-2" style={{ ["--z" as any]: "45px" }}>Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
+              </div>
+              <span className="zl mu text-sm" style={{ ["--z" as any]: "10px" }}>Archivio di scrittura</span>
+            </div>
+          ) : <>
+            <Wordmark light size={56} fs={26} />
+            <div>
+              <h1 className="hd text-5xl font-bold leading-tight max-w-md">{G.d3 ? <Text3D text="Scrivi senza limiti. Ogni mese emergono i testi migliori." layers={12} anim={G.titles} className="t3-hero t3-glint" delay={300} /> : <Words text="Scrivi senza limiti. Ogni mese emergono i testi migliori." on={G.titles} />}</h1>
+              <p className="mu mt-4 max-w-sm b-2">Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
+            </div>
+            <span className="mu text-sm">Archivio di scrittura</span>
+          </>}
         </div>
         <div className="flex items-center justify-center p-6">
-          <div className="w-full max-w-sm pop"><div className="md:hidden mb-10"><Wordmark stack center size={88} fs={30} /></div>
+          <div className={`w-full ${d3live ? "max-w-md" : "max-w-sm"} pop`}><div className={d3live ? "f3d" : ""}><div className="md:hidden mb-10"><Wordmark stack center size={88} fs={30} /></div>
             {resetCode ? (
               <form onSubmit={submitNewPw} className="space-y-4">
                 <h2 className="hd text-3xl font-bold mb-2">Scegli una nuova password</h2>
@@ -2110,7 +2130,7 @@ export default function App() {
               </form>
             )}
             {!resetCode && !profToken && <ApkDownload divider />}
-          </div>
+          </div></div>
         </div>
       </div>
     </>);
@@ -2277,17 +2297,21 @@ export default function App() {
   const heroTitle = `Ciao ${first}, ${isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}`;
   const homeView = (
     <div className="space-y-8">
-      <Reveal fx={boot ? "still" : ""}><div className={`pn brandpanel hero p-8 md:p-12 ${boot ? "boot" : ""}`} onPointerMove={heroMove} onPointerLeave={heroLeave}>{boot && <i className="boot-run" aria-hidden="true" />}<HeroRain on={G.rain} speed={G.spd} dens={G.rainD} fps={G.fps} />
+      <Reveal fx={boot ? "still" : ""}><div className={`pn brandpanel hero p-8 md:p-12 ${boot ? "boot" : ""} ${logo3d ? "h3d" : ""}`} onPointerMove={heroMove} onPointerLeave={heroLeave}>{boot && <i className="boot-run" aria-hidden="true" />}<HeroRain on={G.rain} speed={G.spd} dens={G.rainD} fps={G.fps} />
         {logo3d ? (wide
-          ? <span className="block w-[230px] h-[230px] lg:w-[340px] lg:h-[340px]" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)" }}><React.Suspense fallback={<span className="hero-logo block"><Logo size={170} /></span>}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<span className="hero-logo block"><Logo size={170} /></span>} /></React.Suspense></span>
-          : <span className="block -ml-5 -mt-6 mb-1 w-[150px] h-[150px]"><React.Suspense fallback={<Logo size={76} />}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<Logo size={76} />} /></React.Suspense></span>
+          ? <>
+            {/* ombra del logo sul pannello: sta sul piano, il logo 90 px sopra; inclinando il pannello si separano */}
+            <span className="zsh hidden md:block w-[150px] h-[46px] lg:w-[220px] lg:h-[62px]" style={{ position: "absolute", right: "min(9%, 70px)", top: "calc(50% + 110px)" }} aria-hidden="true" />
+            <span className="zl block w-[230px] h-[230px] lg:w-[340px] lg:h-[340px]" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", ["--z" as any]: "150px" }}><React.Suspense fallback={<span className="hero-logo block"><Logo size={170} /></span>}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<span className="hero-logo block"><Logo size={170} /></span>} /></React.Suspense></span>
+          </>
+          : <span className="zl block -ml-5 -mt-6 mb-1 w-[150px] h-[150px]" style={{ ["--z" as any]: "60px" }}><React.Suspense fallback={<Logo size={76} />}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<Logo size={76} />} /></React.Suspense></span>
         ) : <><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className={`hero-logo block ${boot ? "hero-logo-in" : ""}`}><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span></>}
         {G.d3
-          ? <div className="b-1 relative z-[1]"><Terminal3D user={termUser} cmd={termCmd} out={termOut} run={!G.nomotion} delay={boot ? 1150 : 380} /></div>
+          ? <div className="b-1 zl relative z-[1] w-fit max-w-full" style={{ ["--z" as any]: "100px" }}>{logo3d && <i className="zsh-rect" style={{ ["--sd" as any]: "-100px" }} aria-hidden="true" />}<Terminal3D user={termUser} cmd={termCmd} out={termOut} run={!G.nomotion} delay={boot ? 1150 : 380} /></div>
           : <div className="b-1"><span className="hero-term"><i className="hero-led" />{termUser + "@circuito:~$ " + termCmd}<b className="caret" /></span></div>}
-        <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight relative z-[1]">{G.d3 ? <Text3D text={heroTitle} layers={14} anim={G.titles} className="t3-hero t3-glint" delay={boot ? 420 : 0} /> : <Words text={heroTitle} on={G.titles} />}</h2>
-        <p className="mu mt-3 max-w-md b-2">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
-        <div className="flex flex-wrap gap-2 mt-7 b-3">
+        <h2 className="zl hd text-3xl md:text-5xl font-bold max-w-xl leading-tight relative z-[1]" style={{ ["--z" as any]: "70px" }}>{G.d3 ? <Text3D text={heroTitle} layers={12} anim={G.titles} className="t3-hero t3-glint" delay={boot ? 420 : 0} /> : <Words text={heroTitle} on={G.titles} />}</h2>
+        <p className="zl mu mt-3 max-w-md b-2" style={{ ["--z" as any]: "40px" }}>{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
+        <div className="zl flex flex-wrap gap-2 mt-7 b-3" style={{ ["--z" as any]: "55px" }}>
           <button className="bt cta !px-5 !py-3" onClick={() => go("write")}><Pen size={16} />Scrivi un progetto</button>
           {isAdmin && toRate > 0 && <button className="bt ghost !px-5 !py-3" onClick={() => { go("read"); setMonthFilter(monthNow); setUnrated(true); }}><Star size={16} />Valuta ora ({toRate})</button>}
           {isAdmin && <button className="bt ghost !px-5 !py-3" onClick={() => go("podio")}><Trophy size={16} />Vai al podio</button>}
