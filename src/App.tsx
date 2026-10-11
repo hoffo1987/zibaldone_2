@@ -15,7 +15,6 @@ import {
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
 import { AccessoProf } from "./AccessoProf";
-import { HeroBackground, EnhancedCard, PageTransitionWrapper } from "./EnhancedApp";
 
 // --- FIREBASE ---
 const firebaseConfig = {
@@ -2331,14 +2330,12 @@ export default function App() {
     );
   };
   const profilePage = (
-    <PageTransitionWrapper pageKey="profile" transitionType="scale">
-      <div className="max-w-2xl mx-auto space-y-5">
-        <div className="pn overflow-hidden">{profileView(user.uid, true)}</div>
-        <button className="bt w-full" onClick={() => setOptOpen(true)}><Settings size={16} />Opzioni</button>
-        <ApkDownload className="md:hidden" />
-        <button className="bt dng w-full md:hidden" onClick={logout}><LogOut size={16} />Esci dall'account</button>
-      </div>
-    </PageTransitionWrapper>
+    <div className="max-w-2xl mx-auto space-y-5">
+      <div className="pn overflow-hidden">{profileView(user.uid, true)}</div>
+      <button className="bt w-full" onClick={() => setOptOpen(true)}><Settings size={16} />Opzioni</button>
+      <ApkDownload className="md:hidden" />
+      <button className="bt dng w-full md:hidden" onClick={logout}><LogOut size={16} />Esci dall'account</button>
+    </div>
   );
 
   const stats = isAdmin
@@ -2358,38 +2355,27 @@ export default function App() {
   const heroLeave = (e: any) => { ["--nx", "--ny"].forEach((k) => e.currentTarget.style.removeProperty(k)); };
   const toRate = thisMonth.filter((t) => !t.rating).length;
   const homeView = (
-    <PageTransitionWrapper pageKey="home" transitionType="fade">
-      <div className="space-y-8">
-        <Reveal>
-          <HeroBackground enabled={true}>
-            <div className="pn brandpanel hero p-8 md:p-12" onPointerMove={heroMove} onPointerLeave={heroLeave}>
-              <HeroRain on={G.rain} speed={G.spd} dens={G.rainD} fps={G.fps} />
-              <span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}>
-                <span className="hero-logo block"><Logo size={170} /></span>
-              </span>
-              <span className="md:hidden block mb-5"><Logo size={76} /></span>
-              <div><span className="hero-term"><i className="hero-led" />{(isAdmin ? "admin" : first.toLowerCase().replace(/[^a-z0-9]/g, "") || "utente") + "@circuito:~$ " + (isAdmin ? "ls --nuovi" : "scrivi --nuovo")}<b className="caret" /></span></div>
-              <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight">Ciao {first}, {isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}</h2>
-              <p className="mu mt-3 max-w-md">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
-              <div className="flex flex-wrap gap-2 mt-7">
-                <button className="bt cta !px-5 !py-3" onClick={() => go("write")}><Pen size={16} />Scrivi un progetto</button>
-                {isAdmin && toRate > 0 && <button className="bt ghost !px-5 !py-3" onClick={() => { go("read"); setMonthFilter(monthNow); setUnrated(true); }}><Star size={16} />Valuta ora ({toRate})</button>}
-                {isAdmin && <button className="bt ghost !px-5 !py-3" onClick={() => go("podio")}><Trophy size={16} />Vai al podio</button>}
-              </div>
-            </div>
-          </HeroBackground>
-        </Reveal>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {stats.map((x, i) => <Reveal key={x.l} delay={i * 70} className="h-full"><EnhancedCard enabled={true} index={i} onClick={x.a} className="pn card stat p-5 h-full w-full"><ArrowUpRight size={18} className="go" aria-hidden="true" /><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3">{x.v}</div><div className="mu text-sm">{x.l}</div></EnhancedCard></Reveal>)}
+    <div className="space-y-8">
+      <Reveal><div className="pn brandpanel hero p-8 md:p-12" onPointerMove={heroMove} onPointerLeave={heroLeave}><HeroRain on={G.rain} speed={G.spd} dens={G.rainD} fps={G.fps} /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className="hero-logo block"><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
+        <div><span className="hero-term"><i className="hero-led" />{(isAdmin ? "admin" : first.toLowerCase().replace(/[^a-z0-9]/g, "") || "utente") + "@circuito:~$ " + (isAdmin ? "ls --nuovi" : "scrivi --nuovo")}<b className="caret" /></span></div>
+        <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight">Ciao {first}, {isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}</h2>
+        <p className="mu mt-3 max-w-md">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
+        <div className="flex flex-wrap gap-2 mt-7">
+          <button className="bt cta !px-5 !py-3" onClick={() => go("write")}><Pen size={16} />Scrivi un progetto</button>
+          {isAdmin && toRate > 0 && <button className="bt ghost !px-5 !py-3" onClick={() => { go("read"); setMonthFilter(monthNow); setUnrated(true); }}><Star size={16} />Valuta ora ({toRate})</button>}
+          {isAdmin && <button className="bt ghost !px-5 !py-3" onClick={() => go("podio")}><Trophy size={16} />Vai al podio</button>}
         </div>
-        <Reveal><div className="pn p-2">
-          <div className="flex items-center justify-between px-4 pt-4 pb-2"><h3 className="hd text-lg font-bold">Ultimi progetti</h3><button type="button" className="mu text-sm lk inline-flex items-center gap-1" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>
-          {loading ? <div className="p-6 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
-            : recent.length === 0 ? <p className="mu text-sm px-4 pb-5">Ancora niente qui. Il primo progetto comparirà in questa lista.</p>
-            : recent.map((t) => <Row key={t.id} t={t} />)}
-        </div></Reveal>
+      </div></Reveal>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((x, i) => <Reveal key={x.l} delay={i * 70} className="h-full"><button type="button" onClick={x.a} className="pn card stat p-5 h-full w-full"><ArrowUpRight size={18} className="go" aria-hidden="true" /><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3">{x.v}</div><div className="mu text-sm">{x.l}</div></button></Reveal>)}
       </div>
-    </PageTransitionWrapper>
+      <Reveal><div className="pn p-2">
+        <div className="flex items-center justify-between px-4 pt-4 pb-2"><h3 className="hd text-lg font-bold">Ultimi progetti</h3><button type="button" className="mu text-sm lk inline-flex items-center gap-1" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>
+        {loading ? <div className="p-6 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
+          : recent.length === 0 ? <p className="mu text-sm px-4 pb-5">Ancora niente qui. Il primo progetto comparirà in questa lista.</p>
+          : recent.map((t) => <Row key={t.id} t={t} />)}
+      </div></Reveal>
+    </div>
   );
 
   const mItems = items.filter((t) => mKey(t.timestamp) === month);
@@ -2397,73 +2383,67 @@ export default function App() {
   const top = ranked.slice(0, 3), rest = ranked.slice(3);
   const shiftM = (d: number) => { const [y, m] = month.split("-").map(Number); setMonth(mKey(new Date(y, m - 1 + d, 1).getTime())); };
   const podioView = (
-    <PageTransitionWrapper pageKey="podio" transitionType="slide">
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-2">
-            <button className="bt !p-2.5" onClick={() => shiftM(-1)} aria-label="Mese precedente"><ChevronLeft size={16} /></button>
-            <span className="hd text-xl font-bold capitalize min-w-[190px] text-center">{mLabel(month)}</span>
-            <button className="bt !p-2.5" onClick={() => shiftM(1)} aria-label="Mese successivo"><ChevronRight size={16} /></button>
-          </div>
-          <div className="flex items-center gap-3 text-sm mu">
-            <span>{mItems.length} scritti · {mItems.filter((t) => !t.rating).length} da valutare</span>
-            <button className="bt" onClick={() => { setTab("read"); setMonthFilter(month); setSortBy("newest"); }}>Valuta ora</button>
-          </div>
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-2">
+          <button className="bt !p-2.5" onClick={() => shiftM(-1)} aria-label="Mese precedente"><ChevronLeft size={16} /></button>
+          <span className="hd text-xl font-bold capitalize min-w-[190px] text-center">{mLabel(month)}</span>
+          <button className="bt !p-2.5" onClick={() => shiftM(1)} aria-label="Mese successivo"><ChevronRight size={16} /></button>
         </div>
-        {loading ? <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
-          : ranked.length === 0 ? (
-            <div className="pn p-12 text-center max-w-md mx-auto"><Trophy className="mx-auto mb-4 mu" size={36} />
-              <h3 className="hd text-xl font-bold mb-1">Nessun finalista per {mLabel(month)}</h3>
-              <p className="mu text-sm mb-5">Dai un voto da 1 a 5 stelle agli scritti: i più votati salgono qui sul podio.</p>
-              <button className="bt pri" onClick={() => { setTab("read"); setMonthFilter(month); }}>Apri gli scritti del mese</button></div>
-          ) : (<>
-            <div className="grid md:grid-cols-3 gap-5 items-end">
-              {[1, 0, 2].map((k) => { const t = top[k]; if (!t) return <div key={k} className="hidden md:block" />;
-                return (
-                  <Reveal key={t.id} delay={k * 120}>
-                    <EnhancedCard enabled={true} index={k} onClick={() => openView(t)} className={`pn card cursor-pointer p-6 ${k === 0 ? "md:pt-10 md:pb-16 spin-b" : ""}`}>
-                      <div className="flex items-center justify-between">
-                        <span className="hd w-11 h-11 rounded-full flex items-center justify-center text-lg font-bold" style={{ background: k === 0 ? "var(--am)" : "var(--sf)", color: k === 0 ? "#3b2a00" : "var(--ink)" }}>{k + 1}</span>
-                        <Stars v={t.rating || 0} size={16} />
-                      </div>
-                      <h3 className="hd text-xl font-bold mt-5 line-clamp-2">{t.title}</h3>
-                      <div className="flex items-center gap-2 mt-2"><Who t={t} size={24} /><span className="mu text-sm">{wn(t)}</span></div>
-                      <p className="mu text-sm mt-3 line-clamp-3">{plain(t.content)}</p>
-                    </EnhancedCard>
-                  </Reveal>
-                ); })}
-            </div>
-            {rest.length > 0 && <Reveal className="mt-8"><div className="pn p-2"><h3 className="hd text-lg font-bold px-4 pt-4 pb-2">In lizza</h3>{rest.map((t, i) => <Row key={t.id} t={t} rank={i + 4} />)}</div></Reveal>}
-          </>)}
+        <div className="flex items-center gap-3 text-sm mu">
+          <span>{mItems.length} scritti · {mItems.filter((t) => !t.rating).length} da valutare</span>
+          <button className="bt" onClick={() => { setTab("read"); setMonthFilter(month); setSortBy("newest"); }}>Valuta ora</button>
+        </div>
       </div>
-    </PageTransitionWrapper>
+      {loading ? <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
+        : ranked.length === 0 ? (
+          <div className="pn p-12 text-center max-w-md mx-auto"><Trophy className="mx-auto mb-4 mu" size={36} />
+            <h3 className="hd text-xl font-bold mb-1">Nessun finalista per {mLabel(month)}</h3>
+            <p className="mu text-sm mb-5">Dai un voto da 1 a 5 stelle agli scritti: i più votati salgono qui sul podio.</p>
+            <button className="bt pri" onClick={() => { setTab("read"); setMonthFilter(month); }}>Apri gli scritti del mese</button></div>
+        ) : (<>
+          <div className="grid md:grid-cols-3 gap-5 items-end">
+            {[1, 0, 2].map((k) => { const t = top[k]; if (!t) return <div key={k} className="hidden md:block" />;
+              return (
+                <Reveal key={t.id} delay={k * 120}>
+                  <div onClick={() => openView(t)} className={`pn card cursor-pointer p-6 ${k === 0 ? "md:pt-10 md:pb-16 spin-b" : ""}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="hd w-11 h-11 rounded-full flex items-center justify-center text-lg font-bold" style={{ background: k === 0 ? "var(--am)" : "var(--sf)", color: k === 0 ? "#3b2a00" : "var(--ink)" }}>{k + 1}</span>
+                      <Stars v={t.rating || 0} size={16} />
+                    </div>
+                    <h3 className="hd text-xl font-bold mt-5 line-clamp-2">{t.title}</h3>
+                    <div className="flex items-center gap-2 mt-2"><Who t={t} size={24} /><span className="mu text-sm">{wn(t)}</span></div>
+                    <p className="mu text-sm mt-3 line-clamp-3">{plain(t.content)}</p>
+                  </div>
+                </Reveal>
+              ); })}
+          </div>
+          {rest.length > 0 && <Reveal className="mt-8"><div className="pn p-2"><h3 className="hd text-lg font-bold px-4 pt-4 pb-2">In lizza</h3>{rest.map((t, i) => <Row key={t.id} t={t} rank={i + 4} />)}</div></Reveal>}
+        </>)}
+    </div>
   );
 
   const authors: any[] = Object.values(items.filter((t) => t.svelato || t.userId === user.uid).reduce((m: any, t) => { const k = t.userId || t.author; const a = (m[k] = m[k] || { name: dn(t.userId, t.author || "?"), uid: t.userId, n: 0, r: [], last: 0 }); a.n++; if (t.rating) a.r.push(t.rating); a.last = Math.max(a.last, t.timestamp); return m; }, {}))
     .map((a: any) => ({ ...a, avg: a.r.length ? a.r.reduce((x: number, y: number) => x + y, 0) / a.r.length : 0 })).sort((a: any, b: any) => b.n - a.n);
-  const authorsView = (
-    <PageTransitionWrapper pageKey="authors" transitionType="fade">
-      {loading ? <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div> : authors.length === 0 ? (
-        <div className="pn p-12 text-center max-w-md mx-auto"><Users className="mx-auto mb-4 mu" size={36} /><h3 className="hd text-xl font-bold">Ancora nessun autore</h3><p className="mu text-sm mt-1">Compariranno dopo lo svelamento del loro primo scritto.</p></div>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {authors.map((a, i) => (
-            <Reveal key={a.name + i} delay={(i % 3) * 90} className="h-full">
-              <EnhancedCard enabled={true} index={i} onClick={() => { setTab("read"); setSearch(a.name); setMonthFilter("all"); }} className="pn card h-full p-6 cursor-pointer">
-                <div className="flex items-center gap-4">
-                  <button type="button" aria-label="Apri profilo" onClick={(e) => { e.stopPropagation(); setViewProf(a.uid); }}><Avatar p={profiles[a.uid]} name={a.name} size={48} /></button>
-                  <div className="min-w-0"><div className="hd font-bold text-lg truncate">{a.name}</div><div className="mu text-xs">Ultimo invio {fmtDate(a.last)}</div></div>
-                </div>
-                <div className="flex justify-between items-end mt-6">
-                  <div><div className="hd text-3xl font-bold">{a.n}</div><div className="mu text-xs">{a.n === 1 ? "scritto" : "scritti"}</div></div>
-                  <div className="text-right"><Stars v={Math.round(a.avg)} size={14} /><div className="mu text-xs mt-1">{a.avg ? `media ${a.avg.toFixed(1)}` : "senza voti"}</div></div>
-                </div>
-              </EnhancedCard>
-            </Reveal>
-          ))}
-        </div>
-      )}
-    </PageTransitionWrapper>
+  const authorsView = loading ? <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div> : authors.length === 0 ? (
+    <div className="pn p-12 text-center max-w-md mx-auto"><Users className="mx-auto mb-4 mu" size={36} /><h3 className="hd text-xl font-bold">Ancora nessun autore</h3><p className="mu text-sm mt-1">Compariranno dopo lo svelamento del loro primo scritto.</p></div>
+  ) : (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {authors.map((a, i) => (
+        <Reveal key={a.name + i} delay={(i % 3) * 90} className="h-full">
+          <div className="pn card h-full p-6 cursor-pointer" onClick={() => { setTab("read"); setSearch(a.name); setMonthFilter("all"); }}>
+            <div className="flex items-center gap-4">
+              <button type="button" aria-label="Apri profilo" onClick={(e) => { e.stopPropagation(); setViewProf(a.uid); }}><Avatar p={profiles[a.uid]} name={a.name} size={48} /></button>
+              <div className="min-w-0"><div className="hd font-bold text-lg truncate">{a.name}</div><div className="mu text-xs">Ultimo invio {fmtDate(a.last)}</div></div>
+            </div>
+            <div className="flex justify-between items-end mt-6">
+              <div><div className="hd text-3xl font-bold">{a.n}</div><div className="mu text-xs">{a.n === 1 ? "scritto" : "scritti"}</div></div>
+              <div className="text-right"><Stars v={Math.round(a.avg)} size={14} /><div className="mu text-xs mt-1">{a.avg ? `media ${a.avg.toFixed(1)}` : "senza voti"}</div></div>
+            </div>
+          </div>
+        </Reveal>
+      ))}
+    </div>
   );
   const titles: any = { write: editingId ? "Modifica progetto" : "Nuovo progetto", my_pages: "I miei progetti", read: "Tutti gli scritti", home: "Panoramica", profile: "Il tuo profilo", podio: "Podio del mese", authors: "Autori" };
   const isList = ["my_pages", "read"].includes(tab);
