@@ -39,7 +39,7 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
           <pointLight position={[0, 5, -5]} intensity={0.4} color="#6366F1" />
 
           {/* Campo di particelle interattivo */}
-          <ParticleField count={1500} spread={8} attractDistance={2} repelDistance={1.5} />
+          <ParticleField count={1500} attractRadius={0.3} attractStrength={0.02} />
 
           {/* Sfera liquid glass centrale */}
           <LiquidGlassSphere position={[0, 0, 0]} scale={1.2} />
