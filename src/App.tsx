@@ -539,7 +539,8 @@ const PanelArt = ({ art, anim, speed = 1, fps = 30 }: { art: boolean; anim: bool
     build();
     if (moving) raf = requestAnimationFrame(frame);
     const ro = "ResizeObserver" in window ? new ResizeObserver(() => { clearTimeout(timer); timer = window.setTimeout(build, 150); }) : null; ro?.observe(host);
-    const io = "IntersectionObserver" in window ? new IntersectionObserver(([e]) => { vis = e.isIntersecting; }) : null; io?.observe(cv);
+    // vale l'ultima notifica del gruppo (lo stato attuale), non la prima: vedi Logo3D
+    const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => { vis = es[es.length - 1].isIntersecting; }) : null; io?.observe(cv);
     return () => { cancelAnimationFrame(raf); clearTimeout(timer); ro?.disconnect(); io?.disconnect(); };
   }, [art, anim]);
   return art ? <canvas ref={ref} className="pnl-art" aria-hidden="true" /> : null;
@@ -1157,7 +1158,8 @@ const HeroRain = ({ on, speed = 1, dens = 1, fps = 30 }: { on: boolean; speed?: 
     const mv = (e: PointerEvent) => { const r = host.getBoundingClientRect(); ptr.x = e.clientX - r.left; ptr.nx = (e.clientX - r.left) / r.width - 0.5; ptr.ny = (e.clientY - r.top) / r.height - 0.5; };
     const lv = () => { ptr.x = -999; ptr.nx = 0; ptr.ny = 0; };
     host.addEventListener("pointermove", mv, { passive: true }); host.addEventListener("pointerleave", lv, { passive: true });
-    const io = "IntersectionObserver" in window ? new IntersectionObserver(([e]) => { vis = e.isIntersecting; }) : null; io?.observe(cv);
+    // vale l'ultima notifica del gruppo (lo stato attuale), non la prima: vedi Logo3D
+    const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => { vis = es[es.length - 1].isIntersecting; }) : null; io?.observe(cv);
     const frame = (ts: number) => {
       raf = requestAnimationFrame(frame);
       if (document.hidden || !vis || !W) return;
@@ -1196,7 +1198,8 @@ const Reveal = ({ children, delay = 0, className = "", fx = "", style, flip }: a
   useEffect(() => {
     const el = ref.current; if (!el) return;
     if (!("IntersectionObserver" in window)) { setOn(true); return; }
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setOn(true); io.disconnect(); } }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+    // basta che una qualunque notifica del gruppo dica "visibile": con [fuori, dentro] insieme la prima non deve nascondere tutto per sempre
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { setOn(true); io.disconnect(); } }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
     io.observe(el); return () => io.disconnect();
   }, []);
   return <div ref={ref} data-flip={flip} className={`rv ${fx ? `fx-${fx}` : ""} ${on ? "in" : ""} ${className}`} style={{ animationDelay: `${delay}ms`, ["--rd" as any]: `${delay}ms`, ...style }}>{children}</div>;
@@ -2281,7 +2284,9 @@ export default function App() {
       { l: "Parole scritte", v: items.reduce((a, t) => a + wc(t), 0), i: Pen, a: () => go("my_pages") }];
   const recent = [...items].sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
   const heroMove = (e: any) => {
-    const el = e.currentTarget, r = el.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    // si misura sul contenitore e non sul pannello: il pannello si inclina e, all'ingresso, si muove e si rimpicciolisce; il suo rettangolo
+    // dà coordinate sbagliate e a mouse fermo l'inclinazione sbagliata restava finché non si rimuoveva il puntatore (o si cambiava pagina)
+    const el = e.currentTarget, r = (el.parentElement || el).getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
     el.style.setProperty("--hx", `${x}px`); el.style.setProperty("--hy", `${y}px`);
     el.style.setProperty("--nx", String((x / r.width - 0.5) * 2)); el.style.setProperty("--ny", String((y / r.height - 0.5) * 2));
   };
