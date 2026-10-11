@@ -42,7 +42,7 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
           <ParticleField count={1500} attractRadius={0.3} attractStrength={0.02} />
 
           {/* Sfera liquid glass centrale */}
-          <LiquidGlassSphere position={[0, 0, 0]} scale={1.2} />
+          <LiquidGlassSphere />
         </Canvas>
       </div>
 
