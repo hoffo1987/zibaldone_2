@@ -238,7 +238,10 @@ export default function Logo3D({ intro = true, spd = 1, fallback, className = ""
     fit();
     const ro = "ResizeObserver" in window ? new ResizeObserver(fit) : null; ro?.observe(el);
     let vis = true;
-    const io = "IntersectionObserver" in window ? new IntersectionObserver(([e]) => { vis = e.isIntersecting; }) : null; io?.observe(el);
+    // IntersectionObserver consegna le notifiche a gruppi: se il primo frame è lento (compilazione degli shader) possono arrivare insieme
+    // [fuori, dentro] (il pannello d'accesso entra con un clip-path che all'inizio lo nasconde). Vale l'ultima, cioè lo stato attuale:
+    // leggere la prima lasciava il logo fermo per sempre dopo pochi frame, finché non si cambiava pagina.
+    const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => { vis = es[es.length - 1].isIntersecting; }) : null; io?.observe(el);
 
     // --- tempo: tutte le fasi si integrano (fase += velocità × dt), quindi cambiare velocità non fa mai saltare nulla ---
     let raf = 0, last = performance.now(), T = intro ? 0 : 6;
