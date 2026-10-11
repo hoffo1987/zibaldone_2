@@ -15,6 +15,7 @@ import {
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
 import { AccessoProf } from "./AccessoProf";
+import { M, MOTION_CSS, Words, Sheets, useFlip, useRail, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 
 // --- FIREBASE ---
 const firebaseConfig = {
@@ -624,29 +625,27 @@ background:var(--bg)}
 .inp:hover{border-color:color-mix(in srgb,var(--ac) 45%,var(--ln))}
 .inp:focus,.bt:focus-visible{border-color:var(--ac);box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 20%,transparent)}
 .bt{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.55rem .95rem;border-radius:12px;font-size:.85rem;font-weight:600;border:1px solid var(--ln);background:var(--pn);color:var(--ink);outline:none;cursor:pointer;
-transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .3s,border-color .3s,filter .3s,letter-spacing .3s}
-.bt svg{transition:transform .4s var(--spring),fill .3s}
+transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s cubic-bezier(.16,1,.3,1),background .25s,border-color .25s,color .25s,filter .25s}
+.bt svg{transition:transform .3s cubic-bezier(.16,1,.3,1)}
+/* pulsanti: si alzano di un pixel e si accendono di bordo; alla pressione cedono subito. Le frecce indicano dove portano */
 @media (hover:hover){
-.bt:hover{transform:translate(var(--tx,0px),calc(var(--ty,0px) - 4px)) scale(1.03);border-color:var(--ac);box-shadow:0 10px 20px -8px color-mix(in srgb,var(--ac) 50%,transparent),var(--sh1);letter-spacing:.02em}
-.bt:hover svg{transform:scale(1.25) rotate(-8deg);fill:color-mix(in srgb,var(--ac) 20%,transparent)}
+.bt:hover{transform:translate(var(--tx,0px),calc(var(--ty,0px) - 1px));border-color:var(--ac);box-shadow:0 8px 16px -10px color-mix(in srgb,var(--ac) 55%,transparent),var(--sh1)}
+.bt:hover .lucide-chevron-right,.lk:hover .lucide-arrow-up-right,.bt:hover .lucide-arrow-up-right{transform:translateX(2px)}
+.bt:hover .lucide-chevron-left{transform:translateX(-2px)}
 }
-.bt:active{transform:translateY(2px) scale(.94);box-shadow:none;letter-spacing:0}
+.bt:active{transform:scale(.97);box-shadow:none;transition-duration:.08s}
 .bt:disabled{opacity:.4;pointer-events:none}
 .bt.on{background:linear-gradient(135deg,var(--ac),color-mix(in srgb,var(--ac) 80%,#000));border-color:var(--ac);color:#fff} .root.dark .bt.on{color:#042f2a}
-@media (hover:hover){.bt.on:hover{filter:brightness(1.15);box-shadow:0 14px 30px -6px color-mix(in srgb,var(--ac) 80%,transparent);transform:translate(var(--tx,0px),calc(var(--ty,0px) - 4px)) scale(1.05)}}
+@media (hover:hover){.bt.on:hover{filter:brightness(1.08);box-shadow:0 10px 22px -10px color-mix(in srgb,var(--ac) 80%,transparent)}}
 .bt.pri{background:var(--ink);color:var(--bg);border-color:var(--ink)} .bt.pri:hover{box-shadow:var(--sh2)}
 .bt.dng{color:#dc2626;border-color:#fca5a5} .bt.dng:hover{background:#fef2f2;border-color:#dc2626}
 .nv:hover{background:var(--sf)!important} .nv:hover svg{transform:translateX(3px)}
 .lk{background:linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat;transition:background-size .4s var(--ez),color .2s;cursor:pointer}
 .lk:hover{background-size:100% 1px;color:var(--ink)}
 .mu{color:var(--mu)}
-.card{position:relative;transition:transform .5s var(--spring),box-shadow .5s var(--spring),border-color .4s,opacity .3s}
-.card:hover{transform:perspective(1200px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(-8px) scale(1.02);box-shadow:0 30px 60px -20px color-mix(in srgb,var(--ac) 40%,transparent),var(--sh2);border-color:color-mix(in srgb,var(--ac) 70%,var(--ln))}
-.card:active{transform:perspective(1200px) rotateX(calc(var(--rx,0deg)*0.5)) rotateY(calc(var(--ry,0deg)*0.5)) translateY(2px) scale(.97);box-shadow:var(--sh1)}
-.card:after{content:"";position:absolute;left:0;bottom:0;height:4px;width:100%;background:linear-gradient(90deg,var(--ac),var(--am));transform:scaleX(0);transform-origin:center;transition:transform .6s var(--spring);border-radius:0 0 18px 18px}
+.card{position:relative}
+.card:after{content:"";position:absolute;left:0;bottom:0;width:100%;background:linear-gradient(90deg,var(--ac),var(--am));transform:scaleX(0);border-radius:0 0 18px 18px}
 .card:hover:after{transform:scaleX(1)}
-.card .thumb{transition:transform .8s var(--ez)} .card:hover .thumb{transform:scale(1.05)}
-.card.gone{animation:shred .32s var(--snap) forwards;pointer-events:none}
 .paper{background:#fff;color:#10211F}
 .mm{background-image:linear-gradient(rgba(15,139,122,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(15,139,122,.12) 1px,transparent 1px);background-size:20px 20px}
 .rt{overflow-wrap:anywhere;line-height:32px;font-size:17px}
@@ -656,8 +655,6 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 .rt:empty:before{content:attr(data-ph);color:#94a3b8;pointer-events:none}
 .sm .rt{line-height:22px;font-size:13px} .sm .rt img{max-height:70px;width:auto;margin:4px 0}
 .sw{cursor:pointer;transition:transform .25s var(--ez),box-shadow .25s}.sw:hover{transform:scale(1.18)}
-.rv{opacity:0}
-.rv.in{opacity:1;transform:none}
 .root{--m-circuit:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' fill='none' stroke='black' stroke-width='1.5'%3E%3Cpath d='M0 40H50L70 60V100H120L140 120V160M30 0V30L50 50M160 80H110L90 100M140 0V18M30 160V142M0 80H18M160 40H148'/%3E%3Ccircle cx='50' cy='40' r='3.5'/%3E%3Ccircle cx='120' cy='100' r='3.5'/%3E%3Ccircle cx='30' cy='30' r='3.5'/%3E%3Ccircle cx='110' cy='80' r='3.5'/%3E%3C/svg%3E");
 --m-cross:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' fill='none' stroke='black' stroke-width='1.3'%3E%3Cpath d='M28 22V34M22 28H34'/%3E%3C/svg%3E");
 --m-hatch:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' fill='none' stroke='black' stroke-width='1.2'%3E%3Cpath d='M-4 4L4 -4M0 28L28 0M24 32L32 24'/%3E%3C/svg%3E");
@@ -722,21 +719,19 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 .sws{transition:transform .1s,box-shadow .12s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.sws:active{transform:scale(.86)}
 .rt span[style*="font-size"]{line-height:1.25}
 .wm{font-family:'Unbounded','Bricolage Grotesque',sans-serif;font-weight:600;white-space:nowrap;letter-spacing:-.01em}
-.wl{display:inline-block;color:var(--wc);opacity:0;animation:wl .7s var(--ez) calc(var(--i)*60ms + .2s) forwards,lw 7s ease-in-out calc(2.4s + var(--i)*90ms) infinite}
-@keyframes wl{from{opacity:0;transform:translateY(.7em) rotate(6deg)}to{opacity:1;transform:none}}
-@keyframes lw{0%,14%,100%{color:var(--wc)}7%{color:var(--wa)}}
-.lgw{transition:transform .5s var(--ez);cursor:pointer}.lgw:hover{transform:rotate(-8deg) scale(1.08)}
-.lgf{animation:lgfl 5s ease-in-out infinite}
-@keyframes lgfl{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-.lg-arc,.lg-line{stroke-dasharray:100;stroke-dashoffset:100;animation:lgd 1.1s var(--ez) .15s forwards}
+/* wordmark: le lettere salgono una volta dalla riga; il logo si disegna e la corrente lo attraversa tre volte, poi tace */
+.wl{display:inline-block;color:var(--wc);opacity:0;animation:wl .6s cubic-bezier(.16,1,.3,1) calc(var(--i)*45ms + .15s) forwards}
+@keyframes wl{from{opacity:0;transform:translateY(.6em)}to{opacity:1;transform:none}}
+.lgw{transition:transform .5s var(--ez);cursor:pointer}.lgw:hover{transform:rotate(-6deg)}
+.lg-arc,.lg-line{stroke-dasharray:100;stroke-dashoffset:100;animation:lgd 1.1s cubic-bezier(.65,0,.35,1) .15s forwards}
 .lg-line{animation-duration:.5s;animation-delay:.8s}
 @keyframes lgd{to{stroke-dashoffset:0}}
-.lg-flow{opacity:0;animation:lgs .9s linear 1.4s infinite,fd .4s 1.4s forwards}
+.lg-flow{opacity:0;animation:lgs .9s linear 1.4s 3,fd .4s 1.4s forwards}
 @keyframes lgs{to{stroke-dashoffset:-7}}
 .lg-n,.lg-amber{transform-box:fill-box;transform-origin:center;animation:lgp .55s var(--ez) .9s both}
-.lg-amber{animation:lgp .55s var(--ez) 1.05s both,lgb 2.8s ease-in-out 2s infinite}
+.lg-amber{animation-delay:1.05s}
+.lgw:hover .lg-flow{animation:lgs .9s linear infinite;opacity:1}
 @keyframes lgp{from{opacity:0;transform:scale(0)}to{opacity:1;transform:none}}
-@keyframes lgb{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
 .cpov{position:fixed;inset:0;z-index:40}
 @media (max-width:767px){.root:has(.cpov) nav.hdr{display:none}}
 .cp{position:absolute;top:100%;left:0;margin-top:.5rem;width:336px;z-index:50;box-shadow:var(--sh2);animation:cpIn .4s var(--out) backwards;transform-origin:0 0}
@@ -754,14 +749,13 @@ transition:transform .4s var(--spring),box-shadow .4s var(--spring),background .
 header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--pn)}
 .card:hover{transform:none;box-shadow:var(--sh1)}
 }
-@keyframes pgf{from{opacity:0}}
 @property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
 @keyframes ang{to{--ang:360deg}}
 .bt:not(.absolute){position:relative}
 .bt{overflow:hidden}
 .bt:before,.card:before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s}
 .bt:before{background:radial-gradient(90px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,currentColor 22%,transparent),transparent 70%)}
-.card:before{z-index:1;background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--ac) 26%,transparent),transparent 65%)}
+.card:before{z-index:1;background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--ac) 18%,transparent),transparent 65%)}
 .card:hover:before,.card:active:before{opacity:var(--gi,1)}
 @media (hover:hover){.bt:hover:before{opacity:var(--gi,1)}}
 .bt.rip:after{content:"";position:absolute;left:var(--px,50%);top:var(--py,50%);width:8px;height:8px;margin:-4px;border-radius:50%;background:color-mix(in srgb,currentColor 40%,transparent);pointer-events:none;animation:ripl .65s var(--ez) forwards}
@@ -780,23 +774,20 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--pn
 .root.dark .bd-art{opacity:calc(.32*var(--ao,1))}
 .bd-p{inset:-25vh 0;transform:translateY(calc(var(--sy,0)*-.12px))}
 .bd-podio .bd-p{inset:0;transform:none}
-.prog{position:fixed;top:0;left:0;right:0;height:3px;z-index:90;transform-origin:0 50%;transform:scaleX(var(--sp,0));background:linear-gradient(90deg,var(--ac),var(--am));box-shadow:0 0 12px var(--ac);pointer-events:none}
+.bdin{animation:fd .7s linear backwards}
+.prog{position:fixed;top:0;left:0;right:0;height:2px;z-index:90;transform-origin:0 50%;transform:scaleX(var(--sp,0));background:linear-gradient(90deg,var(--ac),var(--am));pointer-events:none}
 .spinring{display:inline-block;padding:4px;border-radius:50%;background:conic-gradient(from var(--ang),var(--ac),var(--am),#6366F1,var(--ac));animation:ang 5s linear infinite}
 .pn.spin-b{border:2px solid transparent;background:linear-gradient(var(--pn),var(--pn)) padding-box,conic-gradient(from var(--ang),transparent 55%,var(--am),var(--ac),transparent) border-box;animation:ang 6s linear infinite}
-@keyframes boot{0%{opacity:0;transform:translateY(22px) skewX(-5deg) scale(.96)}35%{opacity:.7;transform:translateX(-3px) skewX(2deg)}48%{opacity:.25;transform:translateX(3px)}62%{opacity:1;transform:translateX(-1px)}100%{opacity:1;transform:none}}
-.rv.in{transition:none;animation:boot .8s var(--ez) backwards}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
 ::view-transition-new(root){animation:vtr .75s var(--ez)}
 @keyframes vtr{from{clip-path:circle(0 at var(--vx,50%) var(--vy,50%))}to{clip-path:circle(150vmax at var(--vx,50%) var(--vy,50%))}}
 .root.noreveal .rv{opacity:1;transform:none}.root.noreveal .rv.in{animation:none}
 .root.notitles .wl{animation:none;opacity:1}
-.root.nologo .lg-n,.root.nologo .lg-amber{animation:none;opacity:1}.root.nologo .lg-arc,.root.nologo .lg-line{animation:none;stroke-dashoffset:0}.root.nologo .lgf{animation:none}
+.root.nologo .lg-n,.root.nologo .lg-amber{animation:none;opacity:1}.root.nologo .lg-arc,.root.nologo .lg-line{animation:none;stroke-dashoffset:0}.root.nologo .lg-flow{animation:none;opacity:0}
 .root.noaurora .au{display:none}
 .noglow .bt:before,.noglow .card:before,.noglow .bt.rip:after,.noripple .bt.rip:after{display:none}
-.root.nopages .pg{animation:none!important}
 .root.noscan .hero:after{display:none}
 .root.noprog .prog{display:none}
-.root.nolift .card:hover{transform:perspective(1200px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg))}
 .root.nolift .card:active{transform:perspective(1200px) rotateX(calc(var(--rx,0deg)*.5)) rotateY(calc(var(--ry,0deg)*.5)) scale(.98)}
 .root.nolift .bt:hover,.root.nolift .bt.on:hover{transform:translate(var(--tx,0px),var(--ty,0px))}
 .root.lite *,.root.lite *:before,.root.lite *:after,.root.nomotion *,.root.nomotion *:before,.root.nomotion *:after{animation:none!important;transition:none!important}
@@ -806,205 +797,42 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--pn
 .root.lite .lg-arc,.root.lite .lg-line,.root.lite .tick,.root.nomotion .lg-arc,.root.nomotion .lg-line,.root.nomotion .tick{stroke-dashoffset:0}
 .root.lite .hdr,.root.lite .backdrop-blur-sm,.root.noblur .hdr,.root.noblur .backdrop-blur-sm{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 .rng{display:block;width:100%;height:24px;margin-top:4px;accent-color:var(--ac);cursor:pointer;background:transparent}
-@keyframes pg{from{opacity:0;transform:translateY(20px) scale(.98)}to{opacity:1;transform:none}}
-@keyframes up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
-@keyframes pop{0%{opacity:0;transform:perspective(1000px) rotateX(-15deg) translateY(30px) scale(.85)}100%{opacity:1;transform:none}}
-@keyframes popx{0%{opacity:0;transform:perspective(1000px) rotateX(-15deg) translate(-50%,30px) scale(.85)}100%{opacity:1;transform:translate(-50%,0)}}
-@keyframes fd{from{opacity:0}to{opacity:1}}
 @keyframes dash{to{stroke-dashoffset:0}}
-.up{animation:up .7s var(--ez) both}
-.pop{animation:pop .45s var(--ez) both} .popx{animation:popx .4s var(--ez) both} .fade{animation:fd .3s ease-out both}
-.tick{stroke-dasharray:60;stroke-dashoffset:60;animation:dash .7s .25s ease-out forwards}
-/* ===== MOTION SYSTEM: ogni elemento ha un ingresso (e un'uscita) tutto suo ===== */
-.rv:not(.in) *{animation-play-state:paused!important}
-.rv.in.fx-wipe{animation:rvWipe 1.05s var(--snap) backwards}
-.rv.in.fx-flip{animation:rvFlip .85s var(--out) backwards;transform-origin:50% 0}
-.rv.in.fx-rise{animation:rvRise .95s var(--spring) backwards;transform-origin:50% 100%}
-.rv.in.fx-zoom{animation:rvZoom .75s var(--out) backwards}
-.rv.in.fx-deal{animation:rvDeal .8s var(--out) backwards}
-@keyframes rvWipe{from{clip-path:inset(0 100% 0 0 round 18px)}to{clip-path:inset(0 0 0 0 round 18px)}}
-@keyframes rvFlip{from{opacity:0;transform:perspective(800px) rotateX(-80deg) translateY(-12px)}}
-@keyframes rvRise{from{opacity:0;transform:translateY(110px) scaleY(.4)}}
-@keyframes rvZoom{from{opacity:0;transform:scale(.8);filter:blur(10px)}}
-@keyframes rvDeal{from{opacity:0;transform:translate(var(--dx,0px),140px) rotate(var(--rot,0deg)) scale(.86)}}
-.cas>*:not(.bd-p){animation:casUp .65s var(--out) backwards}
-.cas>:nth-child(1){animation-delay:calc(var(--cb,0s) + 60ms)}.cas>:nth-child(2){animation-delay:calc(var(--cb,0s) + 120ms)}.cas>:nth-child(3){animation-delay:calc(var(--cb,0s) + 180ms)}.cas>:nth-child(4){animation-delay:calc(var(--cb,0s) + 240ms)}
-.cas>:nth-child(5){animation-delay:calc(var(--cb,0s) + 300ms)}.cas>:nth-child(6){animation-delay:calc(var(--cb,0s) + 360ms)}.cas>:nth-child(7){animation-delay:calc(var(--cb,0s) + 420ms)}.cas>:nth-child(8){animation-delay:calc(var(--cb,0s) + 480ms)}
-.cas>:nth-child(9){animation-delay:calc(var(--cb,0s) + 540ms)}.cas>:nth-child(10){animation-delay:calc(var(--cb,0s) + 600ms)}.cas>:nth-child(11){animation-delay:calc(var(--cb,0s) + 660ms)}.cas>:nth-child(12){animation-delay:calc(var(--cb,0s) + 720ms)}.cas>:nth-child(n+13){animation-delay:calc(var(--cb,0s) + 780ms)}
-.cas-l>*:not(.bd-p){animation-name:casL}
-.cas>.swap{animation:swapIn .5s var(--out) backwards}
-.cas>.fld{animation:fldIn .45s var(--out) backwards}
-.fld{transform-origin:50% 0}
-@keyframes casUp{from{opacity:0;transform:translateY(20px)}}
-@keyframes casL{from{opacity:0;transform:translateX(-30px)}}
-@keyframes swapIn{from{opacity:0;transform:translateY(10px);filter:blur(6px)}}
-@keyframes fldIn{from{opacity:0;transform:scaleY(.5) translateY(-10px)}}
-/* pagine: ogni sezione entra in modo diverso */
-.pg{position:relative;animation:.8s var(--spring) backwards}
-.pg-home{animation-name:pgHome;animation-duration:1s;animation-timing-function:var(--out)}
-.pg-write{animation-name:pgWrite;transform-origin:50% 0;animation-duration:.9s;animation-timing-function:var(--spring)}
-.pg-my_pages{animation-name:pgMine;animation-duration:.8s}
-.pg-read{animation-name:pgRead;animation-duration:.8s;animation-timing-function:var(--snap)}
-.pg-podio{animation-name:pgPodio;animation-duration:1.1s;animation-timing-function:var(--spring)}
-.pg-authors{animation-name:pgAuth;animation-duration:1s;animation-timing-function:var(--spring)}
-.pg-profile{animation-name:pgProf;animation-duration:1s;animation-timing-function:var(--snap)}
-@media (min-width:768px){.pg-profile{animation-name:pgProfD}}
-@keyframes pgHome{0%{opacity:0;transform:scale(0.8) translateY(40px) rotate(-2deg);filter:blur(10px)}100%{opacity:1;transform:none;filter:blur(0)}}
-@keyframes pgWrite{0%{opacity:0;transform:perspective(1600px) rotateX(35deg) translateY(120px) scale(0.9);filter:blur(8px)}100%{opacity:1;transform:none;filter:blur(0)}}
-@keyframes pgMine{0%{opacity:0;transform:perspective(1000px) rotateY(-20deg) translateX(80px) skewX(-8deg);filter:drop-shadow(0 0 20px var(--ac))}100%{opacity:1;transform:none;filter:drop-shadow(0 0 0 transparent)}}
-@keyframes pgRead{0%{clip-path:polygon(50% 100%, 50% 100%, 50% 100%, 50% 100%);transform:scale(0.95);opacity:0}100%{clip-path:polygon(0 0, 100% 0, 100% 100%, 0 100%);transform:none;opacity:1}}
-@keyframes pgPodio{0%{opacity:0;transform:translateY(-100px) scale(0.8) rotate(-5deg);filter:drop-shadow(0 30px 40px var(--am))}100%{opacity:1;transform:none;filter:drop-shadow(0 0 0 transparent)}}
-@keyframes pgAuth{0%{opacity:0;transform:perspective(1200px) translateZ(200px) rotateY(15deg) scale(1.2);filter:blur(15px)}100%{opacity:1;transform:none;filter:blur(0)}}
-@keyframes pgProf{0%{clip-path:circle(0% at 50% 50%);transform:scale(0.8) rotate(-10deg);opacity:0}100%{clip-path:circle(150% at 50% 50%);transform:none;opacity:1}}
-@keyframes pgProfD{0%{clip-path:circle(0% at 50% 50%);transform:scale(0.8) rotate(-10deg);opacity:0}100%{clip-path:circle(150% at 50% 50%);transform:none;opacity:1}}
-.trace{position:absolute;top:0;left:1rem;right:1rem;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--ac) 20%,var(--am) 80%,transparent);box-shadow:0 0 12px var(--ac);transform-origin:0 50%;opacity:0;pointer-events:none;animation:trace 1s var(--snap) .05s}
-@keyframes trace{0%{opacity:1;transform:scaleX(0)}65%{opacity:1;transform:scaleX(1)}100%{opacity:0;transform:scaleX(1)}}
-.bdin{animation:bdIn 1.1s var(--ez) backwards}
-@keyframes bdIn{from{opacity:0;transform:scale(1.06)}}
-/* navigazione: indicatore liquido + icona animata per voce */
-.nb{z-index:1}
-.nb.act{color:#fff}.root.dark .nb.act{color:#042f2a}
-.nb.act:hover{background:transparent!important}
-.nb.act svg{animation:var(--ia,none) .75s var(--ez);transform-origin:50% 30%}
-.nind{position:absolute;z-index:0;border-radius:12px;background:var(--ac);box-shadow:0 10px 24px -10px color-mix(in srgb,var(--ac) 80%,transparent);pointer-events:none;opacity:0;overflow:hidden;transition:top .55s var(--ez) var(--da,0ms),bottom .55s var(--ez) var(--db,0ms),left .55s var(--ez) var(--da,0ms),right .55s var(--ez) var(--db,0ms),opacity .3s}
-.nind.v{left:0;right:0;top:var(--a,0px);bottom:var(--b,100%)}
-.nind.h{top:0;bottom:0;left:var(--a,0px);right:var(--b,100%)}
-.nind:after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.4) 50%,transparent 65%);transform:translateX(-120%);animation:shine 4s ease-in-out 1s infinite}
-@keyframes shine{0%,65%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
-@keyframes icHome{from{transform:scale(.4) rotate(-180deg)}}
-@keyframes icWrite{0%,100%{transform:none}20%{transform:rotate(-22deg) translate(-2px,1px)}40%{transform:rotate(12deg) translate(2px,-1px)}60%{transform:rotate(-12deg)}80%{transform:rotate(6deg)}}
-@keyframes icMine{0%{transform:translateY(-12px);opacity:0}55%{transform:translateY(3px) scaleY(.85);opacity:1}100%{transform:none}}
-@keyframes icRead{0%{transform:scaleX(.1)}45%{transform:scale(1.3,1.4)}100%{transform:none}}
-@keyframes icPodio{0%,100%{transform:none}20%{transform:rotate(18deg) translateY(-3px)}40%{transform:rotate(-14deg)}60%{transform:rotate(8deg)}80%{transform:rotate(-4deg)}}
-@keyframes icAuth{0%{transform:scale(1)}30%{transform:scale(1.4) translateY(-4px)}60%{transform:scale(.88)}100%{transform:none}}
-/* selettori a pillola scorrevole */
-.seg-ind{position:absolute;top:4px;bottom:4px;left:4px;border-radius:12px;background:var(--ac);box-shadow:0 8px 18px -8px color-mix(in srgb,var(--ac) 75%,transparent);transition:transform .6s var(--spring)}
+.fade{animation:fd .3s ease-out both}
+.tick{stroke-dasharray:60;stroke-dashoffset:60;animation:dash .7s .25s cubic-bezier(.65,0,.35,1) forwards}
+/* selettori a pillola: la pillola corre sulla sua pista, senza rimbalzi */
+.seg-ind{position:absolute;top:4px;bottom:4px;left:4px;border-radius:12px;background:var(--ac);box-shadow:0 8px 18px -8px color-mix(in srgb,var(--ac) 75%,transparent);transition:transform .45s cubic-bezier(.65,0,.35,1)}
 .seg.soft .seg-ind{background:var(--pn);box-shadow:var(--sh1)}
-.seg .bt{transition:color .3s,transform .3s var(--ez)}
+.seg .bt{transition:color .3s}
+.seg .bt:hover{transform:none;box-shadow:none}
 .seg-on{color:#fff!important}.root.dark .seg-on{color:#042f2a!important}.seg.soft .seg-on{color:var(--ink)!important}
-.seg-on svg{animation:segP .5s var(--spring)}
-@keyframes segP{from{transform:scale(.4) rotate(-40deg)}}
-/* overlay e modali: ognuno con ingresso e uscita unici */
-.ov{animation:ovIn .4s var(--ez) backwards}
-.ov.out{animation:ovOut .34s var(--ez) forwards;pointer-events:none}
-@keyframes ovIn{from{background-color:transparent;-webkit-backdrop-filter:blur(0);backdrop-filter:blur(0)}}
-@keyframes ovOut{to{background-color:transparent;-webkit-backdrop-filter:blur(0);backdrop-filter:blur(0)}}
-.m-doc{animation:docIn .6s var(--out) backwards}
-.out .m-doc{animation:docOut .34s var(--snap) forwards}
-@keyframes docIn{from{opacity:0;transform:translate(var(--ox,0px),var(--oy,60px)) scale(var(--sx,.92),var(--sy,.92));border-radius:26px}35%{opacity:1}}
-@keyframes docOut{to{opacity:0;transform:translate(var(--ox,0px),var(--oy,60px)) scale(var(--sx,.92),var(--sy,.92))}}
-.m-doc .doc-h{animation:hIn .55s var(--out) .22s backwards}
-@keyframes hIn{from{opacity:0;transform:translateY(-14px)}}
-.acts>*{flex:1}
-.print{position:relative;animation:print 1s var(--snap) .3s backwards}
-.print:before{content:"";position:absolute;left:0;right:0;top:0;height:2px;z-index:5;pointer-events:none;background:var(--ac);box-shadow:0 0 16px 3px var(--ac);opacity:0;animation:scan 1s var(--snap) .3s}
-@keyframes print{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0 0 0 0)}}
-@keyframes scan{0%{top:0;opacity:1}85%{opacity:1}100%{top:100%;opacity:0}}
-.m-card{animation:cardIn .75s var(--out) backwards;transform-origin:50% 100%}
-.out .m-card{animation:cardOut .3s var(--snap) forwards}
-@keyframes cardIn{from{opacity:0;transform:perspective(1200px) rotateX(-32deg) rotateY(16deg) translateY(70px) scale(.88)}}
-@keyframes cardOut{to{opacity:0;transform:perspective(1200px) rotateX(18deg) translateY(50px) scale(.92)}}
-.m-crt{animation:crtOn .65s var(--snap) backwards}
-.out .m-crt{animation:crtOff .4s var(--snap) forwards}
-.m-crt .cas{--cb:.38s}
-@keyframes crtOn{0%{opacity:0;transform:scale(.5,.006);filter:brightness(3)}40%{opacity:1;transform:scale(1,.006);filter:brightness(2.2)}100%{transform:none;filter:none}}
-@keyframes crtOff{0%{transform:none}55%{opacity:1;transform:scale(1,.006);filter:brightness(2.5)}100%{opacity:0;transform:scale(0,.006)}}
-.m-warn{animation:warnIn .65s var(--ez) backwards}
-.out .m-warn{animation:implode .36s var(--snap) forwards}
-.m-warn .wi{animation:wiPulse 1.4s ease-in-out .6s infinite}
-@keyframes warnIn{0%{opacity:0;transform:scale(.85)}30%{opacity:1;transform:scale(1.03) translateX(-10px);box-shadow:0 0 0 6px rgba(220,38,38,.35),var(--sh2)}45%{transform:translateX(8px)}60%{transform:translateX(-6px)}75%{transform:translateX(3px)}100%{transform:none}}
-@keyframes implode{to{opacity:0;transform:scale(.3) rotate(-10deg);filter:blur(6px)}}
-@keyframes wiPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.45)}50%{box-shadow:0 0 0 12px rgba(220,38,38,0)}}
-.m-vault{animation:vaultIn .6s var(--out) backwards}
-.out .m-vault{animation:vaultOut .3s var(--snap) forwards}
-.m-vault .key{animation:keyT 1s var(--spring) .2s backwards}
-@keyframes vaultIn{from{opacity:0;transform:scale(1.3);filter:blur(12px)}}
-@keyframes vaultOut{to{opacity:0;transform:scale(1.2);filter:blur(10px)}}
-@keyframes keyT{from{opacity:0;transform:rotate(-220deg) scale(.2)}}
-.shk{animation:shk .45s var(--ez)}
-@keyframes shk{20%{transform:translateX(-9px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
-.m-done{animation:doneIn .7s var(--spring) backwards}
-.out .m-done{animation:doneOut .35s var(--snap) forwards}
-@keyframes doneIn{from{opacity:0;transform:scale(.4) translateY(40px)}}
-@keyframes doneOut{to{opacity:0;transform:translateY(-60px) scale(.9)}}
-.burst{position:relative;width:76px;height:76px;margin:0 auto .9rem}
-.burst svg{position:relative;width:100%;height:100%}
-.burst .rg{position:absolute;inset:0;border-radius:50%;border:2px solid var(--ac);opacity:0;animation:rg 1s var(--out) .35s}
-.burst .rg+.rg{border-color:var(--am);animation-delay:.5s}
-.burst i{position:absolute;left:50%;top:50%;width:4px;height:12px;margin:-6px 0 0 -2px;border-radius:3px;background:var(--c);opacity:0;animation:spark .8s var(--out) .4s}
-@keyframes rg{from{opacity:.9;transform:scale(.5)}to{opacity:0;transform:scale(2.3)}}
-@keyframes spark{0%{opacity:1;transform:rotate(var(--a)) translateY(-22px) scaleY(1.2)}100%{opacity:0;transform:rotate(var(--a)) translateY(-72px) scaleY(.3)}}
-.toast{animation:tIn .55s var(--spring) backwards;overflow:hidden}
-.toast.out{animation:tOut .3s var(--snap) forwards}
-.toast:after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,var(--ac),var(--am));transform-origin:0 50%;animation:tBar 3.2s linear forwards}
-@keyframes tIn{from{opacity:0;transform:translate(-50%,-160%) scale(.85)}}
-@keyframes tOut{to{opacity:0;transform:translate(-50%,-160%) scale(.9)}}
-@keyframes tBar{to{transform:scaleX(0)}}
-.selbar{animation:selIn .6s var(--out) backwards}
-.selbar.out{animation:selOut .3s var(--snap) forwards;pointer-events:none}
-@keyframes selIn{from{opacity:0;clip-path:inset(0 46% 0 46% round 18px);transform:translate(-50%,24px)}to{clip-path:inset(0 0 0 0 round 18px)}}
-@keyframes selOut{to{opacity:0;clip-path:inset(0 46% 0 46% round 18px);transform:translate(-50%,24px)}}
-@keyframes cpIn{from{opacity:0;transform:translateY(-8px) scale(.9);clip-path:inset(0 0 100% 0 round 18px)}to{clip-path:inset(0 0 0 0 round 18px)}}
-.cp.out{animation:cpOut .22s var(--snap) forwards}
+/* menu a comparsa: si apre dal pulsante che lo chiama */
+@keyframes cpIn{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0 round 18px)}to{clip-path:inset(0 0 0 0 round 18px)}}
+.cp.out{animation:cpOut .2s var(--ez) forwards}
 .cpov.out{animation:fdo .22s forwards;pointer-events:none}
-@keyframes cpOut{to{opacity:0;transform:translateY(-6px) scale(.94)}}
-@keyframes fdo{to{opacity:0}}
-.cp .sw{animation:swIn .45s var(--spring) backwards;animation-delay:calc(.08s + var(--i,0)*16ms)}
-@keyframes swIn{from{transform:scale(0) rotate(-90deg)}}
-@keyframes sheetUp{from{transform:translateY(100%)}}
+@keyframes cpOut{to{opacity:0;transform:translateY(-4px)}}
+.cp .sw{animation:swIn .4s cubic-bezier(.16,1,.3,1) backwards;animation-delay:calc(.06s + var(--i,0)*14ms)}
+@keyframes swIn{from{transform:scale(0)}}
 @keyframes sheetDown{to{transform:translateY(100%)}}
-@keyframes cardUpM{from{transform:translateY(100%) scale(.92);border-radius:44px}}
-@media (max-width:767px){
-.m-card{animation:cardUpM .6s var(--out) backwards}
-.m-crt{animation:sheetUp .55s var(--out) backwards}
-.out .m-card,.out .m-crt{animation:sheetDown .3s var(--snap) forwards}
-.m-crt .cas{--cb:.18s}
-.cp.out{animation:sheetDown .28s var(--snap) forwards}}
-/* micro-interazioni */
-@keyframes shred{to{opacity:0;transform:scale(.7,.05) skewX(24deg);filter:blur(6px)}}
-.st-on{animation:stPop .55s var(--spring) backwards;animation-delay:calc(var(--n,0)*55ms)}
-@keyframes stPop{from{transform:scale(0) rotate(-120deg)}}
-.bm-pop{animation:bmPop .55s var(--ez)}
-@keyframes bmPop{0%{transform:translateY(-10px) scale(.4)}60%{transform:translateY(2px) scale(1.3)}100%{transform:none}}
-.tb.on svg{animation:tbOn .45s var(--spring)}
-@keyframes tbOn{from{transform:scale(.5) rotate(-20deg)}}
-.tb-t{animation:tbT .4s var(--out) backwards}.tb-d{animation:tbD .4s var(--out) backwards}
-@keyframes tbT{from{opacity:0;transform:translateX(-24px)}}
-@keyframes tbD{from{opacity:0;transform:translateX(24px)}}
-.pf-bn{animation:bnIn .9s var(--snap) backwards}
-@keyframes bnIn{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0 0 0 0)}}
-.pf-bn .bd-p{animation:bnPan 22s linear infinite}
-@keyframes bnPan{to{-webkit-mask-position:160px 160px;mask-position:160px 160px}}
-.pf-av{display:inline-block;animation:avIn .9s var(--spring) .3s backwards}
-@keyframes avIn{from{opacity:0;transform:scale(.2) rotate(-160deg)}}
-.badge{animation:bdgIn .55s var(--spring) backwards;animation-delay:calc(.7s + var(--i,0)*90ms)}
-@keyframes bdgIn{from{opacity:0;transform:scale(.3) translateY(10px)}}
-.msr{animation:msr .55s var(--out) backwards}.msl{animation:msl .55s var(--out) backwards}
-@keyframes msr{from{opacity:0;transform:translateX(70px)}}
-@keyframes msl{from{opacity:0;transform:translateX(-70px)}}
-.mlab{display:inline-block;animation:mlab .5s var(--spring) backwards}
-@keyframes mlab{from{opacity:0;transform:perspective(400px) rotateX(-90deg)}}
-.medal{animation:medal 1.1s var(--out) backwards;animation-delay:calc(var(--md,0ms) + .45s)}
-@keyframes medal{from{opacity:0;transform:perspective(300px) rotateY(720deg) scale(.3)}}
-.wdw{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em}
-.wd{display:inline-block;animation:wdIn 1s var(--out) backwards;animation-delay:calc(.25s + var(--i,0)*65ms)}
-@keyframes wdIn{from{opacity:0;transform:translateY(115%) rotate(6deg)}}
+@media (max-width:767px){.cp.out{animation:sheetDown .28s var(--snap) forwards}}
+.tb.on svg{animation:tbOn .3s cubic-bezier(.16,1,.3,1)}
+@keyframes tbOn{from{transform:scale(.6)}}
+/* svelamento dell'autore: l'unico momento in cui un nome si "decodifica" */
+.pf-av{display:inline-block;animation:avIn .8s cubic-bezier(.16,1,.3,1) .3s backwards}
+@keyframes avIn{from{opacity:0;transform:scale(.3)}}
+.rvl-av{position:relative;display:inline-flex;flex-shrink:0}
+.rvl-av .rg{position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--ac);opacity:0;animation:rg 1s var(--out) .25s}
+.rvl-av .rg+.rg{border-color:var(--am);animation-delay:.45s}
+@keyframes rg{from{opacity:.9;transform:scale(.5)}to{opacity:0;transform:scale(2.3)}}
+.rvl-sweep{position:absolute;inset:0;pointer-events:none;background:linear-gradient(105deg,transparent 30%,color-mix(in srgb,var(--am) 50%,transparent) 50%,transparent 70%);transform:translateX(-120%);animation:rvlS 1.2s var(--out) .1s forwards}
+@keyframes rvlS{to{transform:translateX(120%)}}
+.rvl-name{display:inline-block;animation:rvlN .9s var(--out) backwards}
+@keyframes rvlN{from{opacity:0;letter-spacing:.3em}}
 .ldr{display:inline-flex;gap:5px;align-items:center;height:30px}
 .ldr i{width:5px;height:100%;border-radius:3px;background:linear-gradient(var(--ac),var(--am));animation:eq 1s ease-in-out infinite}
 .ldr i:nth-child(2){animation-delay:-.85s}.ldr i:nth-child(3){animation-delay:-.7s}.ldr i:nth-child(4){animation-delay:-.55s}.ldr i:nth-child(5){animation-delay:-.4s}
 @keyframes eq{0%,100%{transform:scaleY(.25);opacity:.45}50%{transform:scaleY(1);opacity:1}}
-.empty{animation:empIn .7s var(--spring) backwards}
-.empty>svg:first-child{animation:bob 3.2s ease-in-out .7s infinite}
-@keyframes empIn{from{opacity:0;transform:translateY(30px) scale(.94)}}
-@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px) rotate(-4deg)}}
-.root.noreveal .cas>*,.root.noreveal .pf-av,.root.noreveal .pf-bn,.root.noreveal .badge,.root.noreveal .medal,.root.noreveal .wd,.root.noreveal .st-on{animation:none}
-.rvl-av{position:relative;display:inline-flex;flex-shrink:0}
-.rvl-av .rg{position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--ac);opacity:0;animation:rg 1s var(--out) .25s}
-.rvl-av .rg+.rg{border-color:var(--am);animation-delay:.45s}
-.rvl-sweep{position:absolute;inset:0;pointer-events:none;background:linear-gradient(105deg,transparent 30%,color-mix(in srgb,var(--am) 50%,transparent) 50%,transparent 70%);transform:translateX(-120%);animation:rvlS 1.2s var(--out) .1s forwards}
-@keyframes rvlS{to{transform:translateX(120%)}}
-.rvl-name{display:inline-block;animation:rvlN .9s var(--spring) backwards}
-@keyframes rvlN{from{opacity:0;letter-spacing:.4em;filter:blur(6px)}}
+.root.noreveal .pf-av,.root.noreveal .wd,.root.noreveal .st-on{animation:none}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.tick{stroke-dashoffset:0}.rv{opacity:1;transform:none}.wl,.lg-n,.lg-amber{opacity:1}.lg-arc,.lg-line{stroke-dashoffset:0}}
 `;
 
@@ -1160,6 +988,9 @@ const resolveG = (o: any): any => {
   };
 };
 let GSPD = 1;  // velocità globale delle animazioni (serve anche ai timer fuori da React)
+// prima apertura della sessione: l'ingresso nel Circuito si vede per intero una volta sola, poi le pagine entrano in modo asciutto
+const FIRST = (() => { try { const s = sessionStorage.getItem("circuito:ingresso"); sessionStorage.setItem("circuito:ingresso", "1"); return !s; } catch { return true; } })();
+const NAV_ORDER = ["home", "write", "my_pages", "read", "podio", "authors", "profile"];
 let actx: any = null;
 const blip = (f = 660, vol = 1) => { try { const AC = (window as any).AudioContext || (window as any).webkitAudioContext; actx = actx || new AC(); const o = actx.createOscillator(), g = actx.createGain(); o.type = "square"; o.frequency.value = f; g.gain.setValueAtTime(0.03 * vol, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.08); o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.09); } catch {} };
 
@@ -1266,13 +1097,14 @@ const Rng = ({ label, hint, v, set, min, max, step, fmt }: any) => (
 const Sub = ({ children }: any) => <h5 className="text-[11px] font-bold uppercase tracking-wider mu mt-5 mb-0.5">{children}</h5>;
 
 // numeri che "contano" fino al valore (con easing esponenziale)
-const CountUp = ({ v, on }: any) => {
+const CountUp = ({ v, on, delay = 0 }: any) => {
   const [n, setN] = useState(on ? 0 : v);
   const from = useRef(on ? 0 : v);
   useEffect(() => {
     if (!on || LITE) { setN(v); from.current = v; return; }
-    const a = from.current, t0 = performance.now(), D = 1200 / GSPD; let raf = 0;
-    const step = (t: number) => { const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, 4), x = Math.round(a + (v - a) * e); setN(x); from.current = x; if (k < 1) raf = requestAnimationFrame(step); };
+    // il conteggio parte quando la sua scheda compare, non prima: i numeri "si caricano" sotto gli occhi
+    const a = from.current, t0 = performance.now() + delay / GSPD, D = 900 / GSPD; let raf = 0;
+    const step = (t: number) => { const k = Math.max(0, Math.min(1, (t - t0) / D)), e = 1 - Math.pow(1 - k, 4), x = Math.round(a + (v - a) * e); setN(x); from.current = x; if (k < 1) raf = requestAnimationFrame(step); };
     raf = requestAnimationFrame(step); return () => cancelAnimationFrame(raf);
   }, [v, on]);
   return <>{Number(n).toLocaleString("it-IT")}</>;
@@ -1342,7 +1174,7 @@ const HeroRain = ({ on, speed = 1, dens = 1, fps = 30 }: { on: boolean; speed?: 
   return on ? <canvas ref={ref} className="hrain" aria-hidden="true" /> : null;
 };
 
-const Reveal = ({ children, delay = 0, className = "", fx = "", style }: any) => {
+const Reveal = ({ children, delay = 0, className = "", fx = "", style, flip }: any) => {
   const ref = useRef<HTMLDivElement>(null);
   const [on, setOn] = useState(false);
   useEffect(() => {
@@ -1351,7 +1183,7 @@ const Reveal = ({ children, delay = 0, className = "", fx = "", style }: any) =>
     const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setOn(true); io.disconnect(); } }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
     io.observe(el); return () => io.disconnect();
   }, []);
-  return <div ref={ref} className={`rv ${fx ? `fx-${fx}` : ""} ${on ? "in" : ""} ${className}`} style={{ animationDelay: `${delay}ms`, ...style }}>{children}</div>;
+  return <div ref={ref} data-flip={flip} className={`rv ${fx ? `fx-${fx}` : ""} ${on ? "in" : ""} ${className}`} style={{ animationDelay: `${delay}ms`, ["--rd" as any]: `${delay}ms`, ...style }}>{children}</div>;
 };
 
 const NotifPanel = ({ list, onRead, onOpen }: any) => {
@@ -1388,7 +1220,7 @@ export default function App() {
   const [optOpen, setOptOpen] = useState(false);
   const G = resolveG(opts); // configurazione grafica effettiva (preset o "Personalizzato")
   const lite = G.lite;
-  LITE = G.nomotion; GSPD = G.spd;
+  LITE = G.nomotion; GSPD = G.spd; M.off = G.nomotion; M.spd = G.spd;
   const setOpt = (k: string, v: any) => setOpts((o: any) => ({ ...o, [k]: v }));
   const setC = (k: string, v: any) => setOpts((o: any) => ({ ...o, level: "custom", c: { ...CDEF, ...(o.c || {}), [k]: v } }));
   // passando a "Personalizzato" la prima volta si parte da ciò che si vede adesso; le volte dopo si ritrova la propria scelta
@@ -1578,7 +1410,7 @@ export default function App() {
     const doc: any = document;
     if (typeof doc.getAnimations !== "function") return;
     let raf = 0;
-    const apply = () => { raf = 0; try { doc.getAnimations().forEach((a: any) => { if (a.playState !== "finished" && a.playbackRate !== G.spd) a.playbackRate = G.spd; }); } catch {} };
+    const apply = () => { raf = 0; try { doc.getAnimations().forEach((a: any) => { if (a.id !== "m" && a.playState !== "finished" && a.playbackRate !== G.spd) a.playbackRate = G.spd; }); } catch {} };
     const sched = () => { if (!raf) raf = requestAnimationFrame(apply); };
     apply();
     if (G.spd !== 1) { document.addEventListener("animationstart", sched, true); document.addEventListener("transitionrun", sched, true); }
@@ -1593,7 +1425,7 @@ export default function App() {
       if (G.glow) { el.style.setProperty("--mx", `${x}px`); el.style.setProperty("--my", `${y}px`); }
       if (!G.tilt || ev.pointerType !== "mouse") return;
       const k = G.tiltI;
-      if (el.classList.contains("card")) { el.style.setProperty("--rx", `${((y / r.height - 0.5) * -7 * k).toFixed(2)}deg`); el.style.setProperty("--ry", `${((x / r.width - 0.5) * 7 * k).toFixed(2)}deg`); }
+      if (el.classList.contains("card")) { el.style.setProperty("--rx", `${((y / r.height - 0.5) * -3 * k).toFixed(2)}deg`); el.style.setProperty("--ry", `${((x / r.width - 0.5) * 3 * k).toFixed(2)}deg`); }
       else { el.style.setProperty("--tx", `${((x / r.width - 0.5) * 6 * k).toFixed(1)}px`); el.style.setProperty("--ty", `${((y / r.height - 0.5) * 4 * k).toFixed(1)}px`); }
     };
     const mv = (e: any) => { if (!G.glow && !G.tilt) return; const t = e.target?.closest?.(".card,.bt"); if (!t) return; el = t; ev = e; if (!raf) raf = requestAnimationFrame(run); };
@@ -2123,7 +1955,15 @@ export default function App() {
       setGone([]); setIds([]); setSelMode(false);
     }, 300 / GSPD);
   };
-  const openView = (t: any) => { history.pushState({ tab, v: 1 }, ""); setSel(t); };
+  // il foglio si aprirà dal punto in cui è stato toccato (la carta della scheda, o la riga dell'elenco)
+  const origin = useRef<{ id: string; r: any } | null>(null);
+  const [swap, setSwap] = useState(0); // ultimo passaggio tra scritti nel lettore: -1 indietro, 1 avanti, 0 nessuno
+  const openView = (t: any, e?: any) => {
+    const el: any = e?.currentTarget, r = rectOf(el?.querySelector?.(".paper") || el);
+    origin.current = r ? { id: t.id, r } : null;
+    setSwap(0); history.pushState({ tab, v: 1 }, ""); setSel(t);
+  };
+  const stepTo = (t: any, d: number) => { setSwap(d); setSel(t); };
   const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
   const go = (t: string) => { if (isProf && (t === "my_pages" || t === "profile" || (t === "write" && !editingId))) return; if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
 
@@ -2136,10 +1976,48 @@ export default function App() {
   }, [prepared, search, sortBy, monthFilter, onlyMarked, unrated, statoF, vals, isAdmin, user]);
   const words = plain(content).trim().split(/\s+/).filter(Boolean).length;
 
+  // ================= MOVIMENTO =================
+  // la pagina nuova arriva dal lato verso cui ti sposti nel menu
+  const pdx = useRef(0), prevTab = useRef(tab);
+  if (prevTab.current !== tab) { pdx.current = NAV_ORDER.indexOf(tab) >= NAV_ORDER.indexOf(prevTab.current) ? 18 : -18; prevTab.current = tab; }
+  const heroIntro = useRef(FIRST);
+  useEffect(() => { if (tab !== "home") heroIntro.current = false; }, [tab]);
+  // archivio: le schede che restano scivolano nella nuova posizione quando cambiano ricerca, filtri o ordinamento
+  const gridRef = useRef<HTMLDivElement>(null);
+  useFlip(gridRef, `${tab}:${shown.slice(0, visible).map((t) => t.id).join("|")}`);
+  // menu: la pista che segue la voce attiva
+  const railV = useRef<HTMLDivElement>(null), railH = useRef<HTMLElement>(null);
+  const railKey = `${tab}:${user?.uid || ""}:${adminChecked}:${isAdmin}:${!!editingId}`;
+  useRail(railV, "v", railKey); useRail(railH, "h", railKey);
+  // lettore: il foglio resta montato durante l'uscita, per poter tornare nella sua scheda
+  const [vs, setVs] = useState<any>(null);
+  const view = sel || vs;
+  const sheetRef = useRef<HTMLDivElement>(null), readRef = useRef<HTMLDivElement>(null), railRef = useRef<HTMLDivElement>(null);
+  const opened = useRef(false);
+  const [closing, setClosing] = useState(false);
+  useEffect(() => {
+    if (sel) { if (closing) sheetRef.current?.getAnimations().forEach((a) => a.cancel()); setVs(sel); setClosing(false); return; }
+    if (!vs) return;
+    const p = sheetRef.current;
+    if (!p || !moving()) { setVs(null); setSwap(0); return; }
+    let on = true;
+    setClosing(true);
+    closeSheet(p, vs.id).then(() => { if (on) { setVs(null); setClosing(false); setSwap(0); } });
+    return () => { on = false; };
+  }, [sel]);
+  useLayoutEffect(() => {
+    if (!view) { opened.current = false; return; }
+    if (opened.current || !sheetRef.current) return;
+    opened.current = true;
+    const o = origin.current; origin.current = null;
+    openSheet(sheetRef.current, o && o.id === view.id ? o.r : null);
+  }, [view?.id]);
+  useReadTrace(readRef, railRef, view?.id);
+
   // ================= RENDER =================
   const no = (k: string, cls: string) => (G[k] ? "" : cls);
   const gStyle: any = { "--gi": G.glowI, "--ai": G.auroraI, "--ao": G.artI };
-  const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} min-h-screen`}><style>{CSS}</style><div className="prog" />{children}</div>;
+  const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} min-h-screen`}><style>{CSS + MOTION_CSS}</style><div className="prog" />{children}</div>;
 
   if (authLoading || redeeming || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
@@ -2149,11 +2027,11 @@ export default function App() {
     return shell(<>
       <Backdrop tab="home" fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
       <div className="relative z-10 min-h-screen grid md:grid-cols-2">
-        <div className="brandpanel hidden md:flex flex-col justify-between p-12"><PanelArt art={G.art} anim={G.pulses} speed={G.spd} fps={G.fps} />
+        <div className={`brandpanel hidden md:flex flex-col justify-between p-12 ${G.reveal ? "boot" : ""}`}>{G.reveal && <i className="boot-run" aria-hidden="true" />}<PanelArt art={G.art} anim={G.pulses} speed={G.spd} fps={G.fps} />
           <Wordmark light size={56} fs={26} />
           <div>
-            <h1 className="hd text-5xl font-bold leading-tight max-w-md up">Scrivi senza limiti. Ogni mese emergono i testi migliori.</h1>
-            <p className="mu mt-4 max-w-sm up" style={{ animationDelay: "150ms" }}>Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
+            <h1 className="hd text-5xl font-bold leading-tight max-w-md"><Words text="Scrivi senza limiti. Ogni mese emergono i testi migliori." on={G.titles} /></h1>
+            <p className="mu mt-4 max-w-sm b-2">Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
           </div>
           <span className="mu text-sm">Archivio di scrittura</span>
         </div>
@@ -2231,8 +2109,8 @@ export default function App() {
     </Pop>
   );
   const wc = (t: any) => plain(t.content).trim().split(/\s+/).filter(Boolean).length;
-  const Row = ({ t, rank }: any) => (
-    <button key={t.id} onClick={() => openView(t)} className="nv w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-colors">
+  const Row = ({ t, rank, i = 0 }: any) => (
+    <button key={t.id} data-doc={t.id} onClick={(e) => openView(t, e)} className="nv idx w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-colors" style={{ ["--i" as any]: i }}>
       {rank && <span className="hd w-8 text-center font-bold mu">{rank}</span>}
       <Who t={t} size={36} />
       <div className="flex-1 min-w-0"><div className="font-semibold truncate">{t.title}</div><div className="mu text-xs">{wn(t)} · {fmtDate(t.timestamp)}</div></div>
@@ -2354,26 +2232,28 @@ export default function App() {
   };
   const heroLeave = (e: any) => { ["--nx", "--ny"].forEach((k) => e.currentTarget.style.removeProperty(k)); };
   const toRate = thisMonth.filter((t) => !t.rating).length;
+  // primo ingresso della sessione: la corrente percorre il bordo del pannello e lo accende; dopo, la home entra asciutta
+  const boot = heroIntro.current && G.reveal;
   const homeView = (
     <div className="space-y-8">
-      <Reveal><div className="pn brandpanel hero p-8 md:p-12" onPointerMove={heroMove} onPointerLeave={heroLeave}><HeroRain on={G.rain} speed={G.spd} dens={G.rainD} fps={G.fps} /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className="hero-logo block"><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
-        <div><span className="hero-term"><i className="hero-led" />{(isAdmin ? "admin" : first.toLowerCase().replace(/[^a-z0-9]/g, "") || "utente") + "@circuito:~$ " + (isAdmin ? "ls --nuovi" : "scrivi --nuovo")}<b className="caret" /></span></div>
-        <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight">Ciao {first}, {isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}</h2>
-        <p className="mu mt-3 max-w-md">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
-        <div className="flex flex-wrap gap-2 mt-7">
+      <Reveal fx={boot ? "still" : ""}><div className={`pn brandpanel hero p-8 md:p-12 ${boot ? "boot" : ""}`} onPointerMove={heroMove} onPointerLeave={heroLeave}>{boot && <i className="boot-run" aria-hidden="true" />}<HeroRain on={G.rain} speed={G.spd} dens={G.rainD} fps={G.fps} /><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className={`hero-logo block ${boot ? "hero-logo-in" : ""}`}><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span>
+        <div className="b-1"><span className="hero-term"><i className="hero-led" />{(isAdmin ? "admin" : first.toLowerCase().replace(/[^a-z0-9]/g, "") || "utente") + "@circuito:~$ " + (isAdmin ? "ls --nuovi" : "scrivi --nuovo")}<b className="caret" /></span></div>
+        <h2 className="hd text-3xl md:text-5xl font-bold max-w-xl leading-tight"><Words text={`Ciao ${first}, ${isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}`} on={G.titles} /></h2>
+        <p className="mu mt-3 max-w-md b-2">{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
+        <div className="flex flex-wrap gap-2 mt-7 b-3">
           <button className="bt cta !px-5 !py-3" onClick={() => go("write")}><Pen size={16} />Scrivi un progetto</button>
           {isAdmin && toRate > 0 && <button className="bt ghost !px-5 !py-3" onClick={() => { go("read"); setMonthFilter(monthNow); setUnrated(true); }}><Star size={16} />Valuta ora ({toRate})</button>}
           {isAdmin && <button className="bt ghost !px-5 !py-3" onClick={() => go("podio")}><Trophy size={16} />Vai al podio</button>}
         </div>
       </div></Reveal>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((x, i) => <Reveal key={x.l} delay={i * 70} className="h-full"><button type="button" onClick={x.a} className="pn card stat p-5 h-full w-full"><ArrowUpRight size={18} className="go" aria-hidden="true" /><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3">{x.v}</div><div className="mu text-sm">{x.l}</div></button></Reveal>)}
+        {stats.map((x, i) => <Reveal key={x.l} delay={(boot ? 620 : 0) + i * 70} className="h-full"><button type="button" onClick={x.a} className="pn card stat p-5 h-full w-full"><ArrowUpRight size={18} className="go" aria-hidden="true" /><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3 tabular-nums"><CountUp v={x.v} on={G.reveal} delay={(boot ? 620 : 0) + i * 70 + 150} /></div><div className="mu text-sm">{x.l}</div></button></Reveal>)}
       </div>
-      <Reveal><div className="pn p-2">
+      <Reveal delay={boot ? 820 : 0}><div className="pn p-2">
         <div className="flex items-center justify-between px-4 pt-4 pb-2"><h3 className="hd text-lg font-bold">Ultimi progetti</h3><button type="button" className="mu text-sm lk inline-flex items-center gap-1" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>
         {loading ? <div className="p-6 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
           : recent.length === 0 ? <p className="mu text-sm px-4 pb-5">Ancora niente qui. Il primo progetto comparirà in questa lista.</p>
-          : recent.map((t) => <Row key={t.id} t={t} />)}
+          : recent.map((t, i) => <Row key={t.id} t={t} i={i} />)}
       </div></Reveal>
     </div>
   );
@@ -2406,7 +2286,7 @@ export default function App() {
             {[1, 0, 2].map((k) => { const t = top[k]; if (!t) return <div key={k} className="hidden md:block" />;
               return (
                 <Reveal key={t.id} delay={k * 120}>
-                  <div onClick={() => openView(t)} className={`pn card cursor-pointer p-6 ${k === 0 ? "md:pt-10 md:pb-16 spin-b" : ""}`}>
+                  <div data-doc={t.id} onClick={(e) => openView(t, e)} className={`pn card cursor-pointer p-6 ${k === 0 ? "md:pt-10 md:pb-16 spin-b" : ""}`}>
                     <div className="flex items-center justify-between">
                       <span className="hd w-11 h-11 rounded-full flex items-center justify-center text-lg font-bold" style={{ background: k === 0 ? "var(--am)" : "var(--sf)", color: k === 0 ? "#3b2a00" : "var(--ink)" }}>{k + 1}</span>
                       <Stars v={t.rating || 0} size={16} />
@@ -2418,7 +2298,7 @@ export default function App() {
                 </Reveal>
               ); })}
           </div>
-          {rest.length > 0 && <Reveal className="mt-8"><div className="pn p-2"><h3 className="hd text-lg font-bold px-4 pt-4 pb-2">In lizza</h3>{rest.map((t, i) => <Row key={t.id} t={t} rank={i + 4} />)}</div></Reveal>}
+          {rest.length > 0 && <Reveal className="mt-8"><div className="pn p-2"><h3 className="hd text-lg font-bold px-4 pt-4 pb-2">In lizza</h3>{rest.map((t, i) => <Row key={t.id} t={t} rank={i + 4} i={i} />)}</div></Reveal>}
         </>)}
     </div>
   );
@@ -2457,7 +2337,10 @@ export default function App() {
           <Wordmark stack size={52} fs={22} />
           <div className="ml-auto self-start">{bell(false)}</div>
         </div>
-        {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} className={`bt !justify-start w-full ${tab === n.id ? "on" : "!border-transparent !bg-transparent"} nv`}><n.icon size={16} />{n.label}</button>)}
+        <div ref={railV} className="relative flex flex-col gap-1">
+          <span className="nind" aria-hidden="true" />
+          {nav.map((n) => <button key={n.id} data-act={tab === n.id ? "1" : undefined} aria-current={tab === n.id ? "page" : undefined} onClick={() => go(n.id)} className={`bt nb !justify-start w-full ${tab === n.id ? "act" : ""}`}><n.icon size={16} />{n.label}</button>)}
+        </div>
         <div className="mt-auto space-y-2">
           <ApkDownload compact />
           <div className="flex items-center gap-2">
@@ -2473,14 +2356,15 @@ export default function App() {
         <div className="flex items-center gap-2"><Wordmark size={40} fs={19} tag={false} /></div>
         <div className="flex items-center gap-2">{bell(true)}<button className="bt !p-2" onClick={() => setOptOpen(true)} aria-label="Opzioni"><Settings size={18} /></button><button onClick={() => go("profile")} aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
       </header>
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))", display: kb || (tab === "write" && drawing) ? "none" : undefined }}>
-        {nav.map((n) => <button key={n.id} onClick={() => go(n.id)} aria-label={n.label} className={`bt flex-col flex-1 min-w-0 !gap-1 !px-0 !py-2 !text-[10px] ${tab === n.id ? "on" : "!border-transparent !bg-transparent"}`}><n.icon size={18} /><span className="truncate max-w-full">{n.s || n.label}</span></button>)}
+      <nav ref={railH} className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))", display: kb || (tab === "write" && drawing) ? "none" : undefined }}>
+        <span className="nind" aria-hidden="true" />
+        {nav.map((n) => <button key={n.id} data-act={tab === n.id ? "1" : undefined} aria-current={tab === n.id ? "page" : undefined} onClick={() => go(n.id)} aria-label={n.label} className={`bt nb flex-col flex-1 min-w-0 !gap-1 !px-0 !py-2 !text-[10px] ${tab === n.id ? "act" : ""}`}><n.icon size={18} /><span className="truncate max-w-full">{n.s || n.label}</span></button>)}
       </nav>
 
       <div className="md:ml-60 pb-28 md:pb-12 relative">
-        <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12">
+        <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12" style={{ ["--pdx" as any]: `${pdx.current}px` }}>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div><h1 className="hd text-3xl md:text-5xl font-bold"><Scramble text={titles[tab]} on={G.titles} /></h1>{isList && !loading && <p className="mu text-sm mt-1.5">{shown.length} {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
+            <div><h1 className="hd text-3xl md:text-5xl font-bold"><Words text={titles[tab]} on={G.titles} /></h1>{isList && !loading && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
             {isList && (
               <div className="flex flex-wrap gap-2 items-center">
                 <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>
@@ -2493,6 +2377,7 @@ export default function App() {
               </div>
             )}
           </div>
+          <i className="pg-trace" aria-hidden="true" />
 
           {tab === "home" && homeView}
           {tab === "profile" && profilePage}
@@ -2500,7 +2385,7 @@ export default function App() {
           {tab === "authors" && authorsView}
           {/* LISTA */}
           {isList && (loading ? (
-            <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
+            <Sheets />
           ) : shown.length === 0 ? (
             <div className="pn p-12 text-center max-w-md mx-auto up">
               <Cpu className="mx-auto mb-4 mu" size={36} />
@@ -2509,11 +2394,13 @@ export default function App() {
               {!search && <button className="bt pri" onClick={() => go("write")}><Plus size={15} />Nuovo progetto</button>}
             </div>
           ) : (
-            <><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <><div ref={gridRef} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {shown.slice(0, visible).map((t, i) => {
                 const picked = ids.includes(t.id), { w, h } = dims(t);
+                // ritmo d'ingresso: onda diagonale (riga + colonna) sulle prime due righe; più giù, mentre scorri, solo lo sfasamento di colonna
+                const j = i % 18, wave = (j % 3) * 65 + (j < 6 ? Math.floor(j / 3) * 65 : 0);
                 return (
-                  <Reveal key={t.id} delay={(i % 3) * 90} className="h-full"><article onClick={() => selMode ? setIds((p) => p.includes(t.id) ? p.filter((x) => x !== t.id) : [...p, t.id]) : openView(t)}
+                  <Reveal key={t.id} flip={t.id} delay={wave} fx="sheet" className="h-full"><article data-doc={t.id} onClick={(e) => selMode ? setIds((p) => p.includes(t.id) ? p.filter((x) => x !== t.id) : [...p, t.id]) : openView(t, e)}
                     className={`pn card h-full overflow-hidden cursor-pointer ${gone.includes(t.id) ? "gone" : ""} ${picked ? "!border-[var(--ac)] ring-2 ring-[var(--ac)]" : ""}`}>
                     <div className="paper mm sm relative h-40 overflow-hidden">
                       <div className="thumb absolute inset-0">
@@ -2524,7 +2411,7 @@ export default function App() {
                       {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
                       {isAdmin && !selMode && <button type="button" aria-label="Segnalibro" title={t.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={(e) => { e.stopPropagation(); star(t); }} className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110" style={{ background: "rgba(255,255,255,.92)", boxShadow: "var(--sh1)" }}><Bookmark size={16} style={t.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : { color: "#64748b" }} /></button>}
                     </div>
-                    <div className="p-5 border-t" style={{ borderColor: "var(--ln)" }}>
+                    <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
                       <h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
                       <div className="mt-2 flex items-center gap-2 mu text-xs"><Who t={t} size={22} /><span className="truncate flex-1">{wn(t)}</span><span className="shrink-0">{fmtDate(t.timestamp)}</span></div>
                       {isAdmin && <div className="mt-3"><Stars v={t.rating || 0} onSet={t.svelato ? undefined : (n: number) => rate(t, n)} size={15} /></div>}
@@ -2632,29 +2519,38 @@ export default function App() {
       )}
 
       {/* lettura */}
-      {sel && (() => {
+      {view && (() => {
+        const sel = view; // durante l'uscita resta visibile l'ultimo scritto aperto
         const { w, h } = dims(sel);
         const si = shown.findIndex((x) => x.id === sel.id);
         const hidS = hid(sel), fresh = rvl === sel.id;
+        // il circuito dell'autore: i suoi scritti in ordine di data. Solo autori visibili, e solo scritti già svelati
+        // (altrimenti il raggruppamento tradirebbe chi ha scritto un testo ancora anonimo)
+        const mates = hidS ? [] : prepared.filter((x) => x.userId === sel.userId && !hid(x)).sort((a, b) => a.timestamp - b.timestamp);
+        const mi = mates.findIndex((x) => x.id === sel.id), m0 = Math.max(0, Math.min(mi - 3, mates.length - 7)), near = mates.slice(m0, m0 + 7);
+        const own = sel.userId === user.uid;
         return (
-          <div className="fade fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm" onClick={closeView}>
-            <div className="pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden pop" onClick={(e) => e.stopPropagation()}>
-              <div className="relative overflow-hidden shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
+          <div className={`doc-ov fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm ${closing ? "out" : ""}`} onClick={closeView}>
+            <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={sel.title} className="pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="doc-hd relative overflow-hidden shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
                 {fresh && <span className="rvl-sweep" />}
                 <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
                   {hidS ? <Who t={sel} size={44} /> : <button type="button" onClick={() => setViewProf(sel.userId)} className="shrink-0" aria-label="Apri profilo">{fresh ? <span className="rvl-av"><i className="rg" /><i className="rg" /><span className="pf-av"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></span></span> : <Avatar p={profiles[sel.userId]} name={sel.author} size={44} />}</button>}
-                  <div className="flex-1 min-w-0"><h2 className="hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
+                  <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end self-end md:self-auto w-full md:w-auto">
                   <button className="bt flex-1 md:flex-none justify-center !p-2" title="Copia testo" aria-label="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>
                   {isAdmin && <button className="bt flex-1 md:flex-none justify-center !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} aria-label="Segnalibro" onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /></button>}
                   {canEdit(sel) && <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={() => startEdit(sel)} title="Modifica" aria-label="Modifica"><Pencil size={15} /></button>}
                   {canEdit(sel) && <button className="bt dng flex-1 md:flex-none justify-center !p-2" onClick={() => setToDelete([sel.id])} title="Elimina" aria-label="Elimina"><Trash2 size={15} /></button>}
-                  {si >= 0 && shown.length > 1 && <><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si <= 0} onClick={() => setSel(shown[si - 1])} aria-label="Scritto precedente"><ChevronLeft size={15} /></button><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si >= shown.length - 1} onClick={() => setSel(shown[si + 1])} aria-label="Scritto successivo"><ChevronRight size={15} /></button></>}
+                  {si >= 0 && shown.length > 1 && <><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si <= 0} onClick={() => stepTo(shown[si - 1], -1)} aria-label="Scritto precedente"><ChevronLeft size={15} /></button><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si >= shown.length - 1} onClick={() => stepTo(shown[si + 1], 1)} aria-label="Scritto successivo"><ChevronRight size={15} /></button></>}
                   <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={closeView} title="Chiudi" aria-label="Chiudi"><X size={15} /></button>
                 </div>
               </div>
-              <div key={sel.id} className="overflow-y-auto flex-1 min-h-0">
+              <div className="relative flex-1 min-h-0 flex flex-col">
+              {/* la pista di lettura: si disegna aprendo il foglio, poi segue lo scorrimento; in fondo il nodo diventa ambra */}
+              <div ref={railRef} className="read-rail" aria-hidden="true"><i /><b /></div>
+              <div key={sel.id} ref={readRef} className={`overflow-y-auto flex-1 min-h-0 ${swap ? "doc-swap" : ""}`} style={{ ["--dir" as any]: swap || 1 }}>
               {isAdmin && <div className="flex items-center gap-3 px-4 py-2 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
               {hidS && <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 py-2.5 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
                 <div className="text-sm min-w-0"><b>Autore nascosto.</b> <span className="mu">{sel.rating > 0 ? "Puoi svelarlo: dopo lo svelamento il voto non si cambia più." : "Dai da 1 a 5 stelle per poterlo svelare."}</span></div>
@@ -2672,6 +2568,21 @@ export default function App() {
                   {sel.strokes?.length > 0 && <Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" />}
                   <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: clean(sel.content) }} />
                 </div>
+                {near.length > 1 && (
+                  <Reveal>
+                    <nav className="cx" aria-label={own ? "I tuoi scritti" : `Scritti di ${dn(sel.userId, sel.author)}`}>
+                      <h3 className="hd font-bold text-lg">{own ? "Nel tuo circuito" : `Nel circuito di ${dn(sel.userId, sel.author)}`}</h3>
+                      <p className="mu text-xs">{mates.length} scritti, in ordine di data{mates.length > near.length ? ` · ne vedi ${near.length}` : ""}</p>
+                      <ol className="cx-l">
+                        {near.map((x, i) => {
+                          const cur = x.id === sel.id;
+                          return <li key={x.id} style={{ ["--i" as any]: i }}><button type="button" className="cx-n" aria-current={cur ? "true" : undefined} onClick={() => { if (!cur) stepTo(x, x.timestamp > sel.timestamp ? 1 : -1); }}><i aria-hidden="true" /><span className="cx-t">{x.title}</span><span className="mu text-xs shrink-0">{cur ? "stai leggendo" : fmtDate(x.timestamp)}</span></button></li>;
+                        })}
+                      </ol>
+                    </nav>
+                  </Reveal>
+                )}
+              </div>
               </div>
             </div>
           </div>
@@ -2703,7 +2614,7 @@ export default function App() {
                 <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="Impulsi di corrente sullo sfondo, scintille al tocco e pioggia di codice nel riquadro iniziale" />
                 <Sw on={opts.glow} off={opts.level !== "full"} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
                 <Sw on={opts.aurora} off={opts.level !== "full"} set={(v: boolean) => setOpt("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
-                <Sw on={opts.intro} off={lite} set={(v: boolean) => setOpt("intro", v)} label="Titoli, logo e card animati" hint="Titoli che si decodificano, card che si accendono" />
+                <Sw on={opts.intro} off={lite} set={(v: boolean) => setOpt("intro", v)} label="Titoli, logo e fogli animati" hint="Titoli che emergono dalla riga, fogli dell'archivio che si stampano" />
                 <button type="button" className="bt w-full mt-2" onClick={() => setLevel("custom")}><SlidersHorizontal size={15} />Regola ogni dettaglio</button>
               </div>
             ) : (
@@ -2738,13 +2649,13 @@ export default function App() {
                 <Sw on={G.tilt} set={(v: boolean) => setC("tilt", v)} label="Inclinazione 3D" hint="Card e pulsanti si inclinano verso il mouse" />
                 {G.tilt && <Rng label="Forza dell'inclinazione" v={G.tiltI} set={(v: number) => setC("tiltI", v)} min={0.2} max={2.5} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
                 <Sw on={G.ripple} set={(v: boolean) => setC("ripple", v)} label="Onde sui pulsanti" hint="Un'onda parte dal punto in cui premi" />
-                <Sw on={G.lift} set={(v: boolean) => setC("lift", v)} label="Sollevamento" hint="Card e pulsanti si alzano e ingrandiscono al passaggio" />
+                <Sw on={G.lift} set={(v: boolean) => setC("lift", v)} label="Sollevamento" hint="I fogli si alzano al passaggio e l'angolo si piega" />
 
                 <Sub>Ingressi e transizioni</Sub>
-                <Sw on={G.titles} set={(v: boolean) => setC("titles", v)} label="Titoli che si decodificano" hint="Le scritte si compongono lettera per lettera" />
-                <Sw on={G.logo} set={(v: boolean) => setC("logo", v)} label="Logo animato" hint="Il logo si disegna e fluttua" />
-                <Sw on={G.reveal} set={(v: boolean) => setC("reveal", v)} label="Card e sezioni che compaiono" hint="Ogni elemento entra con la sua animazione mentre scorri" />
-                <Sw on={G.pages} set={(v: boolean) => setC("pages", v)} label="Transizione tra le pagine" hint="Ogni sezione entra in modo diverso quando la apri" />
+                <Sw on={G.titles} set={(v: boolean) => setC("titles", v)} label="Titoli che emergono" hint="Le parole dei titoli salgono dalla propria riga, una dopo l'altra" />
+                <Sw on={G.logo} set={(v: boolean) => setC("logo", v)} label="Logo animato" hint="Il logo si disegna e la corrente lo attraversa" />
+                <Sw on={G.reveal} set={(v: boolean) => setC("reveal", v)} label="Fogli e sezioni che compaiono" hint="L'ingresso nel Circuito, i fogli dell'archivio che si stampano, i numeri che si caricano" />
+                <Sw on={G.pages} set={(v: boolean) => setC("pages", v)} label="Transizione tra le pagine" hint="La pagina arriva dal lato verso cui ti sposti, e la pista sotto il titolo si traccia" />
                 <Sw on={G.theme} set={(v: boolean) => setC("theme", v)} label="Onda al cambio tema" hint="Il passaggio chiaro/scuro si allarga dal punto in cui tocchi" />
                 <Sw on={G.blur} set={(v: boolean) => setC("blur", v)} label="Sfocature" hint="Barra in alto e finestre semitrasparenti. Spegnile se lo schermo scatta" />
 
