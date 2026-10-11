@@ -2069,16 +2069,17 @@ export default function App() {
           {d3live ? (
             // diorama: lo schema elettrico resta sul fondo; marchio, logo, titolo e sottotitolo galleggiano a profondità diverse
             <div className="l3d">
-              <span className="zl block" style={{ ["--z" as any]: "40px" }}><Wordmark light size={56} fs={26} /></span>
-              {wide && <span className="zl block" style={{ position: "absolute", right: "8%", top: "11%", width: "min(330px, 44%)", aspectRatio: "1", ["--z" as any]: "0px" }}>
-                <span className="zsh" style={{ left: "20%", width: "60%", bottom: "-6%", height: "15%" }} aria-hidden="true" />
-                <span className="zl block absolute inset-0" style={{ ["--z" as any]: "170px" }}><React.Suspense fallback={null}><Logo3D className="logo3d w-full h-full" intro={G.logo} spd={G.spd} fallback={null} /></React.Suspense></span>
-              </span>}
-              <div className="zl mt-auto mb-10" style={{ ["--z" as any]: "0px" }}>
-                <h1 className="zl hd text-5xl font-bold leading-tight max-w-md" style={{ ["--z" as any]: "90px" }}><Text3D text="Scrivi senza limiti. Ogni mese emergono i testi migliori." layers={12} anim={G.titles} className="t3-hero t3-glint" delay={300} /></h1>
-                <p className="zl mu mt-5 max-w-sm b-2" style={{ ["--z" as any]: "45px" }}>Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
+              <span className="zl block" style={{ ["--z" as any]: "16px" }}><Wordmark light size={56} fs={26} /></span>
+              {/* logo e titolo in un'unica colonna al centro del pannello: vicino al centro della prospettiva niente si sposta verso i bordi */}
+              <div className="zl l3d-col" style={{ ["--z" as any]: "0px" }}>
+                {wide && <span className="zl block relative l3d-logo" style={{ ["--z" as any]: "0px" }}>
+                  <span className="zsh" style={{ left: "18%", width: "64%", bottom: "-4%", height: "14%" }} aria-hidden="true" />
+                  <span className="zl block absolute inset-0" style={{ ["--z" as any]: "75px" }}><React.Suspense fallback={null}><Logo3D className="logo3d w-full h-full" intro={G.logo} spd={G.spd} fallback={null} /></React.Suspense></span>
+                </span>}
+                <h1 className="zl hd text-5xl font-bold leading-tight" style={{ ["--z" as any]: "45px" }}><Text3D text="Scrivi senza limiti. Ogni mese emergono i testi migliori." layers={12} anim={G.titles} className="t3-hero t3-glint" delay={300} /></h1>
+                <p className="zl mu mt-5 max-w-sm b-2" style={{ ["--z" as any]: "22px" }}>Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
               </div>
-              <span className="zl mu text-sm" style={{ ["--z" as any]: "10px" }}>Archivio di scrittura</span>
+              <span className="zl mu text-sm" style={{ ["--z" as any]: "8px" }}>Archivio di scrittura</span>
             </div>
           ) : <>
             <Wordmark light size={56} fs={26} />

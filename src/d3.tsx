@@ -113,20 +113,24 @@ export const D3_CSS = `
    Il pannello si inclina tutto insieme seguendo il mouse e gli elementi stanno a profondità diverse (--z):
    pioggia di codice sulla superficie, testo qualche centimetro sopra, terminale più in alto, logo in primo piano.
    Ogni elemento che galleggia proietta un'ombra morbida sul pannello: è la parallasse tra i piani a dare profondità. */
-.h3d{overflow:visible!important;transform-style:preserve-3d;transform:perspective(1600px) rotateX(calc(var(--ny,0)*-6deg)) rotateY(calc(var(--nx,0)*9deg));transition:transform .8s cubic-bezier(.16,1,.3,1),box-shadow .5s}
+/* .pn.hero ha già una sua transition (solo box-shadow): senza questa specificità l'inclinazione non avrebbe transizione
+   e all'uscita del mouse il pannello si raddrizzerebbe di colpo */
+.pn.hero.h3d{overflow:visible!important;transform-style:preserve-3d;transform:perspective(1600px) rotateX(calc(var(--ny,0)*-6deg)) rotateY(calc(var(--nx,0)*9deg));transition:transform 1.2s cubic-bezier(.22,1,.36,1),box-shadow .5s;will-change:transform}
 .h3d>.hrain,.h3d:before,.h3d:after{border-radius:inherit}
 .h3d>.hrain{translate:0 0 1px}
 .h3d.boot{animation:h3dIn 1.25s cubic-bezier(.16,1,.3,1) .05s backwards}
 @keyframes h3dIn{from{transform:perspective(1600px) rotateX(26deg) rotateY(-9deg) translateY(50px) translateZ(-260px)}}
 .h3d .boot-run{display:none}
-.l3d{display:flex;flex-direction:column;justify-content:space-between;padding:3rem;transform-style:preserve-3d;transform:perspective(1500px) rotateX(calc(var(--ny,0)*-5deg)) rotateY(calc(var(--nx,0)*7deg));transition:transform .9s cubic-bezier(.16,1,.3,1)}
+.l3d{display:flex;flex-direction:column;justify-content:space-between;padding:3rem;transform-style:preserve-3d;transform:perspective(2600px) rotateX(calc(var(--ny,0)*-4deg)) rotateY(calc(var(--nx,0)*6deg));transition:transform 1.2s cubic-bezier(.22,1,.36,1);will-change:transform}
+.l3d-col{align-self:center;width:min(34rem,100%);margin:auto 0}
+.l3d-logo{width:min(220px,46%);aspect-ratio:1;margin:0 0 1.75rem -14px}
 .brandpanel>.l3d{position:absolute;inset:0}
 /* profondità di campo: lo schema sullo sfondo va appena fuori fuoco e si scurisce, ciò che galleggia davanti resta nitido */
 .brandpanel:has(>.l3d)>canvas.pnl-art{filter:blur(1.4px) brightness(.82);transform:scale(1.02)}
 .zl{transform-style:preserve-3d;translate:0 0 var(--z,0px)}
 .h3d .t3d,.l3d .t3d{transform:none;transition:none}
 .h3d .t3-hero{--dz:1.35px;--sz:-70px;--sx:10px;--sy:20px;--t3sb:9px;--t3s:rgba(0,14,12,.6)}
-.l3d .t3-hero{--dz:1.5px;--sz:-90px;--sx:12px;--sy:24px;--t3sb:10px;--t3s:rgba(0,12,10,.7)}
+.l3d .t3-hero{--dz:1.4px;--sz:-45px;--sx:9px;--sy:18px;--t3sb:8px;--t3s:rgba(0,12,10,.65)}
 .h3d .term3d{transform:rotateX(9deg) rotateY(-12deg) rotateZ(-1.5deg);animation-name:tmIn3}
 @keyframes tmIn3{from{transform:rotateX(70deg) rotateY(-30deg) translateZ(-160px)}}
 /* ombre portate sul piano del pannello */
