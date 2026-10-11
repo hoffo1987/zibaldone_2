@@ -6,6 +6,17 @@ import { ParticleTrail } from './components/ParticleTrail';
 
 /**
  * Enhanced App Wrapper con tutti i componenti Awwwards
+ *
+ * ✅ Attivi globalmente:
+ * - Custom Cursor magnetico
+ * - Particle Trail reattivo
+ * - Smooth Scroll fluido
+ *
+ * 📦 Disponibili per integrazione nell'App:
+ * - HeroBackground (da components/HeroBackground)
+ * - EnhancedCard (da components/EnhancedCard)
+ * - PageTransitionWrapper (da components/PageTransitionWrapper)
+ * - ScrollSection, ParallaxLayer (da components/ScrollAnimations)
  */
 export const EnhancedApp: React.FC = () => {
   return (
@@ -28,3 +39,9 @@ export const EnhancedApp: React.FC = () => {
     </>
   );
 };
+
+// Esporta anche i componenti per uso diretto nell'App
+export { HeroBackground } from './components/HeroBackground';
+export { EnhancedCard } from './components/EnhancedCard';
+export { PageTransitionWrapper, usePageTransitions } from './components/PageTransitionWrapper';
+export { ScrollSection, ParallaxLayer } from './components/ScrollAnimations';
