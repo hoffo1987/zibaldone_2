@@ -98,82 +98,10 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
       110
     ]
   },
-  "run6": {
-    "rect": [
-      320,
-      128,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
-  "run7": {
-    "rect": [
-      480,
-      128,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
-  "run8": {
-    "rect": [
-      640,
-      128,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
-  "run9": {
-    "rect": [
-      800,
-      128,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
-  "run10": {
-    "rect": [
-      0,
-      256,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
-  "run11": {
-    "rect": [
-      160,
-      256,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
   "jump": {
     "rect": [
       320,
-      256,
+      128,
       160,
       128
     ],
@@ -185,7 +113,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "fall": {
     "rect": [
       480,
-      256,
+      128,
       160,
       128
     ],
@@ -197,7 +125,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "land": {
     "rect": [
       640,
-      256,
+      128,
       160,
       128
     ],
@@ -209,7 +137,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "windup": {
     "rect": [
       800,
-      256,
+      128,
       160,
       128
     ],
@@ -221,7 +149,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "slash": {
     "rect": [
       0,
-      384,
+      256,
       160,
       128
     ],
@@ -233,7 +161,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "follow": {
     "rect": [
       160,
-      384,
+      256,
       160,
       128
     ],
@@ -245,7 +173,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "uppercut": {
     "rect": [
       320,
-      384,
+      256,
       160,
       128
     ],
@@ -257,7 +185,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "heavyWindup": {
     "rect": [
       480,
-      384,
+      256,
       160,
       128
     ],
@@ -269,7 +197,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "heavySlash": {
     "rect": [
       640,
-      384,
+      256,
       160,
       128
     ],
@@ -281,7 +209,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "heavyRecover": {
     "rect": [
       800,
-      384,
+      256,
       160,
       128
     ],
@@ -293,7 +221,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "roll0": {
     "rect": [
       0,
-      512,
+      384,
       160,
       128
     ],
@@ -305,7 +233,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "roll1": {
     "rect": [
       160,
-      512,
+      384,
       160,
       128
     ],
@@ -317,7 +245,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "air": {
     "rect": [
       320,
-      512,
+      384,
       160,
       128
     ],
@@ -329,7 +257,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "hurt": {
     "rect": [
       480,
-      512,
+      384,
       160,
       128
     ],
@@ -341,7 +269,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "death": {
     "rect": [
       640,
-      512,
+      384,
       160,
       128
     ],
@@ -353,7 +281,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "win": {
     "rect": [
       800,
-      512,
+      384,
       160,
       128
     ],
@@ -365,7 +293,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "jumpFall": {
     "rect": [
       0,
-      640,
+      512,
       160,
       128
     ],
@@ -377,7 +305,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "followRecover": {
     "rect": [
       160,
-      640,
+      512,
       160,
       128
     ],
@@ -389,7 +317,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "heavySlashRecover": {
     "rect": [
       320,
-      640,
+      512,
       160,
       128
     ],
@@ -401,7 +329,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "recoverFollow": {
     "rect": [
       480,
-      640,
+      512,
       160,
       128
     ],
@@ -413,7 +341,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "idleA": {
     "rect": [
       640,
-      640,
+      512,
       160,
       128
     ],
@@ -425,7 +353,151 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "idleB": {
     "rect": [
       800,
+      512,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run0a": {
+    "rect": [
+      0,
       640,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run0b": {
+    "rect": [
+      160,
+      640,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run1a": {
+    "rect": [
+      320,
+      640,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run1b": {
+    "rect": [
+      480,
+      640,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run2a": {
+    "rect": [
+      640,
+      640,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run2b": {
+    "rect": [
+      800,
+      640,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run3a": {
+    "rect": [
+      0,
+      768,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run3b": {
+    "rect": [
+      160,
+      768,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run4a": {
+    "rect": [
+      320,
+      768,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run4b": {
+    "rect": [
+      480,
+      768,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run5a": {
+    "rect": [
+      640,
+      768,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run5b": {
+    "rect": [
+      800,
+      768,
       160,
       128
     ],

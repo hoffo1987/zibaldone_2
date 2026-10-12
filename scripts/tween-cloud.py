@@ -21,6 +21,8 @@ CELL, PIVOT = (160, 128), (80, 110)
 # nome del fotogramma nuovo, posa di partenza, posa di arrivo, istante (0..1)
 TWEENS = [
     ('idleA', 'idle0', 'idle1', 1 / 3), ('idleB', 'idle0', 'idle1', 2 / 3),
+    # corsa: due pose intermedie fra ogni coppia di passi (6 disegnati -> 18 fotogrammi)
+    *[(f'run{i}{s}', f'run{i}', f'run{(i + 1) % 6}', t) for i in range(6) for s, t in (('a', 1 / 3), ('b', 2 / 3))],
     ('jumpFall', 'jump', 'fall', 0.5),
     ('followRecover', 'follow', 'heavyRecover', 0.5),
     ('heavySlashRecover', 'heavySlash', 'heavyRecover', 0.5),
