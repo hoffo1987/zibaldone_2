@@ -21,8 +21,6 @@ CELL, PIVOT = (160, 128), (80, 110)
 # nome del fotogramma nuovo, posa di partenza, posa di arrivo, istante (0..1)
 TWEENS = [
     ('idleA', 'idle0', 'idle1', 1 / 3), ('idleB', 'idle0', 'idle1', 2 / 3),
-    ('run0m', 'run0', 'run1', 0.5), ('run1m', 'run1', 'run2', 0.5), ('run2m', 'run2', 'run3', 0.5),
-    ('run3m', 'run3', 'run4', 0.5), ('run4m', 'run4', 'run5', 0.5), ('run5m', 'run5', 'run0', 0.5),
     ('jumpFall', 'jump', 'fall', 0.5),
     ('followRecover', 'follow', 'heavyRecover', 0.5),
     ('heavySlashRecover', 'heavySlash', 'heavyRecover', 0.5),

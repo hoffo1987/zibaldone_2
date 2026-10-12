@@ -52,59 +52,5 @@
       550
     ],
     "reduce": 5
-  },
-  {
-    "name": "run0m",
-    "sheet": "tween-5",
-    "anchor": [
-      2000,
-      550
-    ],
-    "reduce": 5
-  },
-  {
-    "name": "run1m",
-    "sheet": "tween-5",
-    "anchor": [
-      2800,
-      550
-    ],
-    "reduce": 5
-  },
-  {
-    "name": "run2m",
-    "sheet": "tween-5",
-    "anchor": [
-      400,
-      1190
-    ],
-    "reduce": 5
-  },
-  {
-    "name": "run3m",
-    "sheet": "tween-5",
-    "anchor": [
-      1200,
-      1190
-    ],
-    "reduce": 5
-  },
-  {
-    "name": "run4m",
-    "sheet": "tween-5",
-    "anchor": [
-      2000,
-      1190
-    ],
-    "reduce": 5
-  },
-  {
-    "name": "run5m",
-    "sheet": "tween-5",
-    "anchor": [
-      2800,
-      1190
-    ],
-    "reduce": 5
   }
 ]

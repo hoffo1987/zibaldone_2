@@ -171,17 +171,18 @@ export const CLOUD: CharDef = {
       ],
     },
     run: {
-      // 6 passi disegnati + 6 intermedi: 20 fotogrammi al secondo
-      cels: ["run0", "run0m", "run1", "run1m", "run2", "run2m", "run3", "run3m", "run4", "run4m", "run5", "run5m"].map((frame, i) => ({ t: i / 20, frame })),
-      len: 0.6, loop: true, fps: 20, speed: 120, keys: [
+      // ciclo di 12 pose disegnate in sequenza, 25 fotogrammi al secondo: in 0,48 s il passo disegnato
+      // corrisponde alla velocità di corsa, così i piedi non scivolano
+      cels: Array.from({ length: 12 }, (_, i) => ({ t: i * 0.04, frame: `run${i}` })),
+      len: 0.48, loop: true, fps: 20, speed: 120, keys: [
         { t: 0, p: { ik: 0, lean: 15, fu: -30, ff: 18, w: -62, ft: 38, fs: -8, fa: -6, bt: -28, bs: -60, ba: 10, bu: 38, bf: 42, y: 0 }, e: "lin" },
-        { t: 0.075, p: { ft: 22, fs: -30, fa: 0, bt: -10, bs: -88, ba: 0, y: 1, bu: 20, bf: 48, fu: -27 }, e: "lin" },
-        { t: 0.15, p: { ft: -2, fs: -18, bt: 26, bs: -100, y: 0, bu: -6, bf: 42, w: -64 }, e: "lin" },
-        { t: 0.225, p: { ft: -32, fs: -12, fa: 12, bt: 50, bs: -58, y: -2, bu: -32, bf: 30, fu: -32 }, e: "lin" },
-        { t: 0.3, p: { ft: -28, fs: -60, fa: 10, bt: 38, bs: -8, ba: -6, y: 0, bu: -40, bf: 26, w: -62 }, e: "lin" },
-        { t: 0.375, p: { ft: -10, fs: -88, fa: 0, bt: 22, bs: -30, ba: 0, y: 1, bu: -22, bf: 34, fu: -27 }, e: "lin" },
-        { t: 0.45, p: { ft: 26, fs: -100, bt: -2, bs: -18, y: 0, bu: 8, bf: 42, w: -64 }, e: "lin" },
-        { t: 0.525, p: { ft: 50, fs: -58, bt: -32, bs: -12, ba: 12, y: -2, bu: 30, bf: 44, fu: -32 }, e: "lin" },
+        { t: 0.06, p: { ft: 22, fs: -30, fa: 0, bt: -10, bs: -88, ba: 0, y: 1, bu: 20, bf: 48, fu: -27 }, e: "lin" },
+        { t: 0.12, p: { ft: -2, fs: -18, bt: 26, bs: -100, y: 0, bu: -6, bf: 42, w: -64 }, e: "lin" },
+        { t: 0.18, p: { ft: -32, fs: -12, fa: 12, bt: 50, bs: -58, y: -2, bu: -32, bf: 30, fu: -32 }, e: "lin" },
+        { t: 0.24, p: { ft: -28, fs: -60, fa: 10, bt: 38, bs: -8, ba: -6, y: 0, bu: -40, bf: 26, w: -62 }, e: "lin" },
+        { t: 0.3, p: { ft: -10, fs: -88, fa: 0, bt: 22, bs: -30, ba: 0, y: 1, bu: -22, bf: 34, fu: -27 }, e: "lin" },
+        { t: 0.36, p: { ft: 26, fs: -100, bt: -2, bs: -18, y: 0, bu: 8, bf: 42, w: -64 }, e: "lin" },
+        { t: 0.42, p: { ft: 50, fs: -58, bt: -32, bs: -12, ba: 12, y: -2, bu: 30, bf: 44, fu: -32 }, e: "lin" },
       ],
     },
     jump: {
