@@ -12,7 +12,17 @@ Cloud usa un atlante PNG trasparente con 24 pose, 96 colori e pixel interi. Il r
 
 ## Come aggiungere o rifinire uno sprite
 
-Le sorgenti sono PNG con alpha binario e palette limitata, ottimizzati dagli originali generati. Il compilatore isola ogni personaggio usando componenti connessi: non assume che i fogli siano griglie perfette e non include frammenti degli sprite vicini. I punti e gli ancoraggi in `scripts/build-cloud-atlas.cjs` sono in pixel della sorgente. Il compilatore rifiuta sprite vuoti o tagliati ai bordi. Campiona senza interpolazione e produce `cloud.png` e `cloud-frames.ts`.
+Le sorgenti sono i PNG trasparenti generati, così come sono. Il compilatore isola ogni personaggio usando componenti connessi: non assume che i fogli siano griglie perfette e non include frammenti degli sprite vicini. I punti e gli ancoraggi in `scripts/build-cloud-atlas.cjs` sono in pixel della sorgente. Il compilatore rifiuta sprite vuoti o tagliati ai bordi e produce `cloud.png` e `cloud-frames.ts`.
+
+Le sorgenti sono illustrazioni morbide alte circa 350 px, ridotte di 4-5 volte (13 per la posa di danno). Prendere un solo pixel per blocco dava rumore, capelli virati all'arancio e viso illeggibile, quindi ogni posa passa per questi passaggi:
+
+1. riduzione Lanczos con un leggero sharpen;
+2. alpha netta (copertura ≥ 50%);
+3. palette comune di 64 colori con k-means deterministico, senza dithering: i fogli restano coerenti fra loro e l'oro dei capelli, l'azzurro degli occhi, il rosso dell'impugnatura e il cuoio non si perdono;
+4. pulizia dei pixel isolati;
+5. contorno scuro di 1 px dove il disegno non ne ha già uno, per leggere la sagoma sullo sfondo del gioco.
+
+Le sorgenti sono in `src/egg/assets/source/` (`cloud-locomotion.png`, `cloud-combat.png`, `cloud-hurt.png`).
 
 Ogni cella finale misura 160×128, con radice/piedi in (80,110). Le pose vengono dipinte 1:1 su coordinate intere; la direzione viene specchiata sull'intero sprite, insieme a flash e scie. Le esposizioni `cels` in `cloud.ts` hanno tempi in secondi: i tre colpi mostrano il fendente esattamente all'inizio della rispettiva finestra di danno. Le pose aeree e le capriole sono fotogrammi dedicati, senza rotazione interpolata del bitmap.
 
