@@ -18,11 +18,15 @@
     "three": "0.160.0"
   },
   "devDependencies": {
+    "sharp": "0.34.5",
     "@types/react": "18.2.38",
     "@types/react-dom": "18.2.15",
     "typescript": "4.4.4"
   },
   "scripts": {
+    "sprites:cloud": "node scripts/build-cloud-atlas.cjs",
+    "preview:egg": "node scripts/preview-egg.cjs",
+    "typecheck:egg": "tsc --project scripts/tsconfig.egg.json",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom",
