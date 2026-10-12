@@ -19,6 +19,16 @@ import { M, MOTION_CSS, Words, Sheets, useFlip, useRail, useReadTrace, openSheet
 import { Text3D, Terminal3D, D3_CSS } from "./d3";
 // il logo 3D (three.js) si carica a parte, solo quando serve: il resto del sito non lo scarica
 const Logo3D = React.lazy(() => import("./Logo3D"));
+// easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login
+const EggGame = React.lazy(() => import("./egg/EggGame"));
+const EGG = "circuito:egg";
+const eggGet = () => { try { return Number(sessionStorage.getItem(EGG) || 0); } catch { return 0; } };
+const eggSet = (n: number) => { try { sessionStorage.setItem(EGG, String(n)); } catch {} };
+const useTriple = (fn: (e: any) => void) => {
+  const r = useRef({ n: 0, t: 0 });
+  return (e: any) => { const now = Date.now(); r.current.n = now - r.current.t < 650 ? r.current.n + 1 : 1; r.current.t = now; if (r.current.n >= 3) { r.current.n = 0; fn(e); } };
+};
+const eggFlip = (e: any) => { const el = e?.currentTarget; if (!el || !el.animate) return; el.animate([{ transform: "perspective(500px) rotateY(0)" }, { transform: "perspective(500px) rotateY(360deg)" }], { duration: 900, easing: "cubic-bezier(.34,1.56,.64,1)" }); };
 
 // --- FIREBASE ---
 const firebaseConfig = {
@@ -103,9 +113,9 @@ const Logo = ({ size = 32 }: { size?: number }) => {
   </svg>
   );
 };
-const Wordmark = ({ size = 38, fs, light, center, stack, tag = true }: any) => (
+const Wordmark = ({ size = 38, fs, light, center, stack, tag = true, onLogo }: any) => (
   <div className={`flex leading-none ${stack ? "flex-col gap-4" : "gap-3"} ${stack && !center ? "items-start" : "items-center"} ${center ? "text-center" : ""}`}>
-    <span className="lgw inline-flex shrink-0"><Logo size={size} /></span>
+    <span className="lgw inline-flex shrink-0" onClick={onLogo}><Logo size={size} /></span>
     <div>
       <div className="wm" aria-label="Il Circuito" style={{ fontSize: fs || Math.round(size * 0.5), ["--wc" as any]: light ? "#fff" : "var(--ink)", ["--wa" as any]: light ? "#FBBF24" : "var(--ac)" }}>
         {"Il Circuito".split("").map((c, i) => <span key={i} aria-hidden="true" className="wl" style={{ ["--i" as any]: i }}>{c === " " ? "\u00A0" : c}</span>)}
@@ -1233,6 +1243,9 @@ export default function App() {
   const [f, setF] = useState({ email: "", pw: "", name: "", surname: "", newPw: "" });
   const [authMsg, setAuthMsg] = useState<{ t: "err" | "ok"; m: string } | null>(null);
   const [resetCode, setResetCode] = useState<string | null>(null);
+  const [egg, setEgg] = useState(false);
+  const eggHome = useTriple((e) => { eggSet(1); eggFlip(e); });
+  const eggLogin = useTriple((e) => { if (eggGet() === 2) { eggFlip(e); setTimeout(() => setEgg(true), 450); } });
   // ui
   const [dark, setDark] = useState(() => { try { return localStorage.getItem("circuito:dark") === "1"; } catch { return false; } });
   const [opts, setOpts] = useState<any>(() => { let o: any = {}; try { o = JSON.parse(localStorage.getItem("circuito:opts") || "{}"); } catch {} const red = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches; return { ...DEF, ...(red && !o.level ? { level: "lite" } : {}), ...o }; });
@@ -1486,7 +1499,7 @@ export default function App() {
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get("mode") === "resetPassword" && p.get("oobCode")) { setResetCode(p.get("oobCode")); setAuthLoading(false); return; }
-    return onAuthStateChanged(auth, (u: any) => { setUser(u); setAuthLoading(false); });
+    return onAuthStateChanged(auth, (u: any) => { if (u && eggGet() === 2) eggSet(0); setUser(u); setAuthLoading(false); });
   }, []);
 
   // dati
@@ -1594,6 +1607,7 @@ export default function App() {
   };
   const logout = async () => {
     if (isProf && !window.confirm("Se esci, per rientrare serve un nuovo link dal titolare. Vuoi uscire?")) return;
+    if (eggGet() === 1) eggSet(2);
     // chiudo ogni finestra aperta: sui PC condivisi non deve restare nulla dell'account che esce
     setSel(null); setViewProf(null); setEditProf(false); setOptOpen(false); setToDelete(null); setDone(null); setSelMode(false); setIds([]);
     // il professore che esce toglie anche il proprio accesso: nell'elenco del titolare non resta un dispositivo fantasma
@@ -2072,10 +2086,10 @@ export default function App() {
           {d3live ? (
             // diorama: lo schema elettrico resta sul fondo; marchio, logo, titolo e sottotitolo galleggiano a profondità diverse
             <div className="l3d">
-              <span className="zl block" style={{ ["--z" as any]: "16px" }}><Wordmark light size={56} fs={26} /></span>
+              <span className="zl block" style={{ ["--z" as any]: "16px" }}><Wordmark light size={56} fs={26} onLogo={eggLogin} /></span>
               {/* logo e titolo in un'unica colonna al centro del pannello: vicino al centro della prospettiva niente si sposta verso i bordi */}
               <div className="zl l3d-col" style={{ ["--z" as any]: "0px" }}>
-                {wide && <span className="zl block relative l3d-logo" style={{ ["--z" as any]: "0px" }}>
+                {wide && <span className="zl block relative l3d-logo" style={{ ["--z" as any]: "0px" }} onClick={eggLogin}>
                   <span className="zsh" style={{ left: "18%", width: "64%", bottom: "-4%", height: "14%" }} aria-hidden="true" />
                   <span className="zl block absolute inset-0" style={{ ["--z" as any]: "75px" }}><React.Suspense fallback={null}><Logo3D className="logo3d w-full h-full" intro={G.logo} spd={G.spd} fallback={null} /></React.Suspense></span>
                 </span>}
@@ -2085,7 +2099,7 @@ export default function App() {
               <span className="zl mu text-sm" style={{ ["--z" as any]: "8px" }}>Archivio di scrittura</span>
             </div>
           ) : <>
-            <Wordmark light size={56} fs={26} />
+            <Wordmark light size={56} fs={26} onLogo={eggLogin} />
             <div>
               <h1 className="hd text-5xl font-bold leading-tight max-w-md">{G.d3 ? <Text3D text="Scrivi senza limiti. Ogni mese emergono i testi migliori." layers={12} anim={G.titles} className="t3-hero t3-glint" delay={300} /> : <Words text="Scrivi senza limiti. Ogni mese emergono i testi migliori." on={G.titles} />}</h1>
               <p className="mu mt-4 max-w-sm b-2">Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
@@ -2094,7 +2108,7 @@ export default function App() {
           </>}
         </div>
         <div className="flex items-center justify-center p-6">
-          <div className={`w-full ${d3live ? "max-w-md" : "max-w-sm"} pop`}><div className={d3live ? "f3d" : ""}><div className="md:hidden mb-10"><Wordmark stack center size={88} fs={30} /></div>
+          <div className={`w-full ${d3live ? "max-w-md" : "max-w-sm"} pop`}><div className={d3live ? "f3d" : ""}><div className="md:hidden mb-10"><Wordmark stack center size={88} fs={30} onLogo={eggLogin} /></div>
             {resetCode ? (
               <form onSubmit={submitNewPw} className="space-y-4">
                 <h2 className="hd text-3xl font-bold mb-2">Scegli una nuova password</h2>
@@ -2137,6 +2151,7 @@ export default function App() {
           </div></div>
         </div>
       </div>
+      {egg && <React.Suspense fallback={<div className="fixed inset-0 z-[300] bg-black" />}><EggGame onClose={() => setEgg(false)} /></React.Suspense>}
     </>);
   }
 
@@ -2308,10 +2323,10 @@ export default function App() {
           ? <>
             {/* ombra del logo sul pannello: sta sul piano, il logo 90 px sopra; inclinando il pannello si separano */}
             <span className="zsh hidden md:block w-[150px] h-[46px] lg:w-[220px] lg:h-[62px]" style={{ position: "absolute", right: "min(9%, 70px)", top: "calc(50% + 110px)" }} aria-hidden="true" />
-            <span className="zl block w-[230px] h-[230px] lg:w-[340px] lg:h-[340px]" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", ["--z" as any]: "150px" }}><React.Suspense fallback={<span className="hero-logo block"><Logo size={170} /></span>}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<span className="hero-logo block"><Logo size={170} /></span>} /></React.Suspense></span>
+            <span className="zl block w-[230px] h-[230px] lg:w-[340px] lg:h-[340px]" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", ["--z" as any]: "150px" }} onClick={eggHome}><React.Suspense fallback={<span className="hero-logo block"><Logo size={170} /></span>}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<span className="hero-logo block"><Logo size={170} /></span>} /></React.Suspense></span>
           </>
-          : <span className="zl block -ml-5 -mt-6 mb-1 w-[150px] h-[150px]" style={{ ["--z" as any]: "60px" }}><React.Suspense fallback={<Logo size={76} />}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<Logo size={76} />} /></React.Suspense></span>
-        ) : <><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className={`hero-logo block ${boot ? "hero-logo-in" : ""}`}><Logo size={170} /></span></span><span className="md:hidden block mb-5"><Logo size={76} /></span></>}
+          : <span className="zl block -ml-5 -mt-6 mb-1 w-[150px] h-[150px]" style={{ ["--z" as any]: "60px" }} onClick={eggHome}><React.Suspense fallback={<Logo size={76} />}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<Logo size={76} />} /></React.Suspense></span>
+        ) : <><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className={`hero-logo block ${boot ? "hero-logo-in" : ""}`} onClick={eggHome}><Logo size={170} /></span></span><span className="md:hidden block mb-5" onClick={eggHome}><Logo size={76} /></span></>}
         {G.d3
           ? <div className="b-1 zl relative z-[1] w-fit max-w-full" style={{ ["--z" as any]: "100px" }}>{logo3d && <i className="zsh-rect" style={{ ["--sd" as any]: "-100px" }} aria-hidden="true" />}<Terminal3D user={termUser} cmd={termCmd} out={termOut} run={!G.nomotion} delay={boot ? 1150 : 380} /></div>
           : <div className="b-1"><span className="hero-term"><i className="hero-led" />{termUser + "@circuito:~$ " + termCmd}<b className="caret" /></span></div>}
