@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const root = path.join(__dirname, '../src/egg/assets');
-const CELL = [160, 128], PIVOT = [80, 110], COLS = 6, PALETTE = 64;
+const CELL = [160, 128], PIVOT = [80, 110], COLS = 6, PALETTE = 64, EYE = [[48, 128, 255], [150, 215, 255]];
 // Source, connected-component seed(s), foot/root anchor in source pixels, reduction.
 const frames = [
   ['idle0', 'locomotion', [[170, 305]], [157, 489], 5],
@@ -78,6 +78,60 @@ async function reduceFrame(s, selected, anchor, reduce, name) {
   return out;
 }
 
+// Occhi: a questa scala l'iride (circa 10x14 px nella sorgente) diventa 2-3 pixel che la riduzione mescola alle
+// ciglia e la palette assorbe nel blu del maglione. Qui si cercano le iridi nella sorgente, cioè piccoli gruppi
+// di pixel azzurri con della pelle accanto (le scie dei fendenti sono grandi e lontane dalla pelle), e si
+// ridipingono i pixel finali che coprono con un azzurro acceso; il pixel più chiaro fa da riflesso.
+const isIris = (r, g, b) => b > 70 && b > r + 40 && b > g + 12 && ((b - Math.min(r, g)) / b > 0.55 || (b > 190 && b > r + 50));
+// iride grigio-azzurra (poco satura): vale solo se accanto c'è il bianco dell'occhio
+const isIrisSoft = (r, g, b) => b >= 60 && b > r + 28 && b > g + 12;
+const isWhite = (r, g, b) => r > 195 && g > 195 && b > 195 && b >= r - 15 && Math.abs(r - g) < 30;
+const isHair = (r, g, b) => r > 190 && g > 130 && r >= g && b < g * 0.62;
+const isSkin = (r, g, b) => r > 190 && g > 120 && r > b + 45 && g < r && b >= g * 0.62;
+function eyes(s, selected, anchor, reduce) {
+  const x0 = anchor[0] - PIVOT[0] * reduce, y0 = anchor[1] - PIVOT[1] * reduce;
+  const W = CELL[0] * reduce, H = CELL[1] * reduce, seen = new Uint8Array(W * H), found = [];
+  const at = (x, y) => {
+    const sx = x0 + x, sy = y0 + y;
+    if (sx < 0 || sx >= s.w || sy < 0 || sy >= s.h || !selected.has(s.labels[sy * s.w + sx])) return null;
+    const k = (sy * s.w + sx) * 4; return [s.data[k], s.data[k + 1], s.data[k + 2]];
+  };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (seen[y * W + x]) continue;
+    const c = at(x, y); if (!c || !isIrisSoft(...c)) continue;
+    const pix = [[x, y]]; seen[y * W + x] = 1;
+    for (let i = 0; i < pix.length && pix.length < 800; i++) {
+      const [px, py] = pix[i];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const X = px + dx, Y = py + dy; if (X < 0 || Y < 0 || X >= W || Y >= H || seen[Y * W + X]) continue;
+        const q = at(X, Y); if (q && isIrisSoft(...q)) { seen[Y * W + X] = 1; pix.push([X, Y]); }
+      }
+    }
+    if (pix.length < 6 || pix.length > 500) continue;
+    let bx0 = 1e9, by0 = 1e9, bx1 = -1, by1 = -1;
+    pix.forEach(([px, py]) => { bx0 = Math.min(bx0, px); by0 = Math.min(by0, py); bx1 = Math.max(bx1, px); by1 = Math.max(by1, py); });
+    // un occhio sta fra pelle e capelli; i riflessi del maglione blu hanno accanto solo pelle
+    let skin = 0, hair = 0, white = 0;
+    for (let y2 = by0 - 12; y2 <= by1 + 12; y2++) for (let x2 = bx0 - 12; x2 <= bx1 + 12; x2++) {
+      const q = at(x2, y2); if (!q) continue;
+      if (isSkin(...q)) skin++; else if (isHair(...q)) hair++;
+      else if (isWhite(...q) && Math.abs(x2 - (bx0 + bx1) / 2) <= 6 + (bx1 - bx0) / 2 && Math.abs(y2 - (by0 + by1) / 2) <= 6 + (by1 - by0) / 2) white++;
+    }
+    const strong = pix.filter(([px, py]) => isIris(...at(px, py))).length;
+    if (skin < 15 || hair < 8 || (strong < 4 && white < 2)) continue;
+    // copertura dei pixel finali
+    const cov = new Map();
+    pix.forEach(([px, py]) => {
+      const q = at(px, py), key = Math.floor(py / reduce) * CELL[0] + Math.floor(px / reduce), e = cov.get(key) || { n: 0, l: 0 };
+      e.n++; e.l += q[0] + q[1] + q[2]; cov.set(key, e);
+    });
+    const list = [...cov.entries()].sort((a, b) => b[1].n - a[1].n);
+    const keep = list.filter(([, e]) => e.n >= reduce * reduce * 0.22);
+    (keep.length ? keep : list.slice(0, 1)).slice(0, 3).forEach(([key, e]) => found.push({ x: key % CELL[0], y: Math.floor(key / CELL[0]), l: e.l / e.n }));
+  }
+  return found;
+}
+
 // palette comune a tutte le pose: k-means deterministico (k-means++ con seme fisso) sui pixel pieni,
 // distanza pesata sulla luminosità percepita; ogni pixel viene poi agganciato al colore più vicino
 function quantize(buf, k) {
@@ -138,12 +192,17 @@ function outline(buf, width, height) {
 }
 
 (async () => {
-  const sources = { locomotion: await source('locomotion'), combat: await source('combat'), hurt: await source('hurt') };
+  // fotogrammi intermedi generati da scripts/tween-cloud.py: ogni cella contiene una sola figura, si prende tutta
+  const tweensFile = path.join(root, 'source/tweens.json');
+  const tweens = fs.existsSync(tweensFile) ? JSON.parse(fs.readFileSync(tweensFile, 'utf8')) : [];
+  tweens.forEach((t) => frames.push([t.name, t.sheet, null, t.anchor, t.reduce]));
+  const sources = {};
+  for (const name of new Set(frames.map((f) => f[1]))) sources[name] = await source(name);
   const width = CELL[0] * COLS, height = CELL[1] * Math.ceil(frames.length / COLS);
-  const atlas = Buffer.alloc(width * height * 4), manifest = {};
+  const atlas = Buffer.alloc(width * height * 4), manifest = {}, eyeSpots = [];
   for (let n = 0; n < frames.length; n++) {
     const [name, sheet, seeds, anchor, reduce] = frames[n], s = sources[sheet];
-    const selected = new Set(seeds.map(([x, y]) => {
+    const selected = !seeds ? { has: (id) => id > 0 } : new Set(seeds.map(([x, y]) => {
       for (let radius = 0; radius <= 16; radius++) {
         for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
           const id = s.labels[(y + dy) * s.w + x + dx];
@@ -152,9 +211,10 @@ function outline(buf, width, height) {
       }
       return 0;
     }));
-    if (selected.has(0)) throw new Error(`Seed outside artwork: ${name}`);
+    if (seeds && selected.has(0)) throw new Error(`Seed outside artwork: ${name}`);
     const cellX = (n % COLS) * CELL[0], cellY = Math.floor(n / COLS) * CELL[1];
     const px = await reduceFrame(s, selected, anchor, reduce, name);
+    eyeSpots.push(...eyes(s, selected, anchor, reduce).map((e) => ({ ...e, x: e.x + cellX, y: e.y + cellY, frame: name })));
     let count = 0;
     for (let y = 0; y < CELL[1]; y++) for (let x = 0; x < CELL[0]; x++) {
       const o = (y * CELL[0] + x) * 4; if (!px[o + 3]) continue;
@@ -169,6 +229,17 @@ function outline(buf, width, height) {
   const q = atlas;
   quantize(q, PALETTE);
   despeckle(q, width, height);
+  // iridi: azzurro acceso, il pixel più chiaro di ogni occhio fa da riflesso
+  const byFrame = {};
+  eyeSpots.forEach((e) => { (byFrame[e.frame] = byFrame[e.frame] || []).push(e); });
+  Object.values(byFrame).forEach((list) => {
+    const top = list.reduce((m, e) => (e.l > m.l ? e : m), list[0]);
+    list.forEach((e) => {
+      const i = (e.y * width + e.x) * 4, c = list.length > 1 && e === top ? EYE[1] : EYE[0];
+      q[i] = c[0]; q[i + 1] = c[1]; q[i + 2] = c[2]; q[i + 3] = 255;
+    });
+  });
+  console.log('Eyes:', Object.entries(byFrame).map(([f, l]) => `${f}:${l.length}`).join(' '));
   outline(q, width, height);
   await sharp(q, raw).png({ compressionLevel: 9 }).toFile(path.join(root, 'cloud.png'));
   fs.writeFileSync(path.join(root, 'cloud-frames.ts'), '// Generated by scripts/build-cloud-atlas.cjs. Do not edit by hand.\nimport type { SpriteFrame } from "../sprite-sheet";\n\nexport const CLOUD_FRAMES: Record<string, SpriteFrame> = ' + JSON.stringify(manifest, null, 2) + ';\n');

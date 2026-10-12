@@ -1,9 +1,10 @@
 # Cloud — nuovo sistema sprite
 
-Cloud usa un atlante PNG trasparente con 24 pose, 96 colori e pixel interi. Il rendering bitmap è separato dallo scheletro usato dal gameplay: danni, collisioni, combo e velocità mantengono i valori precedenti. Clive e Sephiroth continuano a usare il renderer esistente.
+Cloud usa un atlante PNG trasparente con 36 pose (24 disegnate e 12 intermedie generate), 64 colori e pixel interi. Il rendering bitmap è separato dallo scheletro usato dal gameplay: danni, collisioni, combo e velocità mantengono i valori precedenti. Clive e Sephiroth continuano a usare il renderer esistente.
 
 ## Sviluppo e verifica
 
+- `npm run sprites:tweens`: rigenera i fotogrammi intermedi (richiede Python con `numpy`, `pillow`, `opencv-python-headless`); serve solo se cambiano le pose disegnate.
 - `npm run sprites:cloud`: ricompila l'atlante dalle sorgenti in `src/egg/assets/source`.
 - `npm run preview:egg`: apre un server locale su http://127.0.0.1:4173, con lo stesso componente del gioco, senza richiedere login o connessioni Firebase. Scegli “Galleria animazioni” per controllare ogni posa.
 - `npm run typecheck:egg`: verifica TypeScript per il minigioco. Limita i tipi ambientali al componente: il TypeScript 4.4.4 della repository non interpreta alcuni dei nuovi tipi Node/Babel scaricati transitivamente da un'installazione senza lockfile.
@@ -20,13 +21,18 @@ Le sorgenti sono illustrazioni morbide alte circa 350 px, ridotte di 4-5 volte (
 2. alpha netta (copertura ≥ 50%);
 3. palette comune di 64 colori con k-means deterministico, senza dithering: i fogli restano coerenti fra loro e l'oro dei capelli, l'azzurro degli occhi, il rosso dell'impugnatura e il cuoio non si perdono;
 4. pulizia dei pixel isolati;
-5. contorno scuro di 1 px dove il disegno non ne ha già uno, per leggere la sagoma sullo sfondo del gioco.
+5. occhi: le iridi vengono cercate nella sorgente (piccoli gruppi di pixel blu/azzurri fra pelle e capelli; quelle grigio-azzurre solo se accanto c'è il bianco dell'occhio) e ridipinte nei pixel finali con un azzurro acceso più un riflesso, altrimenti la riduzione le mescolerebbe alle ciglia e al blu del maglione;
+6. contorno scuro di 1 px dove il disegno non ne ha già uno, per leggere la sagoma sullo sfondo del gioco.
 
 Le sorgenti sono in `src/egg/assets/source/` (`cloud-locomotion.png`, `cloud-combat.png`, `cloud-hurt.png`).
 
 Ogni cella finale misura 160×128, con radice/piedi in (80,110). Le pose vengono dipinte 1:1 su coordinate intere; la direzione viene specchiata sull'intero sprite, insieme a flash e scie. Le esposizioni `cels` in `cloud.ts` hanno tempi in secondi: i tre colpi mostrano il fendente esattamente all'inizio della rispettiva finestra di danno. Le pose aeree e le capriole sono fotogrammi dedicati, senza rotazione interpolata del bitmap.
 
 La galleria avanza tra le esposizioni effettive, mantiene l'ultima posa dei clip non ciclici e nasconde il comando di interpolazione per i personaggi bitmap. In verticale sui telefoni i controlli sono separati dall'anteprima. Gli asset vengono caricati prima di avviare il motore, con gestione degli errori e pulsante Riprova.
+
+## Fotogrammi intermedi
+
+`scripts/tween-cloud.py` genera 12 pose intermedie dalle pose disegnate con il flusso ottico (OpenCV DIS) a piena risoluzione: due nel respiro della guardia, sei nella corsa (che passa da 6 a 12 fotogrammi, 20 al secondo), una fra salto e caduta e tre nei recuperi dopo i colpi. Per ogni coppia le due pose vengono deformate verso l'istante intermedio; dove coincidono si fondono, altrove vale solo la più vicina, così non compaiono arti doppi o semitrasparenti. Il risultato va in `cloud-tween-4.png`, `cloud-tween-5.png` e `tweens.json`, che il compilatore aggiunge all'atlante. Per i fendenti ampi (la spada ruota di mezzo giro fra due pose) il flusso non trova corrispondenze e l'intermedio sarebbe quasi identico alla prima posa, quindi lì restano le pose disegnate con le loro scie.
 
 ## Provenienza e prompt
 
