@@ -1,7 +1,155 @@
-// Cloud: bitmap artwork with an independent gameplay skeleton.
-import { CharDef, P0, hex } from "./rig";
-import { CLOUD_FRAMES } from "./assets/cloud-frames";
-import cloudAtlas from "./assets/cloud.png";
+// Cloud: lo scheletro guida il gameplay; il disegno viene dall'atlante bitmap in src/egg/assets
+// (cloud.png + cloud-frames.ts, generati da scripts/build-cloud-atlas.cjs). Se l'atlante non c'è,
+// Cloud resta giocabile con il modello pixel art disegnato dal rig qui sotto.
+import { CharDef, Grid, P0, Raster, Skel, V, Arm, Leg, hex, rp, torsoFrame, frameAt, along, lerpV, variant } from "./rig";
+import type { SpriteSheet } from "./sprite-sheet";
+
+// L'atlante è facoltativo: require.context non fallisce se i file mancano (un import diretto romperebbe la build)
+const loadSheet = (): SpriteSheet | undefined => {
+  try {
+    if (process.env.NODE_ENV === "test") {
+      return { src: require("./assets/cloud.png"), frames: require("./assets/cloud-frames").CLOUD_FRAMES };
+    }
+    const ctx = require.context("./", true, /^\.\/assets\/cloud(\.png|-frames\.ts)$/);
+    const keys = ctx.keys(), png = keys.find((k) => k.endsWith(".png")), fr = keys.find((k) => k.endsWith(".ts"));
+    if (!png || !fr) return undefined;
+    const url = ctx(png);
+    return { src: typeof url === "string" ? url : url.default, frames: ctx(fr).CLOUD_FRAMES };
+  } catch {
+    return undefined;
+  }
+};
+const SHEET = loadSheet();
+
+const HAIR = rp("#7a4614", "#c47e28", "#eab04a", "#fde3a0");
+const SKIN = rp("#9a5a40", "#d99572", "#f4c39c", "#ffe2c6");
+const KNIT = rp("#0f1220", "#1c2236", "#2a3250", "#414c70");
+const PANTS = rp("#0e1120", "#1a2036", "#283150", "#3e4a72");
+const BOOT = rp("#24130a", "#45261a", "#6a3d24", "#925a36");
+const GLOVE = rp("#2e170c", "#57301a", "#7f4a28", "#a86a3c");
+const BELT = rp("#2a170c", "#57331b", "#82512c", "#ab7240");
+const METAL = rp("#30353f", "#5f6774", "#9aa3b0", "#d8dee6");
+const STEEL = rp("#26292f", "#4c515a", "#7b818b", "#c3c8cf");
+const GRIP = rp("#3e0a0e", "#7a1820", "#b02a33", "#dc4f55");
+const GOLD = hex("#d8b060");
+
+// testa di profilo verso destra, pixel per pixel: punte all'indietro e verso l'alto, frangia davanti al viso,
+// ciocca davanti all'orecchio. L'ancora è l'attacco del collo, sotto la mascella.
+const hp: Record<string, number> = {
+  a: HAIR[0], b: HAIR[1], c: HAIR[2], d: HAIR[3],
+  s: SKIN[0], S: SKIN[1], L: SKIN[2], W: SKIN[3],
+  e: hex("#3a8cff"), k: hex("#3a2418"), m: hex("#b86a58"),
+};
+const HEAD: Grid = {
+  ax: 15, ay: 20, pal: hp, rows: [
+    "............d..........",
+    "...........ad....d.....",
+    "...........bdd..ad.....",
+    "....dd.....bcd..bcd....",
+    ".....ddc..acccaabcd...d",
+    "......addcbcccdabccd.dd",
+    "....dd.abccccccabccddcb",
+    ".....ddcbaacccdaacccca.",
+    "...dddccccbaccddbccdcda",
+    ".ddccccccbbaacccddcccda",
+    "...aabbbbcccaacdddcbdba",
+    ".....aabbccbbaaSSdaada.",
+    "....ddccbbbLscSSkkLLda.",
+    "...bbbbccbaLscSSkeLLWa.",
+    "......aabcasLdSSSSLLLW.",
+    "........bca.sdSSSSSLs..",
+    ".......bca..saSSSSSL...",
+    "......aa.....sSSSSmL...",
+    "..............ssSSL....",
+    "...............sss.....",
+  ],
+};
+const HEAD_HURT = variant(HEAD, { e: "k" });
+
+// pantaloni larghi con pieghe, raccolti negli stivali di cuoio allacciati
+const leg = (r: Raster, L: Leg, g: number, dim = 0) => {
+  const bt = lerpV(L.k, L.a, 0.56);
+  r.limb(L.h, L.k, 7.8, 7.2, PANTS, g, dim);
+  r.limb(L.k, bt, 7.2, 8, PANTS, g, dim);
+  r.limb(lerpV(L.k, bt, 0.5), bt, 8.6, 8.2, PANTS, g, dim, 2);
+  // pieghe del tessuto: tratti chiari e scuri in diagonale su coscia e polpaccio
+  [[L.h, L.k, 0.3, 1.6, 1], [L.h, L.k, 0.65, -0.8, 1], [L.k, bt, 0.45, 1.2, 1], [L.h, L.k, 0.5, 0.4, 0], [L.k, bt, 0.75, -1.2, 0]].forEach(([a, b, k, o, hi]) => {
+    const A = a as V, Bv = b as V, c = along(lerpV(A, Bv, k as number), L.a1 + 90, o as number);
+    r.line(c, along(c, L.a1 + 140, 1.6), hi ? PANTS[3 - dim] : PANTS[0], g);
+  });
+  r.limb(bt, L.a, 5.4, 5.2, BOOT, g, dim);
+  r.limb(bt, along(bt, L.a2, 1.4), 6.4, 6.2, BOOT, g, dim, 0);
+  const Ff = frameAt(L.a, L.fa);
+  r.poly(Ff, [-3.2, -3, 1.6, -3, 4, -1.2, 6.2, 0, 6.8, 1.4, 6.8, 3, -3.2, 3], BOOT, g, { dim });
+  r.poly(Ff, [-3.2, 2.1, 6.8, 2.1, 6.8, 3, -3.2, 3], BOOT, g, { sh: "flat", t: 0 });
+  [0.3, 0.65].forEach((k) => r.dot(along(lerpV(bt, L.a, k), L.a2 + 90, 2.2), BOOT[3], g));
+};
+
+// braccia nude, bracciale di metallo borchiato al polso, guanto di cuoio
+const arm = (r: Raster, A: Arm, g: number, dim = 0) => {
+  r.limb(A.s, A.e, 5.4, 4.4, SKIN, g, dim);
+  const c = lerpV(A.e, A.w, 0.55);
+  r.limb(A.e, c, 4.6, 4.1, SKIN, g, dim);
+  r.limb(c, A.w, 5.2, 5, METAL, g, dim);
+  r.limb(c, along(c, A.a2, 0.9), 5.8, 5.8, METAL, g, dim, 0);
+  r.limb(A.w, along(A.w, A.a2, 1.6), 4.4, 3.8, GLOVE, g, dim);
+  [0.3, 0.75].forEach((k) => r.dot(along(lerpV(c, A.w, k), A.a2 + 90, 1.8), METAL[3], g));
+};
+
+// Buster Sword: guardia con tre rivetti, due feritoie, filo chiaro in basso, punta a scalpello, impugnatura rossa
+const buster = (r: Raster, at: V, ang: number, g: number) => {
+  const F = frameAt(at, ang);
+  r.limb(along(at, ang, -7), along(at, ang, 2.6), 2.4, 2.4, GRIP, g);
+  r.limb(along(at, ang, -8), along(at, ang, -8.5), 3, 3, METAL, g);
+  r.poly(F, [2.6, -5, 5.6, -5, 5.6, 5, 2.6, 5], METAL, g, { sh: "cy" });
+  r.poly(F, [5.6, -4.4, 46, -4.4, 50, 1.4, 50, 4.4, 5.6, 4.4], STEEL, g, {
+    fn: (X, Y) => {
+      if (X > 8 && X < 10.4 && Y > -2.6 && Y < 0.8) return 0;
+      if (X > 12 && X < 14.4 && Y > -2.6 && Y < 0.8) return 0;
+      if (Y > 2.8) return 3;
+      if (Y > 2) return 1;
+      if (Y < -3.6) return 1;
+      return X > 30 && Y < -1 ? 1 : 2;
+    },
+  });
+  [-3.3, 0, 3.3].forEach((y) => r.dot(along(along(at, ang, 4.1), ang + 90, y), METAL[3], g));
+};
+
+const draw = (r: Raster, s: Skel, _c: V[][]) => {
+  const F = torsoFrame(s), p = s.p;
+  // braccio e gamba lontani: un tono più scuri, per dare profondità
+  if (!p.ik) arm(r, s.arm.b, 10, 1);
+  leg(r, s.leg.b, 20, 1);
+  // bacino, dolcevita a coste, cintura con fibbia dorata
+  r.poly(F, [-5.4, -4.5, 5, -4.5, 5.6, 1, 5.2, 3.2, -5.6, 3.2, -6, 0], PANTS, 30);
+  r.poly(F, [-4.8, 2.4, 4.6, 2.4, 5.2, 6, 6.4, 10.5, 6, 14, 3.8, 16.8, -1.8, 17.4, -5.4, 15.4, -6, 10, -5.4, 5.6], KNIT, 30, {
+    fn: (X, Y) => {
+      const base = X > 2.8 ? 3 : X > -1.2 ? 2 : X > -3.6 ? 1 : 0;
+      return base - ((Math.floor(X + 20) & 1) && Y < 15.4 ? 1 : 0);
+    },
+  });
+  r.poly(F, [-2, 15.4, 2.6, 15.4, 2.6, 19.4, -1.6, 19.4], KNIT, 30, { fn: (X) => ((Math.floor(X + 20) & 1) ? 1 : 2) });
+  r.poly(F, [-5.8, 0.6, 5.6, 0.6, 5.6, 3, -5.8, 3], BELT, 31, { sh: "cx" });
+  const bk = along(along(s.hip, 90 - s.lean, 5), 180 - s.lean, 1.8);
+  r.poly(frameAt(bk, 180 - s.lean), [-1.4, -1.3, 1.4, -1.3, 1.4, 1.3, -1.4, 1.3], BELT, 32, { fn: (X, Y) => (Math.abs(X) > 0.6 || Math.abs(Y) > 0.6 ? 3 : 0) });
+  r.dot(bk, GOLD, 32);
+  // bretella con borchie: dalla spalla scende sul petto fino alla cintura
+  r.poly(F, [1.2, 16.8, 3, 16.6, 5.2, 3, 3.4, 3], BELT, 31, { sh: "cx" });
+  [6, 10, 14].forEach((y) => r.dot(along(along(s.hip, 180 - s.lean, y), 90 - s.lean, 4.3 - (y - 3) * 0.15), METAL[3], 31));
+  leg(r, s.leg.f, 40);
+  // collo e testa
+  r.limb(s.neck, s.head, 3.6, 3.4, SKIN, 50, 0);
+  r.grid(p.ex ? HEAD_HURT : HEAD, s.head, 50);
+  if (p.ik) arm(r, s.arm.b, 55, 1);
+  buster(r, s.grip, s.wa, 60);
+  arm(r, s.arm.f, 70);
+  // spallaccio: piastra di metallo sulla spalla con due bulloni a punta
+  const A = s.arm.f, pa = (A.a1 - s.lean) * 0.5, PF = frameAt(along(A.s, A.a1, 1.8), pa);
+  const at = (X: number, Y: number): V => ({ x: PF.o.x + PF.ax.x * X + PF.ay.x * Y, y: PF.o.y + PF.ax.y * X + PF.ay.y * Y });
+  r.poly(PF, [-2.8, -1, -2.3, -2.7, -0.8, -3.5, 1.3, -3.4, 2.9, -2.4, 3.5, 0, 3, 2.4, 1.1, 3.3, -1.1, 3.2, -2.5, 2.1, -2.8, 0.5], METAL, 75);
+  [0.4, 2.4].forEach((Y) => { const b0 = at(-2.4, Y); r.limb(b0, along(b0, pa + 196, 2), 1.6, 1, METAL, 76); });
+  r.dot(at(0.4, -1.4), METAL[3], 76);
+};
 
 // posa base come lo sprite di riferimento: in piedi, gambe appena aperte, spadone tenuto con una mano in avanti
 const B = { ...P0, lean: 5, fu: 10, ff: 72, bu: -8, bf: 16, ft: 20, fs: -16, fa: -4, bt: -18, bs: -6, ba: 24, w: 94 };
@@ -11,7 +159,7 @@ export const CLOUD: CharDef = {
   body: { thigh: 14.5, shin: 14.5, ankle: 2.5, foot: 4.6, heel: 1.6, torso: 16.5, neck: 2, ua: 10, la: 9, shF: [0.6, 14.2], shB: [-1.6, 14.2], hipF: 1, hipB: -1.5, grip: 4 },
   base: B, buf: [240, 170, 120, 130], ink: hex("#0d0b16"),
   weapon: { base: 14, tip: 50 }, smear: [hex("#ffffff", 235), hex("#9fdcff", 200)],
-  sheet: { src: cloudAtlas, frames: CLOUD_FRAMES },
+  sheet: SHEET, draw,
   anims: {
     idle: {
       cels: [{ t: 0, frame: "idle0" }, { t: 0.5, frame: "idle1" }, { t: 1, frame: "idle0" }],
