@@ -10,12 +10,19 @@ const CELL = [160, 128], PIVOT = [80, 110], COLS = 6, PALETTE = 64, EYE = [[48, 
 const frames = [
   ['idle0', 'locomotion', [[170, 305]], [157, 489], 5],
   ['idle1', 'locomotion', [[546, 305]], [533, 489], 5],
-  ['run0', 'locomotion', [[1010, 316]], [995, 489], 5],
-  ['run1', 'locomotion', [[1380, 334]], [1364, 489], 5],
-  ['run2', 'locomotion', [[228, 770]], [205, 953], 5],
-  ['run3', 'locomotion', [[625, 790]], [605, 948], 5],
-  ['run4', 'locomotion', [[1000, 790]], [977, 953], 5],
-  ['run5', 'locomotion', [[1380, 778]], [1358, 953], 5],
+  // corsa: ciclo di 12 pose in sequenza (cloud-run.png, scontornato dalla scacchiera disegnata)
+  ['run0', 'run', [[103, 228]], [90, 339], 3],
+  ['run1', 'run', [[276, 243]], [260, 339], 3],
+  ['run2', 'run', [[438, 243]], [422, 339], 3],
+  ['run3', 'run', [[609, 240]], [592, 339], 3],
+  ['run4', 'run', [[777, 217]], [760, 339], 3],
+  ['run5', 'run', [[946, 211]], [933, 339], 3],
+  ['run6', 'run', [[102, 487]], [91, 610], 3],
+  ['run7', 'run', [[277, 514]], [261, 610], 3],
+  ['run8', 'run', [[439, 513]], [422, 610], 3],
+  ['run9', 'run', [[610, 501]], [591, 610], 3],
+  ['run10', 'run', [[778, 489]], [762, 610], 3],
+  ['run11', 'run', [[945, 484]], [932, 610], 3],
   ['jump', 'combat', [[195, 157]], [201, 320], 4],
   ['fall', 'combat', [[505, 176]], [510, 334], 4],
   ['land', 'combat', [[800, 259]], [795, 320], 4],
@@ -91,11 +98,14 @@ const isSkin = (r, g, b) => r > 190 && g > 120 && r > b + 45 && g < r && b >= g 
 function eyes(s, selected, anchor, reduce) {
   const x0 = anchor[0] - PIVOT[0] * reduce, y0 = anchor[1] - PIVOT[1] * reduce;
   const W = CELL[0] * reduce, H = CELL[1] * reduce, seen = new Uint8Array(W * H), found = [];
+  // cima dei capelli: l'occhio sta al massimo 22 pixel finali più sotto (il resto è maglione)
+  let hairTop = 1e9;
   const at = (x, y) => {
     const sx = x0 + x, sy = y0 + y;
     if (sx < 0 || sx >= s.w || sy < 0 || sy >= s.h || !selected.has(s.labels[sy * s.w + sx])) return null;
     const k = (sy * s.w + sx) * 4; return [s.data[k], s.data[k + 1], s.data[k + 2]];
   };
+  for (let y = 0; y < H && hairTop === 1e9; y++) for (let x = 0; x < W; x++) { const q = at(x, y); if (q && isHair(...q)) { hairTop = y; break; } }
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     if (seen[y * W + x]) continue;
     const c = at(x, y); if (!c || !isIrisSoft(...c)) continue;
@@ -108,17 +118,20 @@ function eyes(s, selected, anchor, reduce) {
       }
     }
     if (pix.length < 6 || pix.length > 500) continue;
+    if (pix.reduce((m, [, py]) => m + py, 0) / pix.length - hairTop > 22 * reduce) continue;
     let bx0 = 1e9, by0 = 1e9, bx1 = -1, by1 = -1;
     pix.forEach(([px, py]) => { bx0 = Math.min(bx0, px); by0 = Math.min(by0, py); bx1 = Math.max(bx1, px); by1 = Math.max(by1, py); });
     // un occhio sta fra pelle e capelli; i riflessi del maglione blu hanno accanto solo pelle
     let skin = 0, hair = 0, white = 0;
-    for (let y2 = by0 - 12; y2 <= by1 + 12; y2++) for (let x2 = bx0 - 12; x2 <= bx1 + 12; x2++) {
+    const R = Math.round(reduce * 2.4); // circa 2,4 pixel finali attorno al gruppo, a qualunque riduzione
+    for (let y2 = by0 - R; y2 <= by1 + R; y2++) for (let x2 = bx0 - R; x2 <= bx1 + R; x2++) {
       const q = at(x2, y2); if (!q) continue;
       if (isSkin(...q)) skin++; else if (isHair(...q)) hair++;
-      else if (isWhite(...q) && Math.abs(x2 - (bx0 + bx1) / 2) <= 6 + (bx1 - bx0) / 2 && Math.abs(y2 - (by0 + by1) / 2) <= 6 + (by1 - by0) / 2) white++;
+      else if (isWhite(...q) && Math.abs(x2 - (bx0 + bx1) / 2) <= reduce * 1.2 + (bx1 - bx0) / 2 && Math.abs(y2 - (by0 + by1) / 2) <= reduce * 1.2 + (by1 - by0) / 2) white++;
     }
     const strong = pix.filter(([px, py]) => isIris(...at(px, py))).length;
-    if (skin < 15 || hair < 8 || (strong < 4 && white < 2)) continue;
+    const k = (reduce * reduce) / 25; // soglie pensate per la riduzione 5
+    if (skin < 15 * k || hair < 8 * k || (strong < 4 * k && white < 2)) continue;
     // copertura dei pixel finali
     const cov = new Map();
     pix.forEach(([px, py]) => {
@@ -129,7 +142,40 @@ function eyes(s, selected, anchor, reduce) {
     const keep = list.filter(([, e]) => e.n >= reduce * reduce * 0.22);
     (keep.length ? keep : list.slice(0, 1)).slice(0, 3).forEach(([key, e]) => found.push({ x: key % CELL[0], y: Math.floor(key / CELL[0]), l: e.l / e.n }));
   }
+  if (!found.length) found.push(...eyeWhites(s, at, W, H, reduce));
   return found;
+}
+
+// occhi disegnati senza iride blu (pupilla scura e bianco): piccolo gruppo bianco con pelle accanto e un pixel
+// molto scuro vicino; l'azzurro va sul pixel finale della pupilla
+function eyeWhites(s, at, W, H, reduce) {
+  const R = Math.round(reduce * 1.4), out = [], seen = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (seen[y * W + x]) continue;
+    const c = at(x, y); if (!c || !isWhite(...c)) continue;
+    const pix = [[x, y]]; seen[y * W + x] = 1;
+    for (let i = 0; i < pix.length && pix.length < 200; i++) {
+      const [px, py] = pix[i];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const X = px + dx, Y = py + dy; if (X < 0 || Y < 0 || X >= W || Y >= H || seen[Y * W + X]) continue;
+        const q = at(X, Y); if (q && isWhite(...q)) { seen[Y * W + X] = 1; pix.push([X, Y]); }
+      }
+    }
+    if (pix.length < 2 || pix.length > reduce * reduce * 3) continue;
+    let bx0 = 1e9, by0 = 1e9, bx1 = -1, by1 = -1;
+    pix.forEach(([px, py]) => { bx0 = Math.min(bx0, px); by0 = Math.min(by0, py); bx1 = Math.max(bx1, px); by1 = Math.max(by1, py); });
+    let skin = 0, hair = 0, dark = null, dl = 1e9;
+    for (let y2 = by0 - R * 2; y2 <= by1 + R * 2; y2++) for (let x2 = bx0 - R * 2; x2 <= bx1 + R * 2; x2++) {
+      const q = at(x2, y2); if (!q) continue;
+      if (isSkin(...q)) skin++; else if (isHair(...q)) hair++;
+      const l = lum(...q);
+      if (l < 45 && Math.abs(x2 - (bx0 + bx1) / 2) <= R + (bx1 - bx0) / 2 && Math.abs(y2 - (by0 + by1) / 2) <= R + (by1 - by0) / 2 && l < dl) { dl = l; dark = [x2, y2]; }
+    }
+    const k = (reduce * reduce) / 25;
+    if (!dark || skin < 20 * k || hair < 4 * k) continue;
+    out.push({ x: Math.floor(dark[0] / reduce), y: Math.floor(dark[1] / reduce), l: 0 });
+  }
+  return out.slice(0, 1);
 }
 
 // palette comune a tutte le pose: k-means deterministico (k-means++ con seme fisso) sui pixel pieni,

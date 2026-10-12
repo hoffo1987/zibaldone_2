@@ -1,6 +1,6 @@
 # Cloud — nuovo sistema sprite
 
-Cloud usa un atlante PNG trasparente con 36 pose (24 disegnate e 12 intermedie generate), 64 colori e pixel interi. Il rendering bitmap è separato dallo scheletro usato dal gameplay: danni, collisioni, combo e velocità mantengono i valori precedenti. Clive e Sephiroth continuano a usare il renderer esistente.
+Cloud usa un atlante PNG trasparente con 36 pose (30 disegnate, di cui 12 per la corsa, e 6 intermedie generate), 64 colori e pixel interi. Il rendering bitmap è separato dallo scheletro usato dal gameplay: danni, collisioni, combo e velocità mantengono i valori precedenti. Clive e Sephiroth continuano a usare il renderer esistente.
 
 ## Sviluppo e verifica
 
@@ -21,10 +21,12 @@ Le sorgenti sono illustrazioni morbide alte circa 350 px, ridotte di 4-5 volte (
 2. alpha netta (copertura ≥ 50%);
 3. palette comune di 64 colori con k-means deterministico, senza dithering: i fogli restano coerenti fra loro e l'oro dei capelli, l'azzurro degli occhi, il rosso dell'impugnatura e il cuoio non si perdono;
 4. pulizia dei pixel isolati;
-5. occhi: le iridi vengono cercate nella sorgente (piccoli gruppi di pixel blu/azzurri fra pelle e capelli; quelle grigio-azzurre solo se accanto c'è il bianco dell'occhio) e ridipinte nei pixel finali con un azzurro acceso più un riflesso, altrimenti la riduzione le mescolerebbe alle ciglia e al blu del maglione;
+5. occhi: le iridi vengono cercate nella sorgente (piccoli gruppi di pixel blu/azzurri fra pelle e capelli, al massimo 22 pixel finali sotto la cima dei capelli; quelle grigio-azzurre solo se accanto c'è il bianco dell'occhio; se l'occhio è disegnato senza iride blu, il bianco dell'occhio con la pupilla scura vicina) e ridipinte nei pixel finali con un azzurro acceso più un riflesso, altrimenti la riduzione le mescolerebbe alle ciglia e al blu del maglione;
 6. contorno scuro di 1 px dove il disegno non ne ha già uno, per leggere la sagoma sullo sfondo del gioco.
 
-Le sorgenti sono in `src/egg/assets/source/` (`cloud-locomotion.png`, `cloud-combat.png`, `cloud-hurt.png`).
+Le sorgenti sono in `src/egg/assets/source/` (`cloud-locomotion.png`, `cloud-combat.png`, `cloud-hurt.png`, `cloud-run.png`).
+
+La corsa viene da `cloud-run.png`: un ciclo di 12 pose in sequenza (passo di contatto, appoggio, passaggio, spinta, volo, allungo, ripetuti), ridotto di 3. Il foglio originale aveva la scacchiera della trasparenza disegnata nell'immagine: è stato scontornato togliendo il grigio neutro chiaro collegato ai bordi, più un ulteriore pixel grigio sul contorno. Le pose sono ancorate alla testa e alla linea di terra di ogni riga, così nei fotogrammi di volo Cloud si stacca davvero da terra. Il ciclo dura 0,48 s (25 fotogrammi al secondo): il passo disegnato corrisponde alla velocità di corsa e i piedi non scivolano.
 
 Ogni cella finale misura 160×128, con radice/piedi in (80,110). Le pose vengono dipinte 1:1 su coordinate intere; la direzione viene specchiata sull'intero sprite, insieme a flash e scie. Le esposizioni `cels` in `cloud.ts` hanno tempi in secondi: i tre colpi mostrano il fendente esattamente all'inizio della rispettiva finestra di danno. Le pose aeree e le capriole sono fotogrammi dedicati, senza rotazione interpolata del bitmap.
 
@@ -32,7 +34,7 @@ La galleria avanza tra le esposizioni effettive, mantiene l'ultima posa dei clip
 
 ## Fotogrammi intermedi
 
-`scripts/tween-cloud.py` genera 12 pose intermedie dalle pose disegnate con il flusso ottico (OpenCV DIS) a piena risoluzione: due nel respiro della guardia, sei nella corsa (che passa da 6 a 12 fotogrammi, 20 al secondo), una fra salto e caduta e tre nei recuperi dopo i colpi. Per ogni coppia le due pose vengono deformate verso l'istante intermedio; dove coincidono si fondono, altrove vale solo la più vicina, così non compaiono arti doppi o semitrasparenti. Il risultato va in `cloud-tween-4.png`, `cloud-tween-5.png` e `tweens.json`, che il compilatore aggiunge all'atlante. Per i fendenti ampi (la spada ruota di mezzo giro fra due pose) il flusso non trova corrispondenze e l'intermedio sarebbe quasi identico alla prima posa, quindi lì restano le pose disegnate con le loro scie.
+`scripts/tween-cloud.py` genera 12 pose intermedie dalle pose disegnate con il flusso ottico (OpenCV DIS) a piena risoluzione: due nel respiro della guardia, una fra salto e caduta e tre nei recuperi dopo i colpi (la corsa ora ha pose disegnate). Per ogni coppia le due pose vengono deformate verso l'istante intermedio; dove coincidono si fondono, altrove vale solo la più vicina, così non compaiono arti doppi o semitrasparenti. Il risultato va in `cloud-tween-<riduzione>.png` e `tweens.json`, che il compilatore aggiunge all'atlante. Per i fendenti ampi (la spada ruota di mezzo giro fra due pose) il flusso non trova corrispondenze e l'intermedio sarebbe quasi identico alla prima posa, quindi lì restano le pose disegnate con le loro scie.
 
 ## Provenienza e prompt
 

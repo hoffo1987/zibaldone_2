@@ -98,10 +98,82 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
       110
     ]
   },
-  "jump": {
+  "run6": {
     "rect": [
       320,
       128,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run7": {
+    "rect": [
+      480,
+      128,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run8": {
+    "rect": [
+      640,
+      128,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run9": {
+    "rect": [
+      800,
+      128,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run10": {
+    "rect": [
+      0,
+      256,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "run11": {
+    "rect": [
+      160,
+      256,
+      160,
+      128
+    ],
+    "anchor": [
+      80,
+      110
+    ]
+  },
+  "jump": {
+    "rect": [
+      320,
+      256,
       160,
       128
     ],
@@ -113,7 +185,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "fall": {
     "rect": [
       480,
-      128,
+      256,
       160,
       128
     ],
@@ -125,7 +197,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "land": {
     "rect": [
       640,
-      128,
+      256,
       160,
       128
     ],
@@ -137,7 +209,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "windup": {
     "rect": [
       800,
-      128,
+      256,
       160,
       128
     ],
@@ -149,7 +221,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "slash": {
     "rect": [
       0,
-      256,
+      384,
       160,
       128
     ],
@@ -161,7 +233,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "follow": {
     "rect": [
       160,
-      256,
+      384,
       160,
       128
     ],
@@ -173,7 +245,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "uppercut": {
     "rect": [
       320,
-      256,
+      384,
       160,
       128
     ],
@@ -185,7 +257,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "heavyWindup": {
     "rect": [
       480,
-      256,
+      384,
       160,
       128
     ],
@@ -197,7 +269,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "heavySlash": {
     "rect": [
       640,
-      256,
+      384,
       160,
       128
     ],
@@ -209,7 +281,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "heavyRecover": {
     "rect": [
       800,
-      256,
+      384,
       160,
       128
     ],
@@ -221,7 +293,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "roll0": {
     "rect": [
       0,
-      384,
+      512,
       160,
       128
     ],
@@ -233,7 +305,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "roll1": {
     "rect": [
       160,
-      384,
+      512,
       160,
       128
     ],
@@ -245,7 +317,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "air": {
     "rect": [
       320,
-      384,
+      512,
       160,
       128
     ],
@@ -257,7 +329,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "hurt": {
     "rect": [
       480,
-      384,
+      512,
       160,
       128
     ],
@@ -269,7 +341,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "death": {
     "rect": [
       640,
-      384,
+      512,
       160,
       128
     ],
@@ -281,7 +353,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "win": {
     "rect": [
       800,
-      384,
+      512,
       160,
       128
     ],
@@ -293,7 +365,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "jumpFall": {
     "rect": [
       0,
-      512,
+      640,
       160,
       128
     ],
@@ -305,7 +377,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "followRecover": {
     "rect": [
       160,
-      512,
+      640,
       160,
       128
     ],
@@ -317,7 +389,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "heavySlashRecover": {
     "rect": [
       320,
-      512,
+      640,
       160,
       128
     ],
@@ -329,7 +401,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "recoverFollow": {
     "rect": [
       480,
-      512,
+      640,
       160,
       128
     ],
@@ -341,7 +413,7 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
   "idleA": {
     "rect": [
       640,
-      512,
+      640,
       160,
       128
     ],
@@ -351,78 +423,6 @@ export const CLOUD_FRAMES: Record<string, SpriteFrame> = {
     ]
   },
   "idleB": {
-    "rect": [
-      800,
-      512,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
-  "run0m": {
-    "rect": [
-      0,
-      640,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
-  "run1m": {
-    "rect": [
-      160,
-      640,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
-  "run2m": {
-    "rect": [
-      320,
-      640,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
-  "run3m": {
-    "rect": [
-      480,
-      640,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
-  "run4m": {
-    "rect": [
-      640,
-      640,
-      160,
-      128
-    ],
-    "anchor": [
-      80,
-      110
-    ]
-  },
-  "run5m": {
     "rect": [
       800,
       640,
