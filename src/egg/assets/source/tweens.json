@@ -52,5 +52,113 @@
       550
     ],
     "reduce": 5
+  },
+  {
+    "name": "run0a",
+    "sheet": "tween-5",
+    "anchor": [
+      2000,
+      550
+    ],
+    "reduce": 5
+  },
+  {
+    "name": "run0b",
+    "sheet": "tween-5",
+    "anchor": [
+      2800,
+      550
+    ],
+    "reduce": 5
+  },
+  {
+    "name": "run1a",
+    "sheet": "tween-5",
+    "anchor": [
+      400,
+      1190
+    ],
+    "reduce": 5
+  },
+  {
+    "name": "run1b",
+    "sheet": "tween-5",
+    "anchor": [
+      1200,
+      1190
+    ],
+    "reduce": 5
+  },
+  {
+    "name": "run2a",
+    "sheet": "tween-5",
+    "anchor": [
+      2000,
+      1190
+    ],
+    "reduce": 5
+  },
+  {
+    "name": "run2b",
+    "sheet": "tween-5",
+    "anchor": [
+      2800,
+      1190
+    ],
+    "reduce": 5
+  },
+  {
+    "name": "run3a",
+    "sheet": "tween-5",
+    "anchor": [
+      400,
+      1830
+    ],
+    "reduce": 5
+  },
+  {
+    "name": "run3b",
+    "sheet": "tween-5",
+    "anchor": [
+      1200,
+      1830
+    ],
+    "reduce": 5
+  },
+  {
+    "name": "run4a",
+    "sheet": "tween-5",
+    "anchor": [
+      2000,
+      1830
+    ],
+    "reduce": 5
+  },
+  {
+    "name": "run4b",
+    "sheet": "tween-5",
+    "anchor": [
+      2800,
+      1830
+    ],
+    "reduce": 5
+  },
+  {
+    "name": "run5a",
+    "sheet": "tween-5",
+    "anchor": [
+      400,
+      2470
+    ],
+    "reduce": 5
+  },
+  {
+    "name": "run5b",
+    "sheet": "tween-5",
+    "anchor": [
+      1200,
+      2470
+    ],
+    "reduce": 5
   }
 ]

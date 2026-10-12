@@ -5,7 +5,7 @@ import { SEPH } from "./seph";
 import { Puppet } from "./rig";
 
 test("every Cloud animation has ordered exposures pointing to complete atlas cells", () => {
-  expect(Object.keys(CLOUD.sheet.frames)).toHaveLength(36); // 30 pose disegnate (12 di corsa) + 6 intermedie
+  expect(Object.keys(CLOUD.sheet.frames)).toHaveLength(42); // 24 pose disegnate + 18 intermedie
   for (const animation of Object.values(CLOUD.anims)) {
     expect(animation.cels[0].t).toBe(0);
     animation.cels.forEach((cel, i) => {
@@ -13,16 +13,16 @@ test("every Cloud animation has ordered exposures pointing to complete atlas cel
       if (i) expect(cel.t).toBeGreaterThan(animation.cels[i - 1].t);
       const { rect, anchor } = CLOUD.sheet.frames[cel.frame];
       expect(rect[0] + rect[2]).toBeLessThanOrEqual(960);
-      expect(rect[1] + rect[3]).toBeLessThanOrEqual(768);
+      expect(rect[1] + rect[3]).toBeLessThanOrEqual(896);
       expect(anchor).toEqual([80, 110]);
     });
   }
 });
 
 test("loops wrap at the seam and non-looping clips hold the final exposure", () => {
-  expect(celIndex(CLOUD.anims.run, 0.48)).toBe(0);
-  expect(celIndex(CLOUD.anims.run, 600.2)).toBe(5);
-  expect(celIndex(CLOUD.anims.run, -0.01)).toBe(11);
+  expect(celIndex(CLOUD.anims.run, 0.6)).toBe(0);
+  expect(celIndex(CLOUD.anims.run, 600.2)).toBe(6);
+  expect(celIndex(CLOUD.anims.run, -0.01)).toBe(17);
   expect(celIndex(CLOUD.anims.death, 20)).toBe(3);
   expect(celIndex(CLOUD.anims.death, -2)).toBe(0);
 });
@@ -40,8 +40,8 @@ test("gallery stepping follows variable exposure times and clamps held poses", (
   expect(stepCel(CLOUD.anims.atk1, 0, 1)).toBe(0.08);
   expect(stepCel(CLOUD.anims.atk1, 0, -1)).toBe(0);
   expect(stepCel(CLOUD.anims.death, 1.4, 1)).toBe(1);
-  expect(stepCel(CLOUD.anims.run, 0, -1)).toBeCloseTo(0.44);
-  expect(stepCel(CLOUD.anims.run, 0.44, 1)).toBe(0);
+  expect(stepCel(CLOUD.anims.run, 0, -1)).toBeCloseTo(17 / 30);
+  expect(stepCel(CLOUD.anims.run, 17 / 30, 1)).toBe(0);
 });
 
 test("bitmap rendering uses integer destination pixels without rescaling", () => {
