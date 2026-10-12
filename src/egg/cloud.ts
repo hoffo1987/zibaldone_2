@@ -1,153 +1,217 @@
-// Cloud Strife (FF VII) — dolcevita viola senza maniche, pantaloni larghi, stivaloni, bracciali, spallaccio e Buster Sword
-import { CharDef, Grid, P0, Raster, Skel, V, Arm, Leg, hex, rp, torsoFrame, frameAt, along, lerpV, variant } from "./rig";
+// Cloud Strife (FF VII Remake) — dolcevita a coste senza maniche, bretelle e corsetto di cuoio, pantaloni larghi,
+// anfibi, spallaccio imbullonato, bracciale sul braccio sinistro, manicotto sul destro e Buster Sword
+import { CharDef, Frame, Grid, P0, Raster, Skel, V, Arm, Leg, hex, rp, torsoFrame, frameAt, along, lerpV, variant } from "./rig";
 
-const HAIR = rp("#8a5216", "#cf9327", "#f1c84f", "#fff2a2");
-const SKIN = rp("#8f5440", "#d1916c", "#f2c49c", "#ffe3c6");
-const KNIT = rp("#1c1430", "#33264f", "#4b3974", "#66519a");
-const PANTS = rp("#22163f", "#3b2768", "#56409a", "#7861c2");
-const BOOT = rp("#2e170c", "#5e3119", "#8e5129", "#bd7a45");
-const GLOVE = rp("#2f160c", "#5a2d16", "#844624", "#ab6436");
-const BELT = rp("#26150c", "#4f2d18", "#7a4826", "#a46638");
+const HAIR = rp("#6b4a26", "#b48a52", "#dcbc82", "#f7e6bc");
+const SKIN = rp("#8c5a46", "#d29a7c", "#f0c6a6", "#ffe4cc");
+const KNIT = rp("#12151f", "#232838", "#363d55", "#535c7a");
+const PANTS = rp("#111117", "#22222c", "#363643", "#525261");
+const BOOT = rp("#100f12", "#252328", "#3d3a42", "#5e5a64");
+const GLOVE = rp("#100f12", "#211f25", "#36333b", "#524e57");
+const BELT = rp("#1d130d", "#3a281c", "#5a412e", "#7d5d44");
 const METAL = rp("#2c313b", "#666f7d", "#a6b0bd", "#e8eef5");
-const PAUL = rp("#22252b", "#464b55", "#737a86", "#a8afba");
-const IRON = rp("#2a2e36", "#555c68", "#8a929e", "#c4cad3");
-const STEEL = rp("#30343b", "#646a73", "#959ba3", "#cfd4da");
-const GRIP = rp("#3e0a0e", "#7a1820", "#b02a33", "#dc4f55");
+const IRON = rp("#1b1e24", "#373c46", "#5a616d", "#878f9c");
+const PAUL = rp("#121418", "#272a30", "#43474f", "#868c96");
+const STEEL = rp("#202328", "#41464e", "#6a7079", "#a0a7b0");
+const GRIP = rp("#1b120d", "#36261a", "#55402d", "#765c43");
 
-const hp: Record<string, number> = {
-  a: HAIR[0], b: HAIR[1], c: HAIR[2], d: HAIR[3],
+// ---------- testa ----------
+// viso di profilo verso destra, a pixel; l'ancora (5,12) è l'attacco del collo. I capelli sono a parte, ciocca per ciocca.
+const fp: Record<string, number> = {
   s: SKIN[0], S: SKIN[1], L: SKIN[2], W: SKIN[3],
-  e: hex("#5fe8ff"), k: hex("#3a2014"), m: hex("#a35e48"), n: KNIT[2],
+  e: hex("#7cf0e4"), k: hex("#2a1a14"), m: hex("#a8685a"), r: SKIN[2],
 };
-// testa di profilo verso destra: ciuffo enorme a punte, frangia sulla fronte; l'ancora è l'attacco del collo
-const HEAD: Grid = {
-  ax: 11, ay: 21, pal: hp, rows: [
-    "..........d...........",
-    "...b......dc.....c....",
-    "....b....cdc....cc....",
-    "....bb...cdcc..ccc..c.",
-    ".b...bc.ccddc.cccc.cc.",
-    "..bb.bbcccdcdccccccc..",
-    "...bbbbccccdcddccccc..",
-    "b..bbbbcccccddcccccccd",
-    "...bbbbccccccdccccccd.",
-    "aabbbbbcccccccdcccccdd",
-    ".aabbbbbccccccccbcccc.",
-    "..aabbbbbbcccccbcdbcc.",
-    "aaaabbbbbbbccbbcSdccbc",
-    ".aaabbbbbbbbbbSSLcbbcd",
-    "...aabbbbbbbbsSkkLLbc.",
-    "..aaaabbbbbbsSSSeLLb..",
-    "....aaabbbbbsSSSLLLLW.",
-    "......aabbb.sSSSSLLLL.",
-    "........ab...sSSSmLL..",
-    "..............ssSSL...",
-    "..............sss.....",
+const FACE: Grid = {
+  ax: 5, ay: 12, pal: fp, rows: [
+    "............",
+    "............",
+    "........LL..",
+    ".......SLLL.",
+    "..sSSSSkkLL.",
+    "..srsSSkeLL.",
+    "..srsSSSSLLW",
+    "..srsSSSSLLW",
+    "...ssSSSSL..",
+    "....sSSSSm..",
+    ".....sSSSL..",
+    "......ssS...",
   ],
 };
-const HEAD_HURT = variant(HEAD, { e: "k" });
+const FACE_HURT = variant(FACE, { e: "k" });
 
-// pantaloni a sbuffo: coscia e tibia larghe, rigonfiamento sopra lo stivale
-const leg = (r: Raster, L: Leg, g: number, dim = 0) => {
-  const bt = lerpV(L.k, L.a, 0.5);
-  r.limb(L.h, L.k, 8.6, 7.6, PANTS, g, dim);
-  r.limb(L.k, bt, 7.6, 8.2, PANTS, g, dim);
-  r.limb(lerpV(L.k, bt, 0.55), bt, 8.8, 8.4, PANTS, g, dim, 2);
-  // stivalone: gambale, risvolto e piede tozzo con suola
-  r.limb(bt, L.a, 6, 5.8, BOOT, g, dim);
-  r.limb(bt, along(bt, L.a2, 1.6), 7.2, 7, BOOT, g, dim, 0);
-  const Ff = frameAt(L.a, L.fa);
-  r.poly(Ff, [-3.4, -3, 1.8, -3, 4.2, -1, 6.6, 0.2, 7.2, 1.6, 7.2, 3, -3.4, 3], BOOT, g, { dim });
-  r.poly(Ff, [-3.4, 2, 7.2, 2, 7.2, 3, -3.4, 3], BOOT, g, { sh: "flat", t: 0 });
-};
-
-// braccia nude e muscolose, bracciale di metallo borchiato, guanto marrone
-const arm = (r: Raster, A: Arm, g: number, dim = 0) => {
-  r.limb(A.s, A.e, 4.8, 4, SKIN, g, dim);
-  const c = lerpV(A.e, A.w, 0.3);
-  r.limb(A.e, c, 4, 3.8, SKIN, g, dim);
-  r.limb(c, A.w, 5.2, 5, IRON, g, dim);
-  r.limb(c, along(c, A.a2, 0.9), 5.8, 5.8, IRON, g, dim, 0);
-  r.limb(A.w, along(A.w, A.a2, 1.6), 4.4, 3.8, GLOVE, g, dim);
-  [0.35, 0.75].forEach((k) => r.dot(along(lerpV(c, A.w, k), A.a2 + 90, 1.8), METAL[3], g));
-};
-
-// crepe della lama: spezzate nel sistema locale (x lungo la lama, y di traverso)
-const CRACKS = [
-  [16, -1.2, 18.5, 0.6, 21, 0.2, 23.5, 2],
-  [19.5, 0.4, 21, -2.6],
-  [27, -3.6, 28.5, -1.2, 31, -1.8, 33, 0.8, 35.5, 0.4],
-  [33, 0.8, 34, 2.6],
-  [38, 2.4, 40, 0, 42.5, 0.6, 44, -2.4, 46.5, -2],
-  [42.5, 0.6, 44.5, 2.4],
+// ciocca: radice (x,y) nel sistema della testa, angolo come gli arti (0 giù, 90 avanti, 180 su, -90 dietro),
+// lunghezza, larghezza alla radice, curvatura (gradi aggiunti verso la punta), d = un tono più scura (strato dietro)
+type Lock = [number, number, number, number, number, number, number?];
+const BACK: Lock[] = [
+  // nuca: punte che scendono all'indietro sul collo
+  [-2.5, -5.5, -38, 6, 4.4, -6, 1],
+  // dietro: ciocche lunghe quasi orizzontali che in punta si alzano
+  [-4, -9, -84, 8.5, 5.6, -14, 1],
+  [-3, -12.5, -118, 9.5, 5.6, -10, 1],
+  // corona e cima
+  [-0.5, -14, -150, 9, 5.4, -6, 1],
+  [2.5, -14, 174, 7, 5, 6, 1],
+  // punte sottili e lunghe che spezzano la sagoma fra una ciocca grossa e l'altra
+  [-3.5, -7.5, -66, 8, 3, -12, 1],
+  [-4, -11, -106, 9.5, 3, -14, 1],
+  [-1.5, -14, -140, 10, 3, -8, 1],
+  [1.5, -14.5, -170, 8.5, 2.8, 2, 1],
 ];
-const crack = (X: number, Y: number) => {
-  let m = 9;
-  CRACKS.forEach((c) => {
-    for (let i = 0; i + 3 < c.length; i += 2) {
-      const ax = c[i], ay = c[i + 1], bx = c[i + 2] - ax, by = c[i + 3] - ay, L = bx * bx + by * by;
-      const t = Math.max(0, Math.min(1, ((X - ax) * bx + (Y - ay) * by) / L));
-      m = Math.min(m, Math.hypot(X - ax - bx * t, Y - ay - by * t));
-    }
+const MID: Lock[] = [
+  [-4, -7, -60, 7, 5, -10],
+  [-3.5, -11, -100, 8.5, 5.4, -14],
+  [-1.5, -13.5, -133, 8.5, 5.2, -8],
+  [1, -14, -165, 7.5, 4.8, -4],
+  // ciuffo davanti che punta avanti e in alto sopra la fronte
+  [3.5, -13, 138, 6.5, 4.6, 14],
+];
+const FRONT: Lock[] = [
+  // ciocca davanti all'orecchio, fino alla guancia
+  [1, -10, 6, 8.5, 3, 8],
+  // frangia: sporge sopra il sopracciglio e ricade davanti al viso
+  [4.2, -11.5, 50, 6.5, 3.6, -34],
+];
+const LX = 0.55, LY = -0.83; // luce dall'alto, davanti
+const prof = (t: number) => (t < 0.15 ? 0.85 + t : (1 - t) / 0.85);
+const drawLock = (r: Raster, F: Frame, k: Lock, g: number) => {
+  const [x, y, a, l, w, b, d] = k, n = 7, c: V[] = [], ang: number[] = [];
+  let p: V = { x, y };
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    c.push(p); ang.push(a + b * t);
+    if (i < n) p = along(p, a + b * (t + 0.5 / n), l / n);
+  }
+  const L: number[] = [], R: number[] = [];
+  c.forEach((q, i) => {
+    const hw = (w / 2) * prof(i / n), l0 = along(q, ang[i] + 90, hw), r0 = along(q, ang[i] - 90, hw);
+    L.push(l0.x, l0.y); R.unshift(r0.x, r0.y);
   });
-  return m;
+  r.poly(F, L.concat(R), HAIR, g, {
+    fn: (X, Y) => {
+      // punto più vicino sulla linea centrale: t lungo la ciocca e distanza con segno (positiva verso la luce)
+      let best = 1e9, T = 0, side = 0;
+      for (let i = 0; i < n; i++) {
+        const A = c[i], B = c[i + 1], ux = B.x - A.x, uy = B.y - A.y, LL = ux * ux + uy * uy || 1e-6;
+        const s = Math.max(0, Math.min(1, ((X - A.x) * ux + (Y - A.y) * uy) / LL));
+        const dx = X - A.x - ux * s, dy = Y - A.y - uy * s, dd = dx * dx + dy * dy;
+        if (dd < best) { best = dd; T = (i + s) / n; side = ux * dy - uy * dx; }
+      }
+      const nrm = along({ x: 0, y: 0 }, a + b * T + (side > 0 ? -90 : 90), 1);
+      const u = (Math.sqrt(best) / Math.max(0.6, (w / 2) * prof(T))) * (nrm.x * LX + nrm.y * LY > 0 ? 1 : -1);
+      return (u > 0.25 ? 3 : u > -0.35 ? 2 : 1) - (d || 0);
+    },
+  });
+};
+// calotta: la massa dei capelli sotto le ciocche, così fra una punta e l'altra non resta il vuoto
+const CAP = [-2.5, -3, -5, -4.5, -6.2, -8, -5.5, -12, -3, -14.6, 1, -15.4, 4.4, -14.2, 5.8, -12, 5.2, -10.4, 3, -10, 0.4, -9.4, -1, -8, -1.4, -5];
+const drawHead = (r: Raster, at: V, hurt: boolean, g0: number) => {
+  const o = { x: Math.round(at.x), y: Math.round(at.y) }, F: Frame = { o, ax: { x: 1, y: 0 }, ay: { x: 0, y: 1 } };
+  let g = g0;
+  r.poly(F, CAP, HAIR, g++, { sh: "blob", t: -1 });
+  BACK.forEach((k) => drawLock(r, F, k, g));
+  g++;
+  MID.forEach((k) => drawLock(r, F, k, g));
+  g++;
+  // il viso sta in un gruppo più alto delle ciocche davanti: così il bordo scuro cade sui capelli, non sulla pelle
+  r.grid(hurt ? FACE_HURT : FACE, o, g + FRONT.length);
+  FRONT.forEach((k) => drawLock(r, F, k, g++));
+  return g + 1;
 };
 
-// Buster Sword: lama larga e scheggiata, due fori alla base, guardia a cornice, impugnatura rossa
+// ---------- corpo ----------
+// pantaloni larghi raccolti negli anfibi allacciati
+const leg = (r: Raster, L: Leg, g: number, dim = 0) => {
+  const bt = lerpV(L.k, L.a, 0.52);
+  r.limb(L.h, L.k, 8.4, 7.6, PANTS, g, dim);
+  r.limb(L.k, bt, 7.6, 8.4, PANTS, g, dim);
+  r.limb(lerpV(L.k, bt, 0.5), bt, 9, 8.6, PANTS, g, dim, 2);
+  r.limb(bt, L.a, 5.6, 5.4, BOOT, g, dim);
+  r.limb(bt, along(bt, L.a2, 1.4), 6.4, 6.2, BOOT, g, dim, 0);
+  const Ff = frameAt(L.a, L.fa);
+  r.poly(Ff, [-3.2, -3, 1.6, -3, 4, -1.2, 6.4, 0, 7, 1.4, 7, 3, -3.2, 3], BOOT, g, { dim });
+  r.poly(Ff, [-3.2, 2.1, 7, 2.1, 7, 3, -3.2, 3], BOOT, g, { sh: "flat", t: 0 });
+  // lacci sul davanti del gambale e cinghietta in cima
+  [0.25, 0.5, 0.75].forEach((k) => r.dot(along(lerpV(bt, L.a, k), L.a2 + 90, 2.2), BOOT[3], g));
+  r.dot(along(along(bt, L.a2, 0.7), L.a2 + 90, 2.8), METAL[2], g);
+};
+
+// braccio sinistro (vicino): bracciale a piastre imbullonato e guanto; destro (lontano): manicotto nero e guanto
+const arm = (r: Raster, A: Arm, g: number, dim: number, near: boolean) => {
+  r.limb(A.s, A.e, 4.8, 4, SKIN, g, dim);
+  const c = lerpV(A.e, A.w, near ? 0.22 : 0.08);
+  r.limb(A.e, c, 4, 3.9, SKIN, g, dim);
+  if (near) {
+    r.limb(c, A.w, 5.4, 5, IRON, g, dim);
+    [0, 0.36, 0.7].forEach((k) => r.limb(lerpV(c, A.w, k), along(lerpV(c, A.w, k), A.a2, 0.8), 5.9, 5.7, IRON, g, dim, 0));
+    [0.2, 0.55, 0.88].forEach((k) => r.dot(along(lerpV(c, A.w, k), A.a2 + 90, 1.9), METAL[3], g));
+  } else r.limb(c, A.w, 4.4, 4.2, GLOVE, g, dim);
+  r.limb(A.w, along(A.w, A.a2, 1.6), 4.4, 3.8, GLOVE, g, dim);
+};
+
+// Buster Sword: lama larga con filo smussato, due fori, guardia a blocco imbullonata, impugnatura fasciata
 const buster = (r: Raster, at: V, ang: number, g: number) => {
   const F = frameAt(at, ang);
-  r.limb(along(at, ang, -7), along(at, ang, 2.6), 2.6, 2.6, GRIP, g);
-  r.limb(along(at, ang, -8.2), along(at, ang, -8.6), 3.2, 3.2, METAL, g);
-  r.poly(F, [2.6, -5.4, 5.4, -5.4, 5.4, 5.4, 2.6, 5.4], METAL, g, { sh: "cy" });
-  r.poly(F, [5.4, -4.6, 48, -4.6, 52, 1.2, 52, 4.6, 5.4, 4.6], STEEL, g, {
+  r.poly(F, [-7.4, -1.3, 2.6, -1.3, 2.6, 1.3, -7.4, 1.3], GRIP, g, { fn: (X, Y) => (Math.floor(X * 0.9 + Y * 0.7 + 20) % 2 ? 1 : 2) + (Y < -0.4 ? 1 : 0) });
+  r.limb(along(at, ang, -8.2), along(at, ang, -8.8), 3.2, 3.2, METAL, g);
+  r.poly(F, [2.6, -5.2, 6, -5.2, 6, 5.2, 2.6, 5.2], IRON, g, { sh: "cy" });
+  r.poly(F, [6, -4.6, 48, -4.6, 52, 1.6, 52, 4.6, 6, 4.6], STEEL, g, {
     fn: (X, Y) => {
-      if (Math.hypot(X - 9, Y + 0.4) < 1.35 || Math.hypot(X - 13, Y + 0.4) < 1.35) return 0;
-      if (X < 6.4) return 1;
-      if (Y > 3.2) return 3;
-      if (Y < -3.6) return 1;
-      const d = crack(X, Y);
-      if (d < 0.55) return 1;
-      if (d < 1.3 && crack(X, Y - 1) < 0.55) return 3;
+      if (Math.hypot(X - 9.6, Y + 0.6) < 1.35 || Math.hypot(X - 13.6, Y + 0.6) < 1.35) return 0;
+      if (Y > 3) return 3;
+      if (Y > 2.2) return 1;
+      if (Y < -3.8) return 1;
+      // graffi e usura sul piatto
+      if ((Math.floor(X * 1.7) * 7 + Math.floor((Y + 5) * 1.3) * 13) % 23 === 0) return 1;
       return 2;
     },
   });
-  // borchie della guardia
-  [-3.6, 3.6].forEach((y) => r.dot(along(along(at, ang, 4), ang + 90, y), METAL[3], g));
+  [-3.4, 0, 3.4].forEach((y) => r.dot(along(along(at, ang, 4.3), ang + 90, y), METAL[2], g));
 };
 
 const draw = (r: Raster, s: Skel, _c: V[][]) => {
   const F = torsoFrame(s), p = s.p;
   // braccio e gamba lontani: un tono più scuri, per dare profondità
-  if (!p.ik) arm(r, s.arm.b, 10, 1);
+  if (!p.ik) arm(r, s.arm.b, 10, 1, false);
   leg(r, s.leg.b, 20, 1);
-  // bacino (sbuffo dei pantaloni), dolcevita a coste, cintura con fibbia tonda
+  // bacino, dolcevita a coste, corsetto di cuoio con doppia cintura
   r.poly(F, [-5, -4.5, 4.6, -4.5, 5.4, 1, 4.8, 3.4, -5.2, 3.4, -5.6, 0], PANTS, 30);
-  r.poly(F, [-4.2, 2.6, 4, 2.6, 4.6, 7, 5.6, 12, 5.2, 15.8, 3.2, 18.4, -1.6, 19, -4.6, 17, -5.4, 11.4, -4.8, 6.4], KNIT, 30, {
+  r.poly(F, [-4.2, 6, 4.4, 6, 4.8, 8, 5.6, 12, 5.2, 15.8, 3.2, 18.4, -1.6, 19, -4.6, 17, -5.4, 11.4, -4.8, 7.4], KNIT, 30, {
     fn: (X, Y) => {
       const base = X > 3 ? 3 : X > -1.2 ? 2 : X > -3.8 ? 1 : 0;
-      return base - (((Math.floor(X + 20) & 1) && Y > 4 && Y < 17) ? 1 : 0) + (Y > 13 && X > 0 ? 1 : 0);
+      return base - ((Math.floor(X + 20) & 1) && Y < 17 ? 1 : 0) + (Y > 13 && X > 0 ? 1 : 0);
     },
   });
-  r.poly(F, [-2, 17, 2.6, 17, 2.6, 21, -1.6, 21], KNIT, 30, { sh: "cx", t: -1 });
-  // tracolla dello spallaccio: dalla spalla scende in diagonale sul petto
-  r.poly(F, [1, 18.4, 3.2, 18, 5.6, 9.6, 5.4, 6.8], BELT, 31, { sh: "cx" });
-  r.poly(F, [-5.4, 0.4, 5.3, 0.4, 5.3, 3.2, -5.4, 3.2], BELT, 31, { sh: "cx" });
-  const bk = along(along(s.hip, 90 - s.lean, 4.6), 180 - s.lean, 1.8);
-  r.limb(bk, along(bk, 90 - s.lean, 0.6), 3.4, 3.4, METAL, 32);
+  r.poly(F, [-2.2, 17, 2.8, 17, 2.8, 21.6, -1.8, 21.6], KNIT, 30, { fn: (X) => ((Math.floor(X + 20) & 1) ? 1 : 2) });
+  r.poly(F, [-5.4, 2.4, 5.2, 2.4, 5.6, 5, 5.4, 9, -5.2, 9, -5.6, 5], BELT, 31, { sh: "cx" });
+  // fregio sul corsetto
+  r.poly(F, [2.6, 4.4, 4.6, 4.4, 4.6, 7.2, 2.6, 7.2], BELT, 32, { sh: "flat", t: 1 });
+  r.poly(F, [-5.4, -0.6, 5.3, -0.6, 5.3, 2.4, -5.4, 2.4], BELT, 32, { sh: "cx", t: -1 });
+  const bk = along(along(s.hip, 90 - s.lean, 4.8), 180 - s.lean, 0.9);
+  r.poly(frameAt(bk, 180 - s.lean), [-1.2, -1.1, 1.2, -1.1, 1.2, 1.1, -1.2, 1.1], METAL, 33, { sh: "cy" });
+  // bretella: dalla spalla scende dritta al corsetto
+  r.poly(F, [1.2, 18.6, 3, 18.4, 4.6, 9, 3, 9], BELT, 31, { sh: "cx" });
   leg(r, s.leg.f, 40);
   // collo e testa
   r.limb(s.neck, s.head, 3.6, 3.4, SKIN, 50, 0);
-  r.grid(p.ex ? HEAD_HURT : HEAD, s.head, 50);
-  if (p.ik) arm(r, s.arm.b, 55, 1);
-  buster(r, s.grip, s.wa, 60);
-  arm(r, s.arm.f, 70);
-  // spallaccio a cupola su una piastra più bassa, con due bulloni: segue a metà la rotazione dell'omero
-  const A = s.arm.f, pa = (A.a1 - s.lean) * 0.5, PF = frameAt(along(A.s, A.a1, 1.4), pa);
+  let g = drawHead(r, s.head, !!p.ex, 100);
+  if (p.ik) arm(r, s.arm.b, g++, 1, false);
+  buster(r, s.grip, s.wa, g++);
+  arm(r, s.arm.f, g++, 0, true);
+  // spallaccio: piastra bombata con bordo ribattuto e tre bulloni; segue a metà la rotazione dell'omero
+  const A = s.arm.f, pa = (A.a1 - s.lean) * 0.5, PF = frameAt(along(A.s, A.a1, 1.6), pa);
   const at = (X: number, Y: number): V => ({ x: PF.o.x + PF.ax.x * X + PF.ay.x * Y, y: PF.o.y + PF.ax.y * X + PF.ay.y * Y });
-  r.limb(along(A.s, A.a1, 4.6), along(A.s, A.a1, 5.8), 5.2, 4.8, BELT, 73, 0, 0);
-  r.poly(PF, [1.4, -4, 5.4, -3.4, 5.8, 0, 5.4, 3.4, 1.4, 4], PAUL, 74, { t: -1 });
-  r.poly(PF, [-4.2, -1.4, -3.6, -3.6, -1.8, -4.6, 1.4, -4.6, 3.6, -3.2, 4, 0, 3.6, 3.2, 1.4, 4.6, -1.8, 4.4, -3.6, 2.8, -4.2, 0.6], PAUL, 75);
-  [-1.6, 2].forEach((Y) => r.limb(at(-3.6, Y), along(at(-3.6, Y), pa + 205 + Y * 4, 2.6), 1.9, 1.2, METAL, 76));
+  r.limb(along(A.s, A.a1, 4.8), along(A.s, A.a1, 6), 5.2, 4.8, BELT, g++, 0, 0);
+  r.poly(PF, [-4.4, -1.6, -3.8, -4, -1.8, -5.2, 1.8, -5.2, 4.4, -4, 5.6, -0.6, 5, 3.4, 1.8, 5, -1.8, 4.8, -3.8, 3, -4.4, 0.6], PAUL, g, {
+    fn: (X, Y) => {
+      // bordo consumato chiaro in alto, piastra scura e bombata, lato in ombra verso il basso
+      const e = Math.max(Math.abs(X - 0.6) / 5, Math.abs(Y) / 5.1);
+      if (e > 0.84) return X < 1 ? 3 : 1;
+      return (Y < -1.6 ? 2 : 1) + (X < -1.5 && Y < 1 ? 1 : 0) - (X > 3.4 ? 1 : 0);
+    },
+  });
+  // bulloni sporgenti sul bordo alto (verso la nuca) e una testa di rivetto sul davanti
+  [1, 3.6].forEach((Y) => { const b0 = at(-4, Y); r.limb(b0, along(b0, pa + 196, 2.4), 2, 1.6, METAL, g + 1); });
+  r.dot(at(0, -2.6), METAL[3], g + 1);
 };
 
 // posa base come la figure di riferimento: gambe larghe e piegate, spadone impugnato a due mani
