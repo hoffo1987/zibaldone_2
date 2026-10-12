@@ -25,6 +25,7 @@
   },
   "scripts": {
     "sprites:cloud": "node scripts/build-cloud-atlas.cjs",
+    "sprites:tweens": "python3 scripts/tween-cloud.py",
     "preview:egg": "node scripts/preview-egg.cjs",
     "typecheck:egg": "tsc --project scripts/tsconfig.egg.json",
     "start": "react-scripts start",

@@ -162,14 +162,17 @@ export const CLOUD: CharDef = {
   sheet: SHEET, draw,
   anims: {
     idle: {
-      cels: [{ t: 0, frame: "idle0" }, { t: 0.5, frame: "idle1" }, { t: 1, frame: "idle0" }],
+      // respiro: pausa in alto e in basso, due fotogrammi intermedi in salita e in discesa
+      cels: [{ t: 0, frame: "idle0" }, { t: 0.3, frame: "idleA" }, { t: 0.42, frame: "idleB" }, { t: 0.54, frame: "idle1" },
+        { t: 0.86, frame: "idleB" }, { t: 0.98, frame: "idleA" }, { t: 1.1, frame: "idle0" }],
       len: 1.3, loop: true, fps: 12, keys: [
         { t: 0, p: {} },
         { t: 0.65, p: { lean: 6, fu: 8, ff: 70, w: 91, fs: -19, bs: -8, hy: 1 } },
       ],
     },
     run: {
-      cels: ["run0", "run1", "run2", "run3", "run4", "run5"].map((frame, i) => ({ t: i / 10, frame })),
+      // 6 passi disegnati + 6 intermedi: 20 fotogrammi al secondo
+      cels: ["run0", "run0m", "run1", "run1m", "run2", "run2m", "run3", "run3m", "run4", "run4m", "run5", "run5m"].map((frame, i) => ({ t: i / 20, frame })),
       len: 0.6, loop: true, fps: 20, speed: 120, keys: [
         { t: 0, p: { ik: 0, lean: 15, fu: -30, ff: 18, w: -62, ft: 38, fs: -8, fa: -6, bt: -28, bs: -60, ba: 10, bu: 38, bf: 42, y: 0 }, e: "lin" },
         { t: 0.075, p: { ft: 22, fs: -30, fa: 0, bt: -10, bs: -88, ba: 0, y: 1, bu: 20, bf: 48, fu: -27 }, e: "lin" },
@@ -182,7 +185,7 @@ export const CLOUD: CharDef = {
       ],
     },
     jump: {
-      cels: [{ t: 0, frame: "jump" }],
+      cels: [{ t: 0, frame: "jump" }, { t: 0.2, frame: "jumpFall" }],
       len: 0.3, fps: 15, ground: false, keys: [
         { t: 0, p: { ik: 0, fa: 0, ba: 4, lean: 18, ft: 30, fs: -60, bt: -25, bs: -50, fu: -40, ff: 20, w: -70, bu: 40, bf: 40 } },
         { t: 0.12, p: { lean: 4, ft: 55, fs: -75, bt: -8, bs: -38, fu: -20, ff: 40, w: -100, bu: 70, bf: 50 } },
@@ -203,7 +206,7 @@ export const CLOUD: CharDef = {
       ],
     },
     atk1: {
-      cels: [{ t: 0, frame: "windup" }, { t: 0.08, frame: "slash" }, { t: 0.17, frame: "follow" }, { t: 0.28, frame: "heavyRecover" }, { t: 0.36, frame: "idle0" }],
+      cels: [{ t: 0, frame: "windup" }, { t: 0.08, frame: "slash" }, { t: 0.17, frame: "follow" }, { t: 0.225, frame: "followRecover" }, { t: 0.28, frame: "heavyRecover" }, { t: 0.36, frame: "idle0" }],
       len: 0.42, fps: 20, trail: [0.05, 0.2], cancel: 0.22,
       hit: [{ t0: 0.08, t1: 0.17, box: [6, -52, 48, 0], dmg: 12, kb: 130 }],
       keys: [
@@ -225,7 +228,7 @@ export const CLOUD: CharDef = {
       ],
     },
     atk3: {
-      cels: [{ t: 0, frame: "windup" }, { t: 0.12, frame: "heavyWindup" }, { t: 0.2, frame: "heavySlash" }, { t: 0.32, frame: "heavyRecover" }, { t: 0.5, frame: "follow" }, { t: 0.6, frame: "idle0" }],
+      cels: [{ t: 0, frame: "windup" }, { t: 0.12, frame: "heavyWindup" }, { t: 0.2, frame: "heavySlash" }, { t: 0.26, frame: "heavySlashRecover" }, { t: 0.32, frame: "heavyRecover" }, { t: 0.41, frame: "recoverFollow" }, { t: 0.5, frame: "follow" }, { t: 0.6, frame: "idle0" }],
       len: 0.66, fps: 20, trail: [0.13, 0.28], cancel: 0.5,
       hit: [{ t0: 0.2, t1: 0.32, box: [8, -44, 56, 2], dmg: 24, kb: 240, ky: -120 }],
       keys: [
