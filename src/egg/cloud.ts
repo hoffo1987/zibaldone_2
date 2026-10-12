@@ -1,233 +1,151 @@
-// Cloud Strife (FF VII Remake) — dolcevita a coste senza maniche, bretelle e corsetto di cuoio, pantaloni larghi,
-// anfibi, spallaccio imbullonato, bracciale sul braccio sinistro, manicotto sul destro e Buster Sword
-import { CharDef, Frame, Grid, P0, Raster, Skel, V, Arm, Leg, hex, rp, torsoFrame, frameAt, along, lerpV, variant } from "./rig";
+// Cloud Strife (FF VII) in pixel art: dolcevita blu notte senza maniche, pantaloni larghi, stivali e guanti di cuoio,
+// bracciali borchiati, spallaccio, capelli a punte disegnati a mano e Buster Sword
+import { CharDef, Grid, P0, Raster, Skel, V, Arm, Leg, hex, rp, torsoFrame, frameAt, along, lerpV, variant } from "./rig";
 
-const HAIR = rp("#6b4a26", "#b48a52", "#dcbc82", "#f7e6bc");
-const SKIN = rp("#8c5a46", "#d29a7c", "#f0c6a6", "#ffe4cc");
-const KNIT = rp("#12151f", "#232838", "#363d55", "#535c7a");
-const PANTS = rp("#111117", "#22222c", "#363643", "#525261");
-const BOOT = rp("#100f12", "#252328", "#3d3a42", "#5e5a64");
-const GLOVE = rp("#100f12", "#211f25", "#36333b", "#524e57");
-const BELT = rp("#1d130d", "#3a281c", "#5a412e", "#7d5d44");
-const METAL = rp("#2c313b", "#666f7d", "#a6b0bd", "#e8eef5");
-const IRON = rp("#1b1e24", "#373c46", "#5a616d", "#878f9c");
-const PAUL = rp("#121418", "#272a30", "#43474f", "#868c96");
-const STEEL = rp("#202328", "#41464e", "#6a7079", "#a0a7b0");
-const GRIP = rp("#1b120d", "#36261a", "#55402d", "#765c43");
+const HAIR = rp("#7a4614", "#c47e28", "#eab04a", "#fde3a0");
+const SKIN = rp("#9a5a40", "#d99572", "#f4c39c", "#ffe2c6");
+const KNIT = rp("#0f1220", "#1c2236", "#2a3250", "#414c70");
+const PANTS = rp("#0e1120", "#1a2036", "#283150", "#3e4a72");
+const BOOT = rp("#24130a", "#45261a", "#6a3d24", "#925a36");
+const GLOVE = rp("#2e170c", "#57301a", "#7f4a28", "#a86a3c");
+const BELT = rp("#2a170c", "#57331b", "#82512c", "#ab7240");
+const METAL = rp("#30353f", "#5f6774", "#9aa3b0", "#d8dee6");
+const STEEL = rp("#26292f", "#4c515a", "#7b818b", "#c3c8cf");
+const GRIP = rp("#3e0a0e", "#7a1820", "#b02a33", "#dc4f55");
+const GOLD = hex("#d8b060");
 
-// ---------- testa ----------
-// viso di profilo verso destra, a pixel; l'ancora (5,12) è l'attacco del collo. I capelli sono a parte, ciocca per ciocca.
-const fp: Record<string, number> = {
+// testa di profilo verso destra, pixel per pixel: punte all'indietro e verso l'alto, frangia davanti al viso,
+// ciocca davanti all'orecchio. L'ancora è l'attacco del collo, sotto la mascella.
+const hp: Record<string, number> = {
+  a: HAIR[0], b: HAIR[1], c: HAIR[2], d: HAIR[3],
   s: SKIN[0], S: SKIN[1], L: SKIN[2], W: SKIN[3],
-  e: hex("#7cf0e4"), k: hex("#2a1a14"), m: hex("#a8685a"), r: SKIN[2],
+  e: hex("#3a8cff"), k: hex("#3a2418"), m: hex("#b86a58"),
 };
-const FACE: Grid = {
-  ax: 5, ay: 12, pal: fp, rows: [
-    "............",
-    "............",
-    "........LL..",
-    ".......SLLL.",
-    "..sSSSSkkLL.",
-    "..srsSSkeLL.",
-    "..srsSSSSLLW",
-    "..srsSSSSLLW",
-    "...ssSSSSL..",
-    "....sSSSSm..",
-    ".....sSSSL..",
-    "......ssS...",
+const HEAD: Grid = {
+  ax: 15, ay: 20, pal: hp, rows: [
+    "............d..........",
+    "...........ad....d.....",
+    "...........bdd..ad.....",
+    "....dd.....bcd..bcd....",
+    ".....ddc..acccaabcd...d",
+    "......addcbcccdabccd.dd",
+    "....dd.abccccccabccddcb",
+    ".....ddcbaacccdaacccca.",
+    "...dddccccbaccddbccdcda",
+    ".ddccccccbbaacccddcccda",
+    "...aabbbbcccaacdddcbdba",
+    ".....aabbccbbaaSSdaada.",
+    "....ddccbbbLscSSkkLLda.",
+    "...bbbbccbaLscSSkeLLWa.",
+    "......aabcasLdSSSSLLLW.",
+    "........bca.sdSSSSSLs..",
+    ".......bca..saSSSSSL...",
+    "......aa.....sSSSSmL...",
+    "..............ssSSL....",
+    "...............sss.....",
   ],
 };
-const FACE_HURT = variant(FACE, { e: "k" });
+const HEAD_HURT = variant(HEAD, { e: "k" });
 
-// ciocca: radice (x,y) nel sistema della testa, angolo come gli arti (0 giù, 90 avanti, 180 su, -90 dietro),
-// lunghezza, larghezza alla radice, curvatura (gradi aggiunti verso la punta), d = un tono più scura (strato dietro)
-type Lock = [number, number, number, number, number, number, number?];
-const BACK: Lock[] = [
-  // nuca: punte che scendono all'indietro sul collo
-  [-2.5, -5.5, -38, 6, 4.4, -6, 1],
-  // dietro: ciocche lunghe quasi orizzontali che in punta si alzano
-  [-4, -9, -84, 8.5, 5.6, -14, 1],
-  [-3, -12.5, -118, 9.5, 5.6, -10, 1],
-  // corona e cima
-  [-0.5, -14, -150, 9, 5.4, -6, 1],
-  [2.5, -14, 174, 7, 5, 6, 1],
-  // punte sottili e lunghe che spezzano la sagoma fra una ciocca grossa e l'altra
-  [-3.5, -7.5, -66, 8, 3, -12, 1],
-  [-4, -11, -106, 9.5, 3, -14, 1],
-  [-1.5, -14, -140, 10, 3, -8, 1],
-  [1.5, -14.5, -170, 8.5, 2.8, 2, 1],
-];
-const MID: Lock[] = [
-  [-4, -7, -60, 7, 5, -10],
-  [-3.5, -11, -100, 8.5, 5.4, -14],
-  [-1.5, -13.5, -133, 8.5, 5.2, -8],
-  [1, -14, -165, 7.5, 4.8, -4],
-  // ciuffo davanti che punta avanti e in alto sopra la fronte
-  [3.5, -13, 138, 6.5, 4.6, 14],
-];
-const FRONT: Lock[] = [
-  // ciocca davanti all'orecchio, fino alla guancia
-  [1, -10, 6, 8.5, 3, 8],
-  // frangia: sporge sopra il sopracciglio e ricade davanti al viso
-  [4.2, -11.5, 50, 6.5, 3.6, -34],
-];
-const LX = 0.55, LY = -0.83; // luce dall'alto, davanti
-const prof = (t: number) => (t < 0.15 ? 0.85 + t : (1 - t) / 0.85);
-const drawLock = (r: Raster, F: Frame, k: Lock, g: number) => {
-  const [x, y, a, l, w, b, d] = k, n = 7, c: V[] = [], ang: number[] = [];
-  let p: V = { x, y };
-  for (let i = 0; i <= n; i++) {
-    const t = i / n;
-    c.push(p); ang.push(a + b * t);
-    if (i < n) p = along(p, a + b * (t + 0.5 / n), l / n);
-  }
-  const L: number[] = [], R: number[] = [];
-  c.forEach((q, i) => {
-    const hw = (w / 2) * prof(i / n), l0 = along(q, ang[i] + 90, hw), r0 = along(q, ang[i] - 90, hw);
-    L.push(l0.x, l0.y); R.unshift(r0.x, r0.y);
-  });
-  r.poly(F, L.concat(R), HAIR, g, {
-    fn: (X, Y) => {
-      // punto più vicino sulla linea centrale: t lungo la ciocca e distanza con segno (positiva verso la luce)
-      let best = 1e9, T = 0, side = 0;
-      for (let i = 0; i < n; i++) {
-        const A = c[i], B = c[i + 1], ux = B.x - A.x, uy = B.y - A.y, LL = ux * ux + uy * uy || 1e-6;
-        const s = Math.max(0, Math.min(1, ((X - A.x) * ux + (Y - A.y) * uy) / LL));
-        const dx = X - A.x - ux * s, dy = Y - A.y - uy * s, dd = dx * dx + dy * dy;
-        if (dd < best) { best = dd; T = (i + s) / n; side = ux * dy - uy * dx; }
-      }
-      const nrm = along({ x: 0, y: 0 }, a + b * T + (side > 0 ? -90 : 90), 1);
-      const u = (Math.sqrt(best) / Math.max(0.6, (w / 2) * prof(T))) * (nrm.x * LX + nrm.y * LY > 0 ? 1 : -1);
-      return (u > 0.25 ? 3 : u > -0.35 ? 2 : 1) - (d || 0);
-    },
-  });
-};
-// calotta: la massa dei capelli sotto le ciocche, così fra una punta e l'altra non resta il vuoto
-const CAP = [-2.5, -3, -5, -4.5, -6.2, -8, -5.5, -12, -3, -14.6, 1, -15.4, 4.4, -14.2, 5.8, -12, 5.2, -10.4, 3, -10, 0.4, -9.4, -1, -8, -1.4, -5];
-const drawHead = (r: Raster, at: V, hurt: boolean, g0: number) => {
-  const o = { x: Math.round(at.x), y: Math.round(at.y) }, F: Frame = { o, ax: { x: 1, y: 0 }, ay: { x: 0, y: 1 } };
-  let g = g0;
-  r.poly(F, CAP, HAIR, g++, { sh: "blob", t: -1 });
-  BACK.forEach((k) => drawLock(r, F, k, g));
-  g++;
-  MID.forEach((k) => drawLock(r, F, k, g));
-  g++;
-  // il viso sta in un gruppo più alto delle ciocche davanti: così il bordo scuro cade sui capelli, non sulla pelle
-  r.grid(hurt ? FACE_HURT : FACE, o, g + FRONT.length);
-  FRONT.forEach((k) => drawLock(r, F, k, g++));
-  return g + 1;
-};
-
-// ---------- corpo ----------
-// pantaloni larghi raccolti negli anfibi allacciati
+// pantaloni larghi con pieghe, raccolti negli stivali di cuoio allacciati
 const leg = (r: Raster, L: Leg, g: number, dim = 0) => {
-  const bt = lerpV(L.k, L.a, 0.52);
-  r.limb(L.h, L.k, 8.4, 7.6, PANTS, g, dim);
-  r.limb(L.k, bt, 7.6, 8.4, PANTS, g, dim);
-  r.limb(lerpV(L.k, bt, 0.5), bt, 9, 8.6, PANTS, g, dim, 2);
-  r.limb(bt, L.a, 5.6, 5.4, BOOT, g, dim);
+  const bt = lerpV(L.k, L.a, 0.56);
+  r.limb(L.h, L.k, 7.8, 7.2, PANTS, g, dim);
+  r.limb(L.k, bt, 7.2, 8, PANTS, g, dim);
+  r.limb(lerpV(L.k, bt, 0.5), bt, 8.6, 8.2, PANTS, g, dim, 2);
+  // pieghe del tessuto: tratti chiari e scuri in diagonale su coscia e polpaccio
+  [[L.h, L.k, 0.3, 1.6, 1], [L.h, L.k, 0.65, -0.8, 1], [L.k, bt, 0.45, 1.2, 1], [L.h, L.k, 0.5, 0.4, 0], [L.k, bt, 0.75, -1.2, 0]].forEach(([a, b, k, o, hi]) => {
+    const A = a as V, Bv = b as V, c = along(lerpV(A, Bv, k as number), L.a1 + 90, o as number);
+    r.line(c, along(c, L.a1 + 140, 1.6), hi ? PANTS[3 - dim] : PANTS[0], g);
+  });
+  r.limb(bt, L.a, 5.4, 5.2, BOOT, g, dim);
   r.limb(bt, along(bt, L.a2, 1.4), 6.4, 6.2, BOOT, g, dim, 0);
   const Ff = frameAt(L.a, L.fa);
-  r.poly(Ff, [-3.2, -3, 1.6, -3, 4, -1.2, 6.4, 0, 7, 1.4, 7, 3, -3.2, 3], BOOT, g, { dim });
-  r.poly(Ff, [-3.2, 2.1, 7, 2.1, 7, 3, -3.2, 3], BOOT, g, { sh: "flat", t: 0 });
-  // lacci sul davanti del gambale e cinghietta in cima
-  [0.25, 0.5, 0.75].forEach((k) => r.dot(along(lerpV(bt, L.a, k), L.a2 + 90, 2.2), BOOT[3], g));
-  r.dot(along(along(bt, L.a2, 0.7), L.a2 + 90, 2.8), METAL[2], g);
+  r.poly(Ff, [-3.2, -3, 1.6, -3, 4, -1.2, 6.2, 0, 6.8, 1.4, 6.8, 3, -3.2, 3], BOOT, g, { dim });
+  r.poly(Ff, [-3.2, 2.1, 6.8, 2.1, 6.8, 3, -3.2, 3], BOOT, g, { sh: "flat", t: 0 });
+  [0.3, 0.65].forEach((k) => r.dot(along(lerpV(bt, L.a, k), L.a2 + 90, 2.2), BOOT[3], g));
 };
 
-// braccio sinistro (vicino): bracciale a piastre imbullonato e guanto; destro (lontano): manicotto nero e guanto
-const arm = (r: Raster, A: Arm, g: number, dim: number, near: boolean) => {
-  r.limb(A.s, A.e, 4.8, 4, SKIN, g, dim);
-  const c = lerpV(A.e, A.w, near ? 0.22 : 0.08);
-  r.limb(A.e, c, 4, 3.9, SKIN, g, dim);
-  if (near) {
-    r.limb(c, A.w, 5.4, 5, IRON, g, dim);
-    [0, 0.36, 0.7].forEach((k) => r.limb(lerpV(c, A.w, k), along(lerpV(c, A.w, k), A.a2, 0.8), 5.9, 5.7, IRON, g, dim, 0));
-    [0.2, 0.55, 0.88].forEach((k) => r.dot(along(lerpV(c, A.w, k), A.a2 + 90, 1.9), METAL[3], g));
-  } else r.limb(c, A.w, 4.4, 4.2, GLOVE, g, dim);
+// braccia nude, bracciale di metallo borchiato al polso, guanto di cuoio
+const arm = (r: Raster, A: Arm, g: number, dim = 0) => {
+  r.limb(A.s, A.e, 5.4, 4.4, SKIN, g, dim);
+  const c = lerpV(A.e, A.w, 0.55);
+  r.limb(A.e, c, 4.6, 4.1, SKIN, g, dim);
+  r.limb(c, A.w, 5.2, 5, METAL, g, dim);
+  r.limb(c, along(c, A.a2, 0.9), 5.8, 5.8, METAL, g, dim, 0);
   r.limb(A.w, along(A.w, A.a2, 1.6), 4.4, 3.8, GLOVE, g, dim);
+  [0.3, 0.75].forEach((k) => r.dot(along(lerpV(c, A.w, k), A.a2 + 90, 1.8), METAL[3], g));
 };
 
-// Buster Sword: lama larga con filo smussato, due fori, guardia a blocco imbullonata, impugnatura fasciata
+// Buster Sword: guardia con tre rivetti, due feritoie, filo chiaro in basso, punta a scalpello, impugnatura rossa
 const buster = (r: Raster, at: V, ang: number, g: number) => {
   const F = frameAt(at, ang);
-  r.poly(F, [-7.4, -1.3, 2.6, -1.3, 2.6, 1.3, -7.4, 1.3], GRIP, g, { fn: (X, Y) => (Math.floor(X * 0.9 + Y * 0.7 + 20) % 2 ? 1 : 2) + (Y < -0.4 ? 1 : 0) });
-  r.limb(along(at, ang, -8.2), along(at, ang, -8.8), 3.2, 3.2, METAL, g);
-  r.poly(F, [2.6, -5.2, 6, -5.2, 6, 5.2, 2.6, 5.2], IRON, g, { sh: "cy" });
-  r.poly(F, [6, -4.6, 48, -4.6, 52, 1.6, 52, 4.6, 6, 4.6], STEEL, g, {
+  r.limb(along(at, ang, -7), along(at, ang, 2.6), 2.4, 2.4, GRIP, g);
+  r.limb(along(at, ang, -8), along(at, ang, -8.5), 3, 3, METAL, g);
+  r.poly(F, [2.6, -5, 5.6, -5, 5.6, 5, 2.6, 5], METAL, g, { sh: "cy" });
+  r.poly(F, [5.6, -4.4, 46, -4.4, 50, 1.4, 50, 4.4, 5.6, 4.4], STEEL, g, {
     fn: (X, Y) => {
-      if (Math.hypot(X - 9.6, Y + 0.6) < 1.35 || Math.hypot(X - 13.6, Y + 0.6) < 1.35) return 0;
-      if (Y > 3) return 3;
-      if (Y > 2.2) return 1;
-      if (Y < -3.8) return 1;
-      // graffi e usura sul piatto
-      if ((Math.floor(X * 1.7) * 7 + Math.floor((Y + 5) * 1.3) * 13) % 23 === 0) return 1;
-      return 2;
+      if (X > 8 && X < 10.4 && Y > -2.6 && Y < 0.8) return 0;
+      if (X > 12 && X < 14.4 && Y > -2.6 && Y < 0.8) return 0;
+      if (Y > 2.8) return 3;
+      if (Y > 2) return 1;
+      if (Y < -3.6) return 1;
+      return X > 30 && Y < -1 ? 1 : 2;
     },
   });
-  [-3.4, 0, 3.4].forEach((y) => r.dot(along(along(at, ang, 4.3), ang + 90, y), METAL[2], g));
+  [-3.3, 0, 3.3].forEach((y) => r.dot(along(along(at, ang, 4.1), ang + 90, y), METAL[3], g));
 };
 
 const draw = (r: Raster, s: Skel, _c: V[][]) => {
   const F = torsoFrame(s), p = s.p;
   // braccio e gamba lontani: un tono più scuri, per dare profondità
-  if (!p.ik) arm(r, s.arm.b, 10, 1, false);
+  if (!p.ik) arm(r, s.arm.b, 10, 1);
   leg(r, s.leg.b, 20, 1);
-  // bacino, dolcevita a coste, corsetto di cuoio con doppia cintura
-  r.poly(F, [-5, -4.5, 4.6, -4.5, 5.4, 1, 4.8, 3.4, -5.2, 3.4, -5.6, 0], PANTS, 30);
-  r.poly(F, [-4.2, 6, 4.4, 6, 4.8, 8, 5.6, 12, 5.2, 15.8, 3.2, 18.4, -1.6, 19, -4.6, 17, -5.4, 11.4, -4.8, 7.4], KNIT, 30, {
+  // bacino, dolcevita a coste, cintura con fibbia dorata
+  r.poly(F, [-5.4, -4.5, 5, -4.5, 5.6, 1, 5.2, 3.2, -5.6, 3.2, -6, 0], PANTS, 30);
+  r.poly(F, [-4.8, 2.4, 4.6, 2.4, 5.2, 6, 6.4, 10.5, 6, 14, 3.8, 16.8, -1.8, 17.4, -5.4, 15.4, -6, 10, -5.4, 5.6], KNIT, 30, {
     fn: (X, Y) => {
-      const base = X > 3 ? 3 : X > -1.2 ? 2 : X > -3.8 ? 1 : 0;
-      return base - ((Math.floor(X + 20) & 1) && Y < 17 ? 1 : 0) + (Y > 13 && X > 0 ? 1 : 0);
+      const base = X > 2.8 ? 3 : X > -1.2 ? 2 : X > -3.6 ? 1 : 0;
+      return base - ((Math.floor(X + 20) & 1) && Y < 15.4 ? 1 : 0);
     },
   });
-  r.poly(F, [-2.2, 17, 2.8, 17, 2.8, 21.6, -1.8, 21.6], KNIT, 30, { fn: (X) => ((Math.floor(X + 20) & 1) ? 1 : 2) });
-  r.poly(F, [-5.4, 2.4, 5.2, 2.4, 5.6, 5, 5.4, 9, -5.2, 9, -5.6, 5], BELT, 31, { sh: "cx" });
-  // fregio sul corsetto
-  r.poly(F, [2.6, 4.4, 4.6, 4.4, 4.6, 7.2, 2.6, 7.2], BELT, 32, { sh: "flat", t: 1 });
-  r.poly(F, [-5.4, -0.6, 5.3, -0.6, 5.3, 2.4, -5.4, 2.4], BELT, 32, { sh: "cx", t: -1 });
-  const bk = along(along(s.hip, 90 - s.lean, 4.8), 180 - s.lean, 0.9);
-  r.poly(frameAt(bk, 180 - s.lean), [-1.2, -1.1, 1.2, -1.1, 1.2, 1.1, -1.2, 1.1], METAL, 33, { sh: "cy" });
-  // bretella: dalla spalla scende dritta al corsetto
-  r.poly(F, [1.2, 18.6, 3, 18.4, 4.6, 9, 3, 9], BELT, 31, { sh: "cx" });
+  r.poly(F, [-2, 15.4, 2.6, 15.4, 2.6, 19.4, -1.6, 19.4], KNIT, 30, { fn: (X) => ((Math.floor(X + 20) & 1) ? 1 : 2) });
+  r.poly(F, [-5.8, 0.6, 5.6, 0.6, 5.6, 3, -5.8, 3], BELT, 31, { sh: "cx" });
+  const bk = along(along(s.hip, 90 - s.lean, 5), 180 - s.lean, 1.8);
+  r.poly(frameAt(bk, 180 - s.lean), [-1.4, -1.3, 1.4, -1.3, 1.4, 1.3, -1.4, 1.3], BELT, 32, { fn: (X, Y) => (Math.abs(X) > 0.6 || Math.abs(Y) > 0.6 ? 3 : 0) });
+  r.dot(bk, GOLD, 32);
+  // bretella con borchie: dalla spalla scende sul petto fino alla cintura
+  r.poly(F, [1.2, 16.8, 3, 16.6, 5.2, 3, 3.4, 3], BELT, 31, { sh: "cx" });
+  [6, 10, 14].forEach((y) => r.dot(along(along(s.hip, 180 - s.lean, y), 90 - s.lean, 4.3 - (y - 3) * 0.15), METAL[3], 31));
   leg(r, s.leg.f, 40);
   // collo e testa
   r.limb(s.neck, s.head, 3.6, 3.4, SKIN, 50, 0);
-  let g = drawHead(r, s.head, !!p.ex, 100);
-  if (p.ik) arm(r, s.arm.b, g++, 1, false);
-  buster(r, s.grip, s.wa, g++);
-  arm(r, s.arm.f, g++, 0, true);
-  // spallaccio: piastra bombata con bordo ribattuto e tre bulloni; segue a metà la rotazione dell'omero
-  const A = s.arm.f, pa = (A.a1 - s.lean) * 0.5, PF = frameAt(along(A.s, A.a1, 1.6), pa);
+  r.grid(p.ex ? HEAD_HURT : HEAD, s.head, 50);
+  if (p.ik) arm(r, s.arm.b, 55, 1);
+  buster(r, s.grip, s.wa, 60);
+  arm(r, s.arm.f, 70);
+  // spallaccio: piastra di metallo sulla spalla con due bulloni a punta
+  const A = s.arm.f, pa = (A.a1 - s.lean) * 0.5, PF = frameAt(along(A.s, A.a1, 1.8), pa);
   const at = (X: number, Y: number): V => ({ x: PF.o.x + PF.ax.x * X + PF.ay.x * Y, y: PF.o.y + PF.ax.y * X + PF.ay.y * Y });
-  r.limb(along(A.s, A.a1, 4.8), along(A.s, A.a1, 6), 5.2, 4.8, BELT, g++, 0, 0);
-  r.poly(PF, [-4.4, -1.6, -3.8, -4, -1.8, -5.2, 1.8, -5.2, 4.4, -4, 5.6, -0.6, 5, 3.4, 1.8, 5, -1.8, 4.8, -3.8, 3, -4.4, 0.6], PAUL, g, {
-    fn: (X, Y) => {
-      // bordo consumato chiaro in alto, piastra scura e bombata, lato in ombra verso il basso
-      const e = Math.max(Math.abs(X - 0.6) / 5, Math.abs(Y) / 5.1);
-      if (e > 0.84) return X < 1 ? 3 : 1;
-      return (Y < -1.6 ? 2 : 1) + (X < -1.5 && Y < 1 ? 1 : 0) - (X > 3.4 ? 1 : 0);
-    },
-  });
-  // bulloni sporgenti sul bordo alto (verso la nuca) e una testa di rivetto sul davanti
-  [1, 3.6].forEach((Y) => { const b0 = at(-4, Y); r.limb(b0, along(b0, pa + 196, 2.4), 2, 1.6, METAL, g + 1); });
-  r.dot(at(0, -2.6), METAL[3], g + 1);
+  r.poly(PF, [-2.8, -1, -2.3, -2.7, -0.8, -3.5, 1.3, -3.4, 2.9, -2.4, 3.5, 0, 3, 2.4, 1.1, 3.3, -1.1, 3.2, -2.5, 2.1, -2.8, 0.5], METAL, 75);
+  [0.4, 2.4].forEach((Y) => { const b0 = at(-2.4, Y); r.limb(b0, along(b0, pa + 196, 2), 1.6, 1, METAL, 76); });
+  r.dot(at(0.4, -1.4), METAL[3], 76);
 };
 
-// posa base come la figure di riferimento: gambe larghe e piegate, spadone impugnato a due mani
-const B = { ...P0, lean: 12, fu: 26, ff: 30, bu: -8, bf: 26, ft: 36, fs: -44, fa: 8, bt: -34, bs: -4, ba: 34, w: 96, ik: 1 };
+// posa base come lo sprite di riferimento: in piedi, gambe appena aperte, spadone tenuto con una mano in avanti
+const B = { ...P0, lean: 5, fu: 10, ff: 72, bu: -8, bf: 16, ft: 20, fs: -16, fa: -4, bt: -18, bs: -6, ba: 24, w: 94 };
 
 export const CLOUD: CharDef = {
   id: "cloud", name: "Cloud Strife",
-  body: { thigh: 13, shin: 13, ankle: 2.5, foot: 4.6, heel: 1.6, torso: 18, neck: 2, ua: 10, la: 9, shF: [0.6, 15.6], shB: [-1.6, 15.6], hipF: 1, hipB: -1.5, grip: 4 },
+  body: { thigh: 14.5, shin: 14.5, ankle: 2.5, foot: 4.6, heel: 1.6, torso: 16.5, neck: 2, ua: 10, la: 9, shF: [0.6, 14.2], shB: [-1.6, 14.2], hipF: 1, hipB: -1.5, grip: 4 },
   base: B, buf: [240, 170, 120, 130], ink: hex("#0d0b16"),
-  weapon: { base: 14, tip: 52 }, smear: [hex("#ffffff", 235), hex("#9fdcff", 200)],
+  weapon: { base: 14, tip: 50 }, smear: [hex("#ffffff", 235), hex("#9fdcff", 200)],
   draw,
   anims: {
     idle: {
       len: 1.3, loop: true, fps: 12, keys: [
         { t: 0, p: {} },
-        { t: 0.65, p: { lean: 14, fu: 23, ff: 32, w: 92, fs: -48, bs: -8, hy: 1 } },
+        { t: 0.65, p: { lean: 6, fu: 8, ff: 70, w: 91, fs: -19, bs: -8, hy: 1 } },
       ],
     },
     run: {
