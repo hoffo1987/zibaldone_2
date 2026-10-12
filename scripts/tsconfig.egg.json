@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "esModuleInterop": true,
+    "lib": ["dom", "es2020"],
+    "target": "es2018",
+    "module": "commonjs",
+    "jsx": "react-jsx",
+    "types": [],
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "files": ["../src/egg/EggGame.tsx", "../src/egg/assets.d.ts"]
+}
