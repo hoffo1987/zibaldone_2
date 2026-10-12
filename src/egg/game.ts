@@ -4,13 +4,14 @@ import { CharDef, Puppet, Hit } from "./rig";
 import { CLOUD } from "./cloud";
 import { CLIVE } from "./clive";
 import { SEPH } from "./seph";
+import { celIndex, drawCel, stepCel, SpriteImages } from "./sprite-sheet";
 import { makeStage, Stage, VH, FLOOR, CORR_END, ARENA_X, ARENA_W } from "./world";
 
 export const CAST: Record<string, CharDef> = { cloud: CLOUD, clive: CLIVE, seph: SEPH };
 export type Btn = "left" | "right" | "jump" | "atk" | "dodge" | "spec" | "swap";
 export type Scene = "title" | "play" | "over" | "win" | "gallery";
 export interface HUD { scene: Scene; hero: string; hp: number; hpMax: number; boss: number; bossMax: number; showBoss: boolean; banner: string; paused: boolean }
-export interface GalleryInfo { anim: string; frame: number; frames: number; fps: number; t: number; len: number }
+export interface GalleryInfo { anim: string; frame: number; frames: number; fps: number; t: number; len: number; bitmap: boolean }
 
 const G = 980, JUMP = 335, SPEED = 122;
 type C2 = CanvasRenderingContext2D;
@@ -58,13 +59,24 @@ class Sfx {
 class Sprite {
   p: Puppet; cv: HTMLCanvasElement; cx: C2; img: ImageData; tcv: HTMLCanvasElement; tcx: C2;
   flash = 0; alpha = 1;
-  constructor(public def: CharDef) {
+  private painted = "";
+  constructor(public def: CharDef, private images: SpriteImages) {
+    if (def.sheet && !images[def.sheet.src]) throw new Error(`Sprite sheet not loaded: ${def.id}`);
     this.p = new Puppet(def);
     const r = this.p.r;
     [this.cv, this.cx] = mk(r.w, r.h); [this.tcv, this.tcx] = mk(r.w, r.h);
     this.img = new ImageData(new Uint8ClampedArray(r.col.buffer), r.w, r.h);
   }
-  paint() { this.p.render(); this.cx.putImageData(this.img, 0, 0); }
+  paint() {
+    const sheet = this.def.sheet, p = this.p;
+    if (sheet && p.A.cels) {
+      const index = celIndex(p.A, p.t), key = `${p.anim}:${index}`;
+      if (key === this.painted) return;
+      this.cx.clearRect(0, 0, this.cv.width, this.cv.height);
+      drawCel(this.cx, this.images[sheet.src], sheet, p.A.cels[index], p.r.ax, p.r.ay);
+      this.painted = key;
+    } else { p.render(); this.cx.putImageData(this.img, 0, 0); }
+  }
   tint(col: string, dst?: C2) {
     const x = dst || this.tcx; x.clearRect(0, 0, this.cv.width, this.cv.height);
     x.globalCompositeOperation = "source-over"; x.drawImage(this.cv, 0, 0);
@@ -108,12 +120,12 @@ export class Game {
   hdead = 0;
   galSprites: Record<string, Sprite> = {};
 
-  constructor(public canvas: HTMLCanvasElement, public onHud: (h: HUD) => void, public onGal?: (g: GalleryInfo) => void) {
+  constructor(public canvas: HTMLCanvasElement, public onHud: (h: HUD) => void, public onGal?: (g: GalleryInfo) => void, private images: SpriteImages = {}) {
     this.x = canvas.getContext("2d")!;
     this.stage = makeStage();
-    ["cloud", "clive"].forEach((id) => { this.heroes[id] = { s: new Sprite(CAST[id]), id }; });
+    ["cloud", "clive"].forEach((id) => { this.heroes[id] = { s: new Sprite(CAST[id], images), id }; });
     this.hero = this.heroes.cloud;
-    this.boss = new Sprite(SEPH);
+    this.boss = new Sprite(SEPH, images);
     this.resize(480);
     this.title();
     this.last = performance.now();
@@ -167,13 +179,14 @@ export class Game {
   }
   gallery(id: string, anim: string) {
     this.scene = "gallery";
-    if (!this.galSprites[id]) this.galSprites[id] = new Sprite(CAST[id]);
+    if (!this.galSprites[id]) this.galSprites[id] = new Sprite(CAST[id], this.images);
     const p = this.galSprites[id].p;
     if (this.gal.id !== id || this.gal.anim !== anim || p.anim !== anim) { p.play(anim, true); p.resetChains(); this.gal.dist = 0; }
-    this.gal.id = id; this.gal.anim = anim; this.emit(true);
+    this.gal.id = id; this.gal.anim = anim; this.gal.wait = 0; this.gal.key = ""; this.emit(true);
   }
   galStep(dir: number) {
     const p = this.galSprites[this.gal.id]?.p; if (!p) return;
+    if (p.A.cels) { p.t = stepCel(p.A, p.t, dir); p.done = false; this.gal.wait = 0; return; }
     const fps = p.A.fps || 15; p.t = Math.max(0, Math.floor(p.t * fps + 1e-6) / fps + dir / fps); if (p.A.loop) p.t %= p.A.len; p.done = false;
   }
   setPaused(v: boolean) { this.paused = v; this.emit(true); }
@@ -235,7 +248,8 @@ export class Game {
     p.x += v * dt * p.face; g.dist += v * dt;
     p.stepChains(g.paused ? 0.0001 : dt * g.speed, FLOOR);
     const fps = p.A.fps || 15;
-    const info = { anim: g.anim, frame: Math.min(p.frameIdx(), Math.max(0, Math.round(p.A.len * fps) - 1)), frames: Math.max(1, Math.round(p.A.len * fps)), fps, t: p.t, len: p.A.len };
+    const cels = p.A.cels;
+    const info = { anim: g.anim, frame: cels ? celIndex(p.A, p.t) : Math.min(p.frameIdx(), Math.max(0, Math.round(p.A.len * fps) - 1)), frames: cels ? cels.length : Math.max(1, Math.round(p.A.len * fps)), fps, t: p.t, len: p.A.len, bitmap: !!cels };
     const k = g.id + info.anim + info.frame; if (k !== g.key) { g.key = k; this.onGal?.(info); }
   }
 
@@ -581,7 +595,7 @@ export class Game {
   private renderGallery() {
     const x = this.x, W = this.W, s = this.galSprites[this.gal.id]; if (!s) return;
     x.fillStyle = "#14121f"; x.fillRect(0, 0, W, VH);
-    const Z = this.gal.id === "seph" ? 2 : 3, gy = VH - 76;
+    const Z = this.gal.id === "seph" || s.def.sheet ? 2 : 3, gy = VH - 88;
     // griglia di riferimento: un quadretto = 8px di gioco
     x.fillStyle = "#1b1929";
     for (let i = 0; i < W; i += 8 * Z) x.fillRect(i - (Math.round(this.gal.dist * Z) % (8 * Z) + 8 * Z) % (8 * Z), 0, 1, gy);
@@ -593,6 +607,8 @@ export class Game {
     x.drawImage(s.cv, -r.ax, -r.ay);
     x.restore();
     // anteprima 1:1 come in gioco
-    x.save(); x.translate(Math.round(W * 0.12), gy); x.scale(p.face, 1); x.drawImage(s.cv, -r.ax, -r.ay); x.restore();
+    if (W >= 480) {
+      x.save(); x.translate(Math.max(84, Math.round(W * 0.16)), gy); x.scale(p.face, 1); x.drawImage(s.cv, -r.ax, -r.ay); x.restore();
+    }
   }
 }

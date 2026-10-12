@@ -2,6 +2,8 @@
 // a bassa risoluzione con ombreggiatura a bande e outline, come fa Dead Cells con i
 // suoi modelli 3D. Nessuna dipendenza dal DOM: gira anche in node per le anteprime.
 
+import type { Cel, SpriteSheet } from "./sprite-sheet";
+
 export type V = { x: number; y: number };
 export const V2 = (x: number, y: number): V => ({ x, y });
 export const add = (a: V, b: V): V => ({ x: a.x + b.x, y: a.y + b.y });
@@ -283,6 +285,7 @@ export type Ease = "lin" | "in" | "out" | "io" | "step";
 export interface Key { t: number; p?: Partial<Pose>; e?: Ease; r?: boolean }
 export interface Hit { t0: number; t1: number; box: [number, number, number, number]; dmg: number; kb: number; ky?: number }
 export interface Anim {
+  cels?: Cel[]; // authored bitmap exposures, sampled without skeletal interpolation
   len: number; keys: Key[]; loop?: boolean; fps?: number; ground?: boolean;
   speed?: number; // velocità "virtuale" in galleria, per far reagire capelli e mantelli
   trail?: [number, number]; hit?: Hit[]; cancel?: number; // da quando si può concatenare l'azione successiva
@@ -343,11 +346,12 @@ export class Chain {
 
 // ================= personaggio =================
 export interface CharDef {
+  sheet?: SpriteSheet;
   id: string; name: string; body: Body; base: Pose; anims: Record<string, Anim>;
   buf: [number, number, number, number]; ink: Col;
   chains?: ChainDef[]; chainRest?: (s: Skel, i: number) => number;
   weapon: { base: number; tip: number }; smear: [Col, Col];
-  draw(r: Raster, s: Skel, c: V[][]): void;
+  draw?(r: Raster, s: Skel, c: V[][]): void;
 }
 
 export class Puppet {
@@ -397,6 +401,7 @@ export class Puppet {
   render(): Raster {
     const r = this.r; r.clear();
     const loc = this.chains.map((c) => c.p.map((q) => this.toLocal(q)));
+    if (!this.def.draw) throw new Error("Bitmap characters must be painted with their sprite sheet");
     this.def.draw(r, this.skel, loc);
     r.finish(this.def.ink);
     this.drawSmear();

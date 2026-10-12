@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Game, HUD, GalleryInfo, Btn, CAST } from "./game";
 import { VH } from "./world";
+import { loadSpriteSheets, SpriteSheet } from "./sprite-sheet";
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Silkscreen&display=swap');
@@ -38,6 +39,10 @@ const CSS = `
 .eg-row{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;align-items:center}
 .eg-row .eg-b{font-size:10px;padding:6px 8px}
 .eg-info{font-size:10px;color:#b9b2e8;text-align:center}
+@media(max-width:600px) and (orientation:portrait){
+  .eg.eg-gallery{justify-content:flex-start!important;padding-top:max(48px,env(safe-area-inset-top))!important}
+  .eg-gallery .eg-gal{position:fixed;bottom:max(12px,env(safe-area-inset-bottom));max-height:45vh;overflow-y:auto}
+}
 `;
 
 const PICK = [
@@ -60,9 +65,18 @@ export default function EggGame({ onClose }: { onClose: () => void }) {
   const [g, setG] = useState({ id: "cloud", anim: "idle", speed: 1, paused: false, fluid: false, face: 1 });
   const [down, setDown] = useState<Record<string, boolean>>({});
   const [mute, setMute] = useState(false);
+  const [assets, setAssets] = useState<"loading" | "ready" | "error">("loading");
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
-    const game = new Game(cv.current!, setHud, setGal); gm.current = game;
+    let game: Game | null = null, disposed = false;
+    setAssets("loading");
+    const sheets = Object.values(CAST).map(def => def.sheet).filter((sheet): sheet is SpriteSheet => !!sheet);
+    loadSpriteSheets(sheets).then(images => {
+      if (disposed) return;
+      game = new Game(cv.current!, setHud, setGal, images); gm.current = game;
+      fit(); setAssets("ready");
+    }).catch(() => { if (!disposed) setAssets("error"); });
     const coarse = !!window.matchMedia?.("(pointer: coarse)").matches;
     const fit = () => {
       const vw = window.innerWidth, vh = window.innerHeight, portrait = vh > vw * 1.05;
@@ -72,11 +86,12 @@ export default function EggGame({ onClose }: { onClose: () => void }) {
       if (!(bw > 0 && bh > 0)) return; // finestra nascosta o non ancora misurata
       const W = Math.max(ctrl ? 330 : 400, Math.min(640, Math.round((VH * bw) / bh)));
       const s = Math.min(bw / W, bh / VH);
-      game.resize(W); setBox({ w: Math.floor(W * s), h: Math.floor(VH * s), touch: coarse, portrait, ctrl });
+      game?.resize(W); setBox({ w: Math.floor(W * s), h: Math.floor(VH * s), touch: coarse, portrait, ctrl });
     };
     fit(); window.addEventListener("resize", fit); document.addEventListener("visibilitychange", fit);
     const esc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return; e.stopPropagation();
+      if (!game) { onClose(); return; }
       const sc = game.scene;
       if (sc === "play") game.setPaused(!game.paused); else if (sc === "gallery") game.title(); else onClose();
     };
@@ -84,10 +99,10 @@ export default function EggGame({ onClose }: { onClose: () => void }) {
     const H = document.documentElement, prev = [document.body.style.overflow, H.style.overflow];
     document.body.style.overflow = H.style.overflow = "hidden";
     return () => {
-      game.destroy(); window.removeEventListener("resize", fit); document.removeEventListener("visibilitychange", fit); window.removeEventListener("keydown", esc, true);
+      disposed = true; game?.destroy(); gm.current = null; window.removeEventListener("resize", fit); document.removeEventListener("visibilitychange", fit); window.removeEventListener("keydown", esc, true);
       document.body.style.overflow = prev[0]; H.style.overflow = prev[1];
     };
-  }, []);
+  }, [loadAttempt]);
 
   const G = gm.current;
   const scene = hud?.scene || "title";
@@ -112,7 +127,7 @@ export default function EggGame({ onClose }: { onClose: () => void }) {
   const vert = box.touch && box.portrait;
 
   return (
-    <div className="eg" style={vert ? { justifyContent: "flex-start", paddingTop: "max(24px, env(safe-area-inset-top))" } : undefined} onContextMenu={(e) => e.preventDefault()}>
+    <div className={`eg${scene === "gallery" ? " eg-gallery" : ""}`} style={vert ? { justifyContent: "flex-start", paddingTop: "max(24px, env(safe-area-inset-top))" } : undefined} onContextMenu={(e) => e.preventDefault()}>
       <style>{CSS}</style>
       <div className="eg-stage" style={{ width: box.w, height: box.h }}>
         <canvas ref={cv} />
@@ -130,7 +145,12 @@ export default function EggGame({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {scene === "title" && (
+        {assets !== "ready" && <div className="eg-menu" role="status" aria-live="polite">
+          <div className="eg-sub">{assets === "error" ? "Impossibile caricare gli sprite" : "Caricamento sprite…"}</div>
+          {assets === "error" && <button className="eg-b" onClick={() => setLoadAttempt(n => n + 1)}>Riprova</button>}
+        </div>}
+
+        {assets === "ready" && scene === "title" && (
           <div className="eg-menu">
             <div className="eg-sub">un segreto del circuito</div>
             <div className="eg-title">ONE-WINGED<br />ANGEL</div>
@@ -180,10 +200,10 @@ export default function EggGame({ onClose }: { onClose: () => void }) {
               <button className={`eg-b ${g.paused ? "on" : ""}`} onClick={() => galSet({ paused: !g.paused })}>{g.paused ? "Play" : "Pausa"}</button>
               <button className="eg-b" onClick={() => { galSet({ paused: true }); G?.galStep(1); }} aria-label="Frame successivo">|▶</button>
               {[1, 0.5, 0.25].map((s) => <button key={s} className={`eg-b ${g.speed === s ? "on" : ""}`} onClick={() => galSet({ speed: s })}>{s === 1 ? "1×" : s === 0.5 ? "½×" : "¼×"}</button>)}
-              <button className={`eg-b ${g.fluid ? "on" : ""}`} onClick={() => galSet({ fluid: !g.fluid })}>{g.fluid ? "Fluido" : "Pixel"}</button>
+              {!CAST[g.id].sheet && <button className={`eg-b ${g.fluid ? "on" : ""}`} onClick={() => galSet({ fluid: !g.fluid })}>{g.fluid ? "Fluido" : "Pixel"}</button>}
               <button className="eg-b" onClick={() => galSet({ face: -g.face })}>Gira</button>
             </div>
-            {gal && <div className="eg-info">{ANIM_IT[gal.anim] || gal.anim} · frame {gal.frame + 1}/{gal.frames} · {gal.fps} fps · {gal.len.toFixed(2)}s</div>}
+            {gal && <div className="eg-info">{ANIM_IT[gal.anim] || gal.anim} · frame {gal.frame + 1}/{gal.frames} · {gal.bitmap ? "sprite disegnati" : `${gal.fps} fps`} · {gal.len.toFixed(2)}s</div>}
           </div>
         )}
 
