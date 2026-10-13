@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { renderLoop } from "./renderLoop";
 
 const TAU = Math.PI * 2;
 const A0 = Math.atan2(9.6, 11.5);
@@ -46,9 +47,9 @@ const studio = (renderer: any) => {
   panel(11, 1.5, 0xfbbf24, 2.8, 4, -6, -2);
   panel(3, 3, 0xffffff, 5.0, -4, 7, 5); // punto luce speculare nitido per il clearcoat
   panel(16, 16, 0x0e3b36, 0.55, 0, 0, -10);
-  const pm = new THREE.PMREMGenerator(renderer), tex = pm.fromScene(sc, 0.03).texture;
+  const pm = new THREE.PMREMGenerator(renderer), target = pm.fromScene(sc, 0.03);
   pm.dispose(); geo.dispose(); sc.traverse((o: any) => o.material?.dispose?.());
-  return tex;
+  return target;
 };
 
 const currentMaterial = (uniforms: any) => {
@@ -82,27 +83,29 @@ varying float vT;
 
 const withT = (g: any) => { const uv = g.attributes.uv, a = new Float32Array(uv.count); for (let i = 0; i < uv.count; i++) a[i] = uv.getX(i); g.setAttribute("aT", new THREE.BufferAttribute(a, 1)); return g; };
 
-type Props = { intro?: boolean; spd?: number; fallback: React.ReactNode; className?: string };
+export type Props = { intro?: boolean; spd?: number; fps?: number; fallback: React.ReactNode; className?: string };
 
-export default function Logo3D({ intro = true, spd = 1, fallback, className = "" }: Props) {
+function Logo3D({ intro = true, spd = 1, fps = 30, fallback, className = "" }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const [fail, setFail] = useState(false);
-  const spdRef = useRef(spd); spdRef.current = spd;
+  const config = useRef({ spd, fps }); config.current = { spd, fps };
 
   useEffect(() => {
     const el = host.current; if (!el) return;
+    const mobile = window.matchMedia("(max-width:767px), (pointer:coarse)").matches;
+    const q = mobile ? { bevel: 6, curve: 24, arc: 96, radial: 14, sphere: 20, rings: 96, particles: 48 } : { bevel: 10, curve: 40, arc: 160, radial: 20, sphere: 32, rings: 144, particles: 80 };
     let renderer: any;
-    try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" }); }
+    try { renderer = new THREE.WebGLRenderer({ antialias: !mobile, alpha: true, powerPreference: mobile ? "low-power" : "high-performance" }); }
     catch (e) { setFail(true); return; }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.06;
     renderer.domElement.style.cssText = "width:100%;height:100%;display:block;touch-action:pan-y";
     el.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const envTex = studio(renderer); scene.environment = envTex;
+    const envTarget = studio(renderer); scene.environment = envTarget.texture;
     const camera = new THREE.PerspectiveCamera(29, 1, 1, 1000); camera.position.set(0, 0, 184);
-    const disposables: any[] = [envTex];
+    const disposables: any[] = [envTarget];
     const keep = (x: any) => { disposables.push(x); return x; };
 
     scene.add(new THREE.HemisphereLight(0xdffcf7, 0x062521, 0.65));
@@ -116,7 +119,7 @@ export default function Logo3D({ intro = true, spd = 1, fallback, className = ""
     const fgGroup = new THREE.Group(); badge.add(fgGroup); // gruppo frontale con micro-parallasse 3D
 
     // --- piastra smaltata con bisellatura più profonda e morbida ---
-    const plateGeo = keep(new THREE.ExtrudeGeometry(roundedSquare(29.5, 14.5), { depth: 5.8, bevelEnabled: true, bevelThickness: 3.4, bevelSize: 2.6, bevelSegments: 14, curveSegments: 56 }));
+    const plateGeo = keep(new THREE.ExtrudeGeometry(roundedSquare(29.5, 14.5), { depth: 5.8, bevelEnabled: true, bevelThickness: 3.4, bevelSize: 2.6, bevelSegments: q.bevel, curveSegments: q.curve }));
     plateGeo.translate(0, 0, -2.9);
     const ca = new THREE.Color("#22d8c0"), cb = new THREE.Color("#07423d"), sideCol = new THREE.Color("#0d5c54");
     const pos = plateGeo.attributes.position, nor = plateGeo.attributes.normal, col = new Float32Array(pos.count * 3), tmp = new THREE.Color();
@@ -133,28 +136,27 @@ export default function Logo3D({ intro = true, spd = 1, fallback, className = ""
 
     const FRONT = 5.9, BACK = -5.9;
     const gold = keep(new THREE.MeshPhysicalMaterial({ color: 0xe8b04a, metalness: 1, roughness: 0.22, clearcoat: 0.4, envMapIntensity: 1.35 }));
-    const dark CavityMat = keep(new THREE.MeshPhysicalMaterial({ color: 0x052420, roughness: 0.6, metalness: 0.2 }));
 
     // --- filetto bianco interno + sottile ghiera metallica interna ---
     const rimShape = roundedSquare(28.3, 13.5); rimShape.holes.push(roundedSquare(27.2, 12.6, new THREE.Path()));
-    const rimGeo = keep(new THREE.ExtrudeGeometry(rimShape, { depth: 0.65, bevelEnabled: true, bevelThickness: 0.15, bevelSize: 0.12, bevelSegments: 4, curveSegments: 48 }));
+    const rimGeo = keep(new THREE.ExtrudeGeometry(rimShape, { depth: 0.65, bevelEnabled: true, bevelThickness: 0.15, bevelSize: 0.12, bevelSegments: mobile ? 2 : 4, curveSegments: q.curve }));
     const rimMesh = new THREE.Mesh(rimGeo, keep(new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.34, roughness: 0.22, clearcoat: 1 })));
     rimMesh.position.z = FRONT - 0.15; badge.add(rimMesh);
 
     // --- la "C", la pista e le incastonature (socket) sulla piastra ---
     const uArc = { uPh: { value: -1 }, uGain: { value: 0 } }, uLine = { uPh: { value: -1 }, uGain: { value: 0 } };
     const arcCurve = new (class extends THREE.Curve { getPoint(t: number, v = new THREE.Vector3()) { return v.copy(arcAt(t, FRONT + 1.45)); } })();
-    const arcGeo = keep(withT(new THREE.TubeGeometry(arcCurve, 220, 2.55, 28, false)));
+    const arcGeo = keep(withT(new THREE.TubeGeometry(arcCurve, q.arc, 2.55, q.radial, false)));
     fgGroup.add(new THREE.Mesh(arcGeo, keep(currentMaterial(uArc))));
-    const lineGeo = keep(withT(new THREE.TubeGeometry(new THREE.LineCurve3(lineAt(0, FRONT + 1.25), lineAt(1, FRONT + 1.25)), 60, 1.55, 20, false)));
+    const lineGeo = keep(withT(new THREE.TubeGeometry(new THREE.LineCurve3(lineAt(0, FRONT + 1.25), lineAt(1, FRONT + 1.25)), 8, 1.55, q.radial, false)));
     fgGroup.add(new THREE.Mesh(lineGeo, keep(currentMaterial(uLine))));
 
-    const capGeo = keep(new THREE.SphereGeometry(1, 40, 28));
-    const ringSocketGeo = keep(new THREE.TorusGeometry(1, 0.16, 14, 36));
+    const capGeo = keep(new THREE.SphereGeometry(1, q.sphere, Math.round(q.sphere * 0.7)));
+    const ringSocketGeo = keep(new THREE.TorusGeometry(1, 0.16, 8, 24));
     const pearl = keep(new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.14, clearcoat: 1, clearcoatRoughness: 0.06, sheen: 1, sheenColor: new THREE.Color(0x9ff3e4), iridescence: 0.35 }));
     const amberMat = keep(new THREE.MeshPhysicalMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.35, roughness: 0.16, clearcoat: 1 }));
 
-    const addSocket = (p: THREE.Vector3, radius: number) => {
+    const addSocket = (p: { x: number; y: number; z: number }, radius: number) => {
       const s = new THREE.Mesh(ringSocketGeo, gold);
       s.position.set(p.x, p.y, FRONT + 0.25);
       s.scale.setScalar(radius * 0.92);
@@ -179,7 +181,7 @@ export default function Logo3D({ intro = true, spd = 1, fallback, className = ""
     // --- retro: circuito stampato ---
     const TR = [[[-22, -20], [-22, -6], [-12, 4], [-12, 18]], [[-4, 22], [-4, 10], [6, 0], [20, 0]], [[22, -22], [10, -22], [2, -14], [2, -4]], [[-24, 12], [-16, 20], [-6, 20]], [[14, 24], [14, 12], [22, 4]], [[-14, -24], [-4, -24], [4, -16]]];
     TR.forEach((pts) => {
-      badge.add(new THREE.Mesh(keep(new THREE.TubeGeometry(polyline(pts, BACK - 0.5), pts.length * 12, 0.65, 8, false)), gold));
+      badge.add(new THREE.Mesh(keep(new THREE.TubeGeometry(polyline(pts, BACK - 0.5), pts.length * 2, 0.65, 6, false)), gold));
       [pts[0], pts[pts.length - 1]].forEach(([x, y]) => { const d = new THREE.Mesh(capGeo, gold); d.position.set(x, y, BACK - 0.6); d.scale.set(1.9, 1.9, 0.6); badge.add(d); });
     });
     const chip = new THREE.Mesh(keep(new THREE.BoxGeometry(16, 11, 2.4)), keep(new THREE.MeshPhysicalMaterial({ color: 0x0b1f1d, roughness: 0.35, clearcoat: 0.8 }))); chip.position.set(8, -10, BACK - 1.4); badge.add(chip);
@@ -190,13 +192,13 @@ export default function Logo3D({ intro = true, spd = 1, fallback, className = ""
     const orbits = [{ r: 44.5, tilt: [1.2, 0.35, 0], speed: 0.55, color: 0x5eead4, ph: 0 }, { r: 48.5, tilt: [1.0, -0.6, 0.4], speed: -0.38, color: 0xfbbf24, ph: 2.1 }].map((o) => {
       const g = new THREE.Group(); g.rotation.set(o.tilt[0], o.tilt[1], o.tilt[2]); root.add(g);
       const ringMat = keep(new THREE.MeshBasicMaterial({ color: o.color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-      g.add(new THREE.Mesh(keep(new THREE.TorusGeometry(o.r, 0.2, 8, 200)), ringMat));
-      const trail = Array.from({ length: 9 }, (_, i) => sprite(o.color, 8.2 - i * 0.6, g));
+      g.add(new THREE.Mesh(keep(new THREE.TorusGeometry(o.r, 0.2, 6, q.rings)), ringMat));
+      const trail = Array.from({ length: mobile ? 5 : 9 }, (_, i) => sprite(o.color, 8.2 - i * 0.6, g));
       return { ...o, g, ringMat, trail };
     });
 
     // --- scintille ---
-    const SP = 120, spPos = new Float32Array(SP * 3), spVel = new Float32Array(SP * 3), spCol = new Float32Array(SP * 3), spLife = new Float32Array(SP);
+    const SP = q.particles, spPos = new Float32Array(SP * 3), spVel = new Float32Array(SP * 3), spCol = new Float32Array(SP * 3), spLife = new Float32Array(SP);
     const spGeo = keep(new THREE.BufferGeometry());
     spGeo.setAttribute("position", new THREE.BufferAttribute(spPos, 3)); spGeo.setAttribute("color", new THREE.BufferAttribute(spCol, 3));
     root.add(new THREE.Points(spGeo, keep(new THREE.PointsMaterial({ size: 3.8, map: glowTex, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }))));
@@ -212,7 +214,7 @@ export default function Logo3D({ intro = true, spd = 1, fallback, className = ""
     };
 
     const ptr = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
-    let hover = false, drag = false, dragX = 0, dragMoved = 0, lastMove = 0, ang = 0, vel = 0, settle: number | null = null, boost = 0, hoverK = 0;
+    let hover = false, drag = false, pointerId: number | null = null, dragY = 0, dragX = 0, dragMoved = 0, lastMove = 0, ang = 0, vel = 0, settle: number | null = null, boost = 0, hoverK = 0;
     const look = (e: PointerEvent) => {
       if (e.pointerType !== "mouse") return;
       const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
@@ -220,20 +222,21 @@ export default function Logo3D({ intro = true, spd = 1, fallback, className = ""
       ptr.y = Math.max(-1, Math.min(1, (e.clientY - cy) / (window.innerHeight / 2)));
     };
     let spins = 0;
-    const kick = () => { vel = Math.min(42, vel + 9.5); settle = null; boost = 1; burst(44); spins++; window.dispatchEvent(new CustomEvent("circuito:giro", { detail: spins })); };
+    const kick = () => { vel = Math.min(42, vel + 9.5); settle = null; boost = 1; burst(mobile ? 24 : 44); spins++; window.dispatchEvent(new CustomEvent("circuito:giro", { detail: spins })); };
     const cv = renderer.domElement;
-    const down = (e: PointerEvent) => { drag = true; dragX = e.clientX; dragMoved = 0; lastMove = performance.now(); try { cv.setPointerCapture(e.pointerId); } catch {} cv.style.cursor = "grabbing"; };
+    const down = (e: PointerEvent) => { if (!e.isPrimary || e.button !== 0) return; pointerId = e.pointerId; drag = true; dragY = e.clientY; dragX = e.clientX; dragMoved = 0; lastMove = performance.now(); try { cv.setPointerCapture(e.pointerId); } catch {} cv.style.cursor = "grabbing"; };
     const move = (e: PointerEvent) => {
       look(e);
-      if (!drag) return;
+      if (!drag || e.pointerId !== pointerId) return;
+      const dy = e.clientY - dragY; dragY = e.clientY; dragMoved += Math.abs(dy);
       const dx = e.clientX - dragX, now = performance.now(), dt = Math.max(8, now - lastMove) / 1000;
       dragX = e.clientX; dragMoved += Math.abs(dx); lastMove = now;
       const d = dx * 0.013; ang += d; vel = damp(vel, d / dt, 18, dt); settle = null;
     };
     const up = (e: PointerEvent) => {
-      if (!drag) return; drag = false; cv.style.cursor = hover ? "grab" : "";
+      if (!drag || e.pointerId !== pointerId) return; drag = false; pointerId = null; cv.style.cursor = hover ? "grab" : "";
       try { cv.releasePointerCapture(e.pointerId); } catch {}
-      if (dragMoved < 5) kick();
+      if (e.type !== "pointercancel" && dragMoved < 5) kick();
       else if (performance.now() - lastMove > 90) vel = 0;
     };
     const enter = () => { hover = true; if (!drag) cv.style.cursor = "grab"; };
@@ -243,17 +246,15 @@ export default function Logo3D({ intro = true, spd = 1, fallback, className = ""
     cv.addEventListener("pointerdown", down); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
     cv.addEventListener("pointerenter", enter); cv.addEventListener("pointerleave", leave); el.addEventListener("keydown", keyDown);
 
-    const fit = () => { const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+    const fit = () => { const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.position.z = Math.max(184, 54 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.max(1, 1 / camera.aspect)); camera.updateProjectionMatrix(); };
     fit();
     const ro = "ResizeObserver" in window ? new ResizeObserver(fit) : null; ro?.observe(el);
-    let vis = true;
-    const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => { vis = es[es.length - 1].isIntersecting; }) : null; io?.observe(el);
 
-    let raf = 0, last = performance.now(), T = intro ? 0 : 6;
+    let last = performance.now(), T = intro ? 0 : 6;
     let cyc = 0, flash = 0, orbPh = [0, 0];
     const CYCLE = 2.6;
     const step = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000) * (spdRef.current || 1); last = now; T += dt;
+      const dt = Math.min(0.05, (now - last) / 1000) * (config.current.spd || 1); last = now; T += dt;
 
       const kIn = back((T - 0.05) / 1.0);
       badge.scale.setScalar(0.35 + 0.65 * Math.min(1.06, kIn));
@@ -326,22 +327,21 @@ export default function Logo3D({ intro = true, spd = 1, fallback, className = ""
 
       renderer.render(scene, camera);
     };
-    const frame = (now: number) => {
-      raf = requestAnimationFrame(frame);
-      if (document.hidden || !vis) { last = now; return; }
-      step(now);
-    };
-    raf = requestAnimationFrame(frame);
+    const stop = renderLoop(step, () => config.current.fps || 30, el, () => { last = performance.now(); });
+    const lost = (event: Event) => { event.preventDefault(); stop(); setFail(true); };
+    cv.addEventListener("webglcontextlost", lost);
 
     return () => {
-      cancelAnimationFrame(raf); ro?.disconnect(); io?.disconnect();
+      stop(); ro?.disconnect(); cv.removeEventListener("webglcontextlost", lost);
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
       cv.removeEventListener("pointerdown", down); cv.removeEventListener("pointerenter", enter); cv.removeEventListener("pointerleave", leave); el.removeEventListener("keydown", keyDown);
       disposables.forEach((d) => d?.dispose?.());
-      renderer.dispose(); cv.remove();
+      renderer.dispose(); renderer.forceContextLoss(); cv.remove();
     };
-  }, []);
+  }, [fail]);
 
   if (fail) return <>{fallback}</>;
   return <div ref={host} className={className} role="button" tabIndex={0} aria-label="Il Circuito: logo in 3D. Premi per farlo girare, o trascinalo" title="Trascinalo o cliccalo: gira e mostra il circuito sul retro" />;
 }
+
+export default React.memo(Logo3D);

@@ -15,10 +15,14 @@ import {
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
 import { AccessoProf } from "./AccessoProf";
-import { M, MOTION_CSS, Words, Sheets, useFlip, useRail, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
-import { Text3D, Terminal3D, D3_CSS } from "./d3";
+import { M, Words, Sheets, useFlip, useRail, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
+import { Text3D, Terminal3D } from "./d3";
+import { renderLoop } from "./renderLoop";
+import { useMediaQuery } from "./useMediaQuery";
+import { useMusic } from "./useMusic";
+import { SettingsDialog } from "./Dialog";
 // il logo 3D (three.js) si carica a parte, solo quando serve: il resto del sito non lo scarica
-const Logo3D = React.lazy(() => import("./Logo3D"));
+import Logo3D from "./LogoView";
 // easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login
 const EggGame = React.lazy(() => import("./egg/EggGame"));
 const EGG = "circuito:egg";
@@ -527,7 +531,7 @@ const PanelArt = ({ art, anim, speed = 1, fps = 30 }: { art: boolean; anim: bool
     const host = cv.parentElement as HTMLElement | null, ctx = cv.getContext("2d"); if (!host || !ctx) return;
     const stat = document.createElement("canvas"), sg = stat.getContext("2d"); if (!sg) return;
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches), moving = anim && !reduce;
-    let W = 0, H = 0, S: PScene | null = null, raf = 0, last = 0, vis = true, timer = 0;
+    let W = 0, H = 0, S: PScene | null = null, timer = 0;
     const t0 = performance.now();
     const paint = (t: number) => { if (!S) return; ctx.clearRect(0, 0, W, H); ctx.drawImage(stat, 0, 0, W, H); animPanelArt(ctx, S, t, pr.current.speed, moving); };
     const build = () => {
@@ -541,17 +545,13 @@ const PanelArt = ({ art, anim, speed = 1, fps = 30 }: { art: boolean; anim: bool
       paint((performance.now() - t0) / 1000);
     };
     const frame = (ts: number) => {
-      raf = requestAnimationFrame(frame);
-      if (document.hidden || !vis || !S) return;
-      const el = ts - last; if (el < 1000 / (pr.current.fps || 30) - 3) return; last = ts;
+      if (!S) return;
       paint((performance.now() - t0) / 1000);
     };
     build();
-    if (moving) raf = requestAnimationFrame(frame);
+    const stop = moving ? renderLoop(frame, () => pr.current.fps || 30, cv) : () => {};
     const ro = "ResizeObserver" in window ? new ResizeObserver(() => { clearTimeout(timer); timer = window.setTimeout(build, 150); }) : null; ro?.observe(host);
-    // vale l'ultima notifica del gruppo (lo stato attuale), non la prima: vedi Logo3D
-    const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => { vis = es[es.length - 1].isIntersecting; }) : null; io?.observe(cv);
-    return () => { cancelAnimationFrame(raf); clearTimeout(timer); ro?.disconnect(); io?.disconnect(); };
+    return () => { stop(); clearTimeout(timer); ro?.disconnect(); };
   }, [art, anim]);
   return art ? <canvas ref={ref} className="pnl-art" aria-hidden="true" /> : null;
 };
@@ -621,234 +621,7 @@ const ApkDownload = ({ compact, divider, className = "" }: { compact?: boolean; 
   );
 };
 
-const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@600&text=Il%20Circuito&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Instrument+Sans:wght@400;500;600&display=swap');
-.root{--bg:#EDF2F1;--pn:#FFFFFF;--ink:#0E1F1D;--mu:#5B706D;--ln:#DCE6E4;--sf:#F4F8F7;--ac:#0F8B7A;--am:#E8A100;
---sh1:0 1px 2px rgba(14,31,29,.04),0 6px 16px -8px rgba(14,31,29,.10);--sh2:0 2px 4px rgba(14,31,29,.04),0 22px 44px -16px rgba(14,31,29,.26);--ez:cubic-bezier(.22,1,.36,1);--out:cubic-bezier(.16,1,.3,1);--snap:cubic-bezier(.77,0,.18,1);--spring:cubic-bezier(.34,1.56,.64,1);
-font-family:'Instrument Sans',system-ui,sans-serif;color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;
-background:var(--bg)}
-.root.dark{--bg:#091312;--pn:#102120;--ink:#E2EFEB;--mu:#8AA7A2;--ln:#1E3532;--sf:#0C1B1A;--ac:#2DD4BF;--am:#FBBF24;
---sh1:0 1px 2px rgba(0,0,0,.3),0 8px 20px -10px rgba(0,0,0,.55);--sh2:0 24px 50px -18px rgba(0,0,0,.75)}
-*{scrollbar-width:thin;scrollbar-color:var(--ln) transparent}
-::selection{background:color-mix(in srgb,var(--ac) 30%,transparent)}
-.hd{font-family:'Bricolage Grotesque','Instrument Sans',sans-serif;letter-spacing:-.025em}
-.pn{background:var(--pn);border:1px solid var(--ln);border-radius:18px;box-shadow:var(--sh1)}
-.hdr{background:color-mix(in srgb,var(--pn) 78%,transparent);backdrop-filter:blur(14px) saturate(1.4)}
-.inp{width:100%;background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:.7rem 1rem;font-size:.95rem;outline:none;color:var(--ink);transition:border-color .2s,box-shadow .25s var(--ez),background .2s}
-.inp:hover{border-color:color-mix(in srgb,var(--ac) 45%,var(--ln))}
-.inp:focus,.bt:focus-visible{border-color:var(--ac);box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 20%,transparent)}
-.bt{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.55rem .95rem;border-radius:12px;font-size:.85rem;font-weight:600;border:1px solid var(--ln);background:var(--pn);color:var(--ink);outline:none;cursor:pointer;
-transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s cubic-bezier(.16,1,.3,1),background .25s,border-color .25s,color .25s,filter .25s}
-.bt svg{transition:transform .3s cubic-bezier(.16,1,.3,1)}
-/* pulsanti: si alzano di un pixel e si accendono di bordo; alla pressione cedono subito. Le frecce indicano dove portano */
-@media (hover:hover){
-.bt:hover{transform:translate(var(--tx,0px),calc(var(--ty,0px) - 1px));border-color:var(--ac);box-shadow:0 8px 16px -10px color-mix(in srgb,var(--ac) 55%,transparent),var(--sh1)}
-.bt:hover .lucide-chevron-right,.lk:hover .lucide-arrow-up-right,.bt:hover .lucide-arrow-up-right{transform:translateX(2px)}
-.bt:hover .lucide-chevron-left{transform:translateX(-2px)}
-}
-.bt:active{transform:scale(.97);box-shadow:none;transition-duration:.08s}
-.bt:disabled{opacity:.4;pointer-events:none}
-.bt.on{background:linear-gradient(135deg,var(--ac),color-mix(in srgb,var(--ac) 80%,#000));border-color:var(--ac);color:#fff} .root.dark .bt.on{color:#042f2a}
-@media (hover:hover){.bt.on:hover{filter:brightness(1.08);box-shadow:0 10px 22px -10px color-mix(in srgb,var(--ac) 80%,transparent)}}
-.bt.pri{background:var(--ink);color:var(--bg);border-color:var(--ink)} .bt.pri:hover{box-shadow:var(--sh2)}
-.bt.dng{color:#dc2626;border-color:#fca5a5} .bt.dng:hover{background:#fef2f2;border-color:#dc2626}
-.nv:hover{background:var(--sf)!important} .nv:hover svg{transform:translateX(3px)}
-.lk{background:linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat;transition:background-size .4s var(--ez),color .2s;cursor:pointer}
-.lk:hover{background-size:100% 1px;color:var(--ink)}
-.mu{color:var(--mu)}
-.card{position:relative}
-.card:after{content:"";position:absolute;left:0;bottom:0;width:100%;background:linear-gradient(90deg,var(--ac),var(--am));transform:scaleX(0);border-radius:0 0 18px 18px}
-.card:hover:after{transform:scaleX(1)}
-.paper{background:#fff;color:#10211F}
-.mm{background-image:linear-gradient(rgba(15,139,122,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(15,139,122,.12) 1px,transparent 1px);background-size:20px 20px}
-.rt{overflow-wrap:anywhere;line-height:32px;font-size:17px}
-.rt h2{font-family:'Bricolage Grotesque',sans-serif;font-size:1.6rem;font-weight:700;line-height:40px}
-.rt ul{list-style:disc;padding-left:1.5rem} .rt b{font-weight:700} .rt u{text-underline-offset:4px}
-.rt img{max-width:100%;height:auto;border-radius:8px;margin:12px auto;display:block;border:1px solid #D5E0DE}
-.rt:empty:before{content:attr(data-ph);color:#94a3b8;pointer-events:none}
-.sm .rt{line-height:22px;font-size:13px} .sm .rt img{max-height:70px;width:auto;margin:4px 0}
-.sw{cursor:pointer;transition:transform .25s var(--ez),box-shadow .25s}.sw:hover{transform:scale(1.18)}
-.root{--m-circuit:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' fill='none' stroke='black' stroke-width='1.5'%3E%3Cpath d='M0 40H50L70 60V100H120L140 120V160M30 0V30L50 50M160 80H110L90 100M140 0V18M30 160V142M0 80H18M160 40H148'/%3E%3Ccircle cx='50' cy='40' r='3.5'/%3E%3Ccircle cx='120' cy='100' r='3.5'/%3E%3Ccircle cx='30' cy='30' r='3.5'/%3E%3Ccircle cx='110' cy='80' r='3.5'/%3E%3C/svg%3E");
---m-cross:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' fill='none' stroke='black' stroke-width='1.3'%3E%3Cpath d='M28 22V34M22 28H34'/%3E%3C/svg%3E");
---m-hatch:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' fill='none' stroke='black' stroke-width='1.2'%3E%3Cpath d='M-4 4L4 -4M0 28L28 0M24 32L32 24'/%3E%3C/svg%3E");
---m-net:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' stroke='black' stroke-width='1.3'%3E%3Cpath d='M30 40L110 90M110 90L190 50M110 90L90 180M90 180L180 170'/%3E%3Ccircle cx='30' cy='40' r='4'/%3E%3Ccircle cx='110' cy='90' r='5'/%3E%3Ccircle cx='190' cy='50' r='4'/%3E%3Ccircle cx='90' cy='180' r='4'/%3E%3Ccircle cx='180' cy='170' r='4'/%3E%3C/svg%3E")}
-.bd{position:fixed}
-.bd-w,.bd-p{position:absolute;inset:0}
-.bd-p{background:var(--ac);opacity:.11;-webkit-mask-image:var(--m);mask-image:var(--m);-webkit-mask-size:var(--ts,160px);mask-size:var(--ts,160px)}
-.root.dark .bd-p{opacity:.15}
-.bd:after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 25%,color-mix(in srgb,var(--bg) 88%,transparent) 100%)}
-.bd-home .bd-w{background:radial-gradient(760px 460px at 92% -6%,color-mix(in srgb,var(--ac) 24%,transparent),transparent 70%),radial-gradient(620px 520px at 0% 100%,color-mix(in srgb,var(--am) 14%,transparent),transparent 70%)}
-.bd-home .bd-p{--m:var(--m-circuit);--ts:160px}
-.bd-write .bd-w{background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 12%,transparent),transparent 50%)}
-.bd-write .bd-p{--m:var(--m-cross);--ts:56px;opacity:.16}
-.bd-archive .bd-w{background:radial-gradient(700px 480px at 8% -4%,color-mix(in srgb,var(--ac) 18%,transparent),transparent 70%),radial-gradient(640px 500px at 100% 100%,color-mix(in srgb,#64748B 16%,transparent),transparent 70%)}
-.bd-archive .bd-p{--m:var(--m-hatch);--ts:28px;opacity:.08}
-.bd-authors .bd-w{background:radial-gradient(700px 520px at 20% 10%,color-mix(in srgb,var(--ac) 18%,transparent),transparent 70%),radial-gradient(600px 460px at 100% 90%,color-mix(in srgb,#0284C7 14%,transparent),transparent 70%)}
-.bd-authors .bd-p{--m:var(--m-net);--ts:220px}
-.bd-podio .bd-w{background:radial-gradient(820px 520px at 50% -12%,color-mix(in srgb,var(--am) 26%,transparent),transparent 72%)}
-.bd-podio .bd-p{background:repeating-conic-gradient(from -45deg at 50% -8%,var(--am) 0 2.5deg,transparent 2.5deg 9deg);-webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 0,#000,transparent);mask-image:radial-gradient(ellipse 80% 70% at 50% 0,#000,transparent);opacity:.18}
-.brandpanel{position:relative;overflow:hidden;color:#fff;background:radial-gradient(620px 420px at 100% 0,rgba(251,191,36,.2),transparent 60%),linear-gradient(155deg,#0E7468,#08403C 55%,#052321);border-color:transparent}
-.brandpanel>:not(.bd-p){position:relative}
-.brandpanel>canvas.pnl-art{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.brandpanel h1,.brandpanel>div>p{text-shadow:0 0 22px rgba(5,35,33,.9),0 0 3px rgba(5,35,33,.5)}
-.brandpanel .mu{color:rgba(255,255,255,.75)}
-.pn.hero{border:1px solid rgba(255,255,255,.28);background:radial-gradient(rgba(255,255,255,.17) 1px,transparent 1.4px) 0 0/18px 18px,radial-gradient(520px 340px at 100% 0,rgba(251,191,36,.38),transparent 62%),radial-gradient(640px 420px at 0 100%,rgba(45,212,191,.35),transparent 65%),linear-gradient(135deg,#19B7A2 0%,#0C7468 48%,#08403C 100%);box-shadow:0 34px 80px -28px rgba(23,195,174,.65),0 0 0 1px rgba(23,195,174,.18),inset 0 1px 0 rgba(255,255,255,.3);transition:box-shadow .5s var(--ez)}
-.pn.hero:hover{box-shadow:0 40px 90px -26px rgba(23,195,174,.8),0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.35)}
-.hero:before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(360px circle at var(--hx,70%) var(--hy,0%),rgba(255,255,255,.2),transparent 62%);opacity:0;transition:opacity .4s}
-.hero:hover:before{opacity:1}
-.hero .mu{color:rgba(255,255,255,.85)}
-.hero-logo{transition:transform .35s var(--out);transform:translate(calc(var(--nx,0)*-16px),calc(var(--ny,0)*-12px)) rotate(calc(var(--nx,0)*4deg));filter:drop-shadow(0 18px 30px rgba(0,0,0,.35))}
-.hero .bt.cta{background:#fff;color:#08403C;border-color:#fff}
-.hero .bt.cta:hover{background:var(--am);border-color:var(--am);color:#3b2a00}
-.hero .bt.ghost{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.38)}
-.hero .bt.ghost:hover{background:rgba(255,255,255,.26);border-color:#fff}
-.root.lite .hero:before,.noglow .hero:before{display:none}
-.pn.hero>.hrain{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.9;-webkit-mask-image:linear-gradient(100deg,transparent 0,rgba(0,0,0,.22) 38%,#000 72%);mask-image:linear-gradient(100deg,transparent 0,rgba(0,0,0,.22) 38%,#000 72%)}
-@media (max-width:767px){.pn.hero>.hrain{opacity:.5;-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.6));mask-image:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.6))}}
-.hero:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,transparent,rgba(255,255,255,.09),transparent) 0 -140px/100% 140px no-repeat,repeating-linear-gradient(0deg,rgba(0,0,0,.07) 0 1px,transparent 1px 3px);animation:heroScan 6s linear infinite}
-@keyframes heroScan{from{background-position:0 -140px,0 0}to{background-position:0 calc(100% + 140px),0 0}}
-.hero-term{display:inline-flex;align-items:center;gap:.55rem;font:600 .72rem/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.04em;color:rgba(255,255,255,.9);background:rgba(4,26,24,.45);border:1px solid rgba(255,255,255,.2);padding:.5rem .75rem;border-radius:999px;margin-bottom:1.1rem;max-width:100%}
-.hero-led{flex:none;width:7px;height:7px;border-radius:50%;background:#34D399;box-shadow:0 0 8px #34D399;animation:ledP 1.8s ease-in-out infinite}
-.hero-term .caret{flex:none;width:7px;height:12px;background:var(--am);display:inline-block;animation:blink 1s steps(2) infinite}
-@keyframes ledP{50%{opacity:.35}}
-@keyframes blink{50%{opacity:0}}
-.stat{font:inherit;color:inherit;text-align:left;display:block;cursor:pointer;-webkit-appearance:none;appearance:none}
-.stat .go{position:absolute;top:1rem;right:1rem;color:var(--ac);opacity:0;transform:translate(-6px,6px);transition:opacity .3s,transform .4s var(--spring)}
-.stat:hover .go,.stat:focus-visible .go{opacity:1;transform:none}
-.stat:focus-visible{outline:2px solid var(--ac);outline-offset:3px}
-@media (hover:none){.stat .go{opacity:.55;transform:none}}
-.bd-p.w{background:#fff;opacity:.09;--m:var(--m-circuit);--ts:160px}
-@media (hover:none){.bt:hover{transform:none;box-shadow:none}.bt.on:hover{transform:none;filter:none;box-shadow:none}}
-/* toolbar editor: risposta immediata (niente molla), stati distinti.
-   acceso = pieno colorato | pannello aperto = bordo e tinta | entrambi = pieno + anello */
-.tb{transition:background .12s,border-color .12s,color .12s,box-shadow .12s,transform .1s;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.tb svg{transition:none}
-.tb:active{transform:scale(.95)}
-.tb[data-open="true"]:not(.on){border-color:var(--ac);color:var(--ac);background:color-mix(in srgb,var(--ac) 14%,var(--pn))}
-.tb.on[data-open="true"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 35%,transparent)}
-.tbw{transition:transform .22s var(--ez),opacity .18s}
-.tbw[data-hide="1"]{transform:translateY(-110%);opacity:0;pointer-events:none}
-.swr{scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%)}.swr:before,.swr:after{content:"";flex:0 0 6px}.swr::-webkit-scrollbar{display:none}
-.sws{transition:transform .1s,box-shadow .12s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.sws:active{transform:scale(.86)}
-.rt span[style*="font-size"]{line-height:1.25}
-.wm{font-family:'Unbounded','Bricolage Grotesque',sans-serif;font-weight:600;white-space:nowrap;letter-spacing:-.01em}
-/* wordmark: le lettere salgono una volta dalla riga; il logo si disegna e la corrente lo attraversa tre volte, poi tace */
-.wl{display:inline-block;color:var(--wc);opacity:0;animation:wl .6s cubic-bezier(.16,1,.3,1) calc(var(--i)*45ms + .15s) forwards}
-@keyframes wl{from{opacity:0;transform:translateY(.6em)}to{opacity:1;transform:none}}
-.lgw{transition:transform .5s var(--ez);cursor:pointer}.lgw:hover{transform:rotate(-6deg)}
-.lg-arc,.lg-line{stroke-dasharray:100;stroke-dashoffset:100;animation:lgd 1.1s cubic-bezier(.65,0,.35,1) .15s forwards}
-.lg-line{animation-duration:.5s;animation-delay:.8s}
-@keyframes lgd{to{stroke-dashoffset:0}}
-.lg-flow{opacity:0;animation:lgs .9s linear 1.4s 3,fd .4s 1.4s forwards}
-@keyframes lgs{to{stroke-dashoffset:-7}}
-.lg-n,.lg-amber{transform-box:fill-box;transform-origin:center;animation:lgp .55s var(--ez) .9s both}
-.lg-amber{animation-delay:1.05s}
-.lgw:hover .lg-flow{animation:lgs .9s linear infinite;opacity:1}
-@keyframes lgp{from{opacity:0;transform:scale(0)}to{opacity:1;transform:none}}
-.cpov{position:fixed;inset:0;z-index:40}
-@media (max-width:767px){.root:has(.cpov) nav.hdr{display:none}}
-.cp{position:absolute;top:100%;left:0;margin-top:.5rem;width:336px;z-index:50;box-shadow:var(--sh2);animation:cpIn .4s var(--out) backwards;transform-origin:0 0}
-.cp-r{left:auto;right:0;transform-origin:100% 0}
-@keyframes sheet{0%{transform:translateY(100%) scale(.95);opacity:0;border-radius:40px}100%{transform:none;opacity:1;border-radius:24px 24px 0 0}}
-.root{min-height:100dvh;-webkit-tap-highlight-color:transparent}
-.bt{touch-action:manipulation}
-.inp{font-size:16px}
-.bd{contain:strict}
-@media (pointer:coarse){.bt{min-height:44px;min-width:44px}}
-@media (max-width:767px){
-.cpov{background:rgba(0,0,0,.4);animation:fd .25s both}
-.cp{position:fixed;left:0;right:0;bottom:0;top:auto;margin:0;width:auto;border-radius:24px 24px 0 0;padding-bottom:calc(1.5rem + env(safe-area-inset-bottom))!important;animation:sheet .4s var(--ez) both;max-height:80dvh;overflow-y:auto}
-.backdrop-blur-sm{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
-header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--pn)}
-.card:hover{transform:none;box-shadow:var(--sh1)}
-}
-@property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
-@keyframes ang{to{--ang:360deg}}
-.bt:not(.absolute){position:relative}
-.bt{overflow:hidden}
-.bt:before,.card:before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s}
-.bt:before{background:radial-gradient(90px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,currentColor 22%,transparent),transparent 70%)}
-.card:before{z-index:1;background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--ac) 18%,transparent),transparent 65%)}
-.card:hover:before,.card:active:before{opacity:var(--gi,1)}
-@media (hover:hover){.bt:hover:before{opacity:var(--gi,1)}}
-.bt.rip:after{content:"";position:absolute;left:var(--px,50%);top:var(--py,50%);width:8px;height:8px;margin:-4px;border-radius:50%;background:color-mix(in srgb,currentColor 40%,transparent);pointer-events:none;animation:ripl .65s var(--ez) forwards}
-@keyframes ripl{to{transform:scale(32);opacity:0}}
-.au{position:absolute;width:62vmax;height:62vmax;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 44%,transparent),transparent);will-change:transform;opacity:var(--ai,1)}
-.a1{--c:var(--ac);left:-18vmax;top:-24vmax;animation:aur1 21s ease-in-out infinite}
-.a2{--c:var(--am);right:-24vmax;top:14vh;animation:aur2 27s ease-in-out infinite}
-.a3{--c:#6366F1;left:18vw;bottom:-34vmax;opacity:calc(.75*var(--ai,1));animation:aur3 33s ease-in-out infinite}
-@keyframes aur1{0%,100%{transform:translate(0,0) scale(1)}25%{transform:translate(36vw,16vh) scale(1.2)}50%{transform:translate(20vw,40vh) scale(.88)}75%{transform:translate(-6vw,22vh) scale(1.14)}}
-@keyframes aur2{0%,100%{transform:translate(0,0) scale(1)}30%{transform:translate(-40vw,20vh) scale(1.16)}60%{transform:translate(-20vw,-14vh) scale(.86)}80%{transform:translate(-34vw,34vh) scale(1.1)}}
-@keyframes aur3{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30vw,-22vh) scale(1.18)}66%{transform:translate(-18vw,-34vh) scale(.9)}}
-.bd .bd-w{inset:-12%;animation:bdw 24s ease-in-out infinite alternate}
-@keyframes bdw{from{transform:translate(-4%,3%) scale(1)}to{transform:translate(4%,-4%) scale(1.1)}}
-.root.noaurora .bd-w{animation:none}
-.bd-art{position:absolute;left:0;top:-25vh;width:100%;height:150vh;opacity:calc(.24*var(--ao,1));transform:translateY(calc(var(--sy,0)*-.12px))}
-.root.dark .bd-art{opacity:calc(.32*var(--ao,1))}
-.bd-p{inset:-25vh 0;transform:translateY(calc(var(--sy,0)*-.12px))}
-.bd-podio .bd-p{inset:0;transform:none}
-.bdin{animation:fd .7s linear backwards}
-.prog{position:fixed;top:0;left:0;right:0;height:2px;z-index:90;transform-origin:0 50%;transform:scaleX(var(--sp,0));background:linear-gradient(90deg,var(--ac),var(--am));pointer-events:none}
-.spinring{display:inline-block;padding:4px;border-radius:50%;background:conic-gradient(from var(--ang),var(--ac),var(--am),#6366F1,var(--ac));animation:ang 5s linear infinite}
-.pn.spin-b{border:2px solid transparent;background:linear-gradient(var(--pn),var(--pn)) padding-box,conic-gradient(from var(--ang),transparent 55%,var(--am),var(--ac),transparent) border-box;animation:ang 6s linear infinite}
-::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
-::view-transition-new(root){animation:vtr .75s var(--ez)}
-@keyframes vtr{from{clip-path:circle(0 at var(--vx,50%) var(--vy,50%))}to{clip-path:circle(150vmax at var(--vx,50%) var(--vy,50%))}}
-.root.noreveal .rv{opacity:1;transform:none}.root.noreveal .rv.in{animation:none}
-.root.notitles .wl{animation:none;opacity:1}
-.root.nologo .lg-n,.root.nologo .lg-amber{animation:none;opacity:1}.root.nologo .lg-arc,.root.nologo .lg-line{animation:none;stroke-dashoffset:0}.root.nologo .lg-flow{animation:none;opacity:0}
-.root.noaurora .au{display:none}
-.noglow .bt:before,.noglow .card:before,.noglow .bt.rip:after,.noripple .bt.rip:after{display:none}
-.root.noscan .hero:after{display:none}
-.root.noprog .prog{display:none}
-.root.nolift .card:active{transform:perspective(1200px) rotateX(calc(var(--rx,0deg)*.5)) rotateY(calc(var(--ry,0deg)*.5)) scale(.98)}
-.root.nolift .bt:hover,.root.nolift .bt.on:hover{transform:translate(var(--tx,0px),var(--ty,0px))}
-.root.lite *,.root.lite *:before,.root.lite *:after,.root.nomotion *,.root.nomotion *:before,.root.nomotion *:after{animation:none!important;transition:none!important}
-.root.lite .bd,.root.lite .prog{display:none}
-.root.lite .rv,.root.nomotion .rv{opacity:1;transform:none}
-.root.lite .wl,.root.lite .lg-n,.root.lite .lg-amber,.root.nomotion .wl,.root.nomotion .lg-n,.root.nomotion .lg-amber{opacity:1}
-.root.lite .lg-arc,.root.lite .lg-line,.root.lite .tick,.root.nomotion .lg-arc,.root.nomotion .lg-line,.root.nomotion .tick{stroke-dashoffset:0}
-.root.lite .hdr,.root.lite .backdrop-blur-sm,.root.noblur .hdr,.root.noblur .backdrop-blur-sm{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
-.rng{display:block;width:100%;height:24px;margin-top:4px;accent-color:var(--ac);cursor:pointer;background:transparent}
-@keyframes dash{to{stroke-dashoffset:0}}
-.fade{animation:fd .3s ease-out both}
-.tick{stroke-dasharray:60;stroke-dashoffset:60;animation:dash .7s .25s cubic-bezier(.65,0,.35,1) forwards}
-/* selettori a pillola: la pillola corre sulla sua pista, senza rimbalzi */
-.seg-ind{position:absolute;top:4px;bottom:4px;left:4px;border-radius:12px;background:var(--ac);box-shadow:0 8px 18px -8px color-mix(in srgb,var(--ac) 75%,transparent);transition:transform .45s cubic-bezier(.65,0,.35,1)}
-.seg.soft .seg-ind{background:var(--pn);box-shadow:var(--sh1)}
-.seg .bt{transition:color .3s}
-.seg .bt:hover{transform:none;box-shadow:none}
-.seg-on{color:#fff!important}.root.dark .seg-on{color:#042f2a!important}.seg.soft .seg-on{color:var(--ink)!important}
-/* menu a comparsa: si apre dal pulsante che lo chiama */
-@keyframes cpIn{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0 round 18px)}to{clip-path:inset(0 0 0 0 round 18px)}}
-.cp.out{animation:cpOut .2s var(--ez) forwards}
-.cpov.out{animation:fdo .22s forwards;pointer-events:none}
-@keyframes cpOut{to{opacity:0;transform:translateY(-4px)}}
-.cp .sw{animation:swIn .4s cubic-bezier(.16,1,.3,1) backwards;animation-delay:calc(.06s + var(--i,0)*14ms)}
-@keyframes swIn{from{transform:scale(0)}}
-@keyframes sheetDown{to{transform:translateY(100%)}}
-@media (max-width:767px){.cp.out{animation:sheetDown .28s var(--snap) forwards}}
-.tb.on svg{animation:tbOn .3s cubic-bezier(.16,1,.3,1)}
-@keyframes tbOn{from{transform:scale(.6)}}
-/* svelamento dell'autore: l'unico momento in cui un nome si "decodifica" */
-.pf-av{display:inline-block;animation:avIn .8s cubic-bezier(.16,1,.3,1) .3s backwards}
-@keyframes avIn{from{opacity:0;transform:scale(.3)}}
-.rvl-av{position:relative;display:inline-flex;flex-shrink:0}
-.rvl-av .rg{position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--ac);opacity:0;animation:rg 1s var(--out) .25s}
-.rvl-av .rg+.rg{border-color:var(--am);animation-delay:.45s}
-@keyframes rg{from{opacity:.9;transform:scale(.5)}to{opacity:0;transform:scale(2.3)}}
-.rvl-sweep{position:absolute;inset:0;pointer-events:none;background:linear-gradient(105deg,transparent 30%,color-mix(in srgb,var(--am) 50%,transparent) 50%,transparent 70%);transform:translateX(-120%);animation:rvlS 1.2s var(--out) .1s forwards}
-@keyframes rvlS{to{transform:translateX(120%)}}
-.rvl-name{display:inline-block;animation:rvlN .9s var(--out) backwards}
-@keyframes rvlN{from{opacity:0;letter-spacing:.3em}}
-.ldr{display:inline-flex;gap:5px;align-items:center;height:30px}
-.ldr i{width:5px;height:100%;border-radius:3px;background:linear-gradient(var(--ac),var(--am));animation:eq 1s ease-in-out infinite}
-.ldr i:nth-child(2){animation-delay:-.85s}.ldr i:nth-child(3){animation-delay:-.7s}.ldr i:nth-child(4){animation-delay:-.55s}.ldr i:nth-child(5){animation-delay:-.4s}
-@keyframes eq{0%,100%{transform:scaleY(.25);opacity:.45}50%{transform:scaleY(1);opacity:1}}
-.root.noreveal .pf-av,.root.noreveal .wd,.root.noreveal .st-on{animation:none}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.tick{stroke-dashoffset:0}.rv{opacity:1;transform:none}.wl,.lg-n,.lg-amber{opacity:1}.lg-arc,.lg-line{stroke-dashoffset:0}}
-`;
+
 
 const mKey = (ts: number) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
 const mLabel = (k: string) => { const [y, m] = k.split("-"); return new Date(+y, +m - 1, 1).toLocaleDateString("it-IT", { month: "long", year: "numeric" }); };
@@ -966,7 +739,7 @@ const bannerFrom = (file: File): Promise<string> => new Promise((res, rej) => {
   r.onerror = rej; r.readAsDataURL(file);
 });
 
-const DEF = { level: "full", fx: true, glow: true, aurora: true, intro: true, d3: true, sound: false, vibrate: true, text: 1, vol: 1, vib: 1 };
+const DEF = { level: "full", fx: true, glow: true, aurora: true, intro: true, d3: true, sound: false, music: false, musicVol: 0.35, vibrate: true, text: 1, vol: 1, vib: 1 };
 
 // Modalità "Personalizzato": ogni effetto si accende o spegne da solo e ogni intensità si regola a piacere.
 // I valori qui sotto sono quelli del preset "Spettacolo".
@@ -1028,8 +801,8 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
   useEffect(() => {
     const a = bg.current, b = fg.current; if (!a || !b) return;
     const ca = a.getContext("2d")!, cb = b.getContext("2d")!;
-    const G = 48, dpr = Math.min(window.devicePixelRatio || 1, 2);
-    let W = 0, H = 0, raf = 0, last = 0;
+    const G = 48, dpr = Math.min(window.devicePixelRatio || 1, window.innerWidth < 768 ? 1.25 : 1.5);
+    let W = 0, H = 0;
     const fit = () => { W = window.innerWidth; H = window.innerHeight; [a, b].forEach((c) => { c.width = W * dpr; c.height = H * dpr; c.style.width = W + "px"; c.style.height = H + "px"; c.getContext("2d")!.setTransform(dpr, 0, 0, dpr, 0, 0); }); };
     fit(); window.addEventListener("resize", fit);
     const pulses: any[] = [], sparks: any[] = [];
@@ -1043,9 +816,7 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
     };
     window.addEventListener("pointerdown", down, { passive: true });
     const frame = (ts: number) => {
-      raf = requestAnimationFrame(frame);
       const cfg = gr.current;
-      if (document.hidden || ts - last < 1000 / (cfg.fps || 30) - 3) return; last = ts;
       const c = dark ? "45,212,191" : "15,139,122";
       ca.clearRect(0, 0, W, H); cb.clearRect(0, 0, W, H); ca.lineWidth = 1.6; ca.lineCap = "round";
       // numero di impulsi voluto (su schermi piccoli la metà): si aggiunge o si toglie senza riavviare nulla
@@ -1075,8 +846,8 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
         else { s.x += s.vx; s.y += s.vy; s.vx *= 0.94; s.vy *= 0.94; cb.strokeStyle = `rgba(251,191,36,${s.l})`; cb.beginPath(); cb.moveTo(s.x, s.y); cb.lineTo(s.x - s.vx * 2.5, s.y - s.vy * 2.5); cb.stroke(); }
       }
     };
-    raf = requestAnimationFrame(frame);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", fit); window.removeEventListener("pointerdown", down); };
+    const stop = renderLoop(frame, () => gr.current.fps || 30);
+    return () => { stop(); window.removeEventListener("resize", fit); window.removeEventListener("pointerdown", down); };
   }, [dark]);
   return (<>
     <canvas ref={bg} className="fixed inset-0 pointer-events-none" style={{ opacity: 0.8 }} aria-hidden="true" />
@@ -1138,8 +909,8 @@ const HeroRain = ({ on, speed = 1, dens = 1, fps = 30 }: { on: boolean; speed?: 
     const cv = ref.current; if (!on || !cv) return;
     const host = cv.parentElement as HTMLElement, ctx = cv.getContext("2d"); if (!host || !ctx) return;
     const GL = "0101010101ABCDEF<>/{}[]=+#", WORDS = ["CIRCUITO", "SCRIVI", "LEGGI", "SCEGLI", "IDEE", "MESE"];
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    let W = 0, H = 0, cw = 16, lh = 18, raf = 0, last = 0, vis = true;
+    const dpr = Math.min(window.devicePixelRatio || 1, window.innerWidth < 768 ? 1.25 : 1.5);
+    let W = 0, H = 0, cw = 16, lh = 18, last = performance.now();
     let cols: any[] = [];
     const ptr = { x: -999, nx: 0, ny: 0 }, cam = { x: 0, y: 0 };
     const rc = () => GL[Math.floor(Math.random() * GL.length)];
@@ -1168,12 +939,9 @@ const HeroRain = ({ on, speed = 1, dens = 1, fps = 30 }: { on: boolean; speed?: 
     const mv = (e: PointerEvent) => { const r = host.getBoundingClientRect(); ptr.x = e.clientX - r.left; ptr.nx = (e.clientX - r.left) / r.width - 0.5; ptr.ny = (e.clientY - r.top) / r.height - 0.5; };
     const lv = () => { ptr.x = -999; ptr.nx = 0; ptr.ny = 0; };
     host.addEventListener("pointermove", mv, { passive: true }); host.addEventListener("pointerleave", lv, { passive: true });
-    // vale l'ultima notifica del gruppo (lo stato attuale), non la prima: vedi Logo3D
-    const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => { vis = es[es.length - 1].isIntersecting; }) : null; io?.observe(cv);
     const frame = (ts: number) => {
-      raf = requestAnimationFrame(frame);
-      if (document.hidden || !vis || !W) return;
-      const el = ts - last, P = pr.current; if (el < 1000 / (P.fps || 30) - 3) return; last = ts;
+      if (!W) return;
+      const el = ts - last, P = pr.current; last = ts;
       const dt = Math.min(0.1, el / 1000);
       cam.x += (ptr.nx - cam.x) * Math.min(1, dt * 4); cam.y += (ptr.ny - cam.y) * Math.min(1, dt * 4);
       ctx.clearRect(0, 0, W, H); ctx.textBaseline = "top";
@@ -1196,8 +964,8 @@ const HeroRain = ({ on, speed = 1, dens = 1, fps = 30 }: { on: boolean; speed?: 
         if (h - c.len > c.rows) mk(c, false);
       }
     };
-    raf = requestAnimationFrame(frame);
-    return () => { cancelAnimationFrame(raf); ro?.disconnect(); io?.disconnect(); host.removeEventListener("pointermove", mv); host.removeEventListener("pointerleave", lv); };
+    const stop = renderLoop(frame, () => pr.current.fps || 30, cv, () => { last = performance.now(); });
+    return () => { stop(); ro?.disconnect(); host.removeEventListener("pointermove", mv); host.removeEventListener("pointerleave", lv); };
   }, [on]);
   return on ? <canvas ref={ref} className="hrain" aria-hidden="true" /> : null;
 };
@@ -1248,12 +1016,17 @@ export default function App() {
   const eggLogin = useTriple((e) => { if (eggGet() === 2) { eggFlip(e); setTimeout(() => setEgg(true), 450); } });
   // ui
   const [dark, setDark] = useState(() => { try { return localStorage.getItem("circuito:dark") === "1"; } catch { return false; } });
-  const [opts, setOpts] = useState<any>(() => { let o: any = {}; try { o = JSON.parse(localStorage.getItem("circuito:opts") || "{}"); } catch {} const red = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches; return { ...DEF, ...(red && !o.level ? { level: "lite" } : {}), ...o }; });
+  const [opts, setOpts] = useState<any>(() => { let o: any = {}; try { o = JSON.parse(localStorage.getItem("circuito:opts") || "{}"); } catch {} const red = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches; const mobile = !!window.matchMedia?.("(max-width:767px), (pointer:coarse)").matches; return { ...DEF, ...(!o.level ? { level: red ? "lite" : mobile ? "mid" : "full" } : {}), ...o }; });
   const [optOpen, setOptOpen] = useState(false);
-  const G = resolveG(opts); // configurazione grafica effettiva (preset o "Personalizzato")
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const compact = useMediaQuery("(max-width:767px), (pointer:coarse)");
+  const resolved = resolveG(opts);
+  const G = reducedMotion || resolved.nomotion ? { ...resolved, ...OFF, d3: resolved.d3, nomotion: true } : resolved; // configurazione grafica effettiva (preset o "Personalizzato")
   const lite = G.lite;
   LITE = G.nomotion; GSPD = G.spd; M.off = G.nomotion; M.spd = G.spd;
   const setOpt = (k: string, v: any) => setOpts((o: any) => ({ ...o, [k]: v }));
+  const music = useMusic(!!opts.music, opts.musicVol ?? 0.35);
+  const setMusic = (on: boolean) => { music.toggle(on); setOpt("music", on); };
   const setC = (k: string, v: any) => setOpts((o: any) => ({ ...o, level: "custom", c: { ...CDEF, ...(o.c || {}), [k]: v } }));
   // passando a "Personalizzato" la prima volta si parte da ciò che si vede adesso; le volte dopo si ritrova la propria scelta
   const setLevel = (v: string) => setOpts((o: any) => { if (v === "custom" && !o.c) { const g: any = resolveG(o), c: any = {}; Object.keys(CDEF).forEach((k) => { c[k] = g[k]; }); return { ...o, level: v, c }; } return { ...o, level: v }; });
@@ -1460,7 +1233,7 @@ export default function App() {
       if (el.classList.contains("card")) { el.style.setProperty("--rx", `${((y / r.height - 0.5) * -3 * k).toFixed(2)}deg`); el.style.setProperty("--ry", `${((x / r.width - 0.5) * 3 * k).toFixed(2)}deg`); }
       else { el.style.setProperty("--tx", `${((x / r.width - 0.5) * 6 * k).toFixed(1)}px`); el.style.setProperty("--ty", `${((y / r.height - 0.5) * 4 * k).toFixed(1)}px`); }
     };
-    const mv = (e: any) => { if (!G.glow && !G.tilt) return; const t = e.target?.closest?.(".card,.bt"); if (!t) return; el = t; ev = e; if (!raf) raf = requestAnimationFrame(run); };
+    const mv = (e: any) => { if (e.pointerType !== "mouse") return; if (!G.glow && !G.tilt) return; const t = e.target?.closest?.(".card,.bt"); if (!t) return; el = t; ev = e; if (!raf) raf = requestAnimationFrame(run); };
     const out = (e: any) => { const t = e.target?.closest?.(".card,.bt"); if (t) ["--rx", "--ry", "--tx", "--ty"].forEach((k) => t.style.removeProperty(k)); };
     const dn = (e: any) => {
       const t = e.target?.closest?.(".card,.bt"); if (!t) return;
@@ -1470,13 +1243,16 @@ export default function App() {
       if (G.ripple && t.classList.contains("bt")) { t.style.setProperty("--px", `${e.clientX - r.left}px`); t.style.setProperty("--py", `${e.clientY - r.top}px`); t.classList.remove("rip"); void t.offsetWidth; t.classList.add("rip"); }
     };
     document.addEventListener("pointermove", mv, { passive: true }); document.addEventListener("pointerout", out, { passive: true }); document.addEventListener("pointerdown", dn, { passive: true });
-    return () => { document.removeEventListener("pointermove", mv); document.removeEventListener("pointerout", out); document.removeEventListener("pointerdown", dn); cancelAnimationFrame(raf); };
+    return () => {
+      document.removeEventListener("pointermove", mv); document.removeEventListener("pointerout", out); document.removeEventListener("pointerdown", dn); cancelAnimationFrame(raf);
+      document.querySelectorAll<HTMLElement>(".card,.bt").forEach(el => ["--rx", "--ry", "--tx", "--ty"].forEach(key => el.style.removeProperty(key)));
+    };
   }, [G.glow, G.tilt, G.ripple, G.tiltI, opts.sound, opts.vol]);
   useEffect(() => {
-    const lock = sel || toDelete || done || viewProf;
+    const lock = sel || toDelete || done || viewProf || optOpen;
     document.body.style.overflow = lock ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [sel, toDelete, done, viewProf]);
+  }, [sel, toDelete, done, viewProf, optOpen]);
 
   // link del professore:  https://sito/#prof=<64 caratteri>  Il token sta dopo il # (non viene mai inviato a nessun server)
   // e lo tolgo subito dall'indirizzo, tenendolo solo in memoria.
@@ -1503,18 +1279,16 @@ export default function App() {
   }, []);
 
   // dati
+  const dataScope = isAdmin && ["read", "home", "podio", "authors"].includes(tab) ? "all" : ["my_pages", "home", "profile"].includes(tab) ? "mine" : "none";
   useEffect(() => {
-    if (!user || !db || (isProf && !isAdmin)) return;
-    let q: any;
-    if (isAdmin && ["read", "home", "podio", "authors"].includes(tab)) q = collection(db, "pensieri");
-    else if (tab === "my_pages" || tab === "home" || tab === "profile") q = query(collection(db, "pensieri"), where("userId", "==", user.uid));
-    else return;
+    if (!user || !db || (isProf && !isAdmin) || dataScope === "none") return;
+    const q = dataScope === "all" ? collection(db, "pensieri") : query(collection(db, "pensieri"), where("userId", "==", user.uid));
     setLoading(true); setRawItems([]);
     return onSnapshot(q, (s: any) => {
       setRawItems(s.docs.map((d: any) => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, () => { setLoading(false); notify("Impossibile leggere i progetti."); });
-  }, [user, isAdmin, tab]);
+  }, [user, isAdmin, isProf, dataScope]);
 
   // bozza: ripristino + salvataggio automatico
   useEffect(() => {
@@ -2000,14 +1774,18 @@ export default function App() {
   const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
   const go = (t: string) => { if (isProf && (t === "my_pages" || t === "profile" || (t === "write" && !editingId))) return; if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
 
-  const prepared = useMemo(() => items.map((t) => ({ ...t, _tx: plain(t.content), _img: /<img/.test(t.content || "") })), [items]);
+  const prepared = useMemo(() => items.map((t) => {
+    const text = plain(t.content);
+    return { ...t, _tx: text, _words: text.trim().split(/\s+/).filter(Boolean).length, _img: /<img/.test(t.content || "") };
+  }), [items]);
+  const wordCounts = useMemo(() => new Map(prepared.map(t => [t.id, t._words])), [prepared]);
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     return prepared
       .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!onlyMarked || t.isStarred) && (!unrated || !t.rating) && (statoF === "all" || (vals[t.id]?.stato || "da_leggere") === statoF) && (!q || `${t.title} ${isAdmin && !t.svelato && t.userId !== user?.uid ? "" : t.author} ${t._tx}`.toLowerCase().includes(q)))
       .sort((a, b) => sortBy === "rated" ? (b.rating || 0) - (a.rating || 0) || b.timestamp - a.timestamp : sortBy === "oldest" ? a.timestamp - b.timestamp : sortBy === "longest" ? (b.content?.length || 0) - (a.content?.length || 0) : sortBy === "shortest" ? (a.content?.length || 0) - (b.content?.length || 0) : b.timestamp - a.timestamp);
   }, [prepared, search, sortBy, monthFilter, onlyMarked, unrated, statoF, vals, isAdmin, user]);
-  const words = plain(content).trim().split(/\s+/).filter(Boolean).length;
+  const words = useMemo(() => plain(content).trim().split(/\s+/).filter(Boolean).length, [content]);
 
   // ================= MOVIMENTO =================
   // la pagina nuova arriva dal lato verso cui ti sposti nel menu
@@ -2048,13 +1826,13 @@ export default function App() {
   useReadTrace(readRef, railRef, view?.id);
   // 3D: le scritte estruse e il terminale si inclinano verso il puntatore (solo con il mouse; sui telefoni oscillano da sole)
   useEffect(() => {
-    if (!G.d3 || G.nomotion) return;
+    if (!G.d3 || G.nomotion || compact) return;
     let raf = 0, x = 0, y = 0;
-    const apply = () => { raf = 0; document.querySelectorAll<HTMLElement>(".t3d,.term3d,.f3d").forEach((el) => { el.style.setProperty("--gx", x.toFixed(3)); el.style.setProperty("--gy", y.toFixed(3)); }); };
+    const apply = () => { raf = 0; document.querySelector<HTMLElement>(".root")?.style.setProperty("--gx", x.toFixed(3)); document.querySelector<HTMLElement>(".root")?.style.setProperty("--gy", y.toFixed(3)); };
     const mv = (e: PointerEvent) => { if (e.pointerType !== "mouse") return; x = (e.clientX / window.innerWidth) * 2 - 1; y = (e.clientY / window.innerHeight) * 2 - 1; if (!raf) raf = requestAnimationFrame(apply); };
     window.addEventListener("pointermove", mv, { passive: true });
-    return () => { window.removeEventListener("pointermove", mv); cancelAnimationFrame(raf); };
-  }, [G.d3, G.nomotion]);
+    return () => { window.removeEventListener("pointermove", mv); cancelAnimationFrame(raf); const root = document.querySelector<HTMLElement>(".root"); root?.style.removeProperty("--gx"); root?.style.removeProperty("--gy"); };
+  }, [G.d3, G.nomotion, compact]);
   // un solo logo 3D alla volta (un solo contesto WebGL): quello grande su schermi larghi, quello piccolo su telefono
   const [wide, setWide] = useState(() => !!window.matchMedia?.("(min-width:768px)").matches);
   useEffect(() => {
@@ -2067,7 +1845,94 @@ export default function App() {
   // ================= RENDER =================
   const no = (k: string, cls: string) => (G[k] ? "" : cls);
   const gStyle: any = { "--gi": G.glowI, "--ai": G.auroraI, "--ao": G.artI };
-  const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} min-h-screen`}><style>{CSS + MOTION_CSS + D3_CSS}</style><div className="prog" />{children}</div>;
+  const settingsDialog = optOpen && (
+        <SettingsDialog onClose={() => setOptOpen(false)}>
+            <div className="flex items-center justify-between mb-5"><h3 id="settings-title" className="hd text-2xl font-bold">Opzioni</h3><button className="bt !p-2" onClick={() => setOptOpen(false)} aria-label="Chiudi"><X size={16} /></button></div>
+            <h4 className="text-xs mu mb-2">Aspetto</h4>
+            <Seg v={dark} set={(v: boolean, e: any) => setTheme(v, e)} items={[[false, <><Sun size={14} />Chiaro</>], [true, <><Moon size={14} />Scuro</>]]} />
+            <div className="h-2" />
+            <Seg v={opts.text} set={(v: number) => setOpt("text", v)} items={[[0.9, "Testo piccolo"], [1, "Normale"], [1.12, "Grande"]]} />
+            <h4 className="text-xs mu mt-6 mb-2">Effetti e animazioni</h4>
+            <Seg cols={2} v={opts.level} set={(v: string) => setLevel(v)} items={[["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"], ["custom", <><SlidersHorizontal size={13} />Personalizzato</>]]} />
+            <p className="text-xs mu mt-2">{({ full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, aurora e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria.", custom: `Scegli tu ogni effetto e quanto deve essere intenso · ${CBOOL.filter((k) => G[k]).length} di ${CBOOL.length} attivi.` } as any)[opts.level]}</p>
+            {opts.level !== "custom" ? (
+              <div className="mt-2">
+                <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="Impulsi di corrente sullo sfondo, scintille al tocco e pioggia di codice nel riquadro iniziale" />
+                <Sw on={opts.glow} off={opts.level !== "full"} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
+                <Sw on={opts.aurora} off={opts.level !== "full"} set={(v: boolean) => setOpt("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
+                <Sw on={opts.intro} off={lite} set={(v: boolean) => setOpt("intro", v)} label="Titoli, logo e fogli animati" hint="Titoli che emergono dalla riga, fogli dell'archivio che si stampano" />
+                <Sw on={opts.d3 !== false} off={lite} set={(v: boolean) => setOpt("d3", v)} label="Logo e titoli in 3D" hint="Logo tridimensionale che segue il mouse (cliccalo), titoli in rilievo, terminale fluttuante" />
+                <button type="button" className="bt w-full mt-2" onClick={() => setLevel("custom")}><SlidersHorizontal size={15} />Regola ogni dettaglio</button>
+              </div>
+            ) : (
+              <div className="mt-1">
+                <div className="flex items-center gap-2 mt-2 mb-1">
+                  <span className="text-xs mu shrink-0">Parti da</span>
+                  <div className="flex gap-1.5 flex-1">
+                    {([["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"]] as any).map(([id, l]: any) => <button type="button" key={id} className="bt flex-1 !text-xs !px-1 !py-1.5" onClick={() => baseOn(id)}>{l}</button>)}
+                  </div>
+                </div>
+                <Sw on={G.motion} set={(v: boolean) => setC("motion", v)} label="Animazioni dell'interfaccia" hint="Se lo spegni nessun elemento si muove: tutto compare subito" />
+
+                <Sub>Sfondo</Sub>
+                <Sw on={G.pulses} set={(v: boolean) => setC("pulses", v)} label="Impulsi di corrente" hint="Scintille di luce che corrono lungo le piste del circuito" />
+                {G.pulses && <Rng label="Quantità di impulsi" hint="Sugli schermi piccoli sono la metà" v={G.dens} set={(v: number) => setC("dens", v)} min={2} max={40} step={1} />}
+                <Sw on={G.sparks} set={(v: boolean) => setC("sparks", v)} label="Scintille al tocco" hint="Una raggiera di scintille dove clicchi o tocchi" />
+                <Sw on={G.aurora} set={(v: boolean) => setC("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
+                {G.aurora && <Rng label="Intensità aurora" v={G.auroraI} set={(v: number) => setC("auroraI", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <Sw on={G.art} set={(v: boolean) => setC("art", v)} label="Disegno di circuiti" hint="Schema elettronico che cambia a ogni sezione" />
+                {G.art && <Rng label="Visibilità del disegno" v={G.artI} set={(v: number) => setC("artI", v)} min={0.2} max={2.5} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <Sw on={G.parallax} set={(v: boolean) => setC("parallax", v)} label="Parallasse" hint="Lo sfondo scorre più piano della pagina" />
+                <Sw on={G.prog} set={(v: boolean) => setC("prog", v)} label="Barra di avanzamento" hint="Linea luminosa in alto che segue lo scorrimento" />
+
+                <Sub>Riquadro iniziale</Sub>
+                <Sw on={G.rain} set={(v: boolean) => setC("rain", v)} label="Pioggia di codice" hint="Colonne di 0, 1 ed esadecimale che cadono e reagiscono al mouse" />
+                {G.rain && <Rng label="Densità della pioggia" v={G.rainD} set={(v: number) => setC("rainD", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <Sw on={G.scan} set={(v: boolean) => setC("scan", v)} label="Linee di scansione" hint="Righe sottili e fascio di luce che scende sul riquadro" />
+
+                <Sub>Pulsanti e card</Sub>
+                <Sw on={G.glow} set={(v: boolean) => setC("glow", v)} label="Bagliore" hint="Luce che segue il dito o il mouse" />
+                {G.glow && <Rng label="Intensità bagliore" v={G.glowI} set={(v: number) => setC("glowI", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <Sw on={G.tilt} set={(v: boolean) => setC("tilt", v)} label="Inclinazione 3D" hint="Card e pulsanti si inclinano verso il mouse" />
+                {G.tilt && <Rng label="Forza dell'inclinazione" v={G.tiltI} set={(v: number) => setC("tiltI", v)} min={0.2} max={2.5} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <Sw on={G.ripple} set={(v: boolean) => setC("ripple", v)} label="Onde sui pulsanti" hint="Un'onda parte dal punto in cui premi" />
+                <Sw on={G.lift} set={(v: boolean) => setC("lift", v)} label="Sollevamento" hint="I fogli si alzano al passaggio e l'angolo si piega" />
+
+                <Sub>Ingressi e transizioni</Sub>
+                <Sw on={G.titles} set={(v: boolean) => setC("titles", v)} label="Titoli che emergono" hint="Le parole dei titoli salgono dalla propria riga, una dopo l'altra" />
+                <Sw on={G.logo} set={(v: boolean) => setC("logo", v)} label="Logo animato" hint="Il logo si disegna e la corrente lo attraversa" />
+                <Sw on={G.d3} set={(v: boolean) => setC("d3", v)} label="Logo e titoli in 3D" hint="Logo tridimensionale in WebGL, titoli estrusi e terminale fluttuante che seguono il mouse" />
+                <Sw on={G.reveal} set={(v: boolean) => setC("reveal", v)} label="Fogli e sezioni che compaiono" hint="L'ingresso nel Circuito, i fogli dell'archivio che si stampano, i numeri che si caricano" />
+                <Sw on={G.pages} set={(v: boolean) => setC("pages", v)} label="Transizione tra le pagine" hint="La pagina arriva dal lato verso cui ti sposti, e la pista sotto il titolo si traccia" />
+                <Sw on={G.theme} set={(v: boolean) => setC("theme", v)} label="Onda al cambio tema" hint="Il passaggio chiaro/scuro si allarga dal punto in cui tocchi" />
+                <Sw on={G.blur} set={(v: boolean) => setC("blur", v)} label="Sfocature" hint="Barra in alto e finestre semitrasparenti. Spegnile se lo schermo scatta" />
+
+                <Sub>Velocità e prestazioni</Sub>
+                <Rng label="Velocità delle animazioni" hint="Vale per animazioni, transizioni, circuito e pioggia di codice" v={G.spd} set={(v: number) => setC("spd", v)} min={0.25} max={2} step={0.05} fmt={(v: number) => `×${v.toFixed(2).replace(/0$/, "")}`} />
+                <div className="py-2">
+                  <span className="block text-sm font-semibold">Fluidità degli effetti</span>
+                  <span className="block text-xs mu mb-2">Fotogrammi al secondo di circuito e pioggia di codice: meno scatti con più, meno batteria con meno</span>
+                  <Seg v={G.fps} set={(v: number) => setC("fps", v)} items={[[20, "20 fps"], [30, "30 fps"], [60, "60 fps"]]} />
+                </div>
+              </div>
+            )}
+            <h4 className="text-xs mu mt-4 mb-1">Musica e feedback</h4>
+            <Sw on={opts.music} set={setMusic} label="Musica di sottofondo" hint="Mii Channel (Plaza) · riproduzione continua" />
+            {opts.music && <Rng label="Volume della musica" v={opts.musicVol ?? 0.35} set={(v: number) => setOpt("musicVol", v)} min={0} max={1} step={0.05} fmt={(v: number) => Math.round(v * 100) + "%"} />}
+            {opts.music && music.status === "blocked" && <button type="button" className="bt w-full" onClick={music.retry}>Riprendi musica</button>}
+            {opts.music && music.status === "error" && <p className="text-xs mu" role="status">Impossibile riprodurre la musica. <button type="button" className="lk" onClick={music.retry}>Riprova</button></p>}
+            <Sw on={opts.sound} set={(v: boolean) => setOpt("sound", v)} label="Suoni" hint="Piccoli bip elettronici al tocco" />
+            {opts.sound && <Rng label="Volume dei suoni" v={opts.vol ?? 1} set={(v: number) => setOpt("vol", v)} min={0.1} max={2} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+            <Sw on={opts.vibrate} set={(v: boolean) => setOpt("vibrate", v)} label="Vibrazione" hint="Feedback tattile su segnalibro e voti" />
+            {opts.vibrate && <div className="py-2"><span className="block text-xs font-semibold mb-1.5">Forza della vibrazione</span><Seg v={opts.vib ?? 1} set={(v: number) => setOpt("vib", v)} items={[[0.6, "Leggera"], [1, "Normale"], [1.6, "Forte"]]} /></div>}
+            {isOwner && <AccessoProf db={db} notify={notify} />}
+            <div className="flex gap-2 mt-5">
+              <button className="bt flex-1" onClick={() => setOpts({ ...DEF })}><RotateCcw size={15} />Ripristina</button>
+              <button className="bt on flex-1" onClick={() => setOpt("level", "lite")}><Zap size={15} />Elimina effetti</button>
+            </div>
+        </SettingsDialog>
+      );
+  const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} min-h-screen`}><div className="prog" />{children}{settingsDialog}</div>;
 
   if (authLoading || redeeming || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
@@ -2091,7 +1956,7 @@ export default function App() {
               <div className="zl l3d-col" style={{ ["--z" as any]: "0px" }}>
                 {wide && <span className="zl block relative l3d-logo" style={{ ["--z" as any]: "0px" }} onClick={eggLogin}>
                   <span className="zsh" style={{ left: "18%", width: "64%", bottom: "-4%", height: "14%" }} aria-hidden="true" />
-                  <span className="zl block absolute inset-0" style={{ ["--z" as any]: "75px" }}><React.Suspense fallback={null}><Logo3D className="logo3d w-full h-full" intro={G.logo} spd={G.spd} fallback={null} /></React.Suspense></span>
+                  <span className="zl block absolute inset-0" style={{ ["--z" as any]: "75px" }}><Logo3D className="logo3d w-full h-full" intro={G.logo} spd={G.spd} fps={G.fps} fallback={<Logo size={120} />} /></span>
                 </span>}
                 <h1 className="zl hd text-5xl font-bold leading-tight" style={{ ["--z" as any]: "45px" }}><Text3D text="Scrivi senza limiti. Ogni mese emergono i testi migliori." layers={12} anim={G.titles} className="t3-hero t3-glint" delay={300} /></h1>
                 <p className="zl mu mt-5 max-w-sm b-2" style={{ ["--z" as any]: "22px" }}>Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
@@ -2148,6 +2013,7 @@ export default function App() {
               </form>
             )}
             {!resetCode && !profToken && <ApkDownload divider />}
+            <button type="button" className="bt w-full mt-5" onClick={() => setOptOpen(true)}><Settings size={16} />Opzioni</button>
           </div></div>
         </div>
       </div>
@@ -2181,7 +2047,7 @@ export default function App() {
       {(close: any) => <NotifPanel list={notifs} onRead={markRead} onOpen={() => { close(); go("my_pages"); }} />}
     </Pop>
   );
-  const wc = (t: any) => plain(t.content).trim().split(/\s+/).filter(Boolean).length;
+  const wc = (t: any) => wordCounts.get(t.id) || 0;
   const Row = ({ t, rank, i = 0 }: any) => (
     <button key={t.id} data-doc={t.id} onClick={(e) => openView(t, e)} className="nv idx w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-colors" style={{ ["--i" as any]: i }}>
       {rank && <span className="hd w-8 text-center font-bold mu">{rank}</span>}
@@ -2323,9 +2189,9 @@ export default function App() {
           ? <>
             {/* ombra del logo sul pannello: sta sul piano, il logo 90 px sopra; inclinando il pannello si separano */}
             <span className="zsh hidden md:block w-[150px] h-[46px] lg:w-[220px] lg:h-[62px]" style={{ position: "absolute", right: "min(9%, 70px)", top: "calc(50% + 110px)" }} aria-hidden="true" />
-            <span className="zl block w-[230px] h-[230px] lg:w-[340px] lg:h-[340px]" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", ["--z" as any]: "150px" }} onClick={eggHome}><React.Suspense fallback={<span className="hero-logo block"><Logo size={170} /></span>}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<span className="hero-logo block"><Logo size={170} /></span>} /></React.Suspense></span>
+            <span className="zl block w-[230px] h-[230px] lg:w-[340px] lg:h-[340px]" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", ["--z" as any]: "150px" }} onClick={eggHome}><React.Suspense fallback={<span className="hero-logo block"><Logo size={170} /></span>}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fps={G.fps} fallback={<span className="hero-logo block"><Logo size={170} /></span>} /></React.Suspense></span>
           </>
-          : <span className="zl block -ml-5 -mt-6 mb-1 w-[150px] h-[150px]" style={{ ["--z" as any]: "60px" }} onClick={eggHome}><React.Suspense fallback={<Logo size={76} />}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fallback={<Logo size={76} />} /></React.Suspense></span>
+          : <span className="zl block mb-3 w-[132px] h-[132px]" style={{ ["--z" as any]: "60px" }} onClick={eggHome}><React.Suspense fallback={<Logo size={76} />}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fps={G.fps} fallback={<Logo size={76} />} /></React.Suspense></span>
         ) : <><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className={`hero-logo block ${boot ? "hero-logo-in" : ""}`} onClick={eggHome}><Logo size={170} /></span></span><span className="md:hidden block mb-5" onClick={eggHome}><Logo size={76} /></span></>}
         {G.d3
           ? <div className="b-1 zl relative z-[1] w-fit max-w-full" style={{ ["--z" as any]: "100px" }}>{logo3d && <i className="zsh-rect" style={{ ["--sd" as any]: "-100px" }} aria-hidden="true" />}<Terminal3D user={termUser} cmd={termCmd} out={termOut} run={!G.nomotion} delay={boot ? 1150 : 380} /></div>
@@ -2686,92 +2552,6 @@ export default function App() {
           <div className="pn w-full max-w-lg max-h-[92dvh] overflow-y-auto pop relative !rounded-b-none md:!rounded-b-[18px]" onClick={(e) => e.stopPropagation()}>
             <button className="bt !p-2 absolute top-3 right-3 z-10" onClick={() => setViewProf(null)} aria-label="Chiudi"><X size={15} /></button>
             {profileView(viewProf, false)}
-          </div>
-        </div>
-      )}
-
-      {optOpen && (
-        <div className="fade fixed inset-0 z-[70] flex items-end md:items-center justify-center bg-black/60" onClick={() => setOptOpen(false)}>
-          <div className="pn w-full max-w-md max-h-[90dvh] overflow-y-auto p-5 pop !rounded-b-none md:!rounded-b-[18px]" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5"><h3 className="hd text-2xl font-bold">Opzioni</h3><button className="bt !p-2" onClick={() => setOptOpen(false)} aria-label="Chiudi"><X size={16} /></button></div>
-            <h4 className="text-xs mu mb-2">Aspetto</h4>
-            <Seg v={dark} set={(v: boolean, e: any) => setTheme(v, e)} items={[[false, <><Sun size={14} />Chiaro</>], [true, <><Moon size={14} />Scuro</>]]} />
-            <div className="h-2" />
-            <Seg v={opts.text} set={(v: number) => setOpt("text", v)} items={[[0.9, "Testo piccolo"], [1, "Normale"], [1.12, "Grande"]]} />
-            <h4 className="text-xs mu mt-6 mb-2">Effetti e animazioni</h4>
-            <Seg cols={2} v={opts.level} set={(v: string) => setLevel(v)} items={[["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"], ["custom", <><SlidersHorizontal size={13} />Personalizzato</>]]} />
-            <p className="text-xs mu mt-2">{({ full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, aurora e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria.", custom: `Scegli tu ogni effetto e quanto deve essere intenso · ${CBOOL.filter((k) => G[k]).length} di ${CBOOL.length} attivi.` } as any)[opts.level]}</p>
-            {opts.level !== "custom" ? (
-              <div className="mt-2">
-                <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="Impulsi di corrente sullo sfondo, scintille al tocco e pioggia di codice nel riquadro iniziale" />
-                <Sw on={opts.glow} off={opts.level !== "full"} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
-                <Sw on={opts.aurora} off={opts.level !== "full"} set={(v: boolean) => setOpt("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
-                <Sw on={opts.intro} off={lite} set={(v: boolean) => setOpt("intro", v)} label="Titoli, logo e fogli animati" hint="Titoli che emergono dalla riga, fogli dell'archivio che si stampano" />
-                <Sw on={opts.d3 !== false} off={lite} set={(v: boolean) => setOpt("d3", v)} label="Logo e titoli in 3D" hint="Logo tridimensionale che segue il mouse (cliccalo), titoli in rilievo, terminale fluttuante" />
-                <button type="button" className="bt w-full mt-2" onClick={() => setLevel("custom")}><SlidersHorizontal size={15} />Regola ogni dettaglio</button>
-              </div>
-            ) : (
-              <div className="mt-1">
-                <div className="flex items-center gap-2 mt-2 mb-1">
-                  <span className="text-xs mu shrink-0">Parti da</span>
-                  <div className="flex gap-1.5 flex-1">
-                    {([["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"]] as any).map(([id, l]: any) => <button type="button" key={id} className="bt flex-1 !text-xs !px-1 !py-1.5" onClick={() => baseOn(id)}>{l}</button>)}
-                  </div>
-                </div>
-                <Sw on={G.motion} set={(v: boolean) => setC("motion", v)} label="Animazioni dell'interfaccia" hint="Se lo spegni nessun elemento si muove: tutto compare subito" />
-
-                <Sub>Sfondo</Sub>
-                <Sw on={G.pulses} set={(v: boolean) => setC("pulses", v)} label="Impulsi di corrente" hint="Scintille di luce che corrono lungo le piste del circuito" />
-                {G.pulses && <Rng label="Quantità di impulsi" hint="Sugli schermi piccoli sono la metà" v={G.dens} set={(v: number) => setC("dens", v)} min={2} max={40} step={1} />}
-                <Sw on={G.sparks} set={(v: boolean) => setC("sparks", v)} label="Scintille al tocco" hint="Una raggiera di scintille dove clicchi o tocchi" />
-                <Sw on={G.aurora} set={(v: boolean) => setC("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
-                {G.aurora && <Rng label="Intensità aurora" v={G.auroraI} set={(v: number) => setC("auroraI", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
-                <Sw on={G.art} set={(v: boolean) => setC("art", v)} label="Disegno di circuiti" hint="Schema elettronico che cambia a ogni sezione" />
-                {G.art && <Rng label="Visibilità del disegno" v={G.artI} set={(v: number) => setC("artI", v)} min={0.2} max={2.5} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
-                <Sw on={G.parallax} set={(v: boolean) => setC("parallax", v)} label="Parallasse" hint="Lo sfondo scorre più piano della pagina" />
-                <Sw on={G.prog} set={(v: boolean) => setC("prog", v)} label="Barra di avanzamento" hint="Linea luminosa in alto che segue lo scorrimento" />
-
-                <Sub>Riquadro iniziale</Sub>
-                <Sw on={G.rain} set={(v: boolean) => setC("rain", v)} label="Pioggia di codice" hint="Colonne di 0, 1 ed esadecimale che cadono e reagiscono al mouse" />
-                {G.rain && <Rng label="Densità della pioggia" v={G.rainD} set={(v: number) => setC("rainD", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
-                <Sw on={G.scan} set={(v: boolean) => setC("scan", v)} label="Linee di scansione" hint="Righe sottili e fascio di luce che scende sul riquadro" />
-
-                <Sub>Pulsanti e card</Sub>
-                <Sw on={G.glow} set={(v: boolean) => setC("glow", v)} label="Bagliore" hint="Luce che segue il dito o il mouse" />
-                {G.glow && <Rng label="Intensità bagliore" v={G.glowI} set={(v: number) => setC("glowI", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
-                <Sw on={G.tilt} set={(v: boolean) => setC("tilt", v)} label="Inclinazione 3D" hint="Card e pulsanti si inclinano verso il mouse" />
-                {G.tilt && <Rng label="Forza dell'inclinazione" v={G.tiltI} set={(v: number) => setC("tiltI", v)} min={0.2} max={2.5} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
-                <Sw on={G.ripple} set={(v: boolean) => setC("ripple", v)} label="Onde sui pulsanti" hint="Un'onda parte dal punto in cui premi" />
-                <Sw on={G.lift} set={(v: boolean) => setC("lift", v)} label="Sollevamento" hint="I fogli si alzano al passaggio e l'angolo si piega" />
-
-                <Sub>Ingressi e transizioni</Sub>
-                <Sw on={G.titles} set={(v: boolean) => setC("titles", v)} label="Titoli che emergono" hint="Le parole dei titoli salgono dalla propria riga, una dopo l'altra" />
-                <Sw on={G.logo} set={(v: boolean) => setC("logo", v)} label="Logo animato" hint="Il logo si disegna e la corrente lo attraversa" />
-                <Sw on={G.d3} set={(v: boolean) => setC("d3", v)} label="Logo e titoli in 3D" hint="Logo tridimensionale in WebGL, titoli estrusi e terminale fluttuante che seguono il mouse" />
-                <Sw on={G.reveal} set={(v: boolean) => setC("reveal", v)} label="Fogli e sezioni che compaiono" hint="L'ingresso nel Circuito, i fogli dell'archivio che si stampano, i numeri che si caricano" />
-                <Sw on={G.pages} set={(v: boolean) => setC("pages", v)} label="Transizione tra le pagine" hint="La pagina arriva dal lato verso cui ti sposti, e la pista sotto il titolo si traccia" />
-                <Sw on={G.theme} set={(v: boolean) => setC("theme", v)} label="Onda al cambio tema" hint="Il passaggio chiaro/scuro si allarga dal punto in cui tocchi" />
-                <Sw on={G.blur} set={(v: boolean) => setC("blur", v)} label="Sfocature" hint="Barra in alto e finestre semitrasparenti. Spegnile se lo schermo scatta" />
-
-                <Sub>Velocità e prestazioni</Sub>
-                <Rng label="Velocità delle animazioni" hint="Vale per animazioni, transizioni, circuito e pioggia di codice" v={G.spd} set={(v: number) => setC("spd", v)} min={0.25} max={2} step={0.05} fmt={(v: number) => `×${v.toFixed(2).replace(/0$/, "")}`} />
-                <div className="py-2">
-                  <span className="block text-sm font-semibold">Fluidità degli effetti</span>
-                  <span className="block text-xs mu mb-2">Fotogrammi al secondo di circuito e pioggia di codice: meno scatti con più, meno batteria con meno</span>
-                  <Seg v={G.fps} set={(v: number) => setC("fps", v)} items={[[20, "20 fps"], [30, "30 fps"], [60, "60 fps"]]} />
-                </div>
-              </div>
-            )}
-            <h4 className="text-xs mu mt-4 mb-1">Altro</h4>
-            <Sw on={opts.sound} set={(v: boolean) => setOpt("sound", v)} label="Suoni" hint="Piccoli bip elettronici al tocco" />
-            {opts.sound && <Rng label="Volume dei suoni" v={opts.vol ?? 1} set={(v: number) => setOpt("vol", v)} min={0.1} max={2} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
-            <Sw on={opts.vibrate} set={(v: boolean) => setOpt("vibrate", v)} label="Vibrazione" hint="Feedback tattile su segnalibro e voti" />
-            {opts.vibrate && <div className="py-2"><span className="block text-xs font-semibold mb-1.5">Forza della vibrazione</span><Seg v={opts.vib ?? 1} set={(v: number) => setOpt("vib", v)} items={[[0.6, "Leggera"], [1, "Normale"], [1.6, "Forte"]]} /></div>}
-            {isOwner && <AccessoProf db={db} notify={notify} />}
-            <div className="flex gap-2 mt-5">
-              <button className="bt flex-1" onClick={() => setOpts({ ...DEF })}><RotateCcw size={15} />Ripristina</button>
-              <button className="bt on flex-1" onClick={() => setOpt("level", "lite")}><Zap size={15} />Elimina effetti</button>
-            </div>
           </div>
         </div>
       )}
