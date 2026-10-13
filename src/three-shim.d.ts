@@ -1,4 +1,3 @@
-// three.js non porta i propri tipi e @types/three richiede un TypeScript più recente di quello del progetto (4.4):
-// i moduli si usano senza tipi.
+// Compatibility shim for the existing Three.js scene and CRA's TypeScript 4.x toolchain.
 declare module "three";
 declare module "three/examples/jsm/environments/RoomEnvironment.js";
