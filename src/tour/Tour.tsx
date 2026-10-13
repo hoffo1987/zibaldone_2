@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Volume2, VolumeX, Power, ChevronRight } from "lucide-react";
+import { Volume2, VolumeX, ChevronRight } from "lucide-react";
 import * as sound from "../sound";
 import { Text3D } from "../d3";
 import { createFilm, Film, FilmText, MUSIC } from "./film";
@@ -51,14 +51,18 @@ const findTarget = (id: string): HTMLElement | null => {
   return all.find((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && el.getClientRects().length > 0; }) || null;
 };
 
-export type TourProps = { admin: boolean; name: string; calm: boolean; low: boolean; nav: (tab: string) => void; hold: (on: boolean) => void; onDone: (to?: string) => void };
+// mode: "auto" film e poi tour (primo accesso), "film" solo il filmato, "guide" solo il tour guidato (dalle Opzioni)
+export type TourMode = "auto" | "film" | "guide";
+export type TourProps = { mode: TourMode; admin: boolean; name: string; calm: boolean; low: boolean; nav: (tab: string) => void; hold: (on: boolean) => void; onDone: (to?: string) => void };
 
-export default function Tour({ admin, name, calm, low, nav, hold, onDone }: TourProps) {
+export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }: TourProps) {
   const steps = admin ? ADMIN : STUDENT;
-  const [phase, setPhase] = useState<"prep" | "gate" | "film" | "guide">("prep");
+  const [phase, setPhase] = useState<"prep" | "gate" | "film" | "guide">(mode === "guide" ? "guide" : "prep");
   const [muted, setMuted] = useState(!sound.enabled());
   const [caption, setCaption] = useState("");
+  const [pressed, setPressed] = useState(false);
   const host = useRef<HTMLDivElement>(null), cv = useRef<HTMLCanvasElement>(null), prog = useRef<HTMLElement>(null), spark = useRef<HTMLElement>(null);
+  const power = useRef<HTMLButtonElement>(null), hint = useRef<HTMLParagraphElement>(null);
   const film = useRef<Film | null>(null);
   const clock = useRef<{ voice: ReturnType<typeof sound.play>; t0: number; lead: number; paused: number; hiddenAt: number }>({ voice: null, t0: 0, lead: 0, paused: 0, hiddenAt: 0 });
   const done = useRef(onDone); done.current = onDone;
@@ -66,21 +70,23 @@ export default function Tour({ admin, name, calm, low, nav, hold, onDone }: Tour
   const text = useRef(filmText(admin, name)).current;
 
   // il volume della musica di sottofondo scende per tutta la presentazione
-  useEffect(() => { sound.duck("intro", sound.DUCK.intro); return () => { sound.duck("intro", null); holdRef.current(false); }; }, []);
-
-  // preparazione: font delle scritte e jingle; poi il film parte subito o, se l'audio non è ancora sbloccato, aspetta un tocco
   useEffect(() => {
+    if (mode === "guide") return;
+    sound.duck("intro", sound.DUCK.intro);
+    return () => { sound.duck("intro", null); holdRef.current(false); };
+  }, []);
+
+  // preparazione: font delle scritte e jingle, poi il buio con il pulsante d'accensione
+  useEffect(() => {
+    if (mode === "guide") return;
     let off = false;
     sound.preload("intro");
     const fonts = (document as any).fonts;
-    const ready = fonts ? Promise.race([Promise.all(["600 100px Unbounded", "700 100px 'Bricolage Grotesque'", "500 100px 'Instrument Sans'"].map((f) => fonts.load(f).catch(() => null))), new Promise((r) => setTimeout(r, 1500))]) : Promise.resolve();
+    const ready = fonts ? Promise.race([Promise.all(["600 100px Unbounded", "700 100px 'Bricolage Grotesque'", "600 100px 'Instrument Sans'"].map((f) => fonts.load(f).catch(() => null))), new Promise((r) => setTimeout(r, 1500))]) : Promise.resolve();
     ready.then(() => {
       if (off || !cv.current) return;
       film.current = createFilm(cv.current, { text, calm, low });
-      if (!sound.enabled()) { start(false); return; }
-      if (!sound.running()) { setPhase("gate"); return; }
-      const late = setTimeout(() => start(false), 2500);
-      sound.load("intro").then((b) => { clearTimeout(late); if (!off) start(!!b); });
+      setPhase("gate");
     });
     // ruotando il telefono le scritte si ridisegnano per la nuova inquadratura (una volta sola, a rotazione finita)
     let timer = 0;
@@ -88,6 +94,23 @@ export default function Tour({ admin, name, calm, low, nav, hold, onDone }: Tour
     window.addEventListener("resize", rs);
     return () => { off = true; clearTimeout(timer); window.removeEventListener("resize", rs); clock.current.voice?.stop(0.4); film.current?.dispose(); film.current = null; };
   }, []);
+
+  // l'attesa al buio: il pulsante 3D respira, il vero pulsante (invisibile) gli sta sopra per mouse, tastiera e lettori di schermo
+  useEffect(() => {
+    if (phase !== "gate") return;
+    let raf = 0;
+    const frame = () => {
+      const f = film.current; if (!f) return;
+      f.draw(-1);
+      const b = f.button(), p = power.current, h = hint.current;
+      if (b && p) { p.style.transform = `translate(${(b.x - b.r * 1.25).toFixed(1)}px,${(b.y - b.r * 1.25).toFixed(1)}px)`; p.style.width = p.style.height = `${(b.r * 2.5).toFixed(1)}px`; }
+      if (b && h) h.style.transform = `translate(-50%,${(b.y + b.r * 1.5).toFixed(1)}px)`;
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    power.current?.focus({ preventScroll: true } as any);
+    return () => cancelAnimationFrame(raf);
+  }, [phase]);
 
   const now = () => {
     const c = clock.current;
@@ -106,11 +129,16 @@ export default function Tour({ admin, name, calm, low, nav, hold, onDone }: Tour
     holdRef.current(true);
     setPhase("film");
   };
-  const powerOn = () => {
+  // la pressione: il tasto affonda, e appena il jingle è pronto si accende la luce
+  const powerOn = (withMusic: boolean) => {
+    if (pressed) return;
     sound.unlock(); // nello stesso gesto: su iPhone è l'unico modo per avere l'audio
-    setPhase("prep");
+    setPressed(true);
+    film.current?.gate({ press: true });
+    const min = new Promise((r) => setTimeout(r, 260));
+    if (!withMusic || !sound.enabled()) { min.then(() => start(false)); return; }
     const late = setTimeout(() => start(false), 2500);
-    sound.load("intro").then((b) => { clearTimeout(late); start(!!b && sound.running()); });
+    Promise.all([sound.load("intro"), min]).then(([b]) => { clearTimeout(late); start(!!b && sound.running()); });
   };
   const toggleMute = () => {
     const c = clock.current, t = Math.max(0, now());
@@ -119,6 +147,11 @@ export default function Tour({ admin, name, calm, low, nav, hold, onDone }: Tour
     // se il jingle non è ancora pronto (si era scelto di guardare senza audio) lo si decodifica e si entra al punto giusto
     const resume = () => { if (clock.current.voice) return; const t2 = Math.max(0, now()), v = sound.play("intro", { offset: t2 + 0.05, when: sound.now() + 0.05, force: true }); if (v) { c.voice = v; setMuted(false); } };
     if (sound.buffer("intro")) resume(); else sound.load("intro").then(resume);
+  };
+  // fine del film: col primo accesso si passa al tour guidato, rivedendo solo il filmato si torna al sito
+  const finish = () => {
+    if (mode === "film") { host.current?.classList.add("tr-out"); setTimeout(() => done.current(), 460); return; }
+    setPhase("guide");
   };
 
   // il film: un fotogramma per ogni frame dello schermo, con il tempo letto dalla musica
@@ -131,14 +164,14 @@ export default function Tour({ admin, name, calm, low, nav, hold, onDone }: Tour
     document.addEventListener("visibilitychange", vis);
     const frame = () => {
       const t = now();
-      film.current?.draw(Math.max(0, t));
+      film.current?.draw(t);
       if (prog.current) prog.current.style.transform = `scaleX(${Math.min(1, Math.max(0, t / MUSIC.end)).toFixed(4)})`;
       let k = -1; caps.forEach(([at], i) => { if (t >= at) k = i; });
       if (k !== cap) { cap = k; if (k >= 0) setCaption(caps[k][1]); }
       // sul finale la pagina riprende a muoversi sotto la scena: le sue animazioni d'ingresso partono mentre il film svanisce
       if (t >= MUSIC.out && !freed) { freed = true; holdRef.current(false); }
-      if (t >= 14.05 && !landed) { landed = true; land(); }
-      if (t >= MUSIC.end + 0.05 && !ended) { ended = true; setPhase("guide"); return; }
+      if (t >= 14.05 && !landed && mode !== "film") { landed = true; land(); }
+      if (t >= MUSIC.end + 0.05 && !ended) { ended = true; finish(); return; }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -162,6 +195,7 @@ export default function Tour({ admin, name, calm, low, nav, hold, onDone }: Tour
     const c = clock.current; c.voice?.stop(0.6); c.voice = null;
     holdRef.current(false);
     host.current?.classList.add("tr-out");
+    if (mode === "film") { setTimeout(() => done.current(), 340); return; }
     setTimeout(() => setPhase("guide"), 320);
   };
 
@@ -178,19 +212,18 @@ export default function Tour({ admin, name, calm, low, nav, hold, onDone }: Tour
         <i className="tr-vig" aria-hidden="true" />
         <i ref={prog} className="tr-prog" aria-hidden="true" />
         <p className="sr-only" aria-live="polite">{caption}</p>
-        {phase === "gate" && (
-          <div className="tr-gate">
-            <button type="button" className="tr-power" onClick={powerOn} aria-label="Accendi il Circuito"><Power size={34} /></button>
-            <p className="tr-gate-t">Accendi il Circuito</p>
-            <p className="tr-gate-s">Una breve presentazione con musica: alza il volume.</p>
-            <button type="button" className="tr-link" onClick={() => start(false)}>Guarda senza audio</button>
-          </div>
-        )}
+        {phase === "gate" && <>
+          <button ref={power} type="button" className="tr-power3d" onClick={() => powerOn(true)} aria-label="Accendi il Circuito: parte la presentazione con musica"
+            onPointerEnter={() => film.current?.gate({ hover: true })} onPointerLeave={() => film.current?.gate({ hover: false })}
+            onFocus={() => film.current?.gate({ hover: true })} onBlur={() => film.current?.gate({ hover: false })} />
+          <p ref={hint} className={`tr-hint ${pressed ? "off" : ""}`} aria-hidden="true">Premi per accendere</p>
+          {!pressed && <button type="button" className="tr-link tr-silent" onClick={() => powerOn(false)}>Guarda senza audio</button>}
+        </>}
         {phase === "film" && <div className="tr-bar">
           <button type="button" className="tr-btn" onClick={toggleMute} aria-label={muted ? "Attiva l'audio" : "Disattiva l'audio"}>{muted ? <VolumeX size={16} /> : <Volume2 size={16} />}</button>
-          <button type="button" className="tr-btn" onClick={skip} autoFocus>Salta intro<ChevronRight size={15} /></button>
+          <button type="button" className="tr-btn" onClick={skip} autoFocus>{mode === "film" ? "Chiudi" : "Salta intro"}<ChevronRight size={15} /></button>
         </div>}
-        {phase !== "film" && phase !== "gate" && <button type="button" className="tr-btn tr-close" onClick={() => done.current()}>Salta</button>}
+        {phase !== "film" && !pressed && <button type="button" className="tr-btn tr-close" onClick={() => done.current()}>{mode === "film" ? "Chiudi" : "Salta"}</button>}
       </div>}
       <i ref={spark} className="tr-spark" aria-hidden="true" />
       {phase === "guide" && <Guide steps={steps} nav={nav} onDone={(to) => done.current(to)} admin={admin} />}
