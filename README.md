@@ -31,6 +31,38 @@ Le impostazioni si salvano su questo dispositivo; al ritorno il browser può ric
 Quando la scheda è nascosta la riproduzione si ferma e riprende al ritorno, se ancora attivata.
 Le Opzioni sono disponibili anche prima dell'accesso.
 
+## Effetti sonori
+
+Tutti i suoni passano da un unico mixer Web Audio (`src/sound.ts`), con un limitatore in fondo alla catena:
+
+| Suono | Quando | File |
+| --- | --- | --- |
+| Klick | passando col mouse su qualcosa di interattivo; su telefono al tocco | `public/audio/klick.wav` |
+| Enter & Back | cambiando sezione: i due click salgono andando avanti nel menu, scendono tornando indietro | `nav-enter.wav`, `nav-back.wav` |
+| Loading | tra il sito e il gioco segreto, dopo l'ultimo tocco sul logo: la barra segue nota per nota il suono | `loading.mp3` |
+| Jingle | durante la presentazione del primo accesso | `intro.mp3` |
+
+Il tick al passaggio è il suono più basso del mix (si sente spesso), il cambio di sezione sta un gradino sopra, caricamento
+e jingle sono momenti e stanno davanti. Mentre suonano loro, la musica di sottofondo si abbassa e poi risale da sola.
+In **Opzioni → Musica e feedback** si possono spegnere gli **Effetti sonori** e regolarne il volume; i browser li fanno
+partire solo dopo il primo tocco o clic sulla pagina.
+
+I file in `public/audio` sono ricavati dagli originali con `npm run audio:build -- <cartella con gli originali>` (serve
+ffmpeg): toglie i silenzi iniziali, porta i picchi a -1 dBFS e il jingle a -16 LUFS, e crea la versione "indietro" del
+suono di navigazione invertendo i due click. Gli originali non vengono modificati.
+
+## Presentazione del primo accesso
+
+Al primo accesso parte un film di 15 secondi a tempo col jingle: il Circuito si accende, il titolo si alza dalla scheda,
+la camera passa per le stazioni (Scrivi, Conserva, Emergi; per chi valuta: Leggi, Vota, Premia), poi il drop con il
+saluto. Il film è disegnato su un solo canvas (`src/tour/film.ts`), senza WebGL, e si alleggerisce da solo se il
+dispositivo arranca; con il movimento ridotto la camera resta ferma e le scritte si danno il cambio in dissolvenza.
+Alla fine un nodo ambra vola sul primo elemento del sito e parte il tour guidato, che porta sezione per sezione sugli
+elementi veri (`src/tour/Tour.tsx`). Si può saltare in qualunque momento (anche con Esc) e togliere l'audio.
+
+Viene mostrata una volta per account su ogni dispositivo (`localStorage`, chiave `circuito:tour:<uid>`) e si può rivedere
+da **Opzioni → Rivedi la presentazione**. Il codice della presentazione e il jingle si scaricano solo per chi deve vederla.
+
 ## Pulsante "Scarica l'app Android"
 
 Il pulsante compare nella schermata di accesso, nella barra laterale (desktop) e nella pagina Profilo (mobile).

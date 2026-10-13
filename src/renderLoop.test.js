@@ -1,4 +1,4 @@
-import { renderLoop } from "./renderLoop";
+import { renderLoop, holdLoops } from "./renderLoop";
 
 let pending, observer, hidden, next;
 beforeEach(() => {
@@ -35,4 +35,14 @@ test("stops in a background tab and resumes with the current FPS setting", () =>
   fps = 60; hidden = false; document.dispatchEvent(new Event("visibilitychange"));
   tick(100); tick(117); expect(draw).toHaveBeenCalledTimes(3);
   stop();
+});
+
+
+test("holds every loop while a full-screen scene covers the site, then resumes", () => {
+  const a = jest.fn(), b = jest.fn(), stopA = renderLoop(a, () => 60), stopB = renderLoop(b, () => 60);
+  tick(0); expect(a).toHaveBeenCalledTimes(1); expect(b).toHaveBeenCalledTimes(1);
+  holdLoops(true); expect(pending.size).toBe(0);
+  holdLoops(false); tick(50);
+  expect(a).toHaveBeenCalledTimes(2); expect(b).toHaveBeenCalledTimes(2);
+  stopA(); stopB();
 });

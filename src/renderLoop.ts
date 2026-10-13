@@ -1,7 +1,10 @@
-// A canvas owns no animation frame while hidden or outside the viewport.
+// A canvas owns no animation frame while hidden, outside the viewport, or held (a full-screen scene covers the site).
+const loops = new Set<() => void>();
+let held = false;
+export function holdLoops(on: boolean) { if (held === on) return; held = on; loops.forEach((sync) => sync()); }
 export function renderLoop(draw: (time: number) => void, fps: () => number, element?: Element, resume?: () => void) {
   let raf = 0, visible = !element || typeof IntersectionObserver === "undefined", disposed = false, last = -Infinity;
-  const active = () => !disposed && visible && !document.hidden;
+  const active = () => !disposed && visible && !held && !document.hidden;
   const frame = (time: number) => {
     raf = 0;
     if (!active()) return;
@@ -18,6 +21,7 @@ export function renderLoop(draw: (time: number) => void, fps: () => number, elem
   }) : null;
   if (element) observer?.observe(element);
   document.addEventListener("visibilitychange", sync);
+  loops.add(sync);
   sync();
-  return () => { disposed = true; cancelAnimationFrame(raf); observer?.disconnect(); document.removeEventListener("visibilitychange", sync); };
+  return () => { disposed = true; cancelAnimationFrame(raf); observer?.disconnect(); loops.delete(sync); document.removeEventListener("visibilitychange", sync); };
 }

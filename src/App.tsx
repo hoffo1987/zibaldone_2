@@ -10,21 +10,30 @@ import {
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal, Sparkles
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
 import { AccessoProf } from "./AccessoProf";
 import { M, Words, Sheets, useFlip, useRail, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 import { Text3D, Terminal3D } from "./d3";
-import { renderLoop } from "./renderLoop";
+import { renderLoop, holdLoops } from "./renderLoop";
 import { useMediaQuery } from "./useMediaQuery";
 import { useMusic } from "./useMusic";
 import { SettingsDialog } from "./Dialog";
+import * as sound from "./sound";
 // il logo 3D (three.js) si carica a parte, solo quando serve: il resto del sito non lo scarica
 import Logo3D from "./LogoView";
-// easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login
-const EggGame = React.lazy(() => import("./egg/EggGame"));
+// easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login → caricamento → gioco
+import EggPortal from "./EggPortal";
+// presentazione del primo accesso (film + tour guidato): si scarica solo per chi deve vederla
+const loadTour = () => import("./tour/Tour");
+const Tour = React.lazy(loadTour);
+const TOUR = "circuito:tour:";
+const tourSeen = (uid: string) => { try { return localStorage.getItem(TOUR + uid) === "1"; } catch { return true; } };
+const tourMark = (uid: string) => { try { localStorage.setItem(TOUR + uid, "1"); } catch {} };
+// nessuna presentazione già vista su questo dispositivo: chi sta entrando è quasi certamente nuovo
+const tourLikely = () => { try { for (let i = 0; i < localStorage.length; i++) if ((localStorage.key(i) || "").indexOf(TOUR) === 0) return false; return true; } catch { return false; } };
 const EGG = "circuito:egg";
 const eggGet = () => { try { return Number(sessionStorage.getItem(EGG) || 0); } catch { return 0; } };
 const eggSet = (n: number) => { try { sessionStorage.setItem(EGG, String(n)); } catch {} };
@@ -655,12 +664,12 @@ const usePresence = (v: any, ms = 320): [any, boolean] => {
   return [v || keep || null, out && !v];
 };
 
-const Pop = ({ label, trigger, cls = "bt", wrap = "", right, children }: any) => {
+const Pop = ({ label, trigger, cls = "bt", wrap = "", right, tour, children }: any) => {
   const [o, setO] = useState(false);
   const [show, out] = usePresence(o ? 1 : null, 240);
   return (
     <div className={`relative ${wrap}`}>
-      <button type="button" className={cls} onClick={() => setO(!o)} title={label} aria-label={label}>{trigger}</button>
+      <button type="button" className={cls} onClick={() => setO(!o)} title={label} aria-label={label} data-tour={tour}>{trigger}</button>
       {show && (<>
         <div className={`cpov ${out ? "out" : ""}`} onClick={() => setO(false)} />
         <div className={`cp pn p-5 ${right ? "cp-r" : ""} ${out ? "out" : ""}`}>
@@ -739,7 +748,8 @@ const bannerFrom = (file: File): Promise<string> => new Promise((res, rej) => {
   r.onerror = rej; r.readAsDataURL(file);
 });
 
-const DEF = { level: "full", fx: true, glow: true, aurora: true, intro: true, d3: true, sound: false, music: false, musicVol: 0.35, vibrate: true, text: 1, vol: 1, vib: 1 };
+// sfx: tick al passaggio, suono del cambio di sezione, caricamento del gioco e jingle della presentazione (sound.ts)
+const DEF = { level: "full", fx: true, glow: true, aurora: true, intro: true, d3: true, sfx: true, sfxVol: 1, music: false, musicVol: 0.35, vibrate: true, text: 1, vib: 1 };
 
 // Modalità "Personalizzato": ogni effetto si accende o spegne da solo e ogni intensità si regola a piacere.
 // I valori qui sotto sono quelli del preset "Spettacolo".
@@ -780,8 +790,6 @@ let GSPD = 1;  // velocità globale delle animazioni (serve anche ai timer fuori
 // prima apertura della sessione: l'ingresso nel Circuito si vede per intero una volta sola, poi le pagine entrano in modo asciutto
 const FIRST = (() => { try { const s = sessionStorage.getItem("circuito:ingresso"); sessionStorage.setItem("circuito:ingresso", "1"); return !s; } catch { return true; } })();
 const NAV_ORDER = ["home", "write", "my_pages", "read", "podio", "authors", "profile"];
-let actx: any = null;
-const blip = (f = 660, vol = 1) => { try { const AC = (window as any).AudioContext || (window as any).webkitAudioContext; actx = actx || new AC(); const o = actx.createOscillator(), g = actx.createGain(); o.type = "square"; o.frequency.value = f; g.gain.setValueAtTime(0.03 * vol, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.08); o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.09); } catch {} };
 
 const Scramble = ({ text, on }: any) => {
   const [t, setT] = useState(text);
@@ -1011,9 +1019,10 @@ export default function App() {
   const [f, setF] = useState({ email: "", pw: "", name: "", surname: "", newPw: "" });
   const [authMsg, setAuthMsg] = useState<{ t: "err" | "ok"; m: string } | null>(null);
   const [resetCode, setResetCode] = useState<string | null>(null);
-  const [egg, setEgg] = useState(false);
+  // il gioco segreto si apre dal punto toccato, con la schermata di caricamento a tempo col suono (EggPortal)
+  const [egg, setEgg] = useState<{ x: number; y: number } | null>(null);
   const eggHome = useTriple((e) => { eggSet(1); eggFlip(e); });
-  const eggLogin = useTriple((e) => { if (eggGet() === 2) { eggFlip(e); setTimeout(() => setEgg(true), 450); } });
+  const eggLogin = useTriple((e) => { if (eggGet() === 2) { eggFlip(e); sound.unlock(); setEgg({ x: e?.clientX ?? window.innerWidth / 2, y: e?.clientY ?? window.innerHeight / 2 }); } });
   // ui
   const [dark, setDark] = useState(() => { try { return localStorage.getItem("circuito:dark") === "1"; } catch { return false; } });
   const [opts, setOpts] = useState<any>(() => { let o: any = {}; try { o = JSON.parse(localStorage.getItem("circuito:opts") || "{}"); } catch {} const red = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches; const mobile = !!window.matchMedia?.("(max-width:767px), (pointer:coarse)").matches; return { ...DEF, ...(!o.level ? { level: red ? "lite" : mobile ? "mid" : "full" } : {}), ...o }; });
@@ -1027,12 +1036,20 @@ export default function App() {
   const setOpt = (k: string, v: any) => setOpts((o: any) => ({ ...o, [k]: v }));
   const music = useMusic(!!opts.music, opts.musicVol ?? 0.35);
   const setMusic = (on: boolean) => { music.toggle(on); setOpt("music", on); };
+  // suoni: sblocco al primo gesto, livello dalle Opzioni, tick su ciò che è interattivo
+  const sfxOn = opts.sfx !== false;
+  useEffect(() => { sound.installSound(); }, []);
+  useEffect(() => { sound.configure(sfxOn, opts.sfxVol ?? 1); }, [sfxOn, opts.sfxVol]);
+  useEffect(() => (sfxOn ? sound.bindUiSounds() : undefined), [sfxOn]);
   const setC = (k: string, v: any) => setOpts((o: any) => ({ ...o, level: "custom", c: { ...CDEF, ...(o.c || {}), [k]: v } }));
   // passando a "Personalizzato" la prima volta si parte da ciò che si vede adesso; le volte dopo si ritrova la propria scelta
   const setLevel = (v: string) => setOpts((o: any) => { if (v === "custom" && !o.c) { const g: any = resolveG(o), c: any = {}; Object.keys(CDEF).forEach((k) => { c[k] = g[k]; }); return { ...o, level: v, c }; } return { ...o, level: v }; });
   const baseOn = (p: string) => setOpts((o: any) => ({ ...o, level: "custom", c: { ...CBASE[p] } }));
   const buzz = (p: number | number[]) => { if (!opts.vibrate) return; const k = opts.vib || 1; navigator.vibrate?.(Array.isArray(p) ? p.map((x, i) => (i % 2 ? x : Math.round(x * k))) : Math.round(p * k)); };
   const [tab, setTab] = useState("home");
+  // presentazione del primo accesso: una volta per account su questo dispositivo; dalle Opzioni si può rivedere
+  const [tour, setTour] = useState<"" | "auto" | "replay">("");
+  const [tourHold, setTourHold] = useState(false);
   const [month, setMonth] = useState(() => mKey(Date.now()));
   const [monthFilter, setMonthFilter] = useState("all");
   const [onlyMarked, setOnlyMarked] = useState(false);
@@ -1222,7 +1239,7 @@ export default function App() {
     return () => { document.removeEventListener("animationstart", sched, true); document.removeEventListener("transitionrun", sched, true); cancelAnimationFrame(raf); };
   }, [G.spd]);
   useEffect(() => {
-    if (!G.glow && !G.tilt && !G.ripple && !opts.sound) return;
+    if (!G.glow && !G.tilt && !G.ripple) return;
     let raf = 0, el: any = null, ev: any = null;
     const run = () => {
       raf = 0; if (!el || !ev) return;
@@ -1237,7 +1254,6 @@ export default function App() {
     const out = (e: any) => { const t = e.target?.closest?.(".card,.bt"); if (t) ["--rx", "--ry", "--tx", "--ty"].forEach((k) => t.style.removeProperty(k)); };
     const dn = (e: any) => {
       const t = e.target?.closest?.(".card,.bt"); if (!t) return;
-      if (opts.sound) blip(480 + Math.random() * 360, opts.vol ?? 1);
       const r = t.getBoundingClientRect();
       if (G.glow) { t.style.setProperty("--mx", `${e.clientX - r.left}px`); t.style.setProperty("--my", `${e.clientY - r.top}px`); }
       if (G.ripple && t.classList.contains("bt")) { t.style.setProperty("--px", `${e.clientX - r.left}px`); t.style.setProperty("--py", `${e.clientY - r.top}px`); t.classList.remove("rip"); void t.offsetWidth; t.classList.add("rip"); }
@@ -1247,7 +1263,7 @@ export default function App() {
       document.removeEventListener("pointermove", mv); document.removeEventListener("pointerout", out); document.removeEventListener("pointerdown", dn); cancelAnimationFrame(raf);
       document.querySelectorAll<HTMLElement>(".card,.bt").forEach(el => ["--rx", "--ry", "--tx", "--ty"].forEach(key => el.style.removeProperty(key)));
     };
-  }, [G.glow, G.tilt, G.ripple, G.tiltI, opts.sound, opts.vol]);
+  }, [G.glow, G.tilt, G.ripple, G.tiltI]);
   useEffect(() => {
     const lock = sel || toDelete || done || viewProf || optOpen;
     document.body.style.overflow = lock ? "hidden" : "";
@@ -1319,6 +1335,9 @@ export default function App() {
   // --- auth handlers ---
   const submitAuth = async (e: any) => {
     e.preventDefault(); setAuthMsg(null);
+    // nel gesto dell'invio: l'audio si sblocca (iPhone compreso) e, per chi entra per la prima volta, parte il download della presentazione
+    sound.unlock();
+    if (authMode !== "reset" && tourLikely()) { sound.preload("intro"); loadTour().catch(() => {}); }
     const email = f.email.trim(); // la tastiera del telefono aggiunge spesso uno spazio in fondo
     let full = "";
     if (authMode === "register") {
@@ -1359,6 +1378,7 @@ export default function App() {
   const redeemProf = async () => {
     if (!profToken || redeemRef.current) return;
     const token = profToken;
+    sound.unlock(); sound.preload("intro"); loadTour().catch(() => {});
     redeemRef.current = true; setRedeeming(true); setAuthMsg(null);
     try {
       const cred = await signInAnonymously(auth);
@@ -1774,6 +1794,37 @@ export default function App() {
   const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
   const go = (t: string) => { if (isProf && (t === "my_pages" || t === "profile" || (t === "write" && !editingId))) return; if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
 
+  // ================= SUONO E PRESENTAZIONE =================
+  // cambio di sezione: i due click salgono andando avanti nel menu e scendono tornando indietro (anche col tasto Indietro)
+  const sndTab = useRef(tab);
+  useEffect(() => {
+    const p = sndTab.current; sndTab.current = tab;
+    if (p === tab || !user || tour) return; // durante il tour guidato i passi suonano da soli
+    sound.play(NAV_ORDER.indexOf(tab) >= NAV_ORDER.indexOf(p) ? "enter" : "back");
+  }, [tab]);
+  // entrando dal login si sente l'ingresso; non al semplice ricaricamento della pagina, né quando parte la presentazione
+  const fromLogin = useRef(false);
+  useEffect(() => {
+    if (!user) { if (!authLoading) fromLogin.current = true; return; }
+    if (!adminChecked || !fromLogin.current) return;
+    fromLogin.current = false;
+    if (tourSeen(user.uid)) sound.play("enter");
+  }, [user, adminChecked, authLoading]);
+  const tourName = user ? (isProf ? "Professore" : String(profiles[user.uid]?.displayName || user.displayName || "").trim().split(" ")[0]) : "";
+  const wantTour = !!user && adminChecked && !redeeming && !tour && !tourSeen(user.uid);
+  useEffect(() => {
+    if (!wantTour) return;
+    if (tourName) { setTour("auto"); return; }
+    // il nome di un account appena creato arriva un attimo dopo, col profilo: lo aspetto un poco
+    const t = setTimeout(() => setTour("auto"), 2500);
+    return () => clearTimeout(t);
+  }, [wantTour, tourName]);
+  const holdTour = (on: boolean) => { setTourHold(on); holdLoops(on); };
+  // il tour cambia sezione senza riempire la cronologia: alla fine il tasto Indietro non ripercorre i passi
+  const tourNav = (t: string) => { history.replaceState({ tab: t }, ""); setSel(null); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
+  const endTour = (to?: string) => { if (user) tourMark(user.uid); holdTour(false); setTour(""); if (to) go(to); else tourNav("home"); };
+  const tourLow = (navigator.hardwareConcurrency || 8) <= 4 || ((navigator as any).deviceMemory || 8) <= 3;
+
   const prepared = useMemo(() => items.map((t) => {
     const text = plain(t.content);
     return { ...t, _tx: text, _words: text.trim().split(/\s+/).filter(Boolean).length, _img: /<img/.test(t.content || "") };
@@ -1921,10 +1972,11 @@ export default function App() {
             {opts.music && <Rng label="Volume della musica" v={opts.musicVol ?? 0.35} set={(v: number) => setOpt("musicVol", v)} min={0} max={1} step={0.05} fmt={(v: number) => Math.round(v * 100) + "%"} />}
             {opts.music && music.status === "blocked" && <button type="button" className="bt w-full" onClick={music.retry}>Riprendi musica</button>}
             {opts.music && music.status === "error" && <p className="text-xs mu" role="status">Impossibile riprodurre la musica. <button type="button" className="lk" onClick={music.retry}>Riprova</button></p>}
-            <Sw on={opts.sound} set={(v: boolean) => setOpt("sound", v)} label="Suoni" hint="Piccoli bip elettronici al tocco" />
-            {opts.sound && <Rng label="Volume dei suoni" v={opts.vol ?? 1} set={(v: number) => setOpt("vol", v)} min={0.1} max={2} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+            <Sw on={sfxOn} set={(v: boolean) => { setOpt("sfx", v); if (v) { sound.unlock(); sound.configure(true, opts.sfxVol ?? 1); sound.play("enter"); } }} label="Effetti sonori" hint="Tick al passaggio, suono tra le sezioni, caricamento del gioco segreto e jingle di benvenuto" />
+            {sfxOn && <Rng label="Volume degli effetti" hint="La musica di sottofondo si abbassa da sola quando parla un effetto lungo" v={opts.sfxVol ?? 1} set={(v: number) => { setOpt("sfxVol", v); sound.configure(true, v); sound.play("klick"); }} min={0.05} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
             <Sw on={opts.vibrate} set={(v: boolean) => setOpt("vibrate", v)} label="Vibrazione" hint="Feedback tattile su segnalibro e voti" />
             {opts.vibrate && <div className="py-2"><span className="block text-xs font-semibold mb-1.5">Forza della vibrazione</span><Seg v={opts.vib ?? 1} set={(v: number) => setOpt("vib", v)} items={[[0.6, "Leggera"], [1, "Normale"], [1.6, "Forte"]]} /></div>}
+            {user && <button type="button" className="bt w-full mt-3" onClick={() => { setOptOpen(false); setTour("replay"); }}><Sparkles size={15} />Rivedi la presentazione</button>}
             {isOwner && <AccessoProf db={db} notify={notify} />}
             <div className="flex gap-2 mt-5">
               <button className="bt flex-1" onClick={() => setOpts({ ...DEF })}><RotateCcw size={15} />Ripristina</button>
@@ -1932,7 +1984,7 @@ export default function App() {
             </div>
         </SettingsDialog>
       );
-  const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} min-h-screen`}><div className="prog" />{children}{settingsDialog}</div>;
+  const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} ${tourHold ? "tour-hold" : ""} min-h-screen`}><div className="prog" />{children}{settingsDialog}</div>;
 
   if (authLoading || redeeming || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
@@ -2017,7 +2069,7 @@ export default function App() {
           </div></div>
         </div>
       </div>
-      {egg && <React.Suspense fallback={<div className="fixed inset-0 z-[300] bg-black" />}><EggGame onClose={() => setEgg(false)} /></React.Suspense>}
+      {egg && <EggPortal origin={egg} onClose={() => setEgg(null)} />}
     </>);
   }
 
@@ -2043,7 +2095,7 @@ export default function App() {
   const wn = (t: any) => hid(t) ? "Autore nascosto" : dn(t.userId, t.author);
   const unread = notifs.filter((n) => !n.letta).length;
   const bell = (r: boolean) => (
-    <Pop label="Notifiche" right={r} cls="bt !p-2 relative" trigger={<><Bell size={18} />{unread > 0 && <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center" style={{ background: "var(--am)", color: "#3b2a00" }}>{unread}</span>}</>}>
+    <Pop label="Notifiche" right={r} cls="bt !p-2 relative" tour="bell" trigger={<><Bell size={18} />{unread > 0 && <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center" style={{ background: "var(--am)", color: "#3b2a00" }}>{unread}</span>}</>}>
       {(close: any) => <NotifPanel list={notifs} onRead={markRead} onOpen={() => { close(); go("my_pages"); }} />}
     </Pop>
   );
@@ -2198,17 +2250,17 @@ export default function App() {
           : <div className="b-1"><span className="hero-term"><i className="hero-led" />{termUser + "@circuito:~$ " + termCmd}<b className="caret" /></span></div>}
         <h2 className="zl hd text-3xl md:text-5xl font-bold max-w-xl leading-tight relative z-[1]" style={{ ["--z" as any]: "70px" }}>{G.d3 ? <Text3D text={heroTitle} layers={12} anim={G.titles} className="t3-hero t3-glint" delay={boot ? 420 : 0} /> : <Words text={heroTitle} on={G.titles} />}</h2>
         <p className="zl mu mt-3 max-w-md b-2" style={{ ["--z" as any]: "40px" }}>{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
-        <div className="zl flex flex-wrap gap-2 mt-7 b-3" style={{ ["--z" as any]: "55px" }}>
-          <button className="bt cta !px-5 !py-3" onClick={() => go("write")}><Pen size={16} />Scrivi un progetto</button>
+        <div className="zl flex flex-wrap gap-2 mt-7 b-3" style={{ ["--z" as any]: "55px" }} data-tour="hero-actions" data-tour-fit="">
+          <button className="bt cta !px-5 !py-3" onClick={() => go("write")} data-tour="cta" data-snd="nav"><Pen size={16} />Scrivi un progetto</button>
           {isAdmin && toRate > 0 && <button className="bt ghost !px-5 !py-3" onClick={() => { go("read"); setMonthFilter(monthNow); setUnrated(true); }}><Star size={16} />Valuta ora ({toRate})</button>}
           {isAdmin && <button className="bt ghost !px-5 !py-3" onClick={() => go("podio")}><Trophy size={16} />Vai al podio</button>}
         </div>
       </div></Reveal>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((x, i) => <Reveal key={x.l} delay={(boot ? 620 : 0) + i * 70} className="h-full"><button type="button" onClick={x.a} className="pn card stat p-5 h-full w-full"><ArrowUpRight size={18} className="go" aria-hidden="true" /><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3 tabular-nums"><CountUp v={x.v} on={G.reveal} delay={(boot ? 620 : 0) + i * 70 + 150} /></div><div className="mu text-sm">{x.l}</div></button></Reveal>)}
+        {stats.map((x, i) => <Reveal key={x.l} delay={(boot ? 620 : 0) + i * 70} className="h-full"><button type="button" onClick={x.a} data-snd="nav" className="pn card stat p-5 h-full w-full"><ArrowUpRight size={18} className="go" aria-hidden="true" /><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3 tabular-nums"><CountUp v={x.v} on={G.reveal} delay={(boot ? 620 : 0) + i * 70 + 150} /></div><div className="mu text-sm">{x.l}</div></button></Reveal>)}
       </div>
       <Reveal delay={boot ? 820 : 0}><div className="pn p-2">
-        <div className="flex items-center justify-between px-4 pt-4 pb-2"><h3 className="hd text-lg font-bold">Ultimi progetti</h3><button type="button" className="mu text-sm lk inline-flex items-center gap-1" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>
+        <div className="flex items-center justify-between px-4 pt-4 pb-2"><h3 className="hd text-lg font-bold">Ultimi progetti</h3><button type="button" data-snd="nav" className="mu text-sm lk inline-flex items-center gap-1" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>
         {loading ? <div className="p-6 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
           : recent.length === 0 ? <p className="mu text-sm px-4 pb-5">Ancora niente qui. Il primo progetto comparirà in questa lista.</p>
           : recent.map((t, i) => <Row key={t.id} t={t} i={i} />)}
@@ -2297,13 +2349,13 @@ export default function App() {
         </div>
         <div ref={railV} className="relative flex flex-col gap-1">
           <span className="nind" aria-hidden="true" />
-          {nav.map((n) => <button key={n.id} data-act={tab === n.id ? "1" : undefined} aria-current={tab === n.id ? "page" : undefined} onClick={() => go(n.id)} className={`bt nb !justify-start w-full ${tab === n.id ? "act" : ""}`}><n.icon size={16} />{n.label}</button>)}
+          {nav.map((n) => <button key={n.id} data-act={tab === n.id ? "1" : undefined} data-tour={"nav-" + n.id} data-snd="nav" aria-current={tab === n.id ? "page" : undefined} onClick={() => go(n.id)} className={`bt nb !justify-start w-full ${tab === n.id ? "act" : ""}`}><n.icon size={16} />{n.label}</button>)}
         </div>
         <div className="mt-auto space-y-2">
           <ApkDownload compact />
           <div className="flex items-center gap-2">
-            <button onClick={() => go("profile")} className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{isProf ? "Accesso professore" : user.email}</span></span></button>
-            <button className="bt !p-2" onClick={() => setOptOpen(true)} title="Opzioni" aria-label="Opzioni"><Settings size={18} /></button>
+            <button onClick={() => go("profile")} data-snd="nav" className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{isProf ? "Accesso professore" : user.email}</span></span></button>
+            <button className="bt !p-2" onClick={() => setOptOpen(true)} title="Opzioni" aria-label="Opzioni" data-tour="options"><Settings size={18} /></button>
             <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
           </div>
         </div>
@@ -2312,11 +2364,11 @@ export default function App() {
       {/* barra mobile */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
         <div className="flex items-center gap-2"><Wordmark size={40} fs={19} tag={false} /></div>
-        <div className="flex items-center gap-2">{bell(true)}<button className="bt !p-2" onClick={() => setOptOpen(true)} aria-label="Opzioni"><Settings size={18} /></button><button onClick={() => go("profile")} aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
+        <div className="flex items-center gap-2">{bell(true)}<button className="bt !p-2" onClick={() => setOptOpen(true)} aria-label="Opzioni" data-tour="options"><Settings size={18} /></button><button onClick={() => go("profile")} data-snd="nav" aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
       </header>
       <nav ref={railH} className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))", display: kb || (tab === "write" && drawing) ? "none" : undefined }}>
         <span className="nind" aria-hidden="true" />
-        {nav.map((n) => <button key={n.id} data-act={tab === n.id ? "1" : undefined} aria-current={tab === n.id ? "page" : undefined} onClick={() => go(n.id)} aria-label={n.label} className={`bt nb flex-col flex-1 min-w-0 !gap-1 !px-0 !py-2 !text-[10px] ${tab === n.id ? "act" : ""}`}><n.icon size={18} /><span className="truncate max-w-full">{n.s || n.label}</span></button>)}
+        {nav.map((n) => <button key={n.id} data-act={tab === n.id ? "1" : undefined} data-tour={"nav-" + n.id} data-snd="nav" aria-current={tab === n.id ? "page" : undefined} onClick={() => go(n.id)} aria-label={n.label} className={`bt nb flex-col flex-1 min-w-0 !gap-1 !px-0 !py-2 !text-[10px] ${tab === n.id ? "act" : ""}`}><n.icon size={18} /><span className="truncate max-w-full">{n.s || n.label}</span></button>)}
       </nav>
 
       <div className="md:ml-60 pb-28 md:pb-12 relative">
@@ -2324,7 +2376,7 @@ export default function App() {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
             <div><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>{isList && !loading && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
             {isList && (
-              <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex flex-wrap gap-2 items-center" data-tour="filters">
                 <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>
                 <select className="inp !w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>{Object.keys(SORTS).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}</select>
                 <select className="inp !w-auto" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}><option value="all">Tutti i mesi</option>{monthOpts.map((k) => <option key={k} value={k}>{mLabel(k)}</option>)}</select>
@@ -2389,7 +2441,7 @@ export default function App() {
               <input className="inp !text-xl !py-3 hd font-bold" placeholder="Nome del progetto" value={title} onChange={(e) => setTitle(e.target.value)} required />
               <div className="pn">
                 <div className="p-2 rounded-t-[17px]" style={{ background: "var(--sf)" }}>
-                  <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl" style={{ background: "var(--ln)" }}>
+                  <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl" style={{ background: "var(--ln)" }} data-tour="editor-mode">
                     <button type="button" className={`bt !border-0 ${!drawing ? "on" : "!bg-transparent"}`} onClick={() => setDrawing(false)}><Type size={16} />Testo</button>
                     <button type="button" className={`bt !border-0 ${drawing ? "on" : "!bg-transparent"}`} onClick={() => { setDrawing(true); setImg(null); }}><Pencil size={16} />Disegno</button>
                   </div>
@@ -2458,7 +2510,7 @@ export default function App() {
               </div>
               <div className="flex gap-2 justify-end">
                 {(editingId || title || strokes.length > 0 || words > 0) && <button type="button" className="bt" onClick={() => { if (confirm("Scartare le modifiche?")) resetForm(); }}>{editingId ? "Annulla modifica" : "Scarta bozza"}</button>}
-                <button className="bt on !px-6 !py-3" disabled={saving}>{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{editingId ? "Salva modifiche" : "Salva progetto"}</button>
+                <button className="bt on !px-6 !py-3" disabled={saving} data-tour="save">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{editingId ? "Salva modifiche" : "Salva progetto"}</button>
               </div>
             </form>
           )}
@@ -2582,6 +2634,11 @@ export default function App() {
       )}
 
       {toast && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] pn px-4 py-2 text-sm shadow-lg popx">{toast}</div>}
+
+      {/* presentazione: il velo scuro copre il sito finché il film non è pronto, così la home non lampeggia prima */}
+      {(tour || wantTour) && (tour
+        ? <React.Suspense fallback={<div className="fixed inset-0 z-[110]" style={{ background: "#03110F" }} />}><Tour key={tour} admin={isAdmin} name={tourName} calm={!!G.nomotion} low={tourLow} nav={tourNav} hold={holdTour} onDone={endTour} /></React.Suspense>
+        : <div className="fixed inset-0 z-[110]" style={{ background: "#03110F" }} />)}
     </>
   );
 }

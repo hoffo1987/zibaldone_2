@@ -1,0 +1,34 @@
+/* ===== passaggio al gioco segreto: dal verde del Circuito al viola del gioco, a tempo col suono di caricamento ===== */
+.egl{--p:0;position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#e9e6ff;font-family:'Silkscreen',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;-webkit-user-select:none;user-select:none;touch-action:none;
+  background:radial-gradient(70vmax 55vmax at 50% 42%,color-mix(in srgb,#0E7468 calc((1 - var(--p))*55%),#2a1f6b calc(var(--p)*55%)),transparent 70%),#05040a;
+  clip-path:circle(0px at var(--ox,50%) var(--oy,50%))}
+.egl.on{clip-path:circle(150vmax at var(--ox,50%) var(--oy,50%));transition:clip-path .6s cubic-bezier(.16,1,.3,1)}
+.egl.off{animation:eglOff .17s steps(4,end) forwards}
+@keyframes eglOff{0%{clip-path:inset(0 0 0 0);filter:brightness(1)}60%{filter:brightness(2.4)}100%{clip-path:inset(50% 0 50% 0);filter:brightness(3)}}
+.egl-in{display:flex;flex-direction:column;align-items:center;gap:18px;padding:24px;width:min(560px,100%)}
+.egl-logo{width:88px;height:88px;image-rendering:pixelated;image-rendering:crisp-edges;opacity:0;transform:scale(.4)}
+.egl.on .egl-logo{opacity:1;transform:none;transition:transform .5s steps(5,end),opacity .1s;filter:drop-shadow(0 0 14px rgba(45,212,191,.45))}
+.egl.done .egl-logo{animation:eglGlow .5s steps(5,end) both}
+@keyframes eglGlow{0%{filter:drop-shadow(0 0 4px #fff) brightness(1.8)}100%{filter:drop-shadow(0 0 22px rgba(185,167,255,.85)) brightness(1)}}
+.egl-term{width:100%;font-size:11px;line-height:1.9;letter-spacing:.04em;min-height:5.8em}
+.egl-l{opacity:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#9d96c9}
+.egl-l b{font-weight:normal;color:#5EEAD4}
+.egl-l.in{opacity:1;animation:eglType .55s steps(22,end) both}
+@keyframes eglType{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+.egl-ok{color:#FBBF24;text-shadow:0 0 10px rgba(251,191,36,.6)}
+.egl-ok.in{animation:eglType .3s steps(10,end) both,eglBlink .5s steps(2,end) .3s 3}
+@keyframes eglBlink{50%{opacity:.2}}
+.egl-bar{display:flex;gap:8px;width:100%}
+.egl-g{flex:1;display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.egl-b{display:block;height:18px;border:2px solid #2c2850;background:#0c0a18;box-shadow:inset -2px -2px 0 #07060e}
+.egl-b.lit{border-color:#000;background:var(--c);box-shadow:inset -2px -2px 0 rgba(0,0,0,.35),inset 2px 2px 0 rgba(255,255,255,.35),0 0 10px color-mix(in srgb,var(--c) 60%,transparent)}
+.egl-b.hit{animation:eglHit .2s steps(3,end)}
+@keyframes eglHit{0%{background:#fff;transform:translateY(-3px)}100%{transform:none}}
+.egl.done .egl-b{animation:eglDone .45s steps(4,end) both}
+@keyframes eglDone{0%{background:#fff}50%{background:#FBBF24}100%{background:var(--c)}}
+.egl-row{display:flex;justify-content:space-between;width:100%;font-size:11px;letter-spacing:.3em;color:#9d96c9;text-transform:uppercase}
+.egl-pct{color:#e9e6ff;letter-spacing:.1em}
+.egl-scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px);mix-blend-mode:multiply;animation:eglFlick 3s steps(1,end) infinite}
+@keyframes eglFlick{0%,100%{opacity:1}48%{opacity:.85}50%{opacity:1}}
+@media (max-width:520px){.egl-bar{gap:5px}.egl-g{gap:2px}.egl-b{height:14px;border-width:1px}.egl-term{font-size:9px}}
+@media (prefers-reduced-motion:reduce){.egl,.egl.on{clip-path:none;transition:none}.egl.off{animation:none;opacity:0}.egl *{animation:none!important;transition:none!important}.egl-l.in{opacity:1}}

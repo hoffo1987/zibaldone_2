@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { useMusic } from "./useMusic";
+import { duck } from "./sound";
 
 let root, host, result, players, hidden, rejection;
 function Harness({ enabled = false, volume = 0.35 }) { result = useMusic(enabled, volume); return null; }
@@ -58,4 +59,14 @@ test("ignores a late play rejection after disabling and frees the player on unmo
   expect(players[0].removeAttribute).toHaveBeenCalledWith("src");
   expect(players[0].load).toHaveBeenCalled();
   root = { unmount() {} };
+});
+
+test("ducks under long sound cues and rises back afterwards", async () => {
+  await render(true, 0.5);
+  act(() => duck("test", 0.2));
+  await act(async () => { await new Promise((r) => setTimeout(r, 450)); });
+  expect(players[0].volume).toBeCloseTo(0.1, 2);
+  act(() => duck("test", null));
+  await act(async () => { await new Promise((r) => setTimeout(r, 1350)); });
+  expect(players[0].volume).toBeCloseTo(0.5, 2);
 });
