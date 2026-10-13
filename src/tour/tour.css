@@ -1,0 +1,70 @@
+/* ===== presentazione del primo accesso: il film e il tour guidato ===== */
+.tour{position:fixed;inset:0;z-index:110;-webkit-tap-highlight-color:transparent}
+.tour-veil{position:fixed;inset:0;z-index:110;background:#03110F}
+.tr-film{position:absolute;inset:0;background:#03110F;transition:opacity .45s linear;touch-action:none}
+.tr-film canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tr-vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 125% 95% at 50% 50%,transparent 52%,rgba(0,0,0,.6) 100%)}
+.tr-prog{position:absolute;left:0;right:0;bottom:0;height:2px;transform-origin:0 50%;transform:scaleX(0);background:linear-gradient(90deg,#2DD4BF,#FBBF24);opacity:.75;pointer-events:none}
+.tour.tr-out .tr-film{opacity:0;pointer-events:none}
+.tr-bar{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));display:flex;gap:8px;z-index:2;animation:fd .7s 1s both}
+.tr-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:40px;height:40px;padding:0 14px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);color:#E6FFFA;font:600 .8rem/1 'Instrument Sans',system-ui,sans-serif;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);cursor:pointer;transition:background .25s,border-color .25s,transform .2s}
+.tr-btn:hover{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.42)}
+.tr-btn:active{transform:scale(.96)}
+.tr-btn:focus-visible,.tr-power:focus-visible,.tr-link:focus-visible{outline:2px solid #FBBF24;outline-offset:3px}
+.tr-close{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));z-index:2}
+
+/* in attesa di un tocco: senza un gesto il browser non lascia partire la musica */
+.tr-gate{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;text-align:center;color:#E6FFFA;background:radial-gradient(60vmax 42vmax at 50% 48%,rgba(23,195,174,.16),transparent 70%);animation:fd .6s both}
+.tr-power{width:116px;height:116px;margin-bottom:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#FBBF24;cursor:pointer;background:radial-gradient(circle,rgba(251,191,36,.2),rgba(3,17,15,.6) 70%);border:1.5px solid rgba(251,191,36,.65);box-shadow:0 0 0 10px rgba(251,191,36,.06),0 0 50px rgba(251,191,36,.35);animation:trBreath 2.4s ease-in-out infinite;transition:transform .25s cubic-bezier(.16,1,.3,1)}
+.tr-power:hover{transform:scale(1.05)}
+.tr-power:active{transform:scale(.95)}
+@keyframes trBreath{50%{box-shadow:0 0 0 18px rgba(251,191,36,.025),0 0 85px rgba(251,191,36,.5)}}
+.tr-gate-t{font:700 1.7rem/1.1 'Bricolage Grotesque','Instrument Sans',sans-serif;letter-spacing:-.02em}
+.tr-gate-s{color:rgba(230,255,250,.65);font-size:.92rem;max-width:22rem}
+.tr-link{margin-top:14px;min-height:44px;padding:0 10px;color:rgba(230,255,250,.72);font-size:.86rem;text-decoration:underline;text-underline-offset:4px;background:none;border:0;cursor:pointer}
+.tr-link:hover{color:#fff}
+
+/* il nodo ambra che dal film vola sul primo elemento del tour */
+.tr-spark{position:fixed;left:0;top:0;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;display:none;pointer-events:none;z-index:3;background:radial-gradient(circle,#fff 0 18%,#FBBF24 42%,rgba(251,191,36,0) 72%);box-shadow:0 0 34px 10px rgba(251,191,36,.5)}
+
+/* tour guidato */
+.tg{position:absolute;inset:0}
+.tg-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.tg-veil{fill:rgba(2,18,16,.74);animation:fd .45s both}
+.root.dark .tg-veil{fill:rgba(0,7,6,.8)}
+.tg-ring{fill:none;stroke:#2DD4BF;stroke-width:2;filter:drop-shadow(0 0 8px rgba(45,212,191,.75))}
+.tg-run{fill:none;stroke:#FBBF24;stroke-width:2.5;stroke-linecap:round;stroke-dasharray:9 91;animation:tgRun 2.8s linear infinite;filter:drop-shadow(0 0 6px rgba(251,191,36,.9))}
+@keyframes tgRun{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
+.tg-wire{fill:none;stroke:rgba(94,234,212,.8);stroke-width:1.6;stroke-linejoin:round;stroke-dasharray:100;stroke-dashoffset:0}
+.tg-wire.tg-draw{animation:tgDraw .62s cubic-bezier(.65,0,.35,1) .08s backwards}
+@keyframes tgDraw{from{stroke-dashoffset:100}}
+.tg-pulse{fill:none;stroke:#FBBF24;stroke-width:3;stroke-linecap:round;stroke-dasharray:7 93;animation:tgPulse 1.4s cubic-bezier(.45,0,.55,1) .6s infinite backwards}
+@keyframes tgPulse{from{stroke-dashoffset:7}to{stroke-dashoffset:-93}}
+.tg-n1{fill:#FBBF24;filter:drop-shadow(0 0 6px rgba(251,191,36,.9))}
+.tg-n2{fill:#03110F;stroke:#2DD4BF;stroke-width:2}
+.tg-card{position:absolute;left:0;top:0;width:min(360px,calc(100vw - 32px));padding:16px 18px 16px;will-change:transform;box-shadow:0 30px 70px -20px rgba(0,0,0,.6),0 0 0 1px color-mix(in srgb,var(--ac) 38%,transparent);animation:tgIn .55s cubic-bezier(.16,1,.3,1) both}
+@keyframes tgIn{from{opacity:0;clip-path:inset(0 0 100% 0 round 18px)}to{opacity:1;clip-path:inset(0 0 0 0 round 18px)}}
+.tg-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.tg-n{font:600 .72rem/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.08em;color:var(--ac)}
+.tg-n i{font-style:normal;opacity:.45}
+.tg-skip{font-size:.8rem}
+.tg-body{animation:settle .45s cubic-bezier(.16,1,.3,1) both}
+.tg-t{font-size:1.55rem;line-height:1.15;margin:10px 0 6px}
+.tg-p{font-size:.93rem;line-height:1.5}
+/* i passi come nodi su una pista: quelli fatti sono accesi, quello attuale è ambra */
+.tg-dots{display:flex;align-items:center;margin:16px 4px 14px}
+.tg-dots i{position:relative;flex:1;height:2px;background:var(--ln)}
+.tg-dots i:last-child{flex:0 0 0}
+.tg-dots i:before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--pn);box-shadow:inset 0 0 0 2px var(--ln)}
+.tg-dots i.done{background:var(--ac)}
+.tg-dots i.done:before{background:var(--ac);box-shadow:none}
+.tg-dots i.on:before{background:var(--am);box-shadow:0 0 0 4px color-mix(in srgb,var(--am) 25%,transparent);animation:nodeOn .4s cubic-bezier(.16,1,.3,1)}
+.tg-act{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.tg-act .bt.on svg{transition:transform .3s cubic-bezier(.16,1,.3,1)}
+.tg-act .bt.on:hover svg{transform:translateX(2px)}
+@media (max-width:520px){.tg-card{padding:14px 14px 12px}.tg-t{font-size:1.3rem}.tg-p{font-size:.88rem}.tr-gate-t{font-size:1.45rem}}
+@media (prefers-reduced-motion:reduce){.tg-run,.tg-pulse{animation:none;opacity:0}.tg-wire.tg-draw,.tg-card,.tg-body,.tr-power{animation:none}}
+.root.nomotion .tg-run,.root.nomotion .tg-pulse,.root.lite .tg-run,.root.lite .tg-pulse{opacity:0}
+
+/* mentre il film copre il sito, il sito sotto smette di animarsi; riparte sul finale, mentre la scena svanisce */
+.root.tour-hold>:not(.tour),.root.tour-hold>:not(.tour) *{animation-play-state:paused!important}
