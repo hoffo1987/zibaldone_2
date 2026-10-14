@@ -23,6 +23,8 @@ import { SettingsDialog } from "./Dialog";
 import * as sound from "./sound";
 // il logo 3D (WebGPU) si carica a parte, solo quando serve e solo se il browser supporta WebGPU: il resto del sito non lo scarica
 import Logo3D from "./LogoView";
+// il podio del mese in 3D (WebGPU, con illuminazione globale) si scarica solo quando serve
+import PodiumStage from "./PodiumStage";
 // easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login → caricamento → gioco
 import EggPortal from "./EggPortal";
 // presentazione del primo accesso (film + tour guidato): si scarica solo per chi deve vederla
@@ -2250,6 +2252,7 @@ export default function App() {
             <p className="mu text-sm mb-5">Dai un voto da 1 a 5 stelle agli scritti: i più votati salgono qui sul podio.</p>
             <button className="bt pri" onClick={() => { setTab("read"); setMonthFilter(month); }}>Apri gli scritti del mese</button></div>
         ) : (<>
+          <PodiumStage enabled={!G.nomotion && !lite} dark={dark} fallback={<>
           <div className="grid md:grid-cols-3 gap-5 items-end">
             {[1, 0, 2].map((k) => { const t = top[k]; if (!t) return <div key={k} className="hidden md:block" />;
               return (
@@ -2266,6 +2269,14 @@ export default function App() {
                 </Reveal>
               ); })}
           </div>
+          </>} plates={[0, 1, 2].map((k) => { const t = top[k]; if (!t) return null;
+            return (
+              <div data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className="pdm-card">
+                <div className="flex items-center justify-between gap-2"><span className="pdm-rank">{k + 1}° posto</span><Stars v={t.rating || 0} size={13} /></div>
+                <div className="hd font-bold leading-snug mt-1 line-clamp-2">{t.title}</div>
+                <div className="pdm-who flex items-center gap-2 mt-1.5 min-w-0">{who(t, 18)}<span className="mu text-xs truncate">{wn(t)}</span></div>
+              </div>
+            ); })} />
           {rest.length > 0 && <Reveal className="mt-8"><div className="pn p-2"><h3 className="hd text-lg font-bold px-4 pt-4 pb-2">In lizza</h3>{rest.map((t, i) => row(t, i, i + 4))}</div></Reveal>}
         </>)}
     </div>
