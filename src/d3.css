@@ -99,7 +99,7 @@
   .tm-face{min-width:0;padding:.65rem .75rem .8rem;box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 12px 24px -16px rgba(0,0,0,.6)}
   .tm-slab:nth-of-type(n+4){display:none}
   .tm-line,.tm-out{transform:translateZ(8px);text-shadow:none}
-  /* niente filtro sul canvas WebGL (costa un passaggio in più a ogni fotogramma): l'ombra è un'ellisse ferma sotto il logo */
+  /* niente filtro sul canvas del logo 3D (costa un passaggio in più a ogni fotogramma): l'ombra è un'ellisse ferma sotto il logo */
   .logo3d{position:relative;isolation:isolate}
   .logo3d>canvas{filter:none}
   .logo3d:before{content:"";position:absolute;z-index:-1;left:20%;right:20%;bottom:6%;height:12%;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.3),transparent);pointer-events:none}
@@ -113,7 +113,7 @@
 }
 
 /* Safari (e ogni browser su iPhone e iPad) ordina in modo ambiguo i piani complanari di uno stesso spazio 3D: sul telefono il
-   logo WebGL stava allo stesso Z dello sfondo del riquadro e pezzi di sfondo gli venivano disegnati sopra, tagliati lungo la
+   logo 3D stava allo stesso Z dello sfondo del riquadro e pezzi di sfondo gli venivano disegnati sopra, tagliati lungo la
    retta in cui il piano inclinato del terminale incontra quello del pannello (del logo restava uno spicchio). Su telefono e
    tablet il pannello non si inclina e la profondità non serve: ogni contesto 3D resta chiuso nel proprio elemento
    (terminale e scritte estruse si disegnano uguali). Tra 768 e 1199 px il logo resta un poco sopra il pannello. */
