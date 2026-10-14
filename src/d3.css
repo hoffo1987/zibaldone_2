@@ -131,9 +131,9 @@
 .podium3d canvas{z-index:0}
 .podium3d-num,.podium3d-plate{position:absolute;left:0;top:0;will-change:transform}
 .podium3d-num{z-index:1;pointer-events:none;font-family:inherit;font-weight:800;line-height:1;letter-spacing:-.02em;color:rgba(40,46,44,.22);text-shadow:0 1px 0 rgba(255,255,255,.45),0 -1px 0 rgba(0,0,0,.12)}
-.root.dark .podium3d-num{color:rgba(170,215,205,.13);text-shadow:0 -1px 0 rgba(0,0,0,.65),0 1px 0 rgba(255,255,255,.06)}
+.root.dark .podium3d-num{color:rgba(170,215,205,.24);text-shadow:0 -1px 0 rgba(0,0,0,.65),0 1px 0 rgba(255,255,255,.06)}
 .podium3d-num.r1{color:rgba(176,124,20,.42)}.root.dark .podium3d-num.r1{color:rgba(251,191,36,.3)}
-.podium3d-plate{z-index:2}
+.podium3d-plate{z-index:2;box-sizing:border-box}.podium3d-plate *{box-sizing:border-box}
 .pdm-card{display:block;width:100%;text-align:left;cursor:pointer;padding:10px 12px;border-radius:14px;font-size:14px;color:var(--ink);background:color-mix(in srgb,var(--pn) 72%,transparent);border:1px solid color-mix(in srgb,var(--ln) 80%,transparent);-webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2);box-shadow:0 18px 40px -22px rgba(0,0,0,.55);transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s}
 .pdm-card:hover,.pdm-card:focus-visible{transform:translateY(-4px);box-shadow:0 26px 50px -24px rgba(0,0,0,.6)}
 .podium3d-plate.r1 .pdm-card{border-color:color-mix(in srgb,var(--am) 70%,transparent);box-shadow:0 18px 44px -20px color-mix(in srgb,var(--am) 45%,rgba(0,0,0,.5))}

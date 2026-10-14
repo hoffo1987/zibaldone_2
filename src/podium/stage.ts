@@ -54,11 +54,11 @@ export function celestial(t: number, night: boolean) {
 export type Mood = { sun: number[]; sunI: number; skyTop: number[]; skyHor: number[]; wall: number[]; floor: number[]; stone: number[]; plinth: number[]; frame: number[]; fog: number; dust: number; cover: number; exposure: number; ambient: number };
 export const DAY: Mood = {
   sun: [1.0, 0.86, 0.66], sunI: 7.5, skyTop: [0.42, 0.66, 1.0], skyHor: [1.0, 0.93, 0.82], wall: [0.74, 0.76, 0.73], floor: [0.5, 0.52, 0.5],
-  stone: [0.86, 0.87, 0.85], plinth: [0.55, 0.58, 0.56], frame: [0.18, 0.2, 0.2], fog: 0.011, dust: 0.85, cover: 0.8, exposure: 0.78, ambient: 0.015,
+  stone: [0.86, 0.87, 0.85], plinth: [0.55, 0.58, 0.56], frame: [0.18, 0.2, 0.2], fog: 0.011, dust: 0.85, cover: 0.8, exposure: 0.98, ambient: 0.015,
 };
 export const NIGHT: Mood = {
-  sun: [0.62, 0.78, 1.0], sunI: 2.6, skyTop: [0.002, 0.005, 0.016], skyHor: [0.01, 0.025, 0.045], wall: [0.06, 0.11, 0.11], floor: [0.03, 0.06, 0.06],
-  stone: [0.07, 0.14, 0.13], plinth: [0.04, 0.08, 0.08], frame: [0.02, 0.03, 0.03], fog: 0.014, dust: 1.0, cover: 0.85, exposure: 1.05, ambient: 0.003,
+  sun: [0.62, 0.78, 1.0], sunI: 3.4, skyTop: [0.002, 0.005, 0.016], skyHor: [0.01, 0.025, 0.045], wall: [0.06, 0.11, 0.11], floor: [0.03, 0.06, 0.06],
+  stone: [0.07, 0.14, 0.13], plinth: [0.04, 0.08, 0.08], frame: [0.02, 0.03, 0.03], fog: 0.0105, dust: 1.0, cover: 0.75, exposure: 1.45, ambient: 0.005,
 };
 const mix = (a: number[], b: number[], k: number) => a.map((x, i) => x + (b[i] - x) * k);
 export const moodAt = (k: number): Mood => {
