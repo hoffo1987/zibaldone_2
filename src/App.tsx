@@ -2,7 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } f
 import { initializeApp } from "firebase/app";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset, signInAnonymously
+  signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset
 } from "firebase/auth";
 import {
   getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, setDoc, getDoc, deleteField
@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
-import { AccessoProf } from "./AccessoProf";
 import { M, Words, Sheets, useFlip, useRail, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 import { Text3D, Terminal3D } from "./d3";
 import { renderLoop, holdLoops } from "./renderLoop";
@@ -43,6 +42,9 @@ const useTriple = (fn: (e: any) => void) => {
 };
 // la giravolta si aggiunge alla trasformazione che l'elemento ha già (il logo grande è centrato con translateY(-50%)):
 // sostituirla lo faceva cadere di mezza altezza per tutta l'animazione e poi risalire di scatto
+// il logo segue il mouse e si trascina: a 30 fps si vedeva a scatti accanto al resto del sito. Va a 60 fps (la scelta
+// "Fluidità degli effetti" riguarda circuito e pioggia di codice); se la GPU non sta al passo scende la risoluzione
+const LOGO_FPS = 60;
 const eggFlip = (e: any) => {
   const el = e?.currentTarget; if (!el || !el.animate) return;
   const t = getComputedStyle(el).transform, base = t && t !== "none" ? `${t} ` : "";
@@ -1072,12 +1074,6 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
-  // Titolare = admin creato a mano dalla console. Il professore entra con un link monouso: sessione anonima, senza email né password.
-  const [isOwner, setIsOwner] = useState(false);
-  const isProf = !!user?.isAnonymous;
-  const [profToken, setProfToken] = useState<string | null>(null);
-  const [redeeming, setRedeeming] = useState(false);
-  const redeemRef = useRef(false);
   // list
   const [rawItems, setRawItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1133,25 +1129,23 @@ export default function App() {
   }, [rawItems, vals, valsReady, isAdmin]);
   const [notifs, setNotifs] = useState<any[]>([]);
   useEffect(() => {
-    if (!user || !db || isProf) { setNotifs([]); return; }
+    if (!user || !db) { setNotifs([]); return; }
     return onSnapshot(query(collection(db, "notifiche"), where("userId", "==", user.uid)), (s: any) => setNotifs(s.docs.map((d: any) => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => b.timestamp - a.timestamp)), () => {});
   }, [user]);
   useEffect(() => { setVisible(18); }, [search, sortBy, monthFilter, onlyMarked, unrated, tab]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
-  const profOk = !isProf || isAdmin;
   useEffect(() => {
-    if (!user || !db || !profOk) return;
+    if (!user || !db) return;
     return onSnapshot(collection(db, "profili"), (snap: any) => { const m: any = {}; snap.forEach((d: any) => { m[d.id] = d.data(); }); setProfiles(m); }, () => {});
-  }, [user, profOk]);
+  }, [user]);
   // Admin = chi ha il documento  admins/{uid}  su Firestore (creato a mano dalla console): nessuna password nel sito.
   useEffect(() => {
-    if (!user || !db) { setIsAdmin(false); setIsOwner(false); setAdminChecked(false); return; }
-    if (redeemRef.current) return; // durante l'attivazione del link ci pensa redeemProf
+    if (!user || !db) { setIsAdmin(false); setAdminChecked(false); return; }
     let on = true;
     setAdminChecked(false);
     getDoc(doc(db, "admins", user.uid))
-      .then((s: any) => { if (on) { setIsAdmin(s.exists()); setIsOwner(s.exists() && s.data()?.ruolo !== "professore"); } })
-      .catch(() => { if (on) { setIsAdmin(false); setIsOwner(false); } })
+      .then((s: any) => { if (on) setIsAdmin(s.exists()); })
+      .catch(() => { if (on) setIsAdmin(false); })
       .finally(() => { if (on) setAdminChecked(true); });
     return () => { on = false; };
   }, [user]);
@@ -1279,22 +1273,10 @@ export default function App() {
     return () => { document.body.style.overflow = ""; };
   }, [sel, toDelete, done, viewProf, optOpen]);
 
-  // link del professore:  https://sito/#prof=<64 caratteri>  Il token sta dopo il # (non viene mai inviato a nessun server)
-  // e lo tolgo subito dall'indirizzo, tenendolo solo in memoria.
+  // le vecchie sessioni anonime dell'accesso professore (rimosso) non restano aperte
   useEffect(() => {
-    const m = /^#prof=([0-9a-fA-F]{64})$/.exec(window.location.hash);
-    if (!m) return;
-    setProfToken(m[1].toLowerCase());
-    window.history.replaceState(window.history.state, document.title, window.location.pathname + window.location.search);
-  }, []);
-  // chi è già dentro con il proprio account non usa il link: lo scarto senza consumarlo
-  useEffect(() => {
-    if (profToken && user && !user.isAnonymous && !redeeming) { setProfToken(null); notify("Per usare un link professore devi prima uscire dal tuo account."); }
-  }, [profToken, user, redeeming]);
-  // una sessione anonima senza accesso valido (link scaduto, accesso revocato) non deve restare aperta
-  useEffect(() => {
-    if (user?.isAnonymous && adminChecked && !isAdmin && !redeeming) signOut(auth).catch(() => {});
-  }, [user, adminChecked, isAdmin, redeeming]);
+    if (user?.isAnonymous) signOut(auth).catch(() => {});
+  }, [user]);
 
   // auth state + link reset password
   useEffect(() => {
@@ -1306,14 +1288,14 @@ export default function App() {
   // dati
   const dataScope = isAdmin && ["read", "home", "podio", "authors"].includes(tab) ? "all" : ["my_pages", "home", "profile"].includes(tab) ? "mine" : "none";
   useEffect(() => {
-    if (!user || !db || (isProf && !isAdmin) || dataScope === "none") return;
+    if (!user || !db || dataScope === "none") return;
     const q = dataScope === "all" ? collection(db, "pensieri") : query(collection(db, "pensieri"), where("userId", "==", user.uid));
     setLoading(true); setRawItems([]);
     return onSnapshot(q, (s: any) => {
       setRawItems(s.docs.map((d: any) => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, () => { setLoading(false); notify("Impossibile leggere i progetti."); });
-  }, [user, isAdmin, isProf, dataScope]);
+  }, [user, isAdmin, dataScope]);
 
   // bozza: ripristino + salvataggio automatico
   useEffect(() => {
@@ -1382,40 +1364,11 @@ export default function App() {
     } catch { err("Il link è scaduto o non è valido."); }
     setAuthLoading(false);
   };
-  // Attivazione del link: accesso anonimo + un'unica scrittura atomica (crea admins/{uid} e brucia l'invito).
-  // Le regole di Firestore controllano che l'invito esista, non sia scaduto e venga eliminato nella stessa operazione.
-  const redeemProf = async () => {
-    if (!profToken || redeemRef.current) return;
-    const token = profToken;
-    sound.unlock(); sound.preload("intro"); loadTour().catch(() => {});
-    redeemRef.current = true; setRedeeming(true); setAuthMsg(null);
-    try {
-      const cred = await signInAnonymously(auth);
-      const b = writeBatch(db);
-      b.set(doc(db, "admins", cred.user.uid), { ruolo: "professore", invito: token, creatoIl: Date.now() });
-      b.delete(doc(db, "inviti", token));
-      await b.commit();
-      const s = await getDoc(doc(db, "admins", cred.user.uid));
-      if (!s.exists()) throw new Error("accesso non registrato");
-      setIsAdmin(true); setIsOwner(false); setAdminChecked(true);
-      setProfToken(null);
-    } catch (x: any) {
-      setProfToken(null);
-      try { if (auth.currentUser?.isAnonymous) await signOut(auth); } catch {}
-      setIsAdmin(false); setIsOwner(false); setAdminChecked(false);
-      const off = x?.code === "auth/operation-not-allowed" || x?.code === "auth/admin-restricted-operation";
-      err(off ? "L'accesso professore non è ancora attivato su Firebase. Avvisa chi ti ha dato il link." : "Il link non è valido, è già stato usato oppure è scaduto. Chiedi un nuovo link.");
-    }
-    redeemRef.current = false; setRedeeming(false);
-  };
   const logout = async () => {
-    if (isProf && !window.confirm("Se esci, per rientrare serve un nuovo link dal titolare. Vuoi uscire?")) return;
     if (eggGet() === 1) eggSet(2);
     // chiudo ogni finestra aperta: sui PC condivisi non deve restare nulla dell'account che esce
     setSel(null); setViewProf(null); setEditProf(false); setOptOpen(false); setToDelete(null); setDone(null); setSelMode(false); setIds([]);
-    // il professore che esce toglie anche il proprio accesso: nell'elenco del titolare non resta un dispositivo fantasma
-    if (isProf) { try { await deleteDoc(doc(db, "admins", user.uid)); } catch {} }
-    await signOut(auth); setIsAdmin(false); setIsOwner(false); setTab("home");
+    await signOut(auth); setIsAdmin(false); setTab("home");
   };
 
   // --- editor handlers ---
@@ -1801,7 +1754,7 @@ export default function App() {
   };
   const stepTo = (t: any, d: number) => { setSwap(d); setSel(t); };
   const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
-  const go = (t: string) => { if (isProf && (t === "my_pages" || t === "profile" || (t === "write" && !editingId))) return; if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
+  const go = (t: string) => { if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
 
   // ================= SUONO E PRESENTAZIONE =================
   // cambio di sezione: i due click salgono andando avanti nel menu e scendono tornando indietro (anche col tasto Indietro)
@@ -1819,8 +1772,8 @@ export default function App() {
     fromLogin.current = false;
     if (tourSeen(user.uid)) sound.play("enter");
   }, [user, adminChecked, authLoading]);
-  const tourName = user ? (isProf ? "Professore" : String(profiles[user.uid]?.displayName || user.displayName || "").trim().split(" ")[0]) : "";
-  const wantTour = !!user && adminChecked && !redeeming && !tour && !tourSeen(user.uid);
+  const tourName = user ? String(profiles[user.uid]?.displayName || user.displayName || "").trim().split(" ")[0] : "";
+  const wantTour = !!user && adminChecked && !tour && !tourSeen(user.uid);
   useEffect(() => {
     if (!wantTour) return;
     if (tourName) { setTour("auto"); return; }
@@ -1989,7 +1942,6 @@ export default function App() {
               <button type="button" className="bt" onClick={() => { setOptOpen(false); setTour("film"); }}><Clapperboard size={15} />Rivedi il filmato</button>
               <button type="button" className="bt" onClick={() => { setOptOpen(false); setTour("guide"); }}><Compass size={15} />Rivedi il tour</button>
             </div>}
-            {isOwner && <AccessoProf db={db} notify={notify} />}
             <div className="flex gap-2 mt-5">
               <button className="bt flex-1" onClick={() => setOpts({ ...DEF })}><RotateCcw size={15} />Ripristina</button>
               <button className="bt on flex-1" onClick={() => setOpt("level", "lite")}><Zap size={15} />Elimina effetti</button>
@@ -1998,7 +1950,7 @@ export default function App() {
       );
   const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} ${tourHold ? "tour-hold" : ""} min-h-screen`}><div className="prog" />{children}{settingsDialog}</div>;
 
-  if (authLoading || redeeming || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
+  if (authLoading || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
   // diorama del pannello d'accesso: il puntatore inclina lo spazio (variabili --nx/--ny, da -1 a 1)
   const d3live = G.d3 && !G.nomotion;
@@ -2020,7 +1972,7 @@ export default function App() {
               <div className="zl l3d-col" style={{ ["--z" as any]: "0px" }}>
                 {wide && <span className="zl block relative l3d-logo" style={{ ["--z" as any]: "0px" }} onClick={eggLogin}>
                   <span className="zsh" style={{ left: "18%", width: "64%", bottom: "-4%", height: "14%" }} aria-hidden="true" />
-                  <span className="zl block absolute inset-0" style={{ ["--z" as any]: "75px" }}><Logo3D className="logo3d w-full h-full" intro={G.logo} spd={G.spd} fps={G.fps} fallback={<Logo size={120} />} /></span>
+                  <span className="zl block absolute inset-0" style={{ ["--z" as any]: "75px" }}><Logo3D className="logo3d w-full h-full" intro={G.logo} spd={G.spd} fps={LOGO_FPS} fallback={<Logo size={120} />} /></span>
                 </span>}
                 <h1 className="zl hd text-5xl font-bold leading-tight" style={{ ["--z" as any]: "45px" }}><Text3D text="Scrivi senza limiti. Ogni mese emergono i testi migliori." layers={12} anim={G.titles} className="t3-hero t3-glint" delay={300} /></h1>
                 <p className="zl mu mt-5 max-w-sm b-2" style={{ ["--z" as any]: "22px" }}>Testo, foto e disegni a mano libera nello stesso foglio. Ogni mese i testi migliori vengono letti e premiati.</p>
@@ -2045,14 +1997,6 @@ export default function App() {
                 <input className="inp" type="password" minLength={6} required autoFocus placeholder="Almeno 6 caratteri" value={f.newPw} onChange={set("newPw")} />
                 <button className="bt pri w-full py-3">Aggiorna password</button>
               </form>
-            ) : profToken ? (
-              <div className="space-y-4">
-                <h2 className="hd text-3xl font-bold">Accesso professore</h2>
-                {Msg}
-                <p className="mu text-sm">Questo link ti apre la modalità professore, senza account né password. Funziona una sola volta: dopo l'uso si disattiva e questo dispositivo resta collegato.</p>
-                <button type="button" className="bt pri w-full py-3" onClick={redeemProf}>Entra come professore</button>
-                <button type="button" className="mu text-sm lk" onClick={() => { setProfToken(null); setAuthMsg(null); }}>Annulla</button>
-              </div>
             ) : (
               <form onSubmit={submitAuth} className="space-y-4">
                 <h2 className="hd text-3xl font-bold">{authMode === "login" ? "Bentornato" : authMode === "register" ? "Crea il tuo profilo" : "Recupera l'accesso"}</h2>
@@ -2076,7 +2020,7 @@ export default function App() {
                 {authMode === "reset" && <button type="button" className="mu text-sm lk" onClick={() => { setAuthMode("login"); setAuthMsg(null); }}>Torna all'accesso</button>}
               </form>
             )}
-            {!resetCode && !profToken && <ApkDownload divider />}
+            {!resetCode && <ApkDownload divider />}
             <button type="button" className="bt w-full mt-5" onClick={() => setOptOpen(true)}><Settings size={16} />Opzioni</button>
           </div></div>
         </div>
@@ -2093,11 +2037,11 @@ export default function App() {
       { id: "read", label: "Tutti gli scritti", s: "Tutti", icon: Activity },
       { id: "podio", label: "Podio del mese", s: "Podio", icon: Trophy }, { id: "authors", label: "Autori", icon: Users },
     ] : []),
-  ]).filter((n: any) => !isProf || (n.id !== "my_pages" && (n.id !== "write" || !!editingId))); // il professore non scrive progetti suoi: può solo correggere
+  ]);
   const monthOpts: string[] = Array.from(new Set<string>(items.map((t: any) => mKey(t.timestamp)))).sort().reverse();
   const monthNow = mKey(Date.now());
   const thisMonth = items.filter((t) => mKey(t.timestamp) === monthNow);
-  const myName = isProf ? "Professore" : (profiles[user.uid]?.displayName || user.displayName || "Operatore");
+  const myName = profiles[user.uid]?.displayName || user.displayName || "Operatore";
   const first = myName.split(" ")[0];
   const dn = (uid: string, fb: string) => profiles[uid]?.displayName || fb;
   const hid = (t: any) => isAdmin && !t.svelato && t.userId !== user.uid;
@@ -2255,9 +2199,9 @@ export default function App() {
           ? <>
             {/* ombra del logo sul pannello: sta sul piano, il logo 90 px sopra; inclinando il pannello si separano */}
             <span className="zsh hidden md:block w-[150px] h-[46px] lg:w-[220px] lg:h-[62px]" style={{ position: "absolute", right: "min(9%, 70px)", top: "calc(50% + 110px)" }} aria-hidden="true" />
-            <span className="zl block w-[230px] h-[230px] lg:w-[340px] lg:h-[340px]" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", ["--z" as any]: "150px" }} onClick={eggHome}><React.Suspense fallback={<span className="hero-logo block"><Logo size={170} /></span>}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fps={G.fps} fallback={<span className="hero-logo block"><Logo size={170} /></span>} /></React.Suspense></span>
+            <span className="zl block w-[230px] h-[230px] lg:w-[340px] lg:h-[340px]" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", ["--z" as any]: "150px" }} onClick={eggHome}><React.Suspense fallback={<span className="hero-logo block"><Logo size={170} /></span>}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fps={LOGO_FPS} fallback={<span className="hero-logo block"><Logo size={170} /></span>} /></React.Suspense></span>
           </>
-          : <span className="zl block mb-3 w-[132px] h-[132px]" style={{ ["--z" as any]: "60px" }} onClick={eggHome}><React.Suspense fallback={<Logo size={76} />}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fps={G.fps} fallback={<Logo size={76} />} /></React.Suspense></span>
+          : <span className="zl block mb-3 w-[132px] h-[132px]" style={{ ["--z" as any]: "60px" }} onClick={eggHome}><React.Suspense fallback={<Logo size={76} />}><Logo3D className="logo3d w-full h-full" intro={heroLogoFresh} spd={G.spd} fps={LOGO_FPS} fallback={<Logo size={76} />} /></React.Suspense></span>
         ) : <><span className="hidden md:block" style={{ position: "absolute", right: 48, top: "50%", transform: "translateY(-50%)" }}><span className={`hero-logo block ${boot ? "hero-logo-in" : ""}`} onClick={eggHome}><Logo size={170} /></span></span><span className="md:hidden block mb-5" onClick={eggHome}><Logo size={76} /></span></>}
         {G.d3
           ? <div className="b-1 zl relative z-[1] w-fit max-w-full" style={{ ["--z" as any]: "100px" }}>{logo3d && <i className="zsh-rect" style={{ ["--sd" as any]: "-100px" }} aria-hidden="true" />}<Terminal3D user={termUser} cmd={termCmd} out={termOut} run={!G.nomotion} delay={boot ? 1150 : 380} /></div>
@@ -2368,7 +2312,7 @@ export default function App() {
         <div className="mt-auto space-y-2">
           <ApkDownload compact />
           <div className="flex items-center gap-2">
-            <button onClick={() => go("profile")} data-snd="nav" className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{isProf ? "Accesso professore" : user.email}</span></span></button>
+            <button onClick={() => go("profile")} data-snd="nav" className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{user.email}</span></span></button>
             <button className="bt !p-2" onClick={() => setOptOpen(true)} title="Opzioni" aria-label="Opzioni" data-tour="options"><Settings size={18} /></button>
             <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
           </div>
