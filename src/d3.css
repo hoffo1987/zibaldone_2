@@ -99,12 +99,22 @@
   .tm-face{min-width:0;padding:.65rem .75rem .8rem;box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 12px 24px -16px rgba(0,0,0,.6)}
   .tm-slab:nth-of-type(n+4){display:none}
   .tm-line,.tm-out{transform:translateZ(8px);text-shadow:none}
-  .logo3d>canvas{filter:drop-shadow(0 8px 10px rgba(0,0,0,.22))}
+  /* niente filtro sul canvas WebGL (costa un passaggio in più a ogni fotogramma): l'ombra è un'ellisse ferma sotto il logo */
+  .logo3d{position:relative;isolation:isolate}
+  .logo3d>canvas{filter:none}
+  .logo3d:before{content:"";position:absolute;z-index:-1;left:20%;right:20%;bottom:6%;height:12%;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.3),transparent);pointer-events:none}
   .zsh-rect{display:none}
 }
 @media (min-width:768px) and (max-width:1199px){
   .l3d{padding:2rem}
   .l3d h1{font-size:clamp(2rem,4vw,3rem)}
-  .hero.h3d>span.zl{position:relative!important;right:auto!important;top:auto!important;transform:none!important;width:150px;height:150px;margin-bottom:1rem;--z:0px!important}
+  .hero.h3d>span.zl{position:relative!important;right:auto!important;top:auto!important;transform:none!important;width:150px;height:150px;margin-bottom:1rem;--z:3px!important}
   .hero.h3d>.zsh{display:none}
 }
+
+/* Safari (e ogni browser su iPhone e iPad) ordina in modo ambiguo i piani complanari di uno stesso spazio 3D: sul telefono il
+   logo WebGL stava allo stesso Z dello sfondo del riquadro e pezzi di sfondo gli venivano disegnati sopra, tagliati lungo la
+   retta in cui il piano inclinato del terminale incontra quello del pannello (del logo restava uno spicchio). Su telefono e
+   tablet il pannello non si inclina e la profondità non serve: ogni contesto 3D resta chiuso nel proprio elemento
+   (terminale e scritte estruse si disegnano uguali). Tra 768 e 1199 px il logo resta un poco sopra il pannello. */
+@media (max-width:767px),(pointer:coarse){.pn.hero.h3d,.h3d .zl,.l3d,.l3d .zl{transform-style:flat}}

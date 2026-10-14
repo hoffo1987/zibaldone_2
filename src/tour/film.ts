@@ -1,4 +1,4 @@
-import { track, impulse } from "./motion";
+import { track, impulse, direct, follower, wander, jiggle, Shot } from "./motion";
 
 // ===== IL FILM DELLA PRESENTAZIONE =====
 // Una scena 3D disegnata su un solo canvas 2D, senza WebGL: una scheda elettronica sterminata, la targa smaltata del logo
@@ -8,20 +8,39 @@ import { track, impulse } from "./motion";
 // Prima del brano c'è il buio: solo un pulsante 3D acceso dal suo LED. Premuto, la luce si propaga e il film comincia.
 // Le scritte sono pre-disegnate in atlanti (faccia, fianchi, bagliore) e poi solo trasformate: a ogni fotogramma il
 // canvas copia immagini già pronte, che è ciò che anche un telefono fa velocemente.
+// La camera non sta mai ferma: ogni inquadratura orbita e scivola da sola, il passaggio alla successiva le fonde mentre
+// si muovono entrambe; sopra c'è l'inerzia di una camera vera, il tremolio della mano e le scosse sui colpi del brano.
+// Le lettere sono di gelatina: si posano schiacciandosi e ondeggiano a ogni battito, con l'onda che attraversa la parola.
 
 // tempi del brano in secondi: attacco, rintocco, ritorno del basso, campane, crescendo, drop e i tre colpi del ritmo
 export const MUSIC = { hit: 0.06, bloom: 0.15, chime: 1.54, accent: 2.1, s1: 3.5, s2: 4.9, s3: 6.08, fall: 7.25, rise: 8.0, drop: 9.12, k1: 10.26, k2: 11.43, k3: 12.6, tag: 13.0, out: 13.45, end: 14.6 };
 const HATS = [9.5, 9.9, 11.0, 11.8, 12.2, 13.0, 13.4];
 const M = MUSIC;
+// la griglia del brano: dagli attacchi misurati sul file (0,15 · 2,54 · 4,90 · 6,07 · 9,11 · 10,26 · 12,60…) un battito
+// ogni 0,3884 s, in fase con il drop
+const BEAT = 0.3884;
+// battiti che fanno ballare le lettere: la griglia leggera, poi gli attacchi veri del brano più forti
+const HITS: number[][] = (() => {
+  const h: number[][] = [];
+  for (let n = -23; n <= 11; n++) { const b = M.drop + n * BEAT; if (b > 0.1 && b < M.out) h.push([b, b < M.drop ? 0.3 : 0.42]); }
+  [[M.hit, 0.8], [M.chime, 1], [M.accent, 0.55], [M.s1, 0.8], [M.s2, 0.8], [M.s3, 0.9], [M.rise, 0.5], [M.drop, 1.35], [M.k1, 1.1], [M.k2, 1.1], [M.k3, 1.25]].forEach((x) => h.push(x));
+  return h.sort((a, b) => a[0] - b[0]);
+})();
+// scosse della camera: solo sugli attacchi che si sentono davvero
+const SHAKES = [[M.hit, 0.45], [M.chime, 0.3], [M.s1, 0.22], [M.s2, 0.22], [M.s3, 0.3], [M.drop, 1.3], [M.k1, 0.7], [M.k2, 0.7], [M.k3, 0.85]];
 
 export type FilmText = { stations: { word: string; line: string; icon: string }[]; hello: string; stamps: string[]; tag: string };
 export type FilmOpts = { text: FilmText; calm: boolean; low: boolean };
 // draw(t): t < 0 è l'attesa al buio col pulsante; node(): il nodo ambra del logo sullo schermo (per il volo verso il tour);
-// button(): il pulsante d'accensione sullo schermo; gate(): passaggio del mouse e pressione
+// button(): il pulsante d'accensione sullo schermo; gate(): passaggio del mouse e pressione;
+// beat(): quanto sta battendo il brano in questo istante (0-1), per la vignetta che pulsa sopra al canvas;
+// pose(): dove si trova la camera (per lo storyboard dell'anteprima, che ne misura la velocità)
 export type Film = {
   draw: (t: number) => void; resize: () => void; dispose: () => void;
   node: () => { x: number; y: number } | null; button: () => { x: number; y: number; r: number } | null;
   gate: (s: { hover?: boolean; press?: boolean }) => void;
+  beat: () => number;
+  pose: () => { p: number[]; f: number[]; dist: number } | null;
 };
 
 type V3 = [number, number, number];
@@ -66,6 +85,8 @@ type Label = {
   t0: number; stg: number; dur: number; stagger: "sweep" | "center"; kind: "rise" | "slam" | "fade"; out: number; outStg: number; flash: number[];
   // mirror: quota della superficie lucida che la riflette; beam: quota da cui sale il fascio di luce
   mirror: number | null; beam: number | null; glowCol: string;
+  // pose delle lettere già calcolate per questo istante (le usano sia la scritta sia il suo riflesso)
+  st?: any[]; stT?: number;
 };
 const FACE_TOP = "#FFFFFF", FACE_BOT = "#C9F7EE";
 const mkAtlas = (w: number, h: number) => { const c = document.createElement("canvas"); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; };
@@ -218,6 +239,16 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
   const tint = (col: string, core = true) => { const c = mkAtlas(64, 64), g = c.getContext("2d")!; g.drawImage(dot, 0, 0); g.globalCompositeOperation = "source-in"; g.fillStyle = col; g.fillRect(0, 0, 64, 64); if (core) { g.globalCompositeOperation = "lighter"; g.globalAlpha = 0.6; g.drawImage(dot, 16, 16, 32, 32); } return c; };
   const DOT_T = tint("#2DD4BF"), DOT_A = tint("#FBBF24"), DOT_W = tint("#CFFAF1"), DOT_K = tint("#000000", false);
   const POOL = [tint("#17C3AE", false), tint("#FBBF24", false), tint("#BFF7EC", false)];
+  // bokeh dell'obiettivo: un disco pieno con il bordo un po' più acceso, come i punti luce fuori fuoco di una lente vera
+  const disc = (rgb3: string) => {
+    const c = mkAtlas(64, 64), g = c.getContext("2d")!, r = g.createRadialGradient(32, 32, 0, 32, 32, 31);
+    r.addColorStop(0, `rgba(${rgb3},.42)`); r.addColorStop(0.7, `rgba(${rgb3},.5)`); r.addColorStop(0.88, `rgba(${rgb3},.9)`); r.addColorStop(1, `rgba(${rgb3},0)`);
+    g.fillStyle = r; g.beginPath(); g.arc(32, 32, 31, 0, TAU); g.fill(); return c;
+  };
+  const BOKEH = [disc("45,212,191"), disc("251,191,36"), disc("214,255,248")];
+  // riflessi della lente: la striscia anamorfica (un punto luce stirato) e l'anello dei fantasmi
+  const ring = (() => { const c = mkAtlas(64, 64), g = c.getContext("2d")!, r = g.createRadialGradient(32, 32, 0, 32, 32, 31); r.addColorStop(0, "rgba(160,255,240,0)"); r.addColorStop(0.62, "rgba(160,255,240,0)"); r.addColorStop(0.84, "rgba(160,255,240,.55)"); r.addColorStop(1, "rgba(160,255,240,0)"); g.fillStyle = r; g.fillRect(0, 0, 64, 64); return c; })();
+  const STREAK_T = tint("#7FE6FF"), STREAK_A = tint("#FFC46B");
   const teal: string[] = [], amber: string[] = [], white: string[] = [];
   for (let i = 0; i <= 50; i++) { const a = (i / 50).toFixed(2); teal.push(`rgba(45,212,191,${a})`); amber.push(`rgba(251,191,36,${a})`); white.push(`rgba(230,255,250,${a})`); }
   const qa = (arr: string[], a: number) => arr[Math.round(clamp01(a) * 50)];
@@ -233,6 +264,14 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
   const gate = { hover: 0, hoverOn: false, pressAt: 0, t0: performance.now(), lastFrame: performance.now() };
   // pulviscolo che galleggia nella luce del LED, prima dell'accensione
   const motes = Array.from({ length: 34 }, () => ({ a: R() * TAU, r: 0.6 + R() * 5.5, y: R() * 4, s: 0.15 + R() * 0.35, ph: R() * TAU }));
+  // polvere sospesa sopra la scheda, lungo tutto il percorso: fuori fuoco diventa bokeh, e con la parallasse fa sentire
+  // quanto e come si muove la camera
+  const dust = Array.from({ length: o.low ? 26 : 58 }, () => ({ x: (R() - 0.5) * 64, y: 0.8 + R() * 10, z: R() * 132 - 22, r: 0.07 + R() * 0.16, ph: R() * TAU, c: R() < 0.24 ? 1 : R() < 0.45 ? 2 : 0 }));
+  // l'inerzia della camera (vedi follower) e il fotogramma precedente per la scia nei movimenti veloci
+  const rig = follower(2.2, 0.7, 1.7);
+  const trail = mkAtlas(1, 1), trailCtx = trail.getContext("2d")!;
+  let trailOk = false, prevCam: Cam | null = null, beatNow = 0;
+  let beatsNow: number[][] = [];
 
   const FONT = {
     title: "600 %px Unbounded, 'Bricolage Grotesque', sans-serif",
@@ -293,37 +332,51 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
     // inquadrature: la distanza nasce dalla larghezza della scritta e dallo schermo, non da numeri fissi
     const dT = fitDist(titleW, kTitle), dS = stW.map((w) => fitDist(w, kHead)), dH = fitDist(helloW, kHello);
     // in verticale la camera guarda più in basso: l'orizzonte sale e la scheda riempie lo schermo alto e stretto
-    const tilt = portrait ? 12 : 0, yawK = portrait ? 0.38 : 1, XZ = [0, 1, 2];
-    const st = (i: number, k: number, yaw: number, pitch: number): number[] => [STATIONS[i].x, (portrait ? 2.1 : 1.5) + 1.05, STATIONS[i].z, dS[i] * k, yaw * yawK, pitch + tilt, 0, 1];
-    // Ogni stazione ha un solo arco: ingresso, lettura, uscita. Niente inversioni tra parola e parola.
-    camA = track([
+    const tilt = portrait ? 12 : 0, yawK = portrait ? 0.38 : 1, chH = portrait ? 2.1 : 1.5;
+    const near = (u: number) => Math.max(-1.6, Math.min(2.6, u)); // ogni inquadratura vive solo attorno al suo momento
+    // 1 · dal pulsante la gru sale sopra la targa mentre l'onda di luce si allarga, e non si ferma in cima
+    const opening = track([
       { t: 0, v: gateCam.slice() },
       { t: 0.7, v: [0, PH, 0, dTop * 0.86, -7, 76, 0, 1] },
       { t: 1.12, v: [0, PH, 0.4, dTop, 0, 87, 0, 1] },
-      { t: 2.02, v: [0, PH + 2.1, TITLE_Z - 2, dT * 1.23, -10, 29 + tilt, 0, 1] },
-      { t: 2.72, v: [0.3, PH + 2.1, TITLE_Z - 1, dT * 1.17, 2, 24 + tilt, 0, 1] },
-      { t: M.s1 + 0.02, v: st(0, 1.16, -14, 12), still: XZ },
-      { t: 4.42, v: st(0, 1.06, -3, 10), still: XZ },
-      { t: M.s2 + 0.03, v: st(1, 1.14, 12, 12), still: XZ },
-      { t: 5.82, v: st(1, 1.06, 3, 10), still: XZ },
-      { t: M.s3 + 0.13, v: st(2, 1.13, -12, 12), still: XZ },
-      { t: M.fall, v: st(2, 1.04, -2, 10), still: XZ },
-      // La gru apre il campo sul crescendo, poi scende al logo in un arco continuo.
+      { t: 1.5, v: [0, PH + 0.4, 1.4, dTop * 1.03, 2.5, 84, 0, 1], d: [0, 1, 2.6, dTop * 0.05, 6, -14, 0, 0] },
+    ], true);
+    // 2 · il titolo in piedi: la camera gli gira attorno verso sinistra, già nella direzione della prima stazione
+    const titleShot: Shot = (t) => { const u = near(t - 2.1); return [0.3 * u, PH + 2.1 + 0.08 * u, TITLE_Z - 2 + 0.8 * u, dT * (1.2 - 0.05 * u), (-9 + 8 * u) * yawK, 27 + tilt - 2.5 * u, 0, 1]; };
+    // 3 · le stazioni: si arriva con lo slancio del viaggio e lo si conserva: la camera orbita attorno alla parola nella
+    // stessa direzione, scivola in avanti e si avvicina piano. Le stazioni sono a zig-zag (sinistra, destra, sinistra):
+    // l'orbita di ognuna gira nel verso da cui si è arrivati e il passaggio successivo la riprende come un pendolo
+    const station = (i: number, yaw0: number, spin: number, side: number): Shot => (t) => {
+      const P = STATIONS[i], u = near(t - [M.s1, M.s2, M.s3][i]);
+      return [P.x + side * u, chH + 1.05 + 0.05 * u, P.z - 0.6 + 0.6 * u, dS[i] * (1.13 - 0.045 * u), (yaw0 + spin * u) * yawK, 11 + tilt - 0.9 * u, 0, 1];
+    };
+    // 4 · sul crescendo la gru si alza e apre tutta la scheda, poi si tuffa nel logo e ci entra a velocità piena sul drop
+    const dive = track([
+      { t: 7.25, v: [-5, 2.2, 74, dTop * 2.2, -4, 34 + tilt, 0, 1], d: [3, -0.6, -18, dTop * 1.2, 2, 9, 0, 0] },
       { t: M.rise, v: [0, 0, 42, dTop * 4.1, -3, 49, 0, 1] },
-      { t: 8.48, v: [BTN.x, PH, 0, dTop * 2.5, 0, 72, 0, 1.04] },
-      { t: M.drop, v: [BTN.x, PH, 0, 2.3, 0, 88, 0, 1.22] },
+      { t: 8.5, v: [BTN.x, PH, 0, dTop * 2.4, 0, 72, 0, 1.04] },
+      { t: M.drop, v: [BTN.x, PH, 0, 2.3, 0, 88, 0, 1.22], d: [0, 0, 0, -9, 0, 16, 0, 0.5] },
+    ]);
+    // I passaggi partono decisi e si posano con una lunga coda (vedi glide): l'arrivo non è mai una frenata.
+    camA = direct(opening, [
+      { at: 1.42, len: 0.8, shot: titleShot, a: 3, b: 4 },
+      { at: 2.9, len: 0.62, shot: station(0, -10, 7, -0.4) },
+      { at: 4.38, len: 0.56, shot: station(1, 10, -7, 0.4) },
+      { at: 5.6, len: 0.56, shot: station(2, -10, 6, -0.35) },
+      { at: 7.0, len: 1.0, shot: dive, a: 3, b: 4 },
     ]);
     const hy = portrait ? 6.2 : 3.4;
-    // Un dolly lento accompagna il saluto; il ritmo passa nelle lettere, con un piccolo rinculo della camera.
+    // 5 · dopo il drop un dolly continuo accompagna il saluto; il ritmo passa nelle lettere e nelle scosse della camera.
+    // Sul finale la camera sale sopra la targa senza mai fermarsi, per il volo del nodo ambra verso il tour
     camB = track([
-      { t: M.drop, v: [0, hy + 0.1, HZ, dH * 1.14, -9 * yawK, 7 + tilt, 0, 1.04] },
+      { t: M.drop, v: [0, hy + 0.15, HZ, dH * 1.16, -9 * yawK, 7 + tilt, 0, 1.05], d: [0, -0.06, 0, -dH * 0.04, 3.4 * yawK, 0.4, 0, -0.03] },
       { t: M.k1, v: [0, hy, HZ, dH * 1.1, -5 * yawK, 7.5 + tilt, 0, 1] },
       { t: M.k2, v: [0, hy, HZ, dH * 1.06, 0, 7.5 + tilt, 0, 1] },
       { t: M.k3, v: [0, hy - 0.1, HZ, dH * 1.02, 5 * yawK, 8 + tilt, 0, 1] },
-      { t: M.out, v: [0, hy - 0.1, HZ, dH, 7 * yawK, 8 + tilt, 0, 1], hold: true },
+      { t: M.out, v: [0, hy - 0.1, HZ, dH * 0.99, 7.5 * yawK, 8.5 + tilt, 0, 1], d: [0, -0.4, -1.5, -dH * 0.03, 3 * yawK, 6, 0, 0] },
       { t: 14.25, v: [0, PH, 0, dTop * 1.08, 0, 89, 0, 1] },
       { t: M.end, v: [0, PH, 0, dTop * 1.02, 0, 89.5, 0, 1] },
-    ]);
+    ], true);
   };
 
   const resize = () => {
@@ -337,6 +390,8 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
     layerDpr = low ? 0.5 : 0.75;
     layer.width = Math.round(W * layerDpr); layer.height = Math.round(H * layerDpr);
     soft.width = Math.max(1, Math.round(W * (low ? 0.25 : 0.4))); soft.height = Math.max(1, Math.round(H * (low ? 0.25 : 0.4)));
+    // la scia dei movimenti veloci lavora a metà risoluzione (sui dispositivi lenti non c'è)
+    trail.width = low ? 1 : Math.max(1, Math.round(W * 0.5)); trail.height = low ? 1 : Math.max(1, Math.round(H * 0.5)); trailOk = false;
     layout();
   };
 
@@ -673,10 +728,11 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
     node(3.83, 3.2, 1.05, 0.9, false); node(-0.33, 0, 0.8, 1.02, false); node(3.83, -3.2, 1.05, 1.14, true);
   };
 
-  // una lettera: tre angoli proiettati bastano per l'affine che porta la cella dell'atlante sullo schermo
+  // una lettera: tre angoli proiettati bastano per l'affine che porta la cella dell'atlante sullo schermo.
+  // (ox, oy, oz) è il piede della lettera, al centro della sua larghezza: lì la lettera ruota e si schiaccia
   const glyph = (c: Cam, A: Atlas, L: Label, gi: number, ox: number, oy: number, oz: number, R3: V3, U3: V3, alpha: number) => {
     const G = L.g[gi], pxu = L.face.c.height / L.ch;
-    const x0 = G.x - L.W / 2 - L.pad, x1 = x0 + G.cw / pxu, y1 = L.asc + L.pad, y0 = y1 - L.ch;
+    const x0 = -G.adv / 2 - L.pad, x1 = x0 + G.cw / pxu, y1 = L.asc + L.pad, y0 = y1 - L.ch;
     const P = (x: number, y: number, o2: number[]) => proj(c, ox + R3[0] * x + U3[0] * y, oy + R3[1] * x + U3[1] * y, oz + R3[2] * x + U3[2] * y, o2);
     if (!P(x0, y1, pa) || !P(x1, y1, pb) || !P(x0, y0, pc) || pa[2] < 2.5) return; // troppo vicino all'obiettivo
     const sw = G.cw * A.s, sh = A.c.height;
@@ -685,29 +741,51 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
     ctx.drawImage(A.c, G.cx * A.s, 0, sw, sh, 0, 0, sw, sh);
   };
   type GS = { right: V3; up: V3; bk: V3; ox: number; oy: number; oz: number; al: number; fl: number } | null;
-  // stato di ogni lettera: angolo di alzata, spinta verso la camera, opacità, lampo
+  // stato di ogni lettera: angolo di alzata, spinta verso la camera, opacità, lampo e la sua gelatina
   const states = (L: Label, t: number): GS[] => {
+    if (L.st && L.stT === t) return L.st as GS[];
     const R3: V3 = [Math.cos(L.ry * D2R), 0, -Math.sin(L.ry * D2R)], Bk: V3 = [Math.sin(L.ry * D2R), 0, Math.cos(L.ry * D2R)], st: GS[] = [];
-    for (let i = 0; i < L.g.length; i++) {
-      const order = L.stagger === "center" ? Math.abs(i - (L.g.length - 1) / 2) : i;
-      const k = (t - (L.t0 + order * L.stg)) / L.dur, ko = (t - (L.out + i * L.outStg)) / 0.5;
+    const n = L.g.length, jelly = !o.calm && L.kind !== "fade";
+    for (let i = 0; i < n; i++) {
+      const order = L.stagger === "center" ? Math.abs(i - (n - 1) / 2) : i;
+      const tin = L.t0 + order * L.stg, k = (t - tin) / L.dur, ko = (t - (L.out + i * L.outStg)) / 0.5;
       if (k <= 0 || ko >= 1) { st.push(null); continue; }
-      let ang = 0, push = 0, al = 1, lift = 0;
+      let ang = 0, push = 0, al = 1, lift = 0, sq = 0, yw = 0, rl = 0;
       if (L.kind === "rise") {
         const e = back(k); ang = 88 * (1 - e); push = 0.65 * (1 - easeOut(k));
         lift = 0.13 * Math.sin(Math.PI * clamp01(k)); al = easeOut(k * 2.2);
       }
       else if (L.kind === "slam") { const e = back(k); push = 5.5 * (1 - easeOut(k)); al = easeOut(k * 2.5); ang = -9 * (1 - e); lift = 0.22 * Math.sin(Math.PI * clamp01(k)); }
       else { al = easeOut(k); lift = -0.35 * (1 - easeOut(k)); }
+      if (jelly) {
+        // la lettera tocca terra e si schiaccia, poi ogni battito del brano la fa ballare: l'onda attraversa la parola
+        // con un piccolo ritardo da una lettera all'altra. Sotto, un'oscillazione lenta che non si spegne mai
+        let j = jiggle(t - tin - L.dur * (L.kind === "slam" ? 0.3 : 0.4), 3.6, 4.8) * 1.15;
+        for (const b of beatsNow) j += b[1] * jiggle(t - b[0] - i * 0.024, 4.6, 6.2);
+        j = Math.max(-1.6, Math.min(1.6, j));
+        const w1 = Math.sin(t * 2.7 + i * 0.64), w2 = Math.sin(t * 1.9 + i * 0.9 + 1.3), w3 = Math.sin(t * 3.3 + i * 0.71 + 0.5), w4 = Math.sin(t * 2.2 + i * 0.8 + 2.1);
+        sq = 0.17 * j + 0.045 * w1;
+        ang += 9 * j + 3 * w2;
+        yw = 5 * j * (i % 2 ? 1 : -1) + 4 * w3;
+        // il dondolio vero e proprio: la lettera oscilla di lato attorno al piede, come gelatina su un piatto
+        rl = 7.5 * j + 5.5 * w4;
+        lift += 0.07 * j + 0.08 * Math.sin(t * 3.1 + i * 0.7);
+      }
       if (ko > 0) { const e = easeInOut(ko); if (L.kind === "fade") al *= 1 - e; else { ang = Math.max(ang, 90 * e); al *= 1 - e * e; } }
-      const twist = (L.kind === "fade" ? 0 : (i - (L.g.length - 1) / 2) * 1.1 * (1 - easeOut(k))) * D2R;
-      const right: V3 = [R3[0] * Math.cos(twist) + Bk[0] * Math.sin(twist), 0, R3[2] * Math.cos(twist) + Bk[2] * Math.sin(twist)];
-      const bk0 = cross(right, [0, 1, 0]);
-      const ca = Math.cos(ang * D2R), sa = Math.sin(ang * D2R), up: V3 = [bk0[0] * sa, ca, bk0[2] * sa];
+      const twist = ((L.kind === "fade" ? 0 : (i - (n - 1) / 2) * 1.1 * (1 - easeOut(k))) + yw) * D2R;
+      const right0: V3 = [R3[0] * Math.cos(twist) + Bk[0] * Math.sin(twist), 0, R3[2] * Math.cos(twist) + Bk[2] * Math.sin(twist)];
+      const bk0 = cross(right0, [0, 1, 0]);
+      const ca = Math.cos(ang * D2R), sa = Math.sin(ang * D2R), up0: V3 = [bk0[0] * sa, ca, bk0[2] * sa];
+      const cr = Math.cos(rl * D2R), sr = Math.sin(rl * D2R);
+      const right: V3 = [right0[0] * cr + up0[0] * sr, right0[1] * cr + up0[1] * sr, right0[2] * cr + up0[2] * sr];
+      const up: V3 = [up0[0] * cr - right0[0] * sr, up0[1] * cr - right0[1] * sr, up0[2] * cr - right0[2] * sr];
       let fl = 0;
       for (const f of L.flash) if (t >= f) fl = Math.max(fl, 1 - (t - f) * 2.6 - Math.abs(i - (t - f) * 26) * 0.08);
-      st.push({ right, up, bk: cross(right, up), ox: L.x - Bk[0] * push, oy: L.y + lift, oz: L.z - Bk[2] * push, al, fl: Math.max(0, fl) });
+      // il piede della lettera resta sulla riga; schiacciata si allarga (il volume non cambia)
+      const G = L.g[i], cx = G.x - L.W / 2 + G.adv / 2, sy = 1 - sq, sx = 1 + sq * 0.5;
+      st.push({ right: [right[0] * sx, right[1] * sx, right[2] * sx], up: [up[0] * sy, up[1] * sy, up[2] * sy], bk: cross(right, up), ox: L.x + R3[0] * cx - Bk[0] * push, oy: L.y + lift, oz: L.z + R3[2] * cx - Bk[2] * push, al, fl: Math.max(0, fl) });
     }
+    L.st = st; L.stT = t;
     return st;
   };
   const drawLabel = (c: Cam, L: Label, t: number) => {
@@ -770,12 +848,81 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
   const burst = (x: number, y: number, n: number, am: boolean, sp = 1) => {
     for (let i = 0; i < n && parts.length < 320; i++) { const an = Math.random() * TAU, v = (2 + Math.random() * 7) * sp; parts.push({ x, y, vx: Math.cos(an) * v, vy: Math.sin(an) * v - 1.5, l: 1, s: 6 + Math.random() * 14, a: am || Math.random() < 0.3 }); }
   };
+  // ---------- effetti della lente ----------
+  // polvere sospesa: davanti o dietro la parola a fuoco si apre in dischi di bokeh, tanto più grandi quanto è lontana dal fuoco
+  const drawDust = (c: Cam, t: number, far: boolean, k: number) => {
+    if (k <= 0.01 || o.calm) return;
+    const g = ctx, sMin = Math.min(W, H);
+    g.globalCompositeOperation = "lighter";
+    for (const d of dust) {
+      if (!proj(c, d.x + Math.sin(t * 0.31 + d.ph) * 0.9, d.y + Math.sin(t * 0.43 + d.ph * 1.7) * 0.5, d.z + Math.cos(t * 0.27 + d.ph) * 0.7, pa)) continue;
+      if (pa[2] > focus !== far) continue;
+      const coc = Math.min(sMin * 0.09, Math.abs(1 - focus / pa[2]) * sMin * 0.045 * (0.4 + aperture)), s = Math.max(1.5, d.r * pa[3] * 2 + coc);
+      if (s > sMin * 0.12 || pa[0] < -s || pa[0] > W + s || pa[1] < -s || pa[1] > H + s) continue;
+      const a = k * fog(pa[2]) * (0.55 / (1 + coc * 0.12)) * (0.6 + 0.4 * Math.sin(t * 1.7 + d.ph));
+      if (a < 0.01) continue;
+      g.globalAlpha = Math.min(1, a); g.drawImage(BOKEH[d.c], pa[0] - s / 2, pa[1] - s / 2, s, s);
+    }
+    g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
+  };
+  // riflessi della lente: una striscia anamorfica orizzontale sulla luce e qualche fantasma lungo la retta che passa
+  // per il centro dell'immagine, dalla parte opposta
+  const GHOSTS: [number, number, number, HTMLCanvasElement][] = [[0.45, 0.035, 0.16, DOT_T], [0.8, 0.09, 0.08, ring], [1.25, 0.05, 0.12, DOT_A], [1.6, 0.14, 0.06, ring], [1.95, 0.025, 0.14, DOT_W]];
+  const flare = (x: number, y: number, k: number, am: boolean) => {
+    if (k < 0.02 || (low && k < 0.1)) return;
+    const g = ctx, m = Math.max(W, H);
+    if (x < -m * 0.2 || x > W + m * 0.2 || y < -m * 0.2 || y > H + m * 0.2) return;
+    g.globalCompositeOperation = "lighter";
+    const sw = m * (0.32 + 0.45 * Math.min(1, k)), sh = Math.max(3, m * 0.012 * Math.min(1.4, k));
+    g.globalAlpha = Math.min(1, 0.7 * k); g.drawImage(am ? STREAK_A : STREAK_T, x - sw / 2, y - sh / 2, sw, sh);
+    g.globalAlpha = Math.min(1, 0.35 * k); g.drawImage(am ? DOT_A : DOT_W, x - sh * 3, y - sh * 3, sh * 6, sh * 6);
+    if (!low) {
+      const dx = W / 2 - x, dy = H / 2 - y;
+      for (const [f, s, a, img] of GHOSTS) { const ss = s * m * (0.7 + 0.3 * Math.min(1, k)); g.globalAlpha = Math.min(1, a * k); g.drawImage(img, x + dx * f - ss / 2, y + dy * f - ss / 2, ss, ss); }
+    }
+    g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
+  };
+  // luce che filtra: grandi macchie calde o fredde che attraversano l'immagine nei passaggi del brano
+  // [inizio, durata, colore (0 verde acqua, 1 ambra, 2 bianco), da x, a x] (x in frazioni di larghezza)
+  const LEAKS = [[1.3, 1.6, 1, -0.3, 0.6], [3.0, 1.2, 0, 1.2, 0.3], [5.3, 1.2, 1, -0.2, 0.7], [7.7, 1.4, 2, 1.1, 0.2], [11.1, 1.8, 1, -0.3, 0.9]];
+  const leaks = (t: number) => {
+    const g = ctx, m = Math.max(W, H);
+    for (const [t0, d, col, x0, x1] of LEAKS) {
+      const u = (t - t0) / d; if (u <= 0 || u >= 1) continue;
+      const a = Math.pow(Math.sin(Math.PI * u), 2) * (low ? 0.14 : 0.2), x = (x0 + (x1 - x0) * u) * W, y = H * (0.25 + 0.4 * u), rgb3 = col === 1 ? "255,170,60" : col === 2 ? "220,255,250" : "40,230,200";
+      const gr = g.createRadialGradient(x, y, 0, x, y, m * 0.7);
+      gr.addColorStop(0, `rgba(${rgb3},${a.toFixed(3)})`); gr.addColorStop(0.5, `rgba(${rgb3},${(a * 0.35).toFixed(3)})`); gr.addColorStop(1, `rgba(${rgb3},0)`);
+      g.globalCompositeOperation = "screen"; g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    }
+    g.globalCompositeOperation = "source-over";
+  };
+  // aberrazione cromatica: una copia rossa e una ciano dell'immagine, scostate di poco, sopra quella vera
+  const chroma = (k: number) => {
+    const w = soft.width, h = soft.height, s = softCtx, off = k * Math.min(W, H) * 0.012;
+    for (const [col, dir] of [["#FF3355", -1], ["#22E6FF", 1]] as [string, number][]) {
+      s.setTransform(1, 0, 0, 1, 0, 0); s.globalAlpha = 1; s.globalCompositeOperation = "copy"; s.drawImage(cv, 0, 0, w, h);
+      s.globalCompositeOperation = "multiply"; s.fillStyle = col; s.fillRect(0, 0, w, h);
+      screen.globalCompositeOperation = "screen"; screen.globalAlpha = Math.min(0.5, 0.32 * k); screen.drawImage(soft, dir * off, 0, W, H);
+    }
+    s.globalCompositeOperation = "source-over"; screen.globalCompositeOperation = "source-over"; screen.globalAlpha = 1;
+  };
+  // fasce dell'immagine che scivolano di lato (il segnale "salta" sul colpo)
+  const glitch = (k: number, seed: number) => {
+    const rnd = mulberry(seed * 977 + 13), cw = cv.width, ch = cv.height;
+    screen.setTransform(1, 0, 0, 1, 0, 0);
+    for (let i = 0; i < 7; i++) {
+      const y = Math.floor(rnd() * (ch - 1)), h = Math.min(ch - y, Math.max(2, Math.floor((2 + rnd() * rnd() * 46) * dpr))), dx = Math.round((rnd() - 0.5) * 70 * k * dpr);
+      screen.drawImage(cv, 0, y, cw, h, dx, y, cw, h);
+    }
+    screen.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+
   const once = (key: string, t: number, at0: number, fn: () => void) => { if (t >= at0 && lastT < at0 + 0.25 && !fired.has(key)) { fired.add(key); fn(); } };
   const events = (c: Cam, t: number) => {
     once("hit", t, M.hit, () => { rings.push({ x: BTN.x, y: PH, z: 0, t0: M.hit, r: 13, amber: true }); if (proj(c, BTN.x, PH + 0.8, 0, pa)) burst(pa[0], pa[1], low ? 30 : 60, true, 1.2); });
     [M.s1, M.s2, M.s3].forEach((s, i) => once("s" + i, t, s + 0.15, () => {
       const P = STATIONS[i]; rings.push({ x: P.x, y: 0, z: P.z, t0: s + 0.15, r: 12, amber: i === 2 });
-      if (i === 2 && proj(c, P.x, 3.5, P.z, pa)) burst(pa[0], pa[1], low ? 24 : 48, true, 0.9);
+      if (proj(c, P.x, 3.5, P.z, pa)) burst(pa[0], pa[1], i === 2 ? (low ? 24 : 48) : low ? 10 : 22, i === 2, i === 2 ? 0.9 : 0.6);
     }));
     once("drop", t, M.drop, () => { rings.push({ x: 0, y: 0, z: HZ - 4, t0: M.drop, r: 60, amber: false }); burst(W / 2, H * 0.42, low ? 60 : 120, false, 1.6); });
     [M.k1, M.k2, M.k3].forEach((k, i) => once("k" + i, t, k, () => {
@@ -797,11 +944,23 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
     if (t < 0) { const b = breathe(), v = gateCam.slice(); v[4] += b[0]; v[5] += b[1]; v[3] *= b[2]; return v; }
     const A = t < M.drop, tr = A ? camA : camB, v = tr(t);
     if (t < 0.7) { const b = breathe(), k = 1 - easeOut(t / 0.7); v[4] += b[0] * k; v[5] += b[1] * k; v[3] *= 1 + (b[2] - 1) * k; }
+    // in curva la camera si inclina dalla parte della virata, come un drone (più si gira veloce, più si piega)
     const lo = A ? 0 : M.drop, hi = A ? M.drop - 0.001 : 99;
     const vy = (tr(Math.min(hi, t + 0.05))[4] - tr(Math.max(lo, t - 0.05))[4]) / 0.1;
-    v[6] += Math.max(-1.8, Math.min(1.8, -vy * 0.022));
-    if (!A) { const kick = [M.drop, M.k1, M.k2, M.k3].reduce((m, k) => Math.max(m, impulse(t, k)), 0); v[3] *= 1 - 0.04 * kick; }
+    v[6] += Math.max(-3.2, Math.min(3.2, -vy * 0.03));
+    if (!A) { const kick = [M.drop, M.k1, M.k2, M.k3].reduce((m, k) => Math.max(m, impulse(t, k)), 0); v[3] *= 1 - 0.045 * kick; v[7] *= 1 + 0.03 * kick; }
     return v;
+  };
+  // la mano dell'operatore e le scosse sui colpi: si aggiungono dopo l'inerzia, che altrimenti le smorzerebbe.
+  // Restituisce lo spostamento dell'immagine (in pixel) per la scossa
+  const handheld = (v: number[], t: number, energy: number) => {
+    const k = 1 + energy * 0.8 + (t >= M.drop ? 0.35 : 0);
+    v[4] += wander(t, 1.7) * 0.34 * k; v[5] += wander(t * 0.9, 4.1) * 0.24 * k; v[6] += wander(t * 1.1, 7.3) * 0.42 * k;
+    v[3] *= 1 + wander(t * 0.7, 2.2) * 0.007;
+    let sh = 0;
+    for (const [b, a] of SHAKES) { const age = t - b; if (age >= 0 && age < 0.55) sh += a * Math.exp(-age * 9) * Math.sin(age * 71); }
+    v[4] += sh * 0.8; v[5] += sh * 0.55; v[6] += sh * 1.2;
+    return [sh * 6, -sh * 4.5];
   };
 
   const draw = (t: number) => {
@@ -832,7 +991,17 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
     const energy = t < M.drop ? riser * riser : 0.35 + kick * 0.65;
     const converge = t < M.drop && t > M.rise ? Math.pow(riser, 1.6) : 0;
     flow += dt * (1 + energy * 1.6 + converge * 5);
-    const v = view(t), c = (cam = camera(v, W, H, F, 0, 0));
+    // i battiti ancora "vivi" (le lettere ci ballano sopra) e quanto batte adesso (per la vignetta)
+    beatsNow = t < 0 || o.calm ? [] : HITS.filter((b) => b[0] <= t && b[0] > t - 1.3);
+    beatNow = beatsNow.reduce((m, b) => Math.max(m, Math.min(1, b[1]) * Math.exp(-(t - b[0]) * 7)), 0);
+    let v = view(t), shift = [0, 0];
+    if (!o.calm && t >= 0) {
+      // l'inerzia della camera riparte dal bersaglio all'inizio del film e sul taglio del drop
+      v = lastT < 0 || (lastT < M.drop) !== (t < M.drop) ? rig.reset(v) : rig.step(v, t - lastT);
+      shift = handheld(v, t, energy);
+    }
+    prevCam = t >= 0 && lastT >= 0 ? cam : null;
+    const c = (cam = camera(v, W, H, F, shift[0], shift[1]));
     focus = Math.max(NEAR, c.dist);
     aperture = o.calm ? 0 : (low ? 0.6 : 1) * Math.min(1.2, Math.min(W, H) / 750) * (t < 0 ? 0.75 : 1 - riser * 0.7);
     fogN = c.dist * 1.1; fogF = c.dist * 1.1 + (portrait ? 70 : 95);
@@ -906,11 +1075,31 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
       ctx = screen; dpr = nativeDpr;
     }
     vis.filter((L) => L.scene === 4).forEach((L) => drawMirror(c, L, t, null));
+    const flash = o.calm ? 0 : t >= M.drop ? Math.exp(-(t - M.drop) * 7) * 0.95 : riser > 0.9 ? (riser - 0.9) * 6 : 0;
+    const dustK = t < 0 ? 0 : amb * (1 - Math.min(1, flash * 1.4)) * (t >= M.out ? clamp01(1 - (t - M.out) / 0.8) : 1);
+    drawDust(c, t, true, dustK);
     vis.map((L) => ({ L, d: depth(L.x, L.y, L.z) })).filter((x) => x.d > NEAR).sort((a, b) => b.d - a.d).forEach(({ L, d }) => {
       const blur = labelBlur(d);
       if (blur) { beginLayer(); dpr = layerDpr; drawLabel(c, L, t); composite(blur, nativeDpr); ctx = screen; dpr = nativeDpr; }
       else drawLabel(c, L, t);
     });
+    drawDust(c, t, false, dustK);
+    // scia nei movimenti veloci: il fotogramma precedente resta un istante sopra il nuovo, come l'otturatore aperto
+    // di una cinepresa. Più la camera gira o scivola rispetto a ciò che guarda, più la scia è lunga
+    if (!low && !o.calm && t >= 0) {
+      let smear = 0;
+      const gap = t - lastT; // tempo vero tra i due fotogrammi (dt è limitato)
+      if (prevCam && gap > 0 && gap < 0.05) {
+        const turn = Math.acos(Math.min(1, c.f[0] * prevCam.f[0] + c.f[1] * prevCam.f[1] + c.f[2] * prevCam.f[2]));
+        const slide = Math.hypot(c.p[0] - prevCam.p[0], c.p[1] - prevCam.p[1], c.p[2] - prevCam.p[2]) / Math.max(2, c.dist);
+        // quanto si sposta l'immagine in questo fotogramma: oltre qualche decina di pixel la copia si vedrebbe staccata,
+        // non mossa (fotogrammi lenti), e la scia si spegne
+        const jump = (turn + slide * 0.5) * c.F;
+        smear = clamp01(((turn + slide * 0.5) / gap - 0.9) * 0.3) * 0.44 * clamp01(1 - (jump - 28) / 50);
+      }
+      if (smear > 0.02 && trailOk) { g.globalAlpha = smear; g.drawImage(trail, 0, 0, W, H); g.globalAlpha = 1; }
+      trailCtx.setTransform(1, 0, 0, 1, 0, 0); trailCtx.globalCompositeOperation = "copy"; trailCtx.drawImage(cv, 0, 0, trail.width, trail.height); trailOk = true;
+    }
 
     // linee di velocità nel tuffo
     if (!o.calm && riser > 0.35 && t < M.drop && proj(c, BTN.x, PH, 0, pa)) {
@@ -933,12 +1122,34 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
       }
       g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
     }
+    if (!o.calm) {
+      if (t >= 0) leaks(t);
+      // riflessi della lente sulle luci forti: il LED al buio, il nodo ambra del logo, le stazioni che si accendono, il drop
+      if (t < 0) { if (proj(c, BTN.x, PH + 0.6, BTN.z, pa)) flare(pa[0], pa[1], 0.14 + gate.hover * 0.22 + (gate.pressAt ? 0.3 : 0), true); }
+      else {
+        if (logoA > 0 && proj(c, 3.83, PH + 0.9, -3.2, pa)) flare(pa[0], pa[1], logoA * amb * (0.16 + energy * 0.3 + Math.max(0, 1 - Math.abs(t - M.chime) * 2.5) * 0.9 + Math.max(0, 1 - Math.abs(t - M.drop) * 3)), true);
+        if (t < M.drop) [M.s1, M.s2, M.s3].forEach((s, i) => {
+          const age = t - s - 0.1, P = STATIONS[i];
+          if (age > 0 && age < 1.6 && proj(c, P.x, (portrait ? 2.1 : 1.5) + 0.3, P.z - 1.8, pa)) flare(pa[0], pa[1], 0.95 * Math.exp(-age * 2.4), i === 2);
+        });
+        else {
+          const hl = labels.find((L) => L.scene === 4 && L.kind === "slam" && L.flash.length);
+          if (hl && proj(c, hl.x, hl.y + hl.asc * 0.5, hl.z - 0.5, pa)) flare(pa[0], pa[1], 1.3 * Math.exp(-(t - M.drop) * 2.6) + [M.k1, M.k2, M.k3].reduce((m, k) => Math.max(m, t >= k ? 0.7 * Math.exp(-(t - k) * 4) : 0), 0), false);
+        }
+      }
+    }
     // lampi: l'accensione (caldo, dal pulsante) e il drop (bianco, preparato dal bianco che sale alla fine del tuffo)
-    const flash = o.calm ? 0 : t >= M.drop ? Math.exp(-(t - M.drop) * 7) * 0.95 : riser > 0.9 ? (riser - 0.9) * 6 : 0;
     if (flash > 0.01) { g.globalAlpha = Math.min(1, flash); g.fillStyle = "#E9FFFB"; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
     if (!o.calm && t >= M.hit && t < M.hit + 0.7 && proj(c, BTN.x, PH + 0.6, 0, pa)) {
       const k = (t - M.hit) / 0.7, s = 40 + k * Math.max(W, H) * 1.6;
       g.globalCompositeOperation = "lighter"; g.globalAlpha = (1 - k) * (1 - k) * 0.9; g.drawImage(DOT_A, pa[0] - s / 2, pa[1] - s / 2, s, s); g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
+    }
+    // l'urto dei colpi: rosso e ciano si separano un istante; sul drop l'immagine salta per qualche fotogramma
+    if (!o.calm && !low && t >= 0) {
+      const hit = Math.max(t >= M.drop ? Math.exp(-(t - M.drop) * 8) : riser > 0.8 ? (riser - 0.8) * 2.5 : 0, ...[M.k1, M.k2, M.k3].map((k) => (t >= k ? 0.75 * Math.exp(-(t - k) * 10) : 0)), t >= M.hit ? 0.6 * Math.exp(-(t - M.hit) * 8) : 0);
+      if (hit > 0.05) chroma(hit);
+      if (t >= M.drop && t < M.drop + 0.2) glitch(1 - (t - M.drop) / 0.2, Math.floor(t * 30));
+      else if (t >= M.k3 && t < M.k3 + 0.1) glitch(0.5, Math.floor(t * 30) + 7);
     }
     lastT = t;
   };
@@ -953,6 +1164,8 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
       return proj(cam, BTN.x + BTN.rb, PH + 0.5, BTN.z, pb) ? { x, y, r: Math.max(30, Math.hypot(pb[0] - x, pb[1] - y)) } : null;
     },
     gate: (s) => { if (s.hover != null) gate.hoverOn = s.hover; if (s.press && !gate.pressAt) gate.pressAt = performance.now(); },
-    dispose: () => { labels = []; board.traces.length = 0; parts.length = rings.length = 0; layer.width = layer.height = soft.width = soft.height = cv.width = cv.height = 1; },
+    beat: () => beatNow,
+    pose: () => (cam ? { p: cam.p.slice(), f: cam.f.slice(), dist: cam.dist } : null),
+    dispose: () => { labels = []; board.traces.length = 0; parts.length = rings.length = 0; layer.width = layer.height = soft.width = soft.height = trail.width = trail.height = cv.width = cv.height = 1; },
   };
 }
