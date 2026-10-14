@@ -899,8 +899,8 @@ export function createFilm(cv: HTMLCanvasElement, o: FilmOpts): Film {
       ll.forEach((L) => floorSprite(c, POOL[L.c], L.x, 0.01, L.z, L.r * 1.6, L.i * 0.42));
       ctx.globalCompositeOperation = "source-over";
       if (t >= 0) drawComets(c, t, energy, converge, tracePlanes[band]);
-      ss.forEach((s) => s.f());
       rr.forEach((r) => { const k = (t - r.t0) / 1.1; if (k >= 0) ringDraw(c, r.x, r.y, r.z, r.r * easeOut(k), (1 - k) * 0.5, r.amber); });
+      ss.forEach((s) => s.f());
       beams.forEach((L) => drawBeam(c, L, t));
       if (blur) composite(blur, nativeDpr);
       ctx = screen; dpr = nativeDpr;
