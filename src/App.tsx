@@ -24,7 +24,7 @@ import * as sound from "./sound";
 // il logo 3D (WebGPU) si carica a parte, solo quando serve e solo se il browser supporta WebGPU: il resto del sito non lo scarica
 import Logo3D from "./LogoView";
 // il podio del mese in 3D (WebGPU, con illuminazione globale) si scarica solo quando serve
-import PodiumStage from "./PodiumStage";
+import { PodiumScene, PodiumSlot, hasWebGPU } from "./PodiumStage";
 // easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login → caricamento → gioco
 import EggPortal from "./EggPortal";
 // presentazione del primo accesso (film + tour guidato): si scarica solo per chi deve vederla
@@ -1072,6 +1072,7 @@ export default function App() {
   const [editProf, setEditProf] = useState(false);
   const [pf, setPf] = useState<any>({});
   const [viewProf, setViewProf] = useState<string | null>(null);
+  const [podiumFail, setPodiumFail] = useState(false); // WebGPU non è partito: il podio torna quello semplice
   const [showPw, setShowPw] = useState(false);
   const [toast, setToast] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -2231,6 +2232,16 @@ export default function App() {
   const mItems = items.filter((t) => mKey(t.timestamp) === month);
   const ranked = mItems.filter((t) => t.rating > 0 || t.isStarred).sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.isStarred ? 1 : 0) - (a.isStarred ? 1 : 0) || a.timestamp - b.timestamp);
   const top = ranked.slice(0, 3), rest = ranked.slice(3);
+  // il podio in 3D (WebGPU) a tutto schermo; altrimenti quello semplice
+  const podium3d = !G.nomotion && !lite && !podiumFail && hasWebGPU() && !loading && ranked.length > 0;
+  const podiumPlates = [0, 1, 2].map((k) => { const t = top[k]; if (!t) return null;
+            return (
+              <div data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className="pdm-card">
+                <div className="flex items-center justify-between gap-2"><span className="pdm-rank">{k + 1}° posto</span><Stars v={t.rating || 0} size={13} /></div>
+                <div className="hd font-bold leading-snug mt-1 line-clamp-2">{t.title}</div>
+                <div className="pdm-who flex items-center gap-2 mt-1.5 min-w-0">{who(t, 18)}<span className="mu text-xs truncate">{wn(t)}</span></div>
+              </div>
+            ); });
   const shiftM = (d: number) => { const [y, m] = month.split("-").map(Number); setMonth(mKey(new Date(y, m - 1 + d, 1).getTime())); };
   const podioView = (
     <div>
@@ -2252,7 +2263,7 @@ export default function App() {
             <p className="mu text-sm mb-5">Dai un voto da 1 a 5 stelle agli scritti: i più votati salgono qui sul podio.</p>
             <button className="bt pri" onClick={() => { setTab("read"); setMonthFilter(month); }}>Apri gli scritti del mese</button></div>
         ) : (<>
-          <PodiumStage enabled={!G.nomotion && !lite} dark={dark} fallback={<>
+          {podium3d ? <PodiumSlot /> : <>
           <div className="grid md:grid-cols-3 gap-5 items-end">
             {[1, 0, 2].map((k) => { const t = top[k]; if (!t) return <div key={k} className="hidden md:block" />;
               return (
@@ -2269,14 +2280,7 @@ export default function App() {
                 </Reveal>
               ); })}
           </div>
-          </>} plates={[0, 1, 2].map((k) => { const t = top[k]; if (!t) return null;
-            return (
-              <div data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className="pdm-card">
-                <div className="flex items-center justify-between gap-2"><span className="pdm-rank">{k + 1}° posto</span><Stars v={t.rating || 0} size={13} /></div>
-                <div className="hd font-bold leading-snug mt-1 line-clamp-2">{t.title}</div>
-                <div className="pdm-who flex items-center gap-2 mt-1.5 min-w-0">{who(t, 18)}<span className="mu text-xs truncate">{wn(t)}</span></div>
-              </div>
-            ); })} />
+          </>}
           {rest.length > 0 && <Reveal className="mt-8"><div className="pn p-2"><h3 className="hd text-lg font-bold px-4 pt-4 pb-2">In lizza</h3>{rest.map((t, i) => row(t, i, i + 4))}</div></Reveal>}
         </>)}
     </div>
@@ -2310,6 +2314,7 @@ export default function App() {
   return shell(
     <>
       <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
+      {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} onFail={() => setPodiumFail(true)} />}
       {/* sidebar desktop */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col p-5 gap-1 pn !rounded-none !border-y-0 !border-l-0 z-20">
         <div className="flex items-center gap-2.5 mb-8 cursor-pointer select-none" title="Il Circuito">

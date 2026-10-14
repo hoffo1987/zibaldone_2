@@ -1,22 +1,17 @@
-import React, { useState } from "react";
+import React from "react";
 
-// Il podio del mese in 3D (WebGPU) dove si può; altrimenti, o se WebGPU non si avvia, il podio semplice di sempre.
-// Il modulo 3D si scarica solo quando serve.
+// Il podio del mese in 3D (WebGPU) a tutto schermo; il modulo si scarica solo quando serve.
 const Podium3D = React.lazy(() => import("./podium/Podium3D"));
-const hasWebGPU = () => typeof navigator !== "undefined" && "gpu" in navigator && !!(navigator as any).gpu;
-class Boundary extends React.Component<{ fallback: React.ReactNode; children: React.ReactNode }, { failed: boolean }> {
+export const hasWebGPU = () => typeof navigator !== "undefined" && "gpu" in navigator && !!(navigator as any).gpu;
+class Boundary extends React.Component<{ onError: () => void; children: React.ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
-  render() { return this.state.failed ? this.props.fallback : this.props.children; }
+  componentDidCatch() { this.props.onError(); }
+  render() { return this.state.failed ? null : this.props.children; }
 }
-export default function PodiumStage({ enabled, dark, plates, fallback }: { enabled: boolean; dark: boolean; plates: (React.ReactNode | null)[]; fallback: React.ReactNode }) {
-  const [failed, setFailed] = useState(false);
-  if (!enabled || failed || !hasWebGPU()) return <>{fallback}</>;
-  return (
-    <Boundary fallback={fallback}>
-      <React.Suspense fallback={<div className="podium3d"><div className="podium3d-bg" /></div>}>
-        <Podium3D dark={dark} plates={plates} onFail={() => setFailed(true)} />
-      </React.Suspense>
-    </Boundary>
-  );
+// la scena (sta nella radice dell'app, fuori dal contenitore della pagina): se WebGPU non parte chiama onFail
+export function PodiumScene({ dark, plates, onFail }: { dark: boolean; plates: (React.ReactNode | null)[]; onFail: () => void }) {
+  return <Boundary onError={onFail}><React.Suspense fallback={null}><Podium3D dark={dark} plates={plates} onFail={onFail} /></React.Suspense></Boundary>;
 }
+// lo spazio lasciato libero nella pagina, dove la camera inquadra il podio
+export const PodiumSlot = () => <div id="podium-slot" className="podium-slot" aria-hidden="true" />;

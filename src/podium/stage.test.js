@@ -1,41 +1,46 @@
-import { STEPS, WINDOW, ROOM, camera, project, celestial, moodAt, DAY, NIGHT } from "./stage";
-import { giShader, volShader, mainShader, GI_PROBES } from "./shaders";
+import { WINDOW, ROOM, STEP_X, STEP_TOP, STEP_D, TROPHY_TOP, CARPET, camera, project, celestial, moodAt, DAY, NIGHT } from "./stage";
+import { shadowShader, giShader, volShader, mainShader, presentShader, GI_PROBES } from "./shaders";
 
-test("sun and moon always shine through the window onto the podium, from above", () => {
+// dentro il vano del finestrone (rettangolo con l'arco in cima), lontano dal telaio
+const inWindow = (x, y) => (y > WINDOW.ya ? Math.hypot(x, y - WINDOW.ya) < WINDOW.r - WINDOW.frame : Math.abs(x) < WINDOW.r - WINDOW.frame && y > WINDOW.y0 + WINDOW.frame);
+const toWindow = (p, L) => { const k = (ROOM.back - p[2]) / L[2]; return [p[0] + L[0] * k, p[1] + L[1] * k]; };
+
+test("sun and moon are always visible through the arched window and light the trophies and the carpet", () => {
+  const cam = camera(1440, 900, 240, 230);
   for (const night of [false, true]) {
-    for (let t = 0; t < 600; t += 3.7) {
+    for (let t = 0; t < 900; t += 4.3) {
       const L = celestial(t, night);
       expect(Math.hypot(...L)).toBeCloseTo(1, 6);
-      expect(L[2]).toBeLessThan(0); // dietro la parete di fondo
+      expect(L[2]).toBeLessThan(0);
       expect(L[1]).toBeGreaterThan(0.25); // dall'alto
-      // dal centro della cima del primo gradino, verso l'astro, si passa dal vetro
-      const top = [STEPS[0].c[0], STEPS[0].c[1] + STEPS[0].h[1], STEPS[0].c[2]], k = (ROOM.back - top[2]) / L[2];
-      const x = top[0] + L[0] * k, y = top[1] + L[1] * k;
-      expect(x).toBeGreaterThan(WINDOW.x0); expect(x).toBeLessThan(WINDOW.x1);
-      expect(y).toBeGreaterThan(WINDOW.y0); expect(y).toBeLessThan(WINDOW.y1);
+      expect(inWindow(...toWindow(cam.pos, L))).toBe(true); // l'astro si vede nel vetro
+      STEP_X.forEach((x, i) => expect(inWindow(...toWindow([x, TROPHY_TOP[i], -0.15], L))).toBe(true));
+      expect(inWindow(...toWindow([0, 0, CARPET.z0 + 2], L))).toBe(true); // i fasci arrivano sul tappeto
     }
   }
 });
 
-test("the camera frames the whole podium and projects the plates onto the step tops", () => {
-  for (const [w, h] of [[1000, 620], [390, 420]]) {
-    const c = camera(w / h);
-    for (const s of STEPS) for (const sx of [-1, 1]) {
-      const p = project(c, [s.c[0] + sx * s.h[0], 0, s.c[2] + s.h[2]], w, h);
-      expect(p).not.toBeNull();
-      expect(p.x).toBeGreaterThan(0); expect(p.x).toBeLessThan(w);
-      expect(p.y).toBeGreaterThan(0); expect(p.y).toBeLessThan(h);
-    }
-    // il primo gradino è il più alto anche sullo schermo, e sta al centro
-    const tops = STEPS.map((s) => project(c, [s.c[0], s.c[1] + s.h[1], s.c[2] + s.h[2]], w, h));
+test("the camera frames the podium inside the free area of the page, on desktop and on phones", () => {
+  for (const [w, h, left, top] of [[1440, 900, 240, 230], [1920, 1080, 240, 230], [390, 844, 0, 150]]) {
+    const c = camera(w, h, left, top);
+    STEP_X.forEach((x, i) => {
+      for (const sx of [-1.1, 1.1]) {
+        const p = project(c, [x + sx, 0.36, STEP_D]);
+        expect(p.x).toBeGreaterThan(left); expect(p.x).toBeLessThan(w);
+        expect(p.y).toBeGreaterThan(top); expect(p.y).toBeLessThan(h);
+      }
+      expect(project(c, [x, TROPHY_TOP[i] + 0.22, -0.15]).y).toBeGreaterThan(top);
+    });
+    const tops = STEP_X.map((x, i) => project(c, [x, STEP_TOP[i], STEP_D]));
     expect(tops[0].y).toBeLessThan(tops[1].y); expect(tops[1].y).toBeLessThan(tops[2].y);
-    expect(Math.abs(tops[0].x - w / 2)).toBeLessThan(2);
+    expect(Math.abs(tops[0].x - (left + (w - left) / 2))).toBeLessThan(2); // al centro dell'area dei contenuti
   }
 });
 
 test("day and night blend smoothly and the shaders embed the scene", () => {
   expect(moodAt(0).sunI).toBeCloseTo(DAY.sunI, 9); expect(moodAt(1).sunI).toBeCloseTo(NIGHT.sunI, 9);
   expect(moodAt(0.5).sun[2]).toBeCloseTo((DAY.sun[2] + NIGHT.sun[2]) / 2, 6);
-  for (const src of [giShader, volShader, mainShader]) { expect(src).toContain("fn trace("); expect(src).not.toMatch(/NaN|undefined/); }
+  for (const src of [shadowShader, giShader, volShader, mainShader]) { expect(src).toContain("fn trace("); expect(src).not.toMatch(/NaN|undefined/); }
+  expect(presentShader).toContain("fsPresent");
   expect(giShader).toContain(`${GI_PROBES * 6}u`);
 });
