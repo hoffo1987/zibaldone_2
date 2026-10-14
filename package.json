@@ -30,6 +30,7 @@
     "sprites:cloud": "node scripts/build-cloud-atlas.cjs",
     "sprites:tweens": "python3 scripts/tween-cloud.py",
     "preview:egg": "node scripts/preview-egg.cjs",
+    "preview:tour": "node scripts/preview-tour.cjs",
     "audio:build": "node scripts/build-audio.cjs",
     "typecheck:egg": "tsc --project scripts/tsconfig.egg.json",
     "typecheck": "tsc --noEmit",
