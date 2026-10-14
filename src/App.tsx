@@ -10,7 +10,7 @@ import {
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal, Sparkles
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal, Clapperboard, Compass
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
@@ -1047,8 +1047,9 @@ export default function App() {
   const baseOn = (p: string) => setOpts((o: any) => ({ ...o, level: "custom", c: { ...CBASE[p] } }));
   const buzz = (p: number | number[]) => { if (!opts.vibrate) return; const k = opts.vib || 1; navigator.vibrate?.(Array.isArray(p) ? p.map((x, i) => (i % 2 ? x : Math.round(x * k))) : Math.round(p * k)); };
   const [tab, setTab] = useState("home");
-  // presentazione del primo accesso: una volta per account su questo dispositivo; dalle Opzioni si può rivedere
-  const [tour, setTour] = useState<"" | "auto" | "replay">("");
+  // presentazione del primo accesso (film + tour guidato): una volta per account su questo dispositivo;
+  // dalle Opzioni si rivedono il solo filmato ("film") o il solo tour ("guide")
+  const [tour, setTour] = useState<"" | "auto" | "film" | "guide">("");
   const [tourHold, setTourHold] = useState(false);
   const [month, setMonth] = useState(() => mKey(Date.now()));
   const [monthFilter, setMonthFilter] = useState("all");
@@ -1822,7 +1823,7 @@ export default function App() {
   const holdTour = (on: boolean) => { setTourHold(on); holdLoops(on); };
   // il tour cambia sezione senza riempire la cronologia: alla fine il tasto Indietro non ripercorre i passi
   const tourNav = (t: string) => { history.replaceState({ tab: t }, ""); setSel(null); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
-  const endTour = (to?: string) => { if (user) tourMark(user.uid); holdTour(false); setTour(""); if (to) go(to); else tourNav("home"); };
+  const endTour = (to?: string) => { if (user) tourMark(user.uid); holdTour(false); const m = tour; setTour(""); if (to) go(to); else if (m !== "film") tourNav("home"); };
   const tourLow = (navigator.hardwareConcurrency || 8) <= 4 || ((navigator as any).deviceMemory || 8) <= 3;
 
   const prepared = useMemo(() => items.map((t) => {
@@ -1976,7 +1977,10 @@ export default function App() {
             {sfxOn && <Rng label="Volume degli effetti" hint="La musica di sottofondo si abbassa da sola quando parla un effetto lungo" v={opts.sfxVol ?? 1} set={(v: number) => { setOpt("sfxVol", v); sound.configure(true, v); sound.play("klick"); }} min={0.05} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
             <Sw on={opts.vibrate} set={(v: boolean) => setOpt("vibrate", v)} label="Vibrazione" hint="Feedback tattile su segnalibro e voti" />
             {opts.vibrate && <div className="py-2"><span className="block text-xs font-semibold mb-1.5">Forza della vibrazione</span><Seg v={opts.vib ?? 1} set={(v: number) => setOpt("vib", v)} items={[[0.6, "Leggera"], [1, "Normale"], [1.6, "Forte"]]} /></div>}
-            {user && <button type="button" className="bt w-full mt-3" onClick={() => { setOptOpen(false); setTour("replay"); }}><Sparkles size={15} />Rivedi la presentazione</button>}
+            {user && <div className="grid grid-cols-2 gap-2 mt-3">
+              <button type="button" className="bt" onClick={() => { setOptOpen(false); setTour("film"); }}><Clapperboard size={15} />Rivedi il filmato</button>
+              <button type="button" className="bt" onClick={() => { setOptOpen(false); setTour("guide"); }}><Compass size={15} />Rivedi il tour</button>
+            </div>}
             {isOwner && <AccessoProf db={db} notify={notify} />}
             <div className="flex gap-2 mt-5">
               <button className="bt flex-1" onClick={() => setOpts({ ...DEF })}><RotateCcw size={15} />Ripristina</button>
@@ -2637,8 +2641,8 @@ export default function App() {
 
       {/* presentazione: il velo scuro copre il sito finché il film non è pronto, così la home non lampeggia prima */}
       {(tour || wantTour) && (tour
-        ? <React.Suspense fallback={<div className="fixed inset-0 z-[110]" style={{ background: "#03110F" }} />}><Tour key={tour} admin={isAdmin} name={tourName} calm={!!G.nomotion} low={tourLow} nav={tourNav} hold={holdTour} onDone={endTour} /></React.Suspense>
-        : <div className="fixed inset-0 z-[110]" style={{ background: "#03110F" }} />)}
+        ? <React.Suspense fallback={tour === "guide" ? null : <div className="fixed inset-0 z-[110]" style={{ background: "#000302" }} />}><Tour key={tour} mode={tour} admin={isAdmin} name={tourName} calm={!!G.nomotion} low={tourLow} nav={tourNav} hold={holdTour} onDone={endTour} /></React.Suspense>
+        : <div className="fixed inset-0 z-[110]" style={{ background: "#000302" }} />)}
     </>
   );
 }

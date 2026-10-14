@@ -53,15 +53,17 @@ suono di navigazione invertendo i due click. Gli originali non vengono modificat
 
 ## Presentazione del primo accesso
 
-Al primo accesso parte un film di 15 secondi a tempo col jingle: il Circuito si accende, il titolo si alza dalla scheda,
-la camera passa per le stazioni (Scrivi, Conserva, Emergi; per chi valuta: Leggi, Vota, Premia), poi il drop con il
-saluto. Il film è disegnato su un solo canvas (`src/tour/film.ts`), senza WebGL, e si alleggerisce da solo se il
+Al primo accesso lo schermo è buio: c'è solo un pulsante 3D acceso dal suo LED. Premuto, la luce si propaga sulla scheda
+e parte un film di 15 secondi a tempo col jingle: dall'alto si vede l'icona del sito come una targa smaltata con la C in
+rilievo, il titolo si alza dalla targa, la camera vola radente tra le stazioni (Scrivi, Conserva, Emergi; per chi valuta:
+Leggi, Vota, Premia), ognuna una parola in piedi su un chip con la spiegazione incisa sul fronte, poi il tuffo nel logo e
+il drop con il saluto. Pozze e fasci di luce, riflessi sulle superfici lucide. Il film è disegnato su un solo canvas (`src/tour/film.ts`), senza WebGL, e si alleggerisce da solo se il
 dispositivo arranca; con il movimento ridotto la camera resta ferma e le scritte si danno il cambio in dissolvenza.
 Alla fine un nodo ambra vola sul primo elemento del sito e parte il tour guidato, che porta sezione per sezione sugli
 elementi veri (`src/tour/Tour.tsx`). Si può saltare in qualunque momento (anche con Esc) e togliere l'audio.
 
 Viene mostrata una volta per account su ogni dispositivo (`localStorage`, chiave `circuito:tour:<uid>`) e si può rivedere
-da **Opzioni → Rivedi la presentazione**. Il codice della presentazione e il jingle si scaricano solo per chi deve vederla.
+dalle Opzioni: **Rivedi il filmato** (solo il film) e **Rivedi il tour** (solo il tour guidato). Il codice della presentazione e il jingle si scaricano solo per chi deve vederla.
 
 ## Pulsante "Scarica l'app Android"
 
