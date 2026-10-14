@@ -68,8 +68,8 @@ export function camera(w: number, h: number, left = 0, top = 0): Cam {
   const tan = Math.tan((22 * Math.PI) / 180);
   // la parte utile è larga circa 11 m al podio: su schermi stretti la camera arretra e sale un poco
   const narrow = Math.max(0, 1.5 - aspect);
-  const pos = [0, 2.9 + narrow * 0.9, 13.0 + narrow * 10];
-  const target = [0, 3.0 + narrow * 0.4, ROOM.back];
+  const pos = [0, 2.75 + narrow * 0.9, 10.2 + narrow * 10];
+  const target = [0, 2.6 + narrow * 0.4, ROOM.back];
   const fwd = norm([target[0] - pos[0], target[1] - pos[1], target[2] - pos[2]]);
   const right = norm(cross(fwd, [0, 1, 0])), up = cross(right, fwd);
   // campo visivo riferito all'area utile; centro ottico nel suo mezzo

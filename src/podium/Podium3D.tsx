@@ -63,7 +63,7 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
         const tp = project(c, [x, TROPHY_TOP[i] + 0.22, -0.15]), a = project(c, [x - 1.1, STEP_TOP[i], STEP_D]), b = project(c, [x + 1.1, STEP_TOP[i], STEP_D]);
         const f = project(c, [x, STEP_TOP[i] - STEP_H[i] * 0.5 + 0.08, STEP_D + 0.01]);
         const p = plateEls.current[i], n = numEls.current[i];
-        if (p && tp && a && b) { p.style.width = `${Math.max(mobile ? 96 : 150, (b.x - a.x) * k * 1.04)}px`; p.style.transform = `translate(${tp.x * k}px, ${tp.y * k}px) translate(-50%, -100%)`; }
+        if (p && tp && a && b) { p.style.width = `${Math.max(mobile ? 90 : 130, (b.x - a.x) * k * 0.94)}px`; p.style.transform = `translate(${tp.x * k}px, ${tp.y * k}px) translate(-50%, -100%)`; }
         if (n && f) { n.style.transform = `translate(${f.x * k}px, ${f.y * k}px) translate(-50%, -50%)`; n.style.fontSize = `${Math.max(16, f.scale * k * STEP_H[i] * 0.62)}px`; }
       });
     };
