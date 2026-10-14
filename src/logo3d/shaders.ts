@@ -2,8 +2,10 @@
 // trasparente "clearcoat", velluto Charlie, iridescenza a film sottile, luce ambientale con multiscattering), la stessa
 // mappatura tonale ACES e la stessa codifica sRGB per materiale: i colori si fondono sul canvas esattamente come prima.
 
+import { MAX_OBJ, MAX_SPRITE, MAX_PARTICLE, A0, PLATE_TOP } from "./anim";
+import { AO_EXTENT } from "./scene";
 // numeri massimi di elementi negli array uniform (le bozze per telefono ne usano meno)
-export const MAX_OBJ = 12, MAX_SPRITE = 24, MAX_PARTICLE = 80;
+export { MAX_OBJ, MAX_SPRITE, MAX_PARTICLE };
 // le istanze dopo questi valori appartengono alla seconda fase trasparente (davanti al filetto)
 export const OBJ_PHASE = 16, SPRITE_PHASE = 32, PARTICLE_PHASE = 128;
 // atlante dell'ambiente prefiltrato, con la disposizione "cubeUV" di PMREMGenerator (livello più nitido a 128 px)
@@ -72,6 +74,7 @@ struct Particles { p: array<Particle, ${MAX_PARTICLE}> };
 @group(0) @binding(3) var envSamp: sampler;
 @group(0) @binding(4) var glowTex: texture_2d<f32>;
 @group(0) @binding(5) var glowSamp: sampler;
+@group(0) @binding(6) var aoTex: texture_2d<f32>;
 
 fn pow2(x: f32) -> f32 { return x * x; }
 fn pow2v(x: vec3f) -> vec3f { return x * x; }
@@ -100,6 +103,7 @@ export const renderShader = /* wgsl */ `${common}${cubeUV}
 override SHEEN: bool = false;
 override IRID: bool = false;
 override TRANSPARENT: bool = false;
+override PLATE: bool = false;
 
 struct MeshOut {
   @builtin(position) pos: vec4f,
@@ -108,6 +112,7 @@ struct MeshOut {
   @location(2) aux: f32,
   @location(3) @interpolate(flat) obj: u32,
   @location(4) vcol: vec3f,
+  @location(5) lp: vec3f, // posizione nello spazio della targa (per l'occlusione d'ambiente)
 };
 
 fn mesh(p: vec3f, n: vec3f, aux: f32, ii: u32, vcol: vec3f) -> MeshOut {
@@ -118,6 +123,11 @@ fn mesh(p: vec3f, n: vec3f, aux: f32, ii: u32, vcol: vec3f) -> MeshOut {
   o.wpos = w.xyz;
   o.nrm = normalize((m * vec4f(n, 0.0)).xyz);
   o.aux = aux; o.obj = ii; o.vcol = vcol;
+  // la targa ha rotazione e scala uniforme: le coordinate locali sono proiezioni sui suoi assi
+  let pm = F.objs[0].model;
+  let rel = w.xyz - pm[3].xyz;
+  let s2 = dot(pm[0].xyz, pm[0].xyz);
+  o.lp = vec3f(dot(rel, pm[0].xyz), dot(rel, pm[1].xyz), dot(rel, pm[2].xyz)) / s2;
   return o;
 }
 @vertex fn vsMesh(@location(0) p: vec3f, @location(1) na: vec4f, @builtin(instance_index) ii: u32) -> MeshOut {
@@ -265,11 +275,35 @@ fn direct(L: vec3f, color: vec3f, N: vec3f, V: vec3f, m: Mat) -> Direct {
   return d;
 }
 
+// ---- occlusione d'ambiente (precalcolata sulla faccia della targa, di contatto sugli oggetti che la toccano) ----
+fn occlusion(in: MeshOut, N: vec3f, o: Obj) -> f32 {
+  if (PLATE) {
+    let lid = smoothstep(${(PLATE_TOP - 0.7).toFixed(2)}, ${(PLATE_TOP - 0.05).toFixed(2)}, in.lp.z); // faccia anteriore e inizio della smussatura
+    if (lid <= 0.0) { return 1.0; }
+    let s = textureSampleLevel(aoTex, envSamp, vec2f(in.lp.x, -in.lp.y) / ${(2 * AO_EXTENT).toFixed(1)} + 0.5, 0.0);
+    // durante l'entrata ogni ombra segue l'oggetto che la proietta (cur: crescita di C, pista, perle)
+    var ang = atan2(in.lp.y, in.lp.x);
+    if (ang < 0.0) { ang += 2.0 * PI; }
+    let tArc = (ang - ${A0.toFixed(7)}) / (2.0 * PI - ${(2 * A0).toFixed(7)});
+    let arcOn = saturate((o.cur.x - tArc) * 25.0 + 0.5);
+    let lineOn = saturate((o.cur.z - (in.lp.x + 1.0) / 16.0) * 25.0 + 0.5);
+    let occ = 0.8 * (s.r + s.g * arcOn + s.b * lineOn + s.a * o.cur.w);
+    return 1.0 - lid * min(occ, 0.85);
+  }
+  let k = o.irid.w;
+  if (k <= 0.0) { return 1.0; }
+  // parte bassa degli oggetti appoggiati sulla faccia: più scura vicino al contatto e dove la normale guarda la targa
+  let pn = normalize(F.objs[0].model[2].xyz);
+  let h = in.lp.z - ${PLATE_TOP.toFixed(2)};
+  return 1.0 - k * (1.0 - smoothstep(0.0, 2.6, h)) * saturate(0.6 - 0.8 * dot(N, pn));
+}
+
 @fragment fn fsPhysical(in: MeshOut) -> @location(0) vec4f {
   let N = normalize(in.nrm);
   let dxy = max(abs(dpdx(N)), abs(dpdy(N)));
   let geometryRoughness = max(max(dxy.x, dxy.y), dxy.z);
   let o = F.objs[in.obj];
+  let ao = occlusion(in, N, o);
   let V = normalize(F.camPos.xyz - in.wpos);
   let dotNV = saturate(dot(N, V));
 
@@ -323,13 +357,17 @@ fn direct(L: vec3f, color: vec3f, N: vec3f, V: vec3f, m: Mat) -> Direct {
   let multi = Fms * Ems;
   let cosineWeightedIrradiance = iblIrradiance * RECIPROCAL_PI;
   let diffuseIbl = m.diffuse * (1.0 - max3(FssEss + multi));
-  let indirectDiffuse = irradiance * RECIPROCAL_PI * m.diffuse + diffuseIbl * cosineWeightedIrradiance;
-  let indirectSpecular = radiance * FssEss + multi * cosineWeightedIrradiance;
+  // occlusione: piena sulla luce indiretta (riflessi compresi, con la formula di Lagarde), attenuata su quella diretta
+  // perché faccia da ombra morbida di contatto senza spegnere le superfici
+  let specAO = saturate(pow(dotNV + ao, exp2(-16.0 * m.roughness - 1.0)) - 1.0 + ao);
+  let directAO = mix(1.0, ao, 0.45);
+  let indirectDiffuse = (irradiance * RECIPROCAL_PI * m.diffuse + diffuseIbl * cosineWeightedIrradiance) * ao;
+  let indirectSpecular = (radiance * FssEss + multi * cosineWeightedIrradiance) * specAO;
 
-  var outgoing = (acc.diff + indirectDiffuse) + (acc.spec + indirectSpecular) + o.emissive.rgb;
-  if (SHEEN) { outgoing = outgoing * (1.0 - 0.157 * max3(m.sheenColor)) + acc.sheen + sheenIndirect; }
+  var outgoing = (acc.diff + acc.spec) * directAO + indirectDiffuse + indirectSpecular + o.emissive.rgb;
+  if (SHEEN) { outgoing = outgoing * (1.0 - 0.157 * max3(m.sheenColor)) + acc.sheen * directAO + sheenIndirect * ao; }
   let Fcc = F_Schlick(vec3f(0.04), 1.0, dotNV);
-  outgoing = outgoing * (1.0 - clearcoat * Fcc) + (acc.cc + ccIndirect) * clearcoat;
+  outgoing = outgoing * (1.0 - clearcoat * Fcc) + (acc.cc * directAO + ccIndirect * specAO) * clearcoat;
 
   var rgb = outColor(outgoing);
   // la "corrente" che percorre la C e la pista: testa calda e scia, fusa sul colore già in sRGB (come prima)
@@ -347,12 +385,18 @@ fn direct(L: vec3f, color: vec3f, N: vec3f, V: vec3f, m: Mat) -> Direct {
 
 // ---- anelli delle orbite (MeshBasicMaterial additivo) ----
 struct FlatOut { @builtin(position) pos: vec4f, @location(0) @interpolate(flat) rgba: vec4f };
-@vertex fn vsRing(@location(0) p: vec3f, @builtin(instance_index) ii: u32) -> FlatOut {
+// il tubo dell'orbita è sottile (0,2) e a schermo misura meno di un pixel: si allarga fino a un pixel e mezzo e
+// l'opacità scende in proporzione, così la linea resta continua e uniforme invece di spezzarsi in trattini
+const RING_R: f32 = 0.2;
+@vertex fn vsRing(@location(0) p: vec3f, @location(1) na: vec4f, @builtin(instance_index) ii: u32) -> FlatOut {
   let o = F.objs[ii % ${OBJ_PHASE}u];
   var out: FlatOut;
   if (f32(ii / ${OBJ_PHASE}u) != o.irid.w || o.color.a <= 0.0) { out.pos = OFF; return out; }
-  out.pos = F.proj * (F.view * (o.model * vec4f(p, 1.0)));
-  out.rgba = vec4f(outColor(o.color.rgb), o.color.a);
+  let center = p - na.xyz * RING_R;
+  let depth = -(F.view * (o.model * vec4f(center, 1.0))).z;
+  let r = max(RING_R, 0.75 * F.camPos.w * depth);
+  out.pos = F.proj * (F.view * (o.model * vec4f(center + na.xyz * r, 1.0)));
+  out.rgba = vec4f(outColor(o.color.rgb), o.color.a * RING_R / r);
   return out;
 }
 @fragment fn fsFlat(in: FlatOut) -> @location(0) vec4f { return in.rgba; }

@@ -2,9 +2,12 @@
 // prefiltrato e texture dei bagliori si creano una volta e sopravvivono ai cambi di pagina (login → home). Nessun ripiego
 // su WebGL: se WebGPU manca, o il dispositivo va perso e non torna, il componente mostra il logo SVG.
 import { renderShader, envShader, OBJ_PHASE, SPRITE_PHASE, PARTICLE_PHASE, ENV_MAX_MIP, ENV_W, ENV_H } from "./shaders";
-import { buildMeshes, FramePacker, LogoAnim, OBJ, type Meshes, type Quality } from "./scene";
+import { STUDIO, STUDIO_BG } from "./anim";
+import { buildMeshes, bakeAO, FramePacker, LogoAnim, OBJ, FOV, type Meshes, type Quality } from "./scene";
 
-const MSAA_DESKTOP = 4;
+// MSAA 4× ovunque: sui telefoni (GPU a tile) i campioni restano nella memoria del tile e con storeOp "discard" non
+// costano banda; prima i telefoni non avevano antialiasing e i bordi della targa erano a scalini
+const MSAA = 4;
 const KEEP_ALIVE_MS = 60000; // dispositivo e risorse restano pronti per un minuto dopo l'ultimo logo smontato
 
 export const webgpuAvailable = () => typeof navigator !== "undefined" && !!navigator.gpu;
@@ -28,6 +31,7 @@ export class Engine {
   readonly samplers: { env: GPUSampler; glow: GPUSampler };
   env!: { tex: GPUTexture; view: GPUTextureView };
   glow!: { tex: GPUTexture; view: GPUTextureView };
+  ao!: { tex: GPUTexture; view: GPUTextureView };
   lost = false;
   readonly onLost = new Set<() => void>();
   stats = { gpuBytes: 0 };
@@ -44,6 +48,7 @@ export class Engine {
         { binding: 3, visibility: Fr, sampler: {} },
         { binding: 4, visibility: Fr, texture: {} },
         { binding: 5, visibility: Fr, sampler: {} },
+        { binding: 6, visibility: Fr, texture: {} },
       ],
     });
     this.pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [this.layout] });
@@ -59,6 +64,7 @@ export class Engine {
   async init() {
     const ready = this.buildEnv();
     this.buildGlow();
+    this.buildAO();
     await ready;
   }
 
@@ -82,13 +88,9 @@ export class Engine {
     const params = d.createBuffer({ size: 512 + 256 * 20, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const studioData = new Float32Array(128), top = level(ENV_MAX_MIP);
     const linc = (hex: number) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255].map((c) => (c < 0.04045 ? c * 0.0773993808 : Math.pow(c * 0.9478672986 + 0.0521327014, 2.4)));
-    studioData.set([...linc(0x06100e), 0], 0);
+    studioData.set([...linc(STUDIO_BG), 0], 0);
     new Uint32Array(studioData.buffer).set([top.size, 0, top.x, top.y], 4);
-    const PANELS: [number, number, number, number, number, number, number][] = [
-      [10, 6, 0xffffff, 3.6, 3.5, 5.5, 6], [14, 3.5, 0xffffff, 1.1, 0, -2.5, 9], [4.5, 11, 0x2dd4bf, 2.6, -8, 1.5, 1.5],
-      [11, 1.5, 0xfbbf24, 2.8, 4, -6, -2], [3, 3, 0xffffff, 5.0, -4, 7, 5], [16, 16, 0x0e3b36, 0.55, 0, 0, -10],
-    ];
-    PANELS.forEach(([w, h, color, k, x, y, z], i) => {
+    STUDIO.forEach(([w, h, color, k, x, y, z], i) => {
       // orientamento di Object3D.lookAt(0,0,0) con "su" = +y: z del pannello verso l'origine
       const l = Math.hypot(x, y, z), nz = [-x / l, -y / l, -z / l];
       let ex = [nz[2], 0, -nz[0]]; const el = Math.hypot(ex[0], ex[1], ex[2]) || 1; ex = ex.map((c) => c / el); // up × z
@@ -156,6 +158,14 @@ export class Engine {
     this.stats.gpuBytes += (S * S * 4) / 3;
   }
 
+  // ---- occlusione d'ambiente della faccia della targa: calcolata una volta, 64 KB ----
+  private buildAO() {
+    const S = 128, tex = this.device.createTexture({ label: "ao", size: [S, S], format: "rgba8unorm", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+    this.device.queue.writeTexture({ texture: tex }, bakeAO(S), { bytesPerRow: S * 4 }, [S, S]);
+    this.ao = { tex, view: tex.createView() };
+    this.stats.gpuBytes += S * S * 4;
+  }
+
   // ---- geometrie: un vertex buffer, un index buffer e i colori della targa per ogni livello di qualità ----
   geometry(q: Quality): GeoBuffers {
     const key = q.mobile ? "m" : "d";
@@ -198,7 +208,7 @@ export class Engine {
         multisample: { count: samples },
       });
     const [plate, base, fancy, rim, ring, sprite, particle] = await Promise.all([
-      make("plate", "vsMeshColor", [vtx, col], "fsPhysical"),
+      make("plate", "vsMeshColor", [vtx, col], "fsPhysical", { constants: { PLATE: 1 } }),
       make("physical", "vsMesh", [vtx], "fsPhysical"),
       lite ? Promise.resolve(null) : make("physical-sheen-iridescence", "vsMesh", [vtx], "fsPhysical", { constants: { SHEEN: 1, IRID: 1 } }),
       make("rim", "vsMesh", [vtx], "fsPhysical", { constants: { TRANSPARENT: 1 }, blend: normal }),
@@ -212,7 +222,7 @@ export class Engine {
   destroy() {
     this.geos.forEach((g) => { g.vertex.destroy(); g.color.destroy(); g.index.destroy(); });
     this.geos.clear();
-    this.env?.tex.destroy(); this.glow?.tex.destroy();
+    this.env?.tex.destroy(); this.glow?.tex.destroy(); this.ao?.tex.destroy();
     this.device.destroy();
   }
 }
@@ -294,8 +304,7 @@ export class LogoView {
     if (!ctx) throw new Error("Contesto WebGPU non disponibile");
     this.context = ctx;
     ctx.configure({ device: d, format: engine.format, alphaMode: "premultiplied" });
-    // MSAA 4× sul desktop come l'antialias di prima; sui telefoni no (memoria e banda)
-    this.samples = q.mobile ? 1 : MSAA_DESKTOP;
+    this.samples = MSAA;
     this.packer = new FramePacker(q);
     this.geo = engine.geometry(q);
     this.frame = d.createBuffer({ label: "logo-frame", size: this.packer.data.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -307,6 +316,7 @@ export class LogoView {
         { binding: 0, resource: { buffer: this.frame } }, { binding: 1, resource: { buffer: this.particles } },
         { binding: 2, resource: e.view }, { binding: 3, resource: s.env },
         { binding: 4, resource: engine.glow.view }, { binding: 5, resource: s.glow },
+        { binding: 6, resource: engine.ao.view },
       ],
     });
   }
@@ -318,6 +328,8 @@ export class LogoView {
     this.minScale = Math.min(1, 1 / Math.max(1, ratio / this.scale));
     const pw = Math.max(1, Math.floor(w * ratio)), ph = Math.max(1, Math.floor(h * ratio));
     if (w !== this.size.w || h !== this.size.h) this.packer.resize(w, h);
+    // unità del mondo per pixel a distanza 1 dalla camera (spessore minimo delle orbite)
+    this.packer.data[51] = (2 * Math.tan(((FOV / 2) * Math.PI) / 180)) / ph;
     if (pw === this.size.pw && ph === this.size.ph) { this.size.w = w; this.size.h = h; return; }
     this.size = { w, h, pw, ph };
     this.canvas.width = pw; this.canvas.height = ph;

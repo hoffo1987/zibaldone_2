@@ -25,9 +25,11 @@ logo e canvas animati sospendono i fotogrammi fuori schermo o quando la scheda �
 La preferenza di sistema per ridurre il movimento viene rispettata anche quando cambia durante la sessione.
 
 Il logo 3D è disegnato direttamente in WebGPU (`src/logo3d/`: geometrie, shader WGSL, motore), senza three.js né WebGL:
-un solo dispositivo condiviso, pipeline e ambiente prefiltrato creati una volta, la scena registrata in un render bundle.
-Dove WebGPU non c'è resta il logo SVG animato e il codice 3D non viene scaricato; l'SVG torna anche se l'adattatore è
-solo software (rasterizzazione sulla CPU) o se il dispositivo si perde più di due volte.
+un solo dispositivo condiviso, pipeline e ambiente prefiltrato creati una volta, la scena registrata in un render bundle,
+MSAA 4× anche su telefono e ombre di contatto precalcolate in una texture. Mentre WebGPU si prepara compare un
+caricamento animato. Dove WebGPU non c'è, l'adattatore è solo software o il dispositivo si perde più di due volte, la
+stessa scena (stessa animazione, stesse luci e materiali calcolati in JavaScript) è disegnata in Canvas 2D
+(`src/logo2d/`); il logo SVG resta solo se manca anche il Canvas 2D.
 
 In **Opzioni → Musica e feedback** si può attivare **Musica di sottofondo** e regolare il volume separatamente dai bip.
 Il brano allegato, Mii Channel (Plaza), è in `public/audio/mii-channel-plaza.mp3` e viene riprodotto in loop.

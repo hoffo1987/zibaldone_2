@@ -118,3 +118,8 @@
    tablet il pannello non si inclina e la profondità non serve: ogni contesto 3D resta chiuso nel proprio elemento
    (terminale e scritte estruse si disegnano uguali). Tra 768 e 1199 px il logo resta un poco sopra il pannello. */
 @media (max-width:767px),(pointer:coarse){.pn.hero.h3d,.h3d .zl,.l3d,.l3d .zl{transform-style:flat}}
+
+/* caricamento del logo 3D (LogoLoader): entra in dissolvenza solo se l'attesa supera un istante */
+@keyframes logoLoaderIn{from{opacity:0}to{opacity:1}}
+.logo-loader{pointer-events:none}
+.logo-loader-fill{width:100%;height:100%}

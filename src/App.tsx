@@ -41,7 +41,13 @@ const useTriple = (fn: (e: any) => void) => {
   const r = useRef({ n: 0, t: 0 });
   return (e: any) => { const now = Date.now(); r.current.n = now - r.current.t < 650 ? r.current.n + 1 : 1; r.current.t = now; if (r.current.n >= 3) { r.current.n = 0; fn(e); } };
 };
-const eggFlip = (e: any) => { const el = e?.currentTarget; if (!el || !el.animate) return; el.animate([{ transform: "perspective(500px) rotateY(0)" }, { transform: "perspective(500px) rotateY(360deg)" }], { duration: 900, easing: "cubic-bezier(.34,1.56,.64,1)" }); };
+// la giravolta si aggiunge alla trasformazione che l'elemento ha già (il logo grande è centrato con translateY(-50%)):
+// sostituirla lo faceva cadere di mezza altezza per tutta l'animazione e poi risalire di scatto
+const eggFlip = (e: any) => {
+  const el = e?.currentTarget; if (!el || !el.animate) return;
+  const t = getComputedStyle(el).transform, base = t && t !== "none" ? `${t} ` : "";
+  el.animate([{ transform: `${base}perspective(500px) rotateY(0)` }, { transform: `${base}perspective(500px) rotateY(360deg)` }], { duration: 900, easing: "cubic-bezier(.34,1.56,.64,1)" });
+};
 
 // --- FIREBASE ---
 const firebaseConfig = {
