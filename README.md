@@ -57,14 +57,27 @@ Al primo accesso lo schermo è buio: c'è solo un pulsante 3D acceso dal suo LED
 e parte un film di 15 secondi a tempo col jingle: dall'alto si vede l'icona del sito come una targa smaltata con la C in
 rilievo, il titolo si alza dalla targa, la camera vola radente tra le stazioni (Scrivi, Conserva, Emergi; per chi valuta:
 Leggi, Vota, Premia), ognuna una parola in piedi su un chip con la spiegazione incisa sul fronte, poi il tuffo nel logo e
-il drop con il saluto. La camera percorre archi con velocità e accelerazione continue, si posa sulle parole e accompagna
-il ritmo con un rinculo morbido. Le lettere si sollevano in onda con una piccola torsione, oppure arrivano in profondità
-e si assestano sul beat. La ghiera satinata del pulsante, il LED ambra e il vetro reagiscono al passaggio e alla pressione.
+il drop con il saluto.
+
+La camera non sta mai ferma. La regia è fatta di inquadrature vive (orbitano attorno alla parola, scivolano in avanti, si
+avvicinano piano) e ogni passaggio fonde due inquadrature mentre entrambe si muovono (`direct` e `glide` in
+`src/tour/motion.ts`): si parte decisi e si arriva con una lunga coda morbida, conservando lo slancio del viaggio, senza
+frenate davanti alle scritte. Sopra c'è l'inerzia di una camera vera (un sistema del secondo ordine: piccolo sorpasso e
+assestamento), il tremolio della mano, l'inclinazione nelle virate e le scosse sui colpi del brano; nei passaggi veloci il
+fotogramma precedente lascia una scia, come l'otturatore aperto di una cinepresa.
+
+Le lettere sono di gelatina: si posano schiacciandosi, poi a ogni battito del brano (griglia di 0,3884 s misurata sul file,
+in fase con il drop) dondolano attorno al proprio piede, si schiacciano e si allargano, con l'onda che attraversa la parola;
+sotto c'è un'oscillazione lenta che non si spegne mai. Anche i titoli del tour guidato ondeggiano.
+La ghiera satinata del pulsante, il LED ambra e il vetro reagiscono al passaggio e alla pressione.
 Pozze e fasci di luce, riflessi sulle superfici lucide; la profondità di campo separa le scritte nitide dalle piste,
-dai chip e dalle luci fuori fuoco. Il film è disegnato su un canvas (`src/tour/film.ts`), senza WebGL: un buffer
-riutilizzato compone i piani ottici e lo sfocato viene calcolato a risoluzione ridotta. Se il dispositivo arranca,
-si riducono pixel, piste, strati e piani ottici; con il movimento ridotto la camera resta ferma, senza sfocato o impulsi,
-e le scritte si danno il cambio in dissolvenza.
+dai chip e dalle luci fuori fuoco, e la polvere sospesa sopra la scheda diventa bokeh. Effetti della lente: strisce
+anamorfiche e riflessi fantasma sulle luci forti, luce che filtra nei passaggi del brano, aberrazione cromatica sui colpi,
+il segnale che salta sul drop, grana della pellicola e una vignetta che pulsa col ritmo.
+Il film è disegnato su un canvas (`src/tour/film.ts`), senza WebGL: un buffer riutilizzato compone i piani ottici e lo
+sfocato viene calcolato a risoluzione ridotta. Se il dispositivo arranca si riducono pixel, piste, strati, piani ottici e
+polvere, e spariscono scia, aberrazione e salti; con il movimento ridotto la camera resta ferma, senza sfocato, impulsi né
+effetti della lente, e le scritte si danno il cambio in dissolvenza.
 Alla fine un nodo ambra vola sul primo elemento del sito e parte il tour guidato, che porta sezione per sezione sugli
 elementi veri (`src/tour/Tour.tsx`). Si può saltare in qualunque momento (anche con Esc) e togliere l'audio.
 
@@ -78,6 +91,11 @@ npm run preview:tour
 ```
 
 Aprire `http://127.0.0.1:4174`. L'anteprima si ricompila quando si modifica il codice (ricaricare il browser).
+Con `?board=0.5` lo **storyboard**: il film reso fotogramma per fotogramma a 60 fps, con le miniature ogni mezzo secondo e
+il grafico della velocità della camera (serve a controllare che non si fermi mai e che i passaggi non diano strappi;
+`&from=`, `&to=`, `&w=`, `&h=`, `&ts=` per finestra e dimensioni, `&calm`, `&low`, `&admin` come sopra). Con `?sheet` una
+scheda dell'archivio e il lettore, per provare l'apertura e la chiusura del foglio (`&at=ms` ferma l'animazione in quel
+punto, `&close` la chiusura, `&row` partendo da una riga della home).
 I parametri `?admin=1`, `?calm=1`, `?low=1` e `?name=Alessandra` consentono di controllare ruoli, movimento ridotto,
 qualità leggera e saluto; `?mode=auto` verifica anche il passaggio al tour su elementi dimostrativi.
 

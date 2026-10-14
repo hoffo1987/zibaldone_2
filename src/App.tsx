@@ -1207,7 +1207,9 @@ export default function App() {
   const down = useRef(false);
   const draftKey = user ? `circuito:bozza:${user.uid}` : "";
 
-  const notify = (m: string) => { setToast(m); setTimeout(() => setToast(""), 3200); };
+  // un avviso nuovo riparte da capo: il timer di quello prima non deve chiuderlo in anticipo
+  const toastT = useRef(0);
+  const notify = (m: string) => { setToast(m); clearTimeout(toastT.current); toastT.current = window.setTimeout(() => setToast(""), 3200); };
   const err = (m: string) => setAuthMsg({ t: "err", m });
 
   useEffect(() => { try { localStorage.setItem("circuito:dark", dark ? "1" : "0"); } catch {} }, [dark]);
@@ -1784,11 +1786,11 @@ export default function App() {
     }, 300 / GSPD);
   };
   // il foglio si aprirà dal punto in cui è stato toccato (la carta della scheda, o la riga dell'elenco)
-  const origin = useRef<{ id: string; r: any } | null>(null);
+  const origin = useRef<{ id: string; r: any; paper: boolean } | null>(null);
   const [swap, setSwap] = useState(0); // ultimo passaggio tra scritti nel lettore: -1 indietro, 1 avanti, 0 nessuno
   const openView = (t: any, e?: any) => {
-    const el: any = e?.currentTarget, r = rectOf(el?.querySelector?.(".paper") || el);
-    origin.current = r ? { id: t.id, r } : null;
+    const el: any = e?.currentTarget, sheet = el?.querySelector?.(".paper"), r = rectOf(sheet || el);
+    origin.current = r ? { id: t.id, r, paper: !!sheet } : null;
     setSwap(0); history.pushState({ tab, v: 1 }, ""); setSel(t);
   };
   const stepTo = (t: any, d: number) => { setSwap(d); setSel(t); };
@@ -1873,7 +1875,7 @@ export default function App() {
     if (opened.current || !sheetRef.current) return;
     opened.current = true;
     const o = origin.current; origin.current = null;
-    openSheet(sheetRef.current, o && o.id === view.id ? o.r : null);
+    openSheet(sheetRef.current, o && o.id === view.id ? o.r : null, !!o?.paper);
   }, [view?.id]);
   useReadTrace(readRef, railRef, view?.id);
   // 3D: le scritte estruse e il terminale si inclinano verso il puntatore (solo con il mouse; sui telefoni oscillano da sole)
@@ -2093,7 +2095,9 @@ export default function App() {
   const first = myName.split(" ")[0];
   const dn = (uid: string, fb: string) => profiles[uid]?.displayName || fb;
   const hid = (t: any) => isAdmin && !t.svelato && t.userId !== user.uid;
-  const Who = ({ t, size }: any) => hid(t)
+  // funzioni e non componenti: definite qui dentro, come componenti cambierebbero tipo a ogni render e React smonterebbe
+  // e rimonterebbe righe e avatar (le righe ripetevano l'animazione d'ingresso a ogni aggiornamento della pagina)
+  const who = (t: any, size: number) => hid(t)
     ? <span className="rounded-full shrink-0 inline-flex items-center justify-center" style={{ width: size, height: size, background: "var(--sf)", border: "1px dashed var(--mu)" }}><EyeOff size={size * 0.5} className="mu" /></span>
     : <Avatar p={profiles[t.userId]} name={t.author} size={size} />;
   const wn = (t: any) => hid(t) ? "Autore nascosto" : dn(t.userId, t.author);
@@ -2104,10 +2108,10 @@ export default function App() {
     </Pop>
   );
   const wc = (t: any) => wordCounts.get(t.id) || 0;
-  const Row = ({ t, rank, i = 0 }: any) => (
+  const row = (t: any, i = 0, rank?: number) => (
     <button key={t.id} data-doc={t.id} onClick={(e) => openView(t, e)} className="nv idx w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-colors" style={{ ["--i" as any]: i }}>
       {rank && <span className="hd w-8 text-center font-bold mu">{rank}</span>}
-      <Who t={t} size={36} />
+      {who(t, 36)}
       <div className="flex-1 min-w-0"><div className="font-semibold truncate">{t.title}</div><div className="mu text-xs">{wn(t)} · {fmtDate(t.timestamp)}</div></div>
       {isAdmin && <Stars v={t.rating || 0} size={14} />}
     </button>
@@ -2267,7 +2271,7 @@ export default function App() {
         <div className="flex items-center justify-between px-4 pt-4 pb-2"><h3 className="hd text-lg font-bold">Ultimi progetti</h3><button type="button" data-snd="nav" className="mu text-sm lk inline-flex items-center gap-1" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>
         {loading ? <div className="p-6 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
           : recent.length === 0 ? <p className="mu text-sm px-4 pb-5">Ancora niente qui. Il primo progetto comparirà in questa lista.</p>
-          : recent.map((t, i) => <Row key={t.id} t={t} i={i} />)}
+          : recent.map((t, i) => row(t, i))}
       </div></Reveal>
     </div>
   );
@@ -2306,13 +2310,13 @@ export default function App() {
                       <Stars v={t.rating || 0} size={16} />
                     </div>
                     <h3 className="hd text-xl font-bold mt-5 line-clamp-2">{t.title}</h3>
-                    <div className="flex items-center gap-2 mt-2"><Who t={t} size={24} /><span className="mu text-sm">{wn(t)}</span></div>
+                    <div className="flex items-center gap-2 mt-2">{who(t, 24)}<span className="mu text-sm">{wn(t)}</span></div>
                     <p className="mu text-sm mt-3 line-clamp-3">{plain(t.content)}</p>
                   </div>
                 </Reveal>
               ); })}
           </div>
-          {rest.length > 0 && <Reveal className="mt-8"><div className="pn p-2"><h3 className="hd text-lg font-bold px-4 pt-4 pb-2">In lizza</h3>{rest.map((t, i) => <Row key={t.id} t={t} rank={i + 4} i={i} />)}</div></Reveal>}
+          {rest.length > 0 && <Reveal className="mt-8"><div className="pn p-2"><h3 className="hd text-lg font-bold px-4 pt-4 pb-2">In lizza</h3>{rest.map((t, i) => row(t, i, i + 4))}</div></Reveal>}
         </>)}
     </div>
   );
@@ -2427,7 +2431,7 @@ export default function App() {
                     </div>
                     <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
                       <h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
-                      <div className="mt-2 flex items-center gap-2 mu text-xs"><Who t={t} size={22} /><span className="truncate flex-1">{wn(t)}</span><span className="shrink-0">{fmtDate(t.timestamp)}</span></div>
+                      <div className="mt-2 flex items-center gap-2 mu text-xs">{who(t, 22)}<span className="truncate flex-1">{wn(t)}</span><span className="shrink-0">{fmtDate(t.timestamp)}</span></div>
                       {isAdmin && <div className="mt-3"><Stars v={t.rating || 0} onSet={t.svelato ? undefined : (n: number) => rate(t, n)} size={15} /></div>}
                       {!isAdmin && t.svelato && t.rating > 0 && <div className="mt-3 flex items-center gap-2"><Stars v={t.rating} size={15} /><span className="mu text-xs">voto ricevuto</span></div>}
                     </div>
@@ -2549,7 +2553,7 @@ export default function App() {
               <div className="doc-hd relative overflow-hidden shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
                 {fresh && <span className="rvl-sweep" />}
                 <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
-                  {hidS ? <Who t={sel} size={44} /> : <button type="button" onClick={() => setViewProf(sel.userId)} className="shrink-0" aria-label="Apri profilo">{fresh ? <span className="rvl-av"><i className="rg" /><i className="rg" /><span className="pf-av"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></span></span> : <Avatar p={profiles[sel.userId]} name={sel.author} size={44} />}</button>}
+                  {hidS ? who(sel, 44) : <button type="button" onClick={() => setViewProf(sel.userId)} className="shrink-0" aria-label="Apri profilo">{fresh ? <span className="rvl-av"><i className="rg" /><i className="rg" /><span className="pf-av"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></span></span> : <Avatar p={profiles[sel.userId]} name={sel.author} size={44} />}</button>}
                   <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end self-end md:self-auto w-full md:w-auto">
@@ -2564,7 +2568,7 @@ export default function App() {
               <div className="relative flex-1 min-h-0 flex flex-col">
               {/* la pista di lettura: si disegna aprendo il foglio, poi segue lo scorrimento; in fondo il nodo diventa ambra */}
               <div ref={railRef} className="read-rail" aria-hidden="true"><i /><b /></div>
-              <div key={sel.id} ref={readRef} className={`overflow-y-auto flex-1 min-h-0 ${swap ? "doc-swap" : ""}`} style={{ ["--dir" as any]: swap || 1 }}>
+              <div key={sel.id} ref={readRef} data-sheet-scroll="" className={`overflow-y-auto flex-1 min-h-0 ${swap ? "doc-swap" : ""}`} style={{ ["--dir" as any]: swap || 1 }}>
               {isAdmin && <div className="flex items-center gap-3 px-4 py-2 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
               {hidS && <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 py-2.5 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
                 <div className="text-sm min-w-0"><b>Autore nascosto.</b> <span className="mu">{sel.rating > 0 ? "Puoi svelarlo: dopo lo svelamento il voto non si cambia più." : "Dai da 1 a 5 stelle per poterlo svelare."}</span></div>
@@ -2578,7 +2582,7 @@ export default function App() {
                 </button>
                 {panelOpen && <PannelloAdmin db={db} id={sel.id} notify={notify} />}
               </>}
-                <div className="paper mm relative" style={{ aspectRatio: `${w}/${h}` }}>
+                <div className="paper mm relative" data-sheet-paper="" style={{ aspectRatio: `${w}/${h}` }}>
                   {sel.strokes?.length > 0 && <Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" />}
                   <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: clean(sel.content) }} />
                 </div>
@@ -2637,7 +2641,7 @@ export default function App() {
         </div>
       )}
 
-      {toast && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] pn px-4 py-2 text-sm shadow-lg popx">{toast}</div>}
+      {toast && <div key={toast} role="status" className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] pn px-4 py-2 text-sm shadow-lg popx">{toast}</div>}
 
       {/* presentazione: il velo scuro copre il sito finché il film non è pronto, così la home non lampeggia prima */}
       {(tour || wantTour) && (tour

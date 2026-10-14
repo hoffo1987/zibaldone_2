@@ -52,11 +52,13 @@ const studio = (renderer: any) => {
   return target;
 };
 
-const currentMaterial = (uniforms: any) => {
+// sui telefoni niente velluto (sheen) né iridescenza: a quella misura non si vedono, ma rendono lo shader molto più pesante
+// da compilare e da disegnare a ogni fotogramma
+const currentMaterial = (uniforms: any, lite: boolean) => {
   const m = new THREE.MeshPhysicalMaterial({
     color: 0xf4fffd, roughness: 0.16, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.05,
-    sheen: 1, sheenColor: new THREE.Color(0x9ff3e4), sheenRoughness: 0.35,
-    iridescence: 0.32, iridescenceIOR: 1.45, emissive: 0xffffff, emissiveIntensity: 0.05, envMapIntensity: 1.15
+    sheen: lite ? 0 : 1, sheenColor: new THREE.Color(0x9ff3e4), sheenRoughness: 0.35,
+    iridescence: lite ? 0 : 0.32, iridescenceIOR: 1.45, emissive: 0xffffff, emissiveIntensity: 0.05, envMapIntensity: 1.15
   });
   m.onBeforeCompile = (sh: any) => {
     sh.uniforms.uPh = uniforms.uPh; sh.uniforms.uGain = uniforms.uGain;
@@ -77,7 +79,7 @@ varying float vT;
   }`
     );
   };
-  m.customProgramCacheKey = () => "corrente_v2";
+  m.customProgramCacheKey = () => (lite ? "corrente_v2_lite" : "corrente_v2");
   return m;
 };
 
@@ -147,13 +149,13 @@ function Logo3D({ intro = true, spd = 1, fps = 30, fallback, className = "" }: P
     const uArc = { uPh: { value: -1 }, uGain: { value: 0 } }, uLine = { uPh: { value: -1 }, uGain: { value: 0 } };
     const arcCurve = new (class extends THREE.Curve { getPoint(t: number, v = new THREE.Vector3()) { return v.copy(arcAt(t, FRONT + 1.45)); } })();
     const arcGeo = keep(withT(new THREE.TubeGeometry(arcCurve, q.arc, 2.55, q.radial, false)));
-    fgGroup.add(new THREE.Mesh(arcGeo, keep(currentMaterial(uArc))));
+    fgGroup.add(new THREE.Mesh(arcGeo, keep(currentMaterial(uArc, mobile))));
     const lineGeo = keep(withT(new THREE.TubeGeometry(new THREE.LineCurve3(lineAt(0, FRONT + 1.25), lineAt(1, FRONT + 1.25)), 8, 1.55, q.radial, false)));
-    fgGroup.add(new THREE.Mesh(lineGeo, keep(currentMaterial(uLine))));
+    fgGroup.add(new THREE.Mesh(lineGeo, keep(currentMaterial(uLine, mobile))));
 
     const capGeo = keep(new THREE.SphereGeometry(1, q.sphere, Math.round(q.sphere * 0.7)));
     const ringSocketGeo = keep(new THREE.TorusGeometry(1, 0.16, 8, 24));
-    const pearl = keep(new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.14, clearcoat: 1, clearcoatRoughness: 0.06, sheen: 1, sheenColor: new THREE.Color(0x9ff3e4), iridescence: 0.35 }));
+    const pearl = keep(new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.14, clearcoat: 1, clearcoatRoughness: 0.06, sheen: mobile ? 0 : 1, sheenColor: new THREE.Color(0x9ff3e4), iridescence: mobile ? 0 : 0.35 }));
     const amberMat = keep(new THREE.MeshPhysicalMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.35, roughness: 0.16, clearcoat: 1 }));
 
     const addSocket = (p: { x: number; y: number; z: number }, radius: number) => {

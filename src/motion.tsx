@@ -33,14 +33,28 @@ const onScreen = (r: Rect) => r.top < window.innerHeight && r.top + r.height > 0
 
 // Il foglio si apre dalla scheda. Il pannello è già al suo posto: lo si ritaglia sulla scheda e si allarga la finestra.
 // Niente deformazioni: il testo non viene mai schiacciato, cresce solo la porzione visibile del foglio.
-const sheetFrames = (from: Rect, to: Rect, r0: number, r1: number): Keyframe[] => {
-  const w = Math.min(from.width, to.width), h = Math.min(from.height, to.height);
+// La finestra di partenza è la parte del pannello che somiglia a ciò che si è toccato: se si è toccata la carta di una
+// scheda è la carta del lettore (bianca, con lo stesso testo all'inizio), altrimenti l'intestazione (scura, col titolo).
+// Così la scheda diventa il lettore invece di trasformarsi in un altro disegno, e alla chiusura la carta torna carta.
+type Win = { x: number; y: number; w: number; h: number };
+// porzione visibile della carta del lettore, in coordinate del pannello (se il testo è scorso, solo quello che si vede)
+const paperWin = (panel: HTMLElement, to: Rect): Win | null => {
+  const p = rectOf(panel.querySelector("[data-sheet-paper]")); if (!p) return null;
+  const v = rectOf(panel.querySelector("[data-sheet-scroll]")) || to;
+  const top = Math.max(p.top, v.top, to.top), bottom = Math.min(p.top + p.height, v.top + v.height, to.top + to.height);
+  const left = Math.max(p.left, to.left), right = Math.min(p.left + p.width, to.left + to.width);
+  return bottom - top < 24 || right - left < 24 ? null : { x: left - to.left, y: top - to.top, w: right - left, h: bottom - top };
+};
+const sheetFrames = (from: Rect, to: Rect, win: Win | null, r0: number, r1: number): Keyframe[] => {
+  const a = win || { x: 0, y: 0, w: to.width, h: to.height };
+  const w = Math.min(from.width, a.w), h = Math.min(from.height, a.h);
   return [
-    { transform: `translate(${from.left - to.left}px,${from.top - to.top}px)`, clipPath: `inset(0px ${to.width - w}px ${to.height - h}px 0px round ${r0}px)` },
+    { transform: `translate(${from.left - to.left - a.x}px,${from.top - to.top - a.y}px)`, clipPath: `inset(${a.y}px ${to.width - a.x - w}px ${to.height - a.y - h}px ${a.x}px round ${r0}px)` },
     { transform: "translate(0px,0px)", clipPath: `inset(0px 0px 0px 0px round ${r1}px)` },
   ];
 };
-export const openSheet = (panel: HTMLElement, from: Rect | null) => {
+// paper: si è partiti dalla carta di una scheda
+export const openSheet = (panel: HTMLElement, from: Rect | null, paper = false) => {
   panel.getAnimations().forEach((a) => a.cancel());
   if (!moving()) return;
   const to = rectOf(panel);
@@ -48,17 +62,22 @@ export const openSheet = (panel: HTMLElement, from: Rect | null) => {
     run(panel, [{ opacity: 0, transform: "translateY(18px)" }, { opacity: 1, transform: "none" }], { duration: DUR.base, easing: EASE.land });
     return;
   }
-  run(panel, sheetFrames(from, to, 14, 18), { duration: DUR.sheet, easing: EASE.land });
+  run(panel, sheetFrames(from, to, paper ? paperWin(panel, to) : null, 14, 18), { duration: DUR.sheet, easing: EASE.land });
+  // nei primi istanti il foglio si sovrappone alla scheda in dissolvenza: il testo cambia corpo senza scatti
+  run(panel, [{ opacity: 0 }, { opacity: 1, offset: 0.26 }, { opacity: 1 }], { duration: DUR.sheet, easing: "linear" });
 };
 // Il foglio torna nella sua scheda (se è ancora visibile nell'archivio), altrimenti scende e svanisce.
 export const closeSheet = (panel: HTMLElement, id: string): Promise<void> => {
   panel.getAnimations().forEach((a) => a.cancel());
   if (!moving()) return Promise.resolve();
   const home = document.querySelector<HTMLElement>(`[data-doc="${(window as any).CSS?.escape ? CSS.escape(id) : id}"]`);
-  const tgt = rectOf(home?.querySelector(".paper") || home), to = rectOf(panel);
-  const a = tgt && to && onScreen(tgt)
-    ? run(panel, sheetFrames(tgt, to, 14, 18).reverse(), { duration: DUR.base, easing: EASE.trace, fill: "forwards" })
-    : run(panel, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(14px)" }], { duration: 240, easing: EASE.exit, fill: "forwards" });
+  const sheet = home?.querySelector(".paper"), tgt = rectOf(sheet || home), to = rectOf(panel);
+  let a: Animation;
+  if (tgt && to && onScreen(tgt)) {
+    a = run(panel, sheetFrames(tgt, to, sheet ? paperWin(panel, to) : null, 14, 18).reverse(), { duration: DUR.base, easing: EASE.trace, fill: "forwards" });
+    // arrivato sulla scheda il foglio si scioglie in lei
+    run(panel, [{ opacity: 1 }, { opacity: 1, offset: 0.68 }, { opacity: 0 }], { duration: DUR.base, easing: "linear", fill: "forwards" });
+  } else a = run(panel, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(14px)" }], { duration: 240, easing: EASE.exit, fill: "forwards" });
   return a.finished.then(() => {
     // la scheda che riceve il foglio si accende per un attimo: l'occhio ritrova il punto da cui era partito
     if (tgt && home) { const c = home.closest<HTMLElement>(".card") || home; c.classList.remove("back"); void c.offsetWidth; c.classList.add("back"); setTimeout(() => c.classList.remove("back"), 900); }

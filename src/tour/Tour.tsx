@@ -29,7 +29,7 @@ const ADMIN: Step[] = [
   { tab: "home", target: "options", title: "Opzioni", body: "Tema chiaro o scuro, effetti, musica e suoni. Da qui puoi anche rivedere questa presentazione." },
   { tab: "home", target: "hero-actions", title: "Si comincia", body: "Gli scritti del mese ti aspettano. Buona lettura." },
 ];
-const filmText = (admin: boolean, name: string): FilmText => ({
+export const filmText = (admin: boolean, name: string): FilmText => ({
   stations: admin
     ? [{ word: "Leggi", line: "gli scritti arrivano con l'autore nascosto", icon: "eye" }, { word: "Vota", line: "da una a cinque stelle, poi svela chi ha scritto", icon: "star" }, { word: "Premia", line: "il podio del mese mette in luce i migliori", icon: "cup" }]
     : [{ word: "Scrivi", line: "testo, foto e disegni nello stesso foglio", icon: "pen" }, { word: "Conserva", line: "ogni progetto resta nel tuo archivio", icon: "stack" }, { word: "Emergi", line: "ogni mese i testi migliori vengono letti e premiati", icon: "star" }],
@@ -44,6 +44,18 @@ const captions = (f: FilmText): [number, string][] => [
   [MUSIC.drop, `${f.hello}.`],
   [MUSIC.k1, "Scrivi, leggi, scegli. Ogni mese."],
 ];
+
+// grana della pellicola: una tessera di rumore fatta una volta sola, che il CSS fa saltare di posto a ogni fotogramma
+const grainTile = () => {
+  try {
+    const c = document.createElement("canvas"); c.width = c.height = 128;
+    const g = c.getContext("2d"); if (!g) return "";
+    const d = g.createImageData(128, 128);
+    for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+    g.putImageData(d, 0, 0);
+    return c.toDataURL("image/png");
+  } catch { return ""; }
+};
 
 // elemento visibile con quel data-tour (sidebar e barra mobile hanno gli stessi: vale quello che si vede)
 const findTarget = (id: string): HTMLElement | null => {
@@ -61,7 +73,8 @@ export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }
   const [muted, setMuted] = useState(!sound.enabled());
   const [caption, setCaption] = useState("");
   const [pressed, setPressed] = useState(false);
-  const host = useRef<HTMLDivElement>(null), cv = useRef<HTMLCanvasElement>(null), prog = useRef<HTMLElement>(null), spark = useRef<HTMLElement>(null);
+  const host = useRef<HTMLDivElement>(null), cv = useRef<HTMLCanvasElement>(null), prog = useRef<HTMLElement>(null), spark = useRef<HTMLElement>(null), vig = useRef<HTMLElement>(null);
+  const [grain] = useState(() => (mode === "guide" || calm || low ? "" : grainTile()));
   const power = useRef<HTMLButtonElement>(null), hint = useRef<HTMLParagraphElement>(null);
   const film = useRef<Film | null>(null);
   const alive = useRef(true);
@@ -160,7 +173,7 @@ export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }
   // il film: un fotogramma per ogni frame dello schermo, con il tempo letto dalla musica
   useEffect(() => {
     if (phase !== "film") return;
-    let raf = 0, cap = -1, landed = false, ended = false, freed = false;
+    let raf = 0, cap = -1, landed = false, ended = false, freed = false, pulse = 1;
     const caps = captions(text), body = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const vis = () => { const c = clock.current; if (c.voice) return; if (document.hidden) c.hiddenAt = performance.now(); else if (c.hiddenAt) { c.paused += performance.now() - c.hiddenAt; c.hiddenAt = 0; } };
@@ -169,6 +182,9 @@ export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }
       const t = now();
       film.current?.draw(t);
       if (prog.current) prog.current.style.transform = `scaleX(${Math.min(1, Math.max(0, t / MUSIC.end)).toFixed(4)})`;
+      // la vignetta si stringe a ogni battito (solo una scala: la fa il compositore, senza ridisegnare)
+      const sc = calm ? 1 : 1 - 0.075 * (film.current?.beat() || 0);
+      if (vig.current && Math.abs(sc - pulse) > 0.002) { pulse = sc; vig.current.style.transform = `scale(${sc.toFixed(3)})`; }
       let k = -1; caps.forEach(([at], i) => { if (t >= at) k = i; });
       if (k !== cap) { cap = k; if (k >= 0) setCaption(caps[k][1]); }
       // sul finale la pagina riprende a muoversi sotto la scena: le sue animazioni d'ingresso partono mentre il film svanisce
@@ -212,7 +228,8 @@ export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }
     <div ref={host} className={`tour ${phase === "guide" ? "tr-guide" : ""}`} role="dialog" aria-modal="true" aria-label="Presentazione del Circuito">
       {phase !== "guide" && <div className="tr-film">
         <canvas ref={cv} aria-hidden="true" />
-        <i className="tr-vig" aria-hidden="true" />
+        {grain && <i className="tr-grain" style={{ backgroundImage: `url(${grain})` }} aria-hidden="true" />}
+        <i ref={vig} className="tr-vig" aria-hidden="true" />
         <i ref={prog} className="tr-prog" aria-hidden="true" />
         <p className="sr-only" aria-live="polite">{caption}</p>
         {phase === "gate" && <>
