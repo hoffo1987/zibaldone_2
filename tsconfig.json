@@ -4,7 +4,7 @@
     ],
     "compilerOptions": {
         "strict": true,
-        "types": ["react", "react-dom", "node"],
+        "types": ["react", "react-dom", "node", "@webgpu/types"],
         "target": "es2018",
         "module": "esnext",
         "moduleResolution": "node",

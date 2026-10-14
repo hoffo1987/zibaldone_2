@@ -24,6 +24,11 @@ Una preferenza già salvata resta valida. Il logo usa geometrie e risoluzione ad
 logo e canvas animati sospendono i fotogrammi fuori schermo o quando la scheda è nascosta.
 La preferenza di sistema per ridurre il movimento viene rispettata anche quando cambia durante la sessione.
 
+Il logo 3D è disegnato direttamente in WebGPU (`src/logo3d/`: geometrie, shader WGSL, motore), senza three.js né WebGL:
+un solo dispositivo condiviso, pipeline e ambiente prefiltrato creati una volta, la scena registrata in un render bundle.
+Dove WebGPU non c'è resta il logo SVG animato e il codice 3D non viene scaricato; l'SVG torna anche se l'adattatore è
+solo software (rasterizzazione sulla CPU) o se il dispositivo si perde più di due volte.
+
 In **Opzioni → Musica e feedback** si può attivare **Musica di sottofondo** e regolare il volume separatamente dai bip.
 Il brano allegato, Mii Channel (Plaza), è in `public/audio/mii-channel-plaza.mp3` e viene riprodotto in loop.
 La musica è inizialmente spenta e il file non viene richiesto finché non è attivata.

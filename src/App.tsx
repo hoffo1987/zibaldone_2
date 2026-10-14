@@ -22,7 +22,7 @@ import { useMediaQuery } from "./useMediaQuery";
 import { useMusic } from "./useMusic";
 import { SettingsDialog } from "./Dialog";
 import * as sound from "./sound";
-// il logo 3D (three.js) si carica a parte, solo quando serve: il resto del sito non lo scarica
+// il logo 3D (WebGPU) si carica a parte, solo quando serve e solo se il browser supporta WebGPU: il resto del sito non lo scarica
 import Logo3D from "./LogoView";
 // easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login → caricamento → gioco
 import EggPortal from "./EggPortal";
@@ -1887,7 +1887,7 @@ export default function App() {
     window.addEventListener("pointermove", mv, { passive: true });
     return () => { window.removeEventListener("pointermove", mv); cancelAnimationFrame(raf); const root = document.querySelector<HTMLElement>(".root"); root?.style.removeProperty("--gx"); root?.style.removeProperty("--gy"); };
   }, [G.d3, G.nomotion, compact]);
-  // un solo logo 3D alla volta (un solo contesto WebGL): quello grande su schermi larghi, quello piccolo su telefono
+  // un solo logo 3D alla volta (un solo canvas WebGPU): quello grande su schermi larghi, quello piccolo su telefono
   const [wide, setWide] = useState(() => !!window.matchMedia?.("(min-width:768px)").matches);
   useEffect(() => {
     const m = window.matchMedia?.("(min-width:768px)"); if (!m) return;
@@ -1955,7 +1955,7 @@ export default function App() {
                 <Sub>Ingressi e transizioni</Sub>
                 <Sw on={G.titles} set={(v: boolean) => setC("titles", v)} label="Titoli che emergono" hint="Le parole dei titoli salgono dalla propria riga, una dopo l'altra" />
                 <Sw on={G.logo} set={(v: boolean) => setC("logo", v)} label="Logo animato" hint="Il logo si disegna e la corrente lo attraversa" />
-                <Sw on={G.d3} set={(v: boolean) => setC("d3", v)} label="Logo e titoli in 3D" hint="Logo tridimensionale in WebGL, titoli estrusi e terminale fluttuante che seguono il mouse" />
+                <Sw on={G.d3} set={(v: boolean) => setC("d3", v)} label="Logo e titoli in 3D" hint="Logo tridimensionale in WebGPU, titoli estrusi e terminale fluttuante che seguono il mouse" />
                 <Sw on={G.reveal} set={(v: boolean) => setC("reveal", v)} label="Fogli e sezioni che compaiono" hint="L'ingresso nel Circuito, i fogli dell'archivio che si stampano, i numeri che si caricano" />
                 <Sw on={G.pages} set={(v: boolean) => setC("pages", v)} label="Transizione tra le pagine" hint="La pagina arriva dal lato verso cui ti sposti, e la pista sotto il titolo si traccia" />
                 <Sw on={G.theme} set={(v: boolean) => setC("theme", v)} label="Onda al cambio tema" hint="Il passaggio chiaro/scuro si allarga dal punto in cui tocchi" />
@@ -2235,7 +2235,7 @@ export default function App() {
   const toRate = thisMonth.filter((t) => !t.rating).length;
   // primo ingresso della sessione: la corrente percorre il bordo del pannello e lo accende; dopo, la home entra asciutta
   const boot = heroIntro.current && G.reveal;
-  // 3D nel pannello: il logo WebGL (non con le animazioni spente), il terminale che batte il comando e risponde con i numeri veri
+  // 3D nel pannello: il logo WebGPU (non con le animazioni spente), il terminale che batte il comando e risponde con i numeri veri
   const logo3d = G.d3 && !G.nomotion, heroLogoFresh = G.logo;
   const termUser = isAdmin ? "admin" : first.toLowerCase().replace(/[^a-z0-9]/g, "") || "utente", termCmd = isAdmin ? "ls --nuovi" : "scrivi --nuovo";
   const termOut = loading ? "lettura dell'archivio…" : isAdmin
