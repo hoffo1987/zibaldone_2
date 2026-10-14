@@ -7,18 +7,22 @@
 .tr-prog{position:absolute;left:0;right:0;bottom:0;height:2px;transform-origin:0 50%;transform:scaleX(0);background:linear-gradient(90deg,#2DD4BF,#FBBF24);opacity:.75;pointer-events:none}
 .tour.tr-out .tr-film{opacity:0;pointer-events:none}
 .tr-bar{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));display:flex;gap:8px;z-index:2;animation:fd .7s 1s both}
-.tr-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:40px;height:40px;padding:0 14px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);color:#E6FFFA;font:600 .8rem/1 'Instrument Sans',system-ui,sans-serif;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);cursor:pointer;transition:background .25s,border-color .25s,transform .2s}
-.tr-btn:hover{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.42)}
+.tr-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:44px;height:44px;padding:0 16px;border-radius:999px;border:1px solid rgba(202,244,231,.2);background:linear-gradient(160deg,rgba(24,49,41,.72),rgba(5,16,11,.65));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 24px rgba(0,0,0,.16);color:#E6FFFA;font:600 .8rem/1 'Instrument Sans',system-ui,sans-serif;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);cursor:pointer;transition:background .25s,border-color .25s,transform .2s,box-shadow .25s}
+.tr-btn:hover{background:rgba(41,71,56,.8);border-color:rgba(255,223,165,.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 8px 26px rgba(0,0,0,.22)}
 .tr-btn:active{transform:scale(.96)}
 .tr-btn:focus-visible,.tr-link:focus-visible{outline:2px solid #FBBF24;outline-offset:3px}
 .tr-close{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));z-index:2}
 
 /* l'attesa al buio: il pulsante 3D è disegnato nel film, qui sopra c'è il pulsante vero, trasparente */
 .tr-power3d{position:absolute;left:0;top:0;width:120px;height:120px;border-radius:50%;background:transparent;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.tr-power3d:focus-visible{outline:2px solid rgba(251,191,36,.8);outline-offset:4px}
-.tr-hint{position:absolute;left:50%;top:0;margin:0;font:600 .72rem/1 'Instrument Sans',system-ui,sans-serif;letter-spacing:.32em;text-transform:uppercase;color:rgba(251,220,150,.55);white-space:nowrap;pointer-events:none;animation:trHint 1.2s .9s both;transition:opacity .3s}
-.tr-hint.off{opacity:0}
-@keyframes trHint{from{opacity:0;letter-spacing:.6em}to{opacity:1}}
+.tr-power3d:focus-visible{outline:0}
+.tr-power3d:focus-visible:after{content:"";position:absolute;inset:10%;border:2px solid rgba(255,216,144,.7);border-radius:50%;transform:translateY(9%) scaleY(.74);box-shadow:0 0 12px rgba(251,191,36,.16);pointer-events:none}
+.tr-power3d:disabled{cursor:default}
+.tr-hint{position:absolute;left:50%;top:0;margin:0;text-align:center;font:500 .72rem/1.7 'Instrument Sans',system-ui,sans-serif;color:rgba(251,220,170,.58);white-space:nowrap;pointer-events:none;animation:trHint 1.2s .55s both;transition:opacity .25s}
+.tr-hint strong{display:block;font-size:.8rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:rgba(242,246,229,.85)}
+.tr-hint span{display:block;margin-top:7px;letter-spacing:.07em}
+.tr-hint.off{opacity:0;animation:none}
+@keyframes trHint{from{opacity:0}to{opacity:1}}
 .tr-link{min-height:44px;padding:0 10px;color:rgba(230,255,250,.6);font-size:.84rem;text-decoration:underline;text-underline-offset:4px;background:none;border:0;cursor:pointer}
 .tr-link:hover{color:#fff}
 .tr-silent{position:absolute;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);animation:fd .8s 1.4s both}

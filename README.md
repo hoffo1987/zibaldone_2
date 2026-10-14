@@ -57,13 +57,29 @@ Al primo accesso lo schermo è buio: c'è solo un pulsante 3D acceso dal suo LED
 e parte un film di 15 secondi a tempo col jingle: dall'alto si vede l'icona del sito come una targa smaltata con la C in
 rilievo, il titolo si alza dalla targa, la camera vola radente tra le stazioni (Scrivi, Conserva, Emergi; per chi valuta:
 Leggi, Vota, Premia), ognuna una parola in piedi su un chip con la spiegazione incisa sul fronte, poi il tuffo nel logo e
-il drop con il saluto. Pozze e fasci di luce, riflessi sulle superfici lucide. Il film è disegnato su un solo canvas (`src/tour/film.ts`), senza WebGL, e si alleggerisce da solo se il
-dispositivo arranca; con il movimento ridotto la camera resta ferma e le scritte si danno il cambio in dissolvenza.
+il drop con il saluto. La camera percorre archi con velocità e accelerazione continue, si posa sulle parole e accompagna
+il ritmo con un rinculo morbido. Le lettere si sollevano in onda con una piccola torsione, oppure arrivano in profondità
+e si assestano sul beat. La ghiera satinata del pulsante, il LED ambra e il vetro reagiscono al passaggio e alla pressione.
+Pozze e fasci di luce, riflessi sulle superfici lucide; la profondità di campo separa le scritte nitide dalle piste,
+dai chip e dalle luci fuori fuoco. Il film è disegnato su un canvas (`src/tour/film.ts`), senza WebGL: un buffer
+riutilizzato compone i piani ottici e lo sfocato viene calcolato a risoluzione ridotta. Se il dispositivo arranca,
+si riducono pixel, piste, strati e piani ottici; con il movimento ridotto la camera resta ferma, senza sfocato o impulsi,
+e le scritte si danno il cambio in dissolvenza.
 Alla fine un nodo ambra vola sul primo elemento del sito e parte il tour guidato, che porta sezione per sezione sugli
 elementi veri (`src/tour/Tour.tsx`). Si può saltare in qualunque momento (anche con Esc) e togliere l'audio.
 
 Viene mostrata una volta per account su ogni dispositivo (`localStorage`, chiave `circuito:tour:<uid>`) e si può rivedere
 dalle Opzioni: **Rivedi il filmato** (solo il film) e **Rivedi il tour** (solo il tour guidato). Il codice della presentazione e il jingle si scaricano solo per chi deve vederla.
+
+Per rivedere e verificare il componente reale in locale, senza login o connessione a Firebase:
+
+```sh
+npm run preview:tour
+```
+
+Aprire `http://127.0.0.1:4174`. L'anteprima si ricompila quando si modifica il codice (ricaricare il browser).
+I parametri `?admin=1`, `?calm=1`, `?low=1` e `?name=Alessandra` consentono di controllare ruoli, movimento ridotto,
+qualità leggera e saluto; `?mode=auto` verifica anche il passaggio al tour su elementi dimostrativi.
 
 ## Pulsante "Scarica l'app Android"
 

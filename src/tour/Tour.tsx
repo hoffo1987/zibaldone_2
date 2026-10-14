@@ -64,10 +64,13 @@ export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }
   const host = useRef<HTMLDivElement>(null), cv = useRef<HTMLCanvasElement>(null), prog = useRef<HTMLElement>(null), spark = useRef<HTMLElement>(null);
   const power = useRef<HTMLButtonElement>(null), hint = useRef<HTMLParagraphElement>(null);
   const film = useRef<Film | null>(null);
+  const alive = useRef(true);
   const clock = useRef<{ voice: ReturnType<typeof sound.play>; t0: number; lead: number; paused: number; hiddenAt: number }>({ voice: null, t0: 0, lead: 0, paused: 0, hiddenAt: 0 });
   const done = useRef(onDone); done.current = onDone;
   const holdRef = useRef(hold); holdRef.current = hold;
   const text = useRef(filmText(admin, name)).current;
+
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   // il volume della musica di sottofondo scende per tutta la presentazione
   useEffect(() => {
@@ -118,7 +121,7 @@ export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }
   };
   const started = useRef(false);
   const start = (music: boolean) => {
-    if (started.current) return;
+    if (!alive.current || started.current) return;
     started.current = true;
     const c = clock.current, b = sound.buffer("intro");
     // se il decoder aggiunge qualche millisecondo di silenzio in testa, lo tolgo dall'orologio
@@ -145,7 +148,7 @@ export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }
     if (c.voice) { c.voice.stop(0.25); c.voice = null; c.t0 = performance.now() - t * 1000; c.paused = 0; setMuted(true); return; }
     sound.unlock();
     // se il jingle non è ancora pronto (si era scelto di guardare senza audio) lo si decodifica e si entra al punto giusto
-    const resume = () => { if (clock.current.voice) return; const t2 = Math.max(0, now()), v = sound.play("intro", { offset: t2 + 0.05, when: sound.now() + 0.05, force: true }); if (v) { c.voice = v; setMuted(false); } };
+    const resume = () => { if (!alive.current || clock.current.voice) return; const t2 = Math.max(0, now()), v = sound.play("intro", { offset: t2 + 0.05, when: sound.now() + 0.05, force: true }); if (v) { c.voice = v; setMuted(false); } };
     if (sound.buffer("intro")) resume(); else sound.load("intro").then(resume);
   };
   // fine del film: col primo accesso si passa al tour guidato, rivedendo solo il filmato si torna al sito
@@ -213,10 +216,10 @@ export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }
         <i ref={prog} className="tr-prog" aria-hidden="true" />
         <p className="sr-only" aria-live="polite">{caption}</p>
         {phase === "gate" && <>
-          <button ref={power} type="button" className="tr-power3d" onClick={() => powerOn(true)} aria-label="Accendi il Circuito: parte la presentazione con musica"
+          <button ref={power} type="button" className="tr-power3d" onClick={() => powerOn(true)} disabled={pressed} aria-busy={pressed} aria-label="Accendi il Circuito: parte la presentazione con musica"
             onPointerEnter={() => film.current?.gate({ hover: true })} onPointerLeave={() => film.current?.gate({ hover: false })}
             onFocus={() => film.current?.gate({ hover: true })} onBlur={() => film.current?.gate({ hover: false })} />
-          <p ref={hint} className={`tr-hint ${pressed ? "off" : ""}`} aria-hidden="true">Premi per accendere</p>
+          <p ref={hint} className={`tr-hint ${pressed ? "off" : ""}`} aria-hidden="true"><strong>Accendi il Circuito</strong><span>Premi per iniziare</span></p>
           {!pressed && <button type="button" className="tr-link tr-silent" onClick={() => powerOn(false)}>Guarda senza audio</button>}
         </>}
         {phase === "film" && <div className="tr-bar">
