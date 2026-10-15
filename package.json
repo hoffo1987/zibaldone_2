@@ -9,6 +9,10 @@
   ],
   "main": "src/index.tsx",
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "8.5.3",
     "firebase": "12.19.0",
     "loader-utils": "3.2.1",
     "lucide-react": "1.46.0",
@@ -27,6 +31,8 @@
     "typescript": "4.9.5"
   },
   "scripts": {
+    "fonts:update": "node scripts/vendor-fonts.cjs",
+    "benchmark": "node scripts/benchmark.cjs",
     "sprites:cloud": "node scripts/build-cloud-atlas.cjs",
     "sprites:tweens": "python3 scripts/tween-cloud.py",
     "preview:egg": "node scripts/preview-egg.cjs",
@@ -36,9 +42,15 @@
     "typecheck:egg": "tsc --project scripts/tsconfig.egg.json",
     "typecheck": "tsc --noEmit",
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "node scripts/build.cjs",
+    "cap:sync": "cap sync",
+    "apk:sync": "npm run build && cap sync android",
+    "apk:release": "npm run build && cap sync android && cd android && gradlew assembleRelease",
     "test": "react-scripts test --env=jsdom",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "ios:sync": "npm run build && cap sync ios",
+    "ios:open": "cap open ios",
+    "android:bundle": "npm run build && cap sync android && cd android && gradlew bundleRelease"
   },
   "browserslist": [
     ">0.2%",

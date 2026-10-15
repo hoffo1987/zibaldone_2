@@ -4,3 +4,9 @@ build
 .egg-preview
 .tour-preview
 .podium-preview
+.test-cache/
+.optimization/
+dist-apk/
+*.log
+*.jks
+*.keystore

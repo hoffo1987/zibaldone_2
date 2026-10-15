@@ -19,7 +19,7 @@ const STUDIO_L = STUDIO.map(([w, h, col, k, x, y, z]) => {
   // orientamento di Object3D.lookAt(0,0,0) con "su" = +y, come nel compute shader dell'ambiente
   const d = Math.hypot(x, y, z), c = lin(col), n = [-x / d, -y / d, -z / d];
   const ex = norm([n[2], 0, -n[0]]), ey = [n[1] * ex[2] - n[2] * ex[1], n[2] * ex[0] - n[0] * ex[2], n[0] * ex[1] - n[1] * ex[0]];
-  return { pos: [x, y, z], n, ex, ey, hw: w / 2, hh: h / 2, dir: [x / d, y / d, z / d], col: [c[0] * k, c[1] * k, c[2] * k], solid: (w * h) / (d * d) };
+  return { pos: [x, y, z], plane: x * n[0] + y * n[1] + z * n[2], n, ex, ey, hw: w / 2, hh: h / 2, dir: [x / d, y / d, z / d], col: [c[0] * k, c[1] * k, c[2] * k], solid: (w * h) / (d * d) };
 });
 const BG = lin(STUDIO_BG);
 const SKY = lin(0xdffcf7).map((c) => c * 0.65), GROUND = lin(0x062521).map((c) => c * 0.65);
@@ -32,7 +32,7 @@ const env = (r: ArrayLike<number>, rough: number, out: number[]) => {
   const blur = 0.02 + rough * rough * 1.1;
   for (const p of STUDIO_L) {
     const den = dot(r, p.n); if (den > -1e-4) continue; // il raggio deve andare verso la faccia luminosa
-    const t = dot(p.pos, p.n) / den; if (t <= 0) continue;
+    const t = p.plane / den; if (t <= 0) continue;
     const qx = r[0] * t - p.pos[0], qy = r[1] * t - p.pos[1], qz = r[2] * t - p.pos[2], b = blur * t;
     const u = Math.abs(qx * p.ex[0] + qy * p.ex[1] + qz * p.ex[2]), v = Math.abs(qx * p.ey[0] + qy * p.ey[1] + qz * p.ey[2]);
     const w = soft((p.hw - u) / (2 * b) + 0.5) * soft((p.hh - v) / (2 * b) + 0.5) * Math.min(1, (p.hw * p.hh) / ((p.hw + b) * (p.hh + b)) * 1.15);
@@ -45,37 +45,40 @@ const envDiffuse = (n: ArrayLike<number>, out: number[]) => {
   for (const p of STUDIO_L) { const k = Math.max(0, dot(n, p.dir)) * p.solid / PI; out[0] += p.col[0] * k; out[1] += p.col[1] * k; out[2] += p.col[2] * k; }
   return out;
 };
-const dfg = (dotNV: number, r: number) => {
+const dfg = (dotNV: number, r: number, out: number[]) => {
   const r0 = -r + 1, r1 = -0.0275 * r + 0.0425, r2 = -0.572 * r + 1.04, r3 = 0.022 * r - 0.04;
   const a004 = Math.min(r0 * r0, Math.pow(2, -9.28 * dotNV)) * r0 + r1;
-  return [-1.04 * a004 + r2, 1.04 * a004 + r3];
+  out[0] = -1.04 * a004 + r2; out[1] = 1.04 * a004 + r3;
+  return out;
 };
 const ggx = (N: ArrayLike<number>, V: ArrayLike<number>, L: ArrayLike<number>, rough: number, f0: number) => {
-  const H = norm([L[0] + V[0], L[1] + V[1], L[2] + V[2]]), nl = Math.max(0, dot(N, L)), nv = Math.max(1e-4, dot(N, V)), nh = Math.max(0, dot(N, H)), vh = Math.max(0, dot(V, H));
+  const hx = L[0] + V[0], hy = L[1] + V[1], hz = L[2] + V[2], hl = Math.hypot(hx, hy, hz) || 1;
+  const x = hx / hl, y = hy / hl, z = hz / hl;
+  const nl = Math.max(0, dot(N, L)), nv = Math.max(1e-4, dot(N, V)), nh = Math.max(0, N[0] * x + N[1] * y + N[2] * z), vh = Math.max(0, V[0] * x + V[1] * y + V[2] * z);
   const a = rough * rough, a2 = a * a, dd = nh * nh * (a2 - 1) + 1, D = a2 / (PI * dd * dd);
   const Vis = 0.5 / Math.max(nl * Math.sqrt(a2 + (1 - a2) * nv * nv) + nv * Math.sqrt(a2 + (1 - a2) * nl * nl), 1e-6);
   const F = f0 + (1 - f0) * Math.pow(2, (-5.55473 * vh - 6.98316) * vh);
   return nl * D * Vis * F;
 };
 const tmpA = [0, 0, 0], tmpB = [0, 0, 0], tmpR = [0, 0, 0];
+const tmpCC = [0, 0, 0], tmpFab = [0, 0], tmpCCFab = [0, 0];
 // colore lineare in uscita da una superficie con normale N vista da V (entrambe nel mondo, normalizzate)
 export const shade = (m: Mat, N: ArrayLike<number>, V: ArrayLike<number>, out: number[], ao = 1, tint?: ArrayLike<number>) => {
   const nv = Math.max(1e-4, dot(N, V)), base = tint || m.color;
   const rough = Math.max(m.rough, 0.0525), ccr = Math.max(m.ccRough, 0.0525);
-  const diff = [base[0] * (1 - m.metal), base[1] * (1 - m.metal), base[2] * (1 - m.metal)];
-  const f0 = [0.04 + (base[0] - 0.04) * m.metal, 0.04 + (base[1] - 0.04) * m.metal, 0.04 + (base[2] - 0.04) * m.metal];
   // riflessione: R piegata verso N quanto la rugosità, come iblRadiance
   const d2 = 2 * dot(N, V);
   tmpR[0] = d2 * N[0] - V[0]; tmpR[1] = d2 * N[1] - V[1]; tmpR[2] = d2 * N[2] - V[2];
-  const hemi = 0.5 * N[1] + 0.5, irr = [GROUND[0] + (SKY[0] - GROUND[0]) * hemi, GROUND[1] + (SKY[1] - GROUND[1]) * hemi, GROUND[2] + (SKY[2] - GROUND[2]) * hemi];
-  const ed = envDiffuse(N, tmpA), rad = env(tmpR, rough, tmpB), fab = dfg(nv, rough);
+  const hemi = 0.5 * N[1] + 0.5;
+  const ed = envDiffuse(N, tmpA), rad = env(tmpR, rough, tmpB), fab = dfg(nv, rough, tmpFab);
   const kl = Math.max(0, dot(N, KEY)), kr = Math.max(0, dot(N, RIM)), sk = ggx(N, V, KEY, rough, 0.04), sr = ggx(N, V, RIM, rough, 0.04);
-  const ccK = ggx(N, V, KEY, ccr, 0.04), ccRad = env(tmpR, ccr, [0, 0, 0]), ccFab = dfg(nv, ccr), fcc = 0.04 + 0.96 * Math.pow(2, (-5.55473 * nv - 6.98316) * nv);
+  const ccK = ggx(N, V, KEY, ccr, 0.04), ccRad = env(tmpR, ccr, tmpCC), ccFab = dfg(nv, ccr, tmpCCFab), fcc = 0.04 + 0.96 * Math.pow(2, (-5.55473 * nv - 6.98316) * nv);
   const dirAO = 1 + (ao - 1) * 0.45;
   for (let i = 0; i < 3; i++) {
-    const fss = f0[i] * fab[0] + fab[1];
-    const direct = (diff[i] / PI) * (KEY_C[i] * kl + RIM_C[i] * kr) + (KEY_C[i] * sk + RIM_C[i] * sr) * (m.metal ? f0[i] / 0.04 : 1);
-    const indirect = (diff[i] * (irr[i] / PI + ed[i] * m.envI) * (1 - fss)) * ao + rad[i] * m.envI * fss * ao;
+    const diff = base[i] * (1 - m.metal), f0 = 0.04 + (base[i] - 0.04) * m.metal, irr = GROUND[i] + (SKY[i] - GROUND[i]) * hemi;
+    const fss = f0 * fab[0] + fab[1];
+    const direct = (diff / PI) * (KEY_C[i] * kl + RIM_C[i] * kr) + (KEY_C[i] * sk + RIM_C[i] * sr) * (m.metal ? f0 / 0.04 : 1);
+    const indirect = (diff * (irr / PI + ed[i] * m.envI) * (1 - fss)) * ao + rad[i] * m.envI * fss * ao;
     let o = direct * dirAO + indirect;
     o = o * (1 - m.cc * fcc) + (KEY_C[i] * ccK * dirAO + ccRad[i] * m.envI * (0.04 * ccFab[0] + ccFab[1]) * ao) * m.cc;
     out[i] = o;
@@ -97,7 +100,8 @@ export const toSRGB = (c: ArrayLike<number>, out: number[] = [0, 0, 0]) => {
   return out;
 };
 const css = (c: ArrayLike<number>, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a.toFixed(3)})`;
-const litCss = (m: Mat, N: ArrayLike<number>, V: ArrayLike<number>, a = 1, ao = 1, tint?: ArrayLike<number>) => css(toSRGB(shade(m, N, V, [0, 0, 0], ao, tint)), a);
+const litLinear = [0, 0, 0], litRGB = [0, 0, 0];
+const litCss = (m: Mat, N: ArrayLike<number>, V: ArrayLike<number>, a = 1, ao = 1, tint?: ArrayLike<number>) => css(toSRGB(shade(m, N, V, litLinear, ao, tint), litRGB), a);
 
 const MAT = {
   plate: { color: [1, 1, 1] as C3, metal: 0.08, rough: 0.26, cc: 0.95, ccRough: 0.1, envI: 0.95 },

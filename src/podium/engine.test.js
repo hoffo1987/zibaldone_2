@@ -1,0 +1,83 @@
+// Verify that the live renderer retains every pass and draw while avoiding redundant resource creation/work.
+let PodiumView, podiumQuality;
+const globals = ['GPUBuffer', 'GPUBufferUsage', 'GPUTextureUsage', 'GPUShaderStage'];
+beforeAll(() => {
+  global.GPUBuffer = class { constructor(desc) { Object.assign(this, desc); } destroy() {} };
+  global.GPUBufferUsage = { UNIFORM: 1, COPY_DST: 2, STORAGE: 4, VERTEX: 8, INDEX: 16 };
+  global.GPUTextureUsage = { RENDER_ATTACHMENT: 1, TEXTURE_BINDING: 2, STORAGE_BINDING: 4, COPY_DST: 8 };
+  global.GPUShaderStage = { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
+  ({ PodiumView, podiumQuality } = require('./engine'));
+});
+afterAll(() => globals.forEach(k => delete global[k]));
+
+function gpu() {
+  const stats = { views: 0, bundles: 0, textures: 0, passes: [] };
+  const texture = desc => {
+    stats.textures++;
+    return { width: Array.isArray(desc.size) ? desc.size[0] : 1, height: Array.isArray(desc.size) ? desc.size[1] : 1,
+      mipLevelCount: desc.mipLevelCount || 1, createView: o => { stats.views++; return { texture: desc.label, ...o }; }, destroy() {} };
+  };
+  const encoder = desc => {
+    const record = { label: desc?.label, dispatches: [], commands: [] };
+    return { record, setPipeline() {}, setBindGroup() {}, setVertexBuffer() {}, setIndexBuffer() {},
+      dispatchWorkgroups(...n) { record.dispatches.push(n); },
+      draw(...args) { record.commands.push(['draw', ...args]); }, drawIndexed(...args) { record.commands.push(['indexed', ...args]); },
+      executeBundles(bundles) { bundles.forEach(b => record.commands.push(...b.commands)); },
+      end() {}, finish: () => record };
+  };
+  const device = {
+    queue: { writeBuffer() {}, copyExternalImageToTexture() {}, submit() {}, onSubmittedWorkDone: () => Promise.resolve() },
+    createBuffer: desc => new GPUBuffer(desc), createTexture: texture, createSampler: x => x,
+    createBindGroup: desc => desc, createBindGroupLayout: x => x, createPipelineLayout: x => x, createShaderModule: x => x,
+    createComputePipelineAsync: jest.fn(async () => ({ getBindGroupLayout: () => ({}) })),
+    createRenderPipelineAsync: jest.fn(async () => ({ getBindGroupLayout: () => ({}) })),
+    createRenderBundleEncoder(desc) { stats.bundles++; return encoder(desc); },
+    createCommandEncoder: () => ({
+      beginComputePass(desc) { const e = encoder(desc); stats.passes.push(e.record); return e; },
+      beginRenderPass(desc) { const e = encoder(desc); stats.passes.push(e.record); return e; },
+      finish() {},
+    }), pushErrorScope() {}, popErrorScope: async () => null,
+  };
+  const canvasTexture = texture({ label: 'canvas', size: [800, 600] });
+  const ctx = { configure() {}, unconfigure() {}, getCurrentTexture: () => canvasTexture };
+  const gradient = { addColorStop() {} };
+  const context2d = new Proxy({}, { get: (_, k) => k === 'createLinearGradient' || k === 'createRadialGradient' ? () => gradient : () => {} });
+  jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(kind => kind === 'webgpu' ? ctx : context2d);
+  Object.defineProperty(navigator, 'gpu', { configurable: true, value: { getPreferredCanvasFormat: () => 'bgra8unorm' } });
+  return { device, stats };
+}
+afterEach(() => { jest.restoreAllMocks(); delete navigator.gpu; });
+
+test.each([['low', true], ['high', false]])('keeps the complete %s scene and updates mipmaps only for the changed cube face', async (tier, mobile) => {
+  const { device, stats } = gpu(), q = podiumQuality(tier, mobile);
+  const view = new PodiumView(device, document.createElement('canvas'), q);
+  await view.ready(); view.resize(800, 600, 1, 1, 0, 0);
+  view.render(20, 0); await device.queue.onSubmittedWorkDone();
+  const initialMain = stats.passes.find(p => p.label === 'podium-main');
+  expect(initialMain.commands.filter(c => c[0] === 'indexed').length).toBeGreaterThan(4);
+  expect(initialMain.commands.slice(-2)).toEqual([['draw', 3], ['draw', 4, q.dust]]);
+  expect(stats.passes.filter(p => p.label === 'podium-env')).toHaveLength(6);
+  expect(stats.bundles).toBe(8); // six reflection cameras, floor reflection, main scene
+  stats.passes = []; const views = stats.views, textures = stats.textures;
+  view.render(20 + 1 / 60, 1); await device.queue.onSubmittedWorkDone();
+  expect(stats.passes.filter(p => p.label === 'podium-env')).toHaveLength(1);
+  expect(stats.passes.find(p => p.label === 'podium-mips').dispatches).toHaveLength(7 + 5); // cube + floor
+  expect(stats.passes.find(p => p.label === 'podium-main').commands).toEqual(initialMain.commands);
+  expect(stats.passes.some(p => p.label === 'podium-shadow')).toBe(true);
+  expect(stats.passes.some(p => p.label === 'podium-gi')).toBe(true);
+  expect(stats.passes.some(p => p.label === 'podium-planar')).toBe(true);
+  expect(stats.views - views).toBe(1); // only the swapchain image; all other texture views are reused
+  expect(stats.textures).toBe(textures); expect(stats.bundles).toBe(8);
+  view.resize(800, 600, 1, 1, 0, 0); expect(stats.bundles).toBe(8);
+  view.resize(800, 600, 0.9, 1, 0, 0); expect(stats.bundles).toBe(9);
+  view.destroy();
+  const pipelines = device.createRenderPipelineAsync.mock.calls.length;
+  stats.passes = [];
+  const second = new PodiumView(device, document.createElement('canvas'), q);
+  await second.ready();
+  expect(stats.passes).toHaveLength(0); // procedural materials were already generated for this device
+  expect(second.marble).toBe(view.marble); expect(second.fabric).toBe(view.fabric); expect(second.decal).toBe(view.decal);
+  expect(device.createRenderPipelineAsync).toHaveBeenCalledTimes(pipelines);
+  expect(second.vbuf).toBe(view.vbuf); expect(second.ibuf).toBe(view.ibuf);
+  second.destroy();
+});

@@ -3,6 +3,8 @@
 // per questo si usa una lista di ciò che è CONSENTITO (tag, attributi, stili), non una lista di cose vietate.
 // Tutto il resto viene tolto. Le funzioni non toccano mai il DOM della pagina: lavorano su un documento inerte.
 
+import { memoText } from "./cache";
+
 const HTML_NS = "http://www.w3.org/1999/xhtml";
 
 // Tag che l'editor può produrre (o che arrivano incollando da Word, pagine web, ecc.)
@@ -90,17 +92,17 @@ const walk = (parent: Node) => {
 };
 
 /** HTML sicuro da mostrare o salvare. */
-export const clean = (h: string): string => {
+export const clean = memoText((h: string): string => {
   const d = new DOMParser().parseFromString(h || "", "text/html");
   walk(d.body);
   return d.body.innerHTML;
-};
+});
 
 /** Solo il testo, con uno spazio tra un paragrafo e l'altro (così "ciao" + "mondo" sono 2 parole). */
-export const plain = (h: string): string => {
+export const plain = memoText((h: string): string => {
   const d = new DOMParser().parseFromString(h || "", "text/html");
   d.querySelectorAll("script,style").forEach((n) => n.remove());
   d.body.querySelectorAll("br").forEach((b) => b.after(" "));
   d.body.querySelectorAll("div,p,li,tr,h1,h2,h3,h4,h5,h6,blockquote,pre").forEach((b) => b.append(" "));
   return d.body.textContent || "";
-};
+});

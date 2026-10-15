@@ -1,4 +1,4 @@
-// Motore WebGPU della sala del podio: usa lo stesso GPUDevice del logo (acquireEngine). Una volta all'avvio: geometrie
+// Motore WebGPU della sala del podio: GPUDevice dedicato (acquirePodiumDevice). Una volta all'avvio: geometrie
 // (meshes.ts), texture procedurali di marmo e stoffa con le mip, l'atlante dei numeri incisi e dell'emblema (Canvas 2D).
 // Ogni fotogramma:
 //  1. compute: nuvole sul piano del vetro + mip (la penombra delle nuvole sceglie il livello)
@@ -25,6 +25,33 @@ const ENV_POS = [0, 3.0, 0.6]; // centro della cubemap: sopra il primo gradino, 
 const PLANAR_MIPS = 6, ENV_MIPS = 8;
 const RT = GPUTextureUsage;
 const mipCount = (w: number, h: number) => Math.floor(Math.log2(Math.max(w, h))) + 1;
+type Geometry = { vertex: GPUBuffer; index: GPUBuffer; ranges: Record<string, [number, number]> };
+// The podium device is retained for 30 seconds between visits. Keep its immutable mesh buffers as well,
+// so reopening the room does not regenerate and upload 161,539 vertices. Device destruction frees the buffers.
+const geometryCache = new WeakMap<GPUDevice, Map<boolean, Geometry>>();
+const pipelineCache = new WeakMap<GPUDevice, Map<string, Promise<any>>>();
+type Materials = { marble: GPUTexture; fabric: GPUTexture; decal: GPUTexture; initialized: boolean };
+const materialCache = new WeakMap<GPUDevice, Map<boolean, Materials>>();
+function materials(device: GPUDevice, mobile: boolean): Materials {
+  let variants = materialCache.get(device);
+  if (!variants) { variants = new Map(); materialCache.set(device, variants); }
+  const saved = variants.get(mobile); if (saved) return saved;
+  const ms = mobile ? 512 : 1024, usage = RT.STORAGE_BINDING | RT.TEXTURE_BINDING;
+  const marble = device.createTexture({ label: "podium-marble", size: [ms, ms], format: "rgba8unorm", mipLevelCount: mipCount(ms, ms), usage });
+  const fabric = device.createTexture({ label: "podium-fabric", size: [256, 256], format: "rgba8unorm", mipLevelCount: mipCount(256, 256), usage });
+  const decal = device.createTexture({ label: "podium-decal", size: [1024, 1024], format: "rgba8unorm", mipLevelCount: mipCount(1024, 1024), usage: usage | RT.COPY_DST | RT.RENDER_ATTACHMENT });
+  const result = { marble, fabric, decal, initialized: false }; variants.set(mobile, result); return result;
+}
+function geometry(device: GPUDevice, mobile: boolean): Geometry {
+  let variants = geometryCache.get(device);
+  if (!variants) { variants = new Map(); geometryCache.set(device, variants); }
+  const saved = variants.get(mobile); if (saved) return saved;
+  const mesh = buildScene(mobile), usage = GPUBufferUsage.COPY_DST;
+  const vertex = device.createBuffer({ label: "podium-vertices", size: mesh.vertices.byteLength, usage: GPUBufferUsage.VERTEX | usage });
+  const index = device.createBuffer({ label: "podium-indices", size: mesh.indices.byteLength, usage: GPUBufferUsage.INDEX | usage });
+  device.queue.writeBuffer(vertex, 0, mesh.vertices); device.queue.writeBuffer(index, 0, mesh.indices);
+  const result = { vertex, index, ranges: mesh.ranges }; variants.set(mobile, result); return result;
+}
 
 // facce della cubemap (convenzione WebGPU: +X, -X, +Y, -Y, +Z, -Z): direzione, destra e alto dell'immagine
 const FACES: [number[], number[], number[]][] = [
@@ -78,7 +105,8 @@ type Sized = {
   pw: number; ph: number; cw: number; ch: number; vw: number; vh: number; rw: number; rh: number;
   textures: GPUTexture[];
   color: GPUTextureView; depth: GPUTextureView; scene: GPUTextureView | null; comb: GPUTextureView; ldr: GPUTextureView;
-  vol: GPUTexture[]; planar: GPUTexture; planarDepth: GPUTextureView; bloom: GPUTexture[];
+  vol: GPUTextureView[]; planar: GPUTextureView; planarDepth: GPUTextureView; bloom: GPUTextureView[];
+  bundle: GPURenderBundle;
   frameMain: GPUBindGroup; volGroups: GPUBindGroup[]; planarMips: GPUBindGroup[];
   combine: GPUBindGroup[]; down: GPUBindGroup[]; up: GPUBindGroup[]; tone: GPUBindGroup; final: GPUBindGroup;
 };
@@ -98,8 +126,11 @@ export class PodiumView {
   private readonly marble: GPUTexture;
   private readonly fabric: GPUTexture;
   private readonly decal: GPUTexture;
+  private readonly materials: Materials;
   private readonly env: GPUTexture;
   private readonly envDepth: GPUTexture;
+  private readonly shadowView: GPUTextureView;
+  private readonly envDepthView: GPUTextureView;
   private readonly dummy2d: GPUTexture;
   private readonly dummyCube: GPUTexture;
   private readonly samplers: { cmp: GPUSampler; lin: GPUSampler; aniso: GPUSampler };
@@ -148,22 +179,18 @@ export class PodiumView {
       busy: [false, false, false],
     };
 
-    const mesh = buildScene(q.mobile);
-    this.ranges = mesh.ranges;
-    this.vbuf = buf("podium-vertices", mesh.vertices.byteLength, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
-    this.ibuf = buf("podium-indices", mesh.indices.byteLength, GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST);
-    d.queue.writeBuffer(this.vbuf, 0, mesh.vertices);
-    d.queue.writeBuffer(this.ibuf, 0, mesh.indices);
+    const mesh = geometry(d, q.mobile);
+    this.ranges = mesh.ranges; this.vbuf = mesh.vertex; this.ibuf = mesh.index;
 
     const tex = (desc: GPUTextureDescriptor) => { const t = d.createTexture(desc); this.ownTextures.push(t); return t; };
     this.shadow = tex({ label: "podium-shadow", size: q.shadow, format: "depth32float", usage: RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING });
     this.cloud = tex({ label: "podium-clouds", size: CLOUD, format: HDR, mipLevelCount: mipCount(CLOUD[0], CLOUD[1]), usage: RT.STORAGE_BINDING | RT.TEXTURE_BINDING });
-    const ms = q.mobile ? 512 : 1024;
-    this.marble = tex({ label: "podium-marble", size: [ms, ms], format: "rgba8unorm", mipLevelCount: mipCount(ms, ms), usage: RT.STORAGE_BINDING | RT.TEXTURE_BINDING });
-    this.fabric = tex({ label: "podium-fabric", size: [256, 256], format: "rgba8unorm", mipLevelCount: mipCount(256, 256), usage: RT.STORAGE_BINDING | RT.TEXTURE_BINDING });
-    this.decal = tex({ label: "podium-decal", size: [1024, 1024], format: "rgba8unorm", mipLevelCount: mipCount(1024, 1024), usage: RT.TEXTURE_BINDING | RT.COPY_DST | RT.RENDER_ATTACHMENT | RT.STORAGE_BINDING });
+    this.materials = materials(d, q.mobile);
+    this.marble = this.materials.marble; this.fabric = this.materials.fabric; this.decal = this.materials.decal;
     this.env = tex({ label: "podium-env", size: [q.envSize, q.envSize, 6], format: HDR, mipLevelCount: ENV_MIPS, usage: RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING | RT.STORAGE_BINDING });
     this.envDepth = tex({ label: "podium-env-depth", size: [q.envSize, q.envSize], format: "depth24plus", usage: RT.RENDER_ATTACHMENT });
+    this.shadowView = this.shadow.createView();
+    this.envDepthView = this.envDepth.createView();
     this.dummy2d = tex({ label: "podium-dummy", size: [1, 1], format: HDR, usage: RT.TEXTURE_BINDING });
     this.dummyCube = tex({ label: "podium-dummy-cube", size: [1, 1, 6], format: HDR, usage: RT.TEXTURE_BINDING });
 
@@ -219,10 +246,10 @@ export class PodiumView {
   }
 
   // catena delle mip con il compute (riduzione 2×2): un gruppo per livello
-  private mipGroups(pipe: GPUComputePipeline, t: GPUTexture, levels: number, array = false) {
+  private mipGroups(pipe: GPUComputePipeline, t: GPUTexture, levels: number, array = false, face = 0, layers = 6) {
     const out: GPUBindGroup[] = [];
     for (let k = 1; k < levels; k++) {
-      const view = (l: number) => t.createView(array ? { dimension: "2d-array", baseMipLevel: l, mipLevelCount: 1, baseArrayLayer: 0, arrayLayerCount: 6 } : { baseMipLevel: l, mipLevelCount: 1 });
+      const view = (l: number) => t.createView(array ? { dimension: "2d-array", baseMipLevel: l, mipLevelCount: 1, baseArrayLayer: face, arrayLayerCount: layers } : { baseMipLevel: l, mipLevelCount: 1 });
       out.push(this.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: view(k - 1) }, { binding: 1, resource: view(k) }] }));
     }
     return out;
@@ -232,7 +259,7 @@ export class PodiumView {
     groups.forEach((g, k) => { cp.setBindGroup(0, g); cp.dispatchWorkgroups(Math.ceil(Math.max(1, w >> (k + 1)) / 8), Math.ceil(Math.max(1, h >> (k + 1)) / 8), layers); });
   }
 
-  async ready() {
+  private async buildPipelines() {
     const d = this.device, q = this.q, L = this.layouts;
     const mod = (code: string, label: string) => d.createShaderModule({ label, code });
     const scene = mod(sceneShader(q), "podium-scene"), post = mod(postShader, "podium-post"), vol = mod(volShader(q), "podium-vol");
@@ -286,8 +313,24 @@ export class PodiumView {
       full(post, "fsTone", postLayout, HDR),
       full(post, "fsFinal", postLayout, this.format),
     ]);
+    return { texgen, mip8, mip16, mipCube, clouds, gi, shadow, main, sky, dust, flat, flatSky, vol: volP, combine, down, up, tone, final };
+  }
+
+  async ready() {
+    const d = this.device, L = this.layouts;
+    let variants = pipelineCache.get(d);
+    if (!variants) { variants = new Map(); pipelineCache.set(d, variants); }
+    const key = JSON.stringify([this.format, this.q]);
+    let ready = variants.get(key);
+    if (!ready) {
+      ready = this.buildPipelines(); variants.set(key, ready);
+      const cache = variants;
+      ready.catch(() => { if (cache.get(key) === ready) cache.delete(key); });
+    }
+    const pipes = await ready;
     if (this.dead) return;
-    this.pipes = { mip8, mip16, mipCube, clouds, gi, shadow, main, sky, dust, flat, flatSky, vol: volP, combine, down, up, tone, final };
+    this.pipes = pipes;
+    const { clouds, gi, shadow, mip8, mip16, mipCube } = pipes;
 
     // gruppi che non dipendono dalle dimensioni del canvas
     const dummy2d = this.dummy2d.createView(), dummyCube = this.dummyCube.createView({ dimension: "cube" });
@@ -298,26 +341,31 @@ export class PodiumView {
       gi: this.frameGroup(L.frameRW, dummyCube, dummy2d),
       // nei riflessi la cubemap e il riflesso planare non si leggono (e non si possono leggere mentre si disegnano)
       frameOff: this.frameGroup(L.frame, dummyCube, dummy2d),
-      envMips: this.mipGroups(mipCube, this.env, ENV_MIPS, true),
+      envMips: FACES.map((_, face) => this.mipGroups(mipCube, this.env, ENV_MIPS, true, face, 1)),
       envFaces: FACES.map((_, i) => this.env.createView({ dimension: "2d", baseArrayLayer: i, arrayLayerCount: 1, baseMipLevel: 0, mipLevelCount: 1 })),
       passMain: d.createBindGroup({ layout: L.pass, entries: [{ binding: 0, resource: { buffer: this.passBuf.main } }] }),
       passPlanar: d.createBindGroup({ layout: L.pass, entries: [{ binding: 0, resource: { buffer: this.passBuf.planar } }] }),
       passEnv: this.passBuf.env.map((b) => d.createBindGroup({ layout: L.pass, entries: [{ binding: 0, resource: { buffer: b } }] })),
       envView: this.env.createView({ dimension: "cube" }),
     };
+    const G = this.groups;
+    G.envBundles = G.passEnv.map((pass: GPUBindGroup) => this.sceneBundle(false, G.frameOff, pass, ["trophies"]));
+    G.planarBundle = this.sceneBundle(false, G.frameOff, G.passPlanar, ["floor"]);
 
     // texture procedurali e atlante delle incisioni, una volta
+    if (this.materials.initialized) return;
     d.queue.copyExternalImageToTexture({ source: decalCanvas() }, { texture: this.decal }, [1024, 1024]);
     const enc = d.createCommandEncoder({ label: "podium-init" });
     const cp = enc.beginComputePass();
-    cp.setPipeline(texgen);
-    cp.setBindGroup(0, d.createBindGroup({ layout: texgen.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.marble.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }, { binding: 1, resource: this.fabric.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }] }));
+    cp.setPipeline(pipes.texgen);
+    cp.setBindGroup(0, d.createBindGroup({ layout: pipes.texgen.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.marble.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }, { binding: 1, resource: this.fabric.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }] }));
     cp.dispatchWorkgroups(Math.ceil(this.marble.width / 8), Math.ceil(this.marble.height / 8));
     this.runMips(cp, mip8, this.mipGroups(mip8, this.marble, this.marble.mipLevelCount), this.marble.width, this.marble.height);
     this.runMips(cp, mip8, this.mipGroups(mip8, this.fabric, this.fabric.mipLevelCount), this.fabric.width, this.fabric.height);
     this.runMips(cp, mip8, this.mipGroups(mip8, this.decal, this.decal.mipLevelCount), this.decal.width, this.decal.height);
     cp.end();
     d.queue.submit([enc.finish()]);
+    this.materials.initialized = true;
   }
 
   // w, h: viewport in pixel CSS; ratio: pixel della scena per pixel CSS; out: pixel del canvas per pixel CSS (quelli dello
@@ -353,11 +401,13 @@ export class PodiumView {
     const lin = this.samplers.lin, dummy = this.dummy2d.createView();
     const postGroup = (src: GPUTextureView, aux: GPUTextureView, buffer: number, layout = L.post) => d.createBindGroup({ layout, entries: [{ binding: 0, resource: src }, { binding: 1, resource: lin }, { binding: 2, resource: aux }, { binding: 3, resource: { buffer: this.postBuf[buffer] } }] });
     const depthView = depth.createView(), colorView = color.createView(), sceneView = scene ? scene.createView() : null;
+    const frameMain = this.frameGroup(L.frame, this.groups.envView, planar.createView());
     this.sized = {
       pw, ph, cw, ch, vw, vh, rw, rh, textures,
       color: colorView, depth: depthView, scene: sceneView, comb: comb.createView(), ldr: ldr.createView(),
-      vol, planar, planarDepth: planarDepth.createView(), bloom,
-      frameMain: this.frameGroup(L.frame, this.groups.envView, planar.createView()),
+      vol: vol.map((v) => v.createView()), planar: planar.createView({ baseMipLevel: 0, mipLevelCount: 1 }), planarDepth: planarDepth.createView(), bloom: bloom.map((b) => b.createView()),
+      bundle: this.sceneBundle(true, frameMain, this.groups.passMain, []),
+      frameMain,
       // vol[v] si scrive leggendo vol[1-v]
       volGroups: [0, 1].map((v) => d.createBindGroup({ layout: L.volx, entries: [{ binding: 0, resource: depthView }, { binding: 1, resource: vol[1 - v].createView() }] })),
       planarMips: this.mipGroups(P.mip16, planar, planarMips),
@@ -402,16 +452,28 @@ export class PodiumView {
     cp.setPipeline(P.clouds); cp.setBindGroup(0, G.clouds); cp.dispatchWorkgroups(Math.ceil(CLOUD[0] / 8), Math.ceil(CLOUD[1] / 8));
     this.runMips(cp, P.mip16, G.cloudMips, CLOUD[0], CLOUD[1]);
     cp.end();
-    const sp = enc.beginRenderPass({ label: "podium-shadow", colorAttachments: [], depthStencilAttachment: { view: this.shadow.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" } });
+    const sp = enc.beginRenderPass({ label: "podium-shadow", colorAttachments: [], depthStencilAttachment: { view: this.shadowView, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" } });
     sp.setPipeline(P.shadow); sp.setBindGroup(0, G.shadow);
     sp.setVertexBuffer(0, this.vbuf); sp.setIndexBuffer(this.ibuf, "uint32");
     sp.drawIndexed(this.ibuf.size / 4);
     sp.end();
   }
 
-  private drawScene(p: GPURenderPassEncoder, skip: string[]) {
+  private drawScene(p: GPURenderPassEncoder | GPURenderBundleEncoder, skip: string[]) {
     p.setVertexBuffer(0, this.vbuf); p.setIndexBuffer(this.ibuf, "uint32");
     for (const [name, [first, count]] of Object.entries(this.ranges)) if (!skip.includes(name) && count > 0) p.drawIndexed(count, 1, first);
+  }
+
+  // The draw order, geometry, shaders and uniforms are unchanged. Only record the immutable commands once;
+  // uniform buffers still supply the live camera, light, cups and banners on every frame.
+  private sceneBundle(main: boolean, frame: GPUBindGroup, pass: GPUBindGroup, skip: string[]) {
+    const P = this.pipes;
+    const b = this.device.createRenderBundleEncoder({ colorFormats: [HDR], depthStencilFormat: main ? "depth32float" : "depth24plus", sampleCount: main ? MSAA : 1 });
+    b.setBindGroup(0, frame); b.setBindGroup(1, pass);
+    b.setPipeline(main ? P.main : P.flat); this.drawScene(b, skip);
+    b.setPipeline(main ? P.sky : P.flatSky); b.draw(3);
+    if (main) { b.setPipeline(P.dust); b.draw(4, this.q.dust); }
+    return b.finish();
   }
 
   // t: secondi; night: 0 giorno … 1 notte; motion: camera; cups: per coppa [angolo, sollevamento, bagliore].
@@ -438,9 +500,10 @@ export class PodiumView {
       this.warm = true;
     }
     const m = this.writeFrame(t, night, this.frameNo % q.giPeriod);
-    d.queue.writeBuffer(this.passBuf.main, 0, this.packPass(c, viewProj(c), 0, s.pw, s.ph));
+    const vp = viewProj(c);
+    d.queue.writeBuffer(this.passBuf.main, 0, this.packPass(c, vp, 0, s.pw, s.ph));
     const kx = s.rw / s.pw, ky = s.rh / s.ph;
-    d.queue.writeBuffer(this.passBuf.planar, 0, this.packPass(c, viewProj(c), 1, s.rw, s.rh, kx, ky));
+    d.queue.writeBuffer(this.passBuf.planar, 0, this.packPass(c, vp, 1, s.rw, s.rh, kx, ky));
     const post = this.postData;
     post.set([m.exposure, 0.075 / q.bloom, this.frameNo % 4096, 1]); d.queue.writeBuffer(this.postBuf[0], 0, post);
     post[3] = 0; d.queue.writeBuffer(this.postBuf[1], 0, post);
@@ -456,23 +519,20 @@ export class PodiumView {
     for (const f of faces) {
       // fin qui il lavoro non dipende dalla risoluzione della scena
       const stamp = this.ts && f === faces[faces.length - 1] ? { timestampWrites: { querySet: this.ts.set, endOfPassWriteIndex: 1 } } : {};
-      const p = enc.beginRenderPass({ label: "podium-env", colorAttachments: [{ view: G.envFaces[f], loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: this.envDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" }, ...stamp });
-      p.setBindGroup(0, G.frameOff); p.setBindGroup(1, G.passEnv[f]);
-      p.setPipeline(P.flat); this.drawScene(p, ["trophies"]);
-      p.setPipeline(P.flatSky); p.draw(3);
+      const p = enc.beginRenderPass({ label: "podium-env", colorAttachments: [{ view: G.envFaces[f], loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: this.envDepthView, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" }, ...stamp });
+      p.executeBundles([G.envBundles[f]]);
       p.end();
     }
     // riflesso del pavimento
     {
-      const p = enc.beginRenderPass({ label: "podium-planar", colorAttachments: [{ view: s.planar.createView({ baseMipLevel: 0, mipLevelCount: 1 }), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: s.planarDepth, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" } });
-      p.setBindGroup(0, G.frameOff); p.setBindGroup(1, G.passPlanar);
-      p.setPipeline(P.flat); this.drawScene(p, ["floor"]);
-      p.setPipeline(P.flatSky); p.draw(3);
+      const p = enc.beginRenderPass({ label: "podium-planar", colorAttachments: [{ view: s.planar, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: s.planarDepth, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" } });
+      p.executeBundles([G.planarBundle]);
       p.end();
     }
     {
       const cp = enc.beginComputePass({ label: "podium-mips" });
-      this.runMips(cp, P.mipCube, G.envMips, q.envSize, q.envSize, 6);
+      // The other five faces have not changed. Their mip levels already contain these exact texels.
+      for (const f of faces) this.runMips(cp, P.mipCube, G.envMips[f], q.envSize, q.envSize);
       this.runMips(cp, P.mip16, s.planarMips, s.rw, s.rh);
       cp.end();
     }
@@ -480,10 +540,7 @@ export class PodiumView {
     {
       const color: GPURenderPassColorAttachment = s.scene ? { view: s.color, resolveTarget: s.scene, loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 1] } : { view: s.color, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] };
       const p = enc.beginRenderPass({ label: "podium-main", colorAttachments: [color], depthStencilAttachment: { view: s.depth, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" } });
-      p.setBindGroup(0, s.frameMain); p.setBindGroup(1, G.passMain);
-      p.setPipeline(P.main); this.drawScene(p, []);
-      p.setPipeline(P.sky); p.draw(3);
-      p.setPipeline(P.dust); p.draw(4, q.dust);
+      p.executeBundles([s.bundle]);
       p.end();
     }
     const v = this.vflip;
@@ -491,10 +548,10 @@ export class PodiumView {
       const p = enc.beginRenderPass({ colorAttachments: [{ view, loadOp: load ? "load" : "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], ...(stamp && this.ts ? { timestampWrites: { querySet: this.ts.set, endOfPassWriteIndex: 2 } } : {}) });
       p.setPipeline(pipe); groups.forEach((g, i) => p.setBindGroup(i, g)); p.draw(3); p.end();
     };
-    full(s.vol[v].createView(), P.vol, [s.frameMain, G.passMain, s.volGroups[v]]);
+    full(s.vol[v], P.vol, [s.frameMain, G.passMain, s.volGroups[v]]);
     full(s.comb, P.combine, [s.combine[v]]);
-    s.bloom.forEach((b, k) => full(b.createView(), P.down, [s.down[k]]));
-    for (let k = s.bloom.length - 1; k >= 1; k--) full(s.bloom[k - 1].createView(), P.up, [s.up[k - 1]], true);
+    s.bloom.forEach((b, k) => full(b, P.down, [s.down[k]]));
+    for (let k = s.bloom.length - 1; k >= 1; k--) full(s.bloom[k - 1], P.up, [s.up[k - 1]], true);
     full(s.ldr, P.tone, [s.tone]);
     full(this.ctx.getCurrentTexture().createView(), P.final, [s.final], false, true);
     const ts = this.ts, slot = ts ? ts.busy.indexOf(false) : -1;
@@ -525,7 +582,7 @@ export class PodiumView {
     this.sized?.textures.forEach((t) => t.destroy()); this.sized = null;
     this.ownTextures.splice(0).forEach((t) => t.destroy());
     this.ts?.set.destroy();
-    [...(this.ts ? [this.ts.resolve, ...this.ts.read] : []), this.frameBuf, this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, ...this.postBuf, this.gi, this.vbuf, this.ibuf].forEach((b) => b.destroy());
+    [...(this.ts ? [this.ts.resolve, ...this.ts.read] : []), this.frameBuf, this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, ...this.postBuf, this.gi].forEach((b) => b.destroy());
     try { this.ctx.unconfigure(); } catch {}
   }
 }

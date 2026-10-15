@@ -8,7 +8,6 @@ type V3 = [number, number, number];
 const TAU = Math.PI * 2;
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const norm = (a: V3): V3 => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 
 export class MeshBuilder {
@@ -18,11 +17,14 @@ export class MeshBuilder {
   vert(p: V3, n: V3, u: number, w: number, m: number, ao = 1) { this.v.push(p[0], p[1], p[2], n[0], n[1], n[2], u, w, m, ao); return this.count - 1; }
   // triangolo con l'avvolgimento antiorario visto dal lato della normale (per lo scarto delle facce posteriori)
   tri(a: number, b: number, c: number) {
-    const P = (i: number): V3 => [this.v[i * VERTEX_FLOATS], this.v[i * VERTEX_FLOATS + 1], this.v[i * VERTEX_FLOATS + 2]];
-    const N = (i: number): V3 => [this.v[i * VERTEX_FLOATS + 3], this.v[i * VERTEX_FLOATS + 4], this.v[i * VERTEX_FLOATS + 5]];
-    const g = cross(sub(P(b), P(a)), sub(P(c), P(a)));
-    const n = N(a), nb = N(b), nc = N(c);
-    if (dot(g, [n[0] + nb[0] + nc[0], n[1] + nb[1] + nc[1], n[2] + nb[2] + nc[2]]) < 0) this.idx.push(a, c, b); else this.idx.push(a, b, c);
+    // Same winding calculation with scalars: this runs hundreds of thousands of times at scene startup.
+    // Avoid thirteen temporary arrays per triangle without changing any vertex, normal or triangle.
+    const v = this.v, ai = a * VERTEX_FLOATS, bi = b * VERTEX_FLOATS, ci = c * VERTEX_FLOATS;
+    const ux = v[bi] - v[ai], uy = v[bi + 1] - v[ai + 1], uz = v[bi + 2] - v[ai + 2];
+    const vx = v[ci] - v[ai], vy = v[ci + 1] - v[ai + 1], vz = v[ci + 2] - v[ai + 2];
+    const gx = uy * vz - uz * vy, gy = uz * vx - ux * vz, gz = ux * vy - uy * vx;
+    const nx = v[ai + 3] + v[bi + 3] + v[ci + 3], ny = v[ai + 4] + v[bi + 4] + v[ci + 4], nz = v[ai + 5] + v[bi + 5] + v[ci + 5];
+    if (gx * nx + gy * ny + gz * nz < 0) this.idx.push(a, c, b); else this.idx.push(a, b, c);
   }
   quad(a: number, b: number, c: number, d: number) { this.tri(a, b, c); this.tri(a, c, d); }
 
@@ -32,12 +34,15 @@ export class MeshBuilder {
     for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) {
       const u = i / nu, v = j / nv, p = f(u, v);
       const u0 = Math.max(0, u - e), u1 = Math.min(1, u + e), v0 = Math.max(0, v - e), v1 = Math.min(1, v + e);
-      let du = sub(f(u1, v), f(u0, v)), dv = sub(f(u, v1), f(u, v0));
+      let pu1 = f(u1, v), pu0 = f(u0, v), pv1 = f(u, v1), pv0 = f(u, v0);
+      let ux = pu1[0] - pu0[0], uy = pu1[1] - pu0[1], uz = pu1[2] - pu0[2];
+      let vx = pv1[0] - pv0[0], vy = pv1[1] - pv0[1], vz = pv1[2] - pv0[2];
       // ai poli (raggio nullo) la derivata si prende appena accanto
       const vn = v < 0.99 ? v + 0.01 : v - 0.01, un = u < 0.99 ? u + 0.01 : u - 0.01;
-      if (Math.hypot(...du) < 1e-12) du = sub(f(u1, vn), f(u0, vn));
-      if (Math.hypot(...dv) < 1e-12) dv = sub(f(un, v1), f(un, v0));
-      let n = norm(cross(du, dv)); if (side < 0) n = [-n[0], -n[1], -n[2]];
+      if (Math.hypot(ux, uy, uz) < 1e-12) { pu1 = f(u1, vn); pu0 = f(u0, vn); ux = pu1[0] - pu0[0]; uy = pu1[1] - pu0[1]; uz = pu1[2] - pu0[2]; }
+      if (Math.hypot(vx, vy, vz) < 1e-12) { pv1 = f(un, v1); pv0 = f(un, v0); vx = pv1[0] - pv0[0]; vy = pv1[1] - pv0[1]; vz = pv1[2] - pv0[2]; }
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, length = Math.hypot(nx, ny, nz) || 1;
+      const n: V3 = side < 0 ? [-(nx / length), -(ny / length), -(nz / length)] : [nx / length, ny / length, nz / length];
       const t = o.uv ? o.uv(u, v) : [u, v];
       this.vert(p, n, t[0], t[1], m, o.ao ? o.ao(u, v) : 1);
     }
@@ -53,18 +58,27 @@ export class MeshBuilder {
     strips.forEach((pr, si) => {
       const L: number[] = [0]; for (let k = 1; k < pr.length; k++) L.push(L[k - 1] + Math.hypot(pr[k][0] - pr[k - 1][0], pr[k][1] - pr[k - 1][1]));
       const total = L[L.length - 1] || 1;
+      const profileCache = new Map<number, number[]>();
       const at = (v: number) => {
+        const saved = profileCache.get(v); if (saved) return saved;
         const s = v * total; let k = 1; while (k < pr.length - 1 && L[k] < s) k++;
         const t = (s - L[k - 1]) / Math.max(1e-9, L[k] - L[k - 1]);
-        return [pr[k - 1][0] + (pr[k][0] - pr[k - 1][0]) * t, pr[k - 1][1] + (pr[k][1] - pr[k - 1][1]) * t, k - 1 + t];
+        const point = [pr[k - 1][0] + (pr[k][0] - pr[k - 1][0]) * t, pr[k - 1][1] + (pr[k][1] - pr[k - 1][1]) * t, k - 1 + t];
+        profileCache.set(v, point); return point;
       };
       const fl = o.flutes;
       const channel = (a: number) => { if (!fl) return 0; const x = ((a / TAU) * fl.n % 1) * 2 - 1; return Math.abs(x) < 0.8 ? Math.sqrt(1 - (x / 0.8) ** 2) : 0; };
+      const angleCache = new Map<number, number[]>();
+      const angle = (a: number) => {
+        let saved = angleCache.get(a);
+        if (!saved) { saved = [Math.cos(a), Math.sin(a), channel(a)]; angleCache.set(a, saved); }
+        return saved;
+      };
       const fade = (y: number) => (!fl ? 0 : Math.min(1, Math.max(0, (y - fl.y0) / 0.12)) * Math.min(1, Math.max(0, (fl.y1 - y) / 0.12)));
       this.surface(seg, Math.max(1, (pr.length - 1) * (fl ? 3 : 2)), (u, v) => {
-        const a = u * TAU, [r0, y] = at(v), r = r0 - (fl ? fl.depth * channel(a) * fade(y) : 0);
-        return [cx + Math.cos(a) * r, y, cz - Math.sin(a) * r];
-      }, m, { ao: (u, v) => { const [, y, k] = at(v); const base = o.ao?.[si] ? o.ao[si][Math.min(o.ao[si].length - 1, Math.round(k))] : 1; return base * (1 - 0.5 * channel(u * TAU) * fade(y)); } });
+        const a = angle(u * TAU), [r0, y] = at(v), r = r0 - (fl ? fl.depth * a[2] * fade(y) : 0);
+        return [cx + a[0] * r, y, cz - a[1] * r];
+      }, m, { ao: (u, v) => { const [, y, k] = at(v); const base = o.ao?.[si] ? o.ao[si][Math.min(o.ao[si].length - 1, Math.round(k))] : 1; return base * (1 - 0.5 * angle(u * TAU)[2] * fade(y)); } });
     });
   }
 

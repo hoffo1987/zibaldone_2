@@ -15,7 +15,60 @@ npm start
 ```
 
 Tailwind e gli stili dell'interfaccia sono compilati nella build: non serve il CDN Tailwind a runtime.
-La workflow `Site checks` esegue controlli dei tipi, test e build a ogni pull request e aggiornamento di `main`.
+La workflow `Site checks` esegue controlli dei tipi, test e build a ogni pull request e aggiornamento di `main`,
+poi compila APK/AAB Android e l'app Release per simulatore iPhone/iPad su macOS. Gli artefatti sono scaricabili dalla
+scheda Actions per 14 giorni. La build web viene compilata una volta e riutilizzata nelle due build native.
+
+## Build PC, Android e iOS
+
+La versione PC è la build web per browser desktop; Android e iOS includono lo stesso codice con Capacitor 8.5.3.
+
+```sh
+npm run build          # produzione web, directory build/
+npm run apk:sync       # produzione web + sincronizzazione Android
+npm run apk:release    # APK Release (Windows)
+npm run android:bundle # AAB Release (Windows)
+npm run ios:sync       # produzione web + sincronizzazione iOS, anche da Windows
+npm run ios:open       # aprire il progetto in Xcode su Mac
+```
+
+Android richiede **JDK 21**, configurato tramite `JAVA_HOME`, e **Android SDK 36**. Il progetto non contiene percorsi
+assoluti verso il computer dello sviluppatore. R8 ottimizza il codice e rimuove risorse inutilizzate nella Release;
+le annotazioni e i metodi usati dal bridge Capacitor sono conservati. Cache e compilazione parallela Gradle sono attive.
+Come nella configurazione Android iniziale, APK e AAB usano il certificato **debug**: per la distribuzione su Play Store
+va configurata la propria chiave di firma. Non commettere chiavi o password.
+
+Il progetto `ios/App/App.xcodeproj` usa Swift Package Manager e supporta **iPhone e iPad, da iOS 15**. La compilazione e
+la firma Apple richiedono macOS/Xcode. La CI verifica la compilazione Release per simulatore senza certificati;
+per installazione su dispositivi e App Store, scegliere il proprio team e la firma in Xcode.
+
+## Ottimizzazioni senza ridurre il dettaglio
+
+- Il podio riusa render bundle e texture view. Geometrie, pipeline e materiali procedurali restano pronti sul dispositivo
+  GPU per 30 secondi tra due visite alla sala, poi il dispositivo viene distrutto e libera tutte le risorse. Tutti i
+  passaggi di luce, ombre, riflessi, MSAA, pulviscolo e postproduzione restano attivi agli stessi preset.
+- Le mipmap della cubemap si aggiornano sulla sola faccia modificata: **5/6 del lavoro di quella catena è eliminato**
+  nei fotogrammi successivi al primo. Gli altri texel sono già identici e non devono essere riscritti.
+- Le mesh mantengono gli stessi vertici, normali, UV e triangoli. La generazione evita array temporanei e calcoli
+  ripetuti. Il logo Canvas riusa i buffer dei materiali, con gli stessi risultati numerici.
+- Gli aggiornamenti Firestore deserializzano i soli documenti modificati; il testo degli scritti invariati non viene
+  rianalizzato. Cache limitate e WeakMap evitano la crescita della memoria. HTML e filtri di sicurezza restano gli stessi.
+- Le sezioni non visibili non vengono costruite durante la digitazione. Disegni e tratti già completati sono memoizzati;
+  la ricerca degli archivi viene aggiornata con priorità inferiore alla digitazione.
+- I font originali sono inclusi senza modifiche in `public/fonts`, insieme alle licenze OFL, agli URL e agli SHA-256:
+  stessa tipografia anche offline, senza richieste a Google Fonts. `npm run fonts:update` aggiorna intenzionalmente i font.
+- Le source map sono escluse dalla produzione web e dai pacchetti nativi. Per una build diagnostica si può impostare
+  `GENERATE_SOURCEMAP=true` prima di `npm run build`; non cambia la qualità del rendering.
+
+Per confrontare matematicamente geometrie e materiali con una copia iniziale:
+
+```sh
+npm run benchmark -- /percorso/alla/copia-iniziale
+```
+
+Il comando fallisce se geometrie o risultati dei materiali differiscono; i tempi riportati sono mediane locali,
+non una previsione degli FPS su ogni dispositivo. I test del renderer controllano anche il riuso delle risorse e la
+presenza di tutti i passaggi di rendering.
 
 ## Mobile, 3D e musica
 

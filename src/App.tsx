@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from "react";
 import { initializeApp } from "firebase/app";
 import {
-  getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset
 } from "firebase/auth";
 import {
@@ -15,6 +15,7 @@ import {
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
 import { pubOf, pubSig } from "./testi";
+import { snapshotReader } from "./snapshot";
 import { M, Words, Sheets, useFlip, useRail, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 import { Text3D, Terminal3D } from "./d3";
 import { renderLoop, holdLoops } from "./renderLoop";
@@ -65,7 +66,7 @@ const firebaseConfig = {
   measurementId: "G-S3KW241D85",
 };
 let auth: any, db: any;
-try { const app = initializeApp(firebaseConfig); auth = getAuth(app); db = getFirestore(app); } catch (e) { console.error(e); }
+try { const app = initializeApp(firebaseConfig); auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence] }); db = getFirestore(app); } catch (e) { console.error(e); }
 
 const INK_COLORS = [
   { id: "#10211F", name: "Inchiostro" }, { id: "#334155", name: "Ardesia" }, { id: "#64748B", name: "Grigio tecnico" },
@@ -576,7 +577,7 @@ const PanelArt = ({ art, anim, speed = 1, fps = 30 }: { art: boolean; anim: bool
   return art ? <canvas ref={ref} className="pnl-art" aria-hidden="true" /> : null;
 };
 
-const Shape = ({ s }: any) => {
+const Shape = React.memo(({ s }: any) => {
   const p = s.points; if (!p?.length) return null;
   const a = p[0], b = p[p.length - 1];
   const c: any = { stroke: s.color, strokeWidth: s.size || 3, strokeOpacity: s.opacity ?? 1, strokeLinecap: "round", strokeLinejoin: "round", fill: "none" };
@@ -588,12 +589,12 @@ const Shape = ({ s }: any) => {
   }
   const pts = p.map((q: any) => `${q.x},${q.y}`).join(" ");
   return s.tool === "fill" ? <polygon points={pts} {...c} fill={s.color} fillOpacity={s.opacity ?? 1} /> : <polyline points={pts} {...c} />;
-};
-const Drawing = ({ strokes, w, h, className = "" }: any) => (
+});
+const Drawing = React.memo(({ strokes, w, h, className = "" }: any) => (
   <svg className={className} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMinYMin meet">
     {(strokes || []).map((s: any, i: number) => <Shape key={i} s={s} />)}
   </svg>
-);
+));
 
 // --- APP ANDROID (APK) ---
 // Il link all'APK si trova su Firestore, nel documento  app_config/android  con i campi:
@@ -1082,6 +1083,7 @@ export default function App() {
   const [rawItems, setRawItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const deferredSearch = React.useDeferredValue(search);
   const [sortBy, setSortBy] = useState("newest");
   const [vals, setVals] = useState<any>({});
   const [valsReady, setValsReady] = useState(false);
@@ -1298,8 +1300,9 @@ export default function App() {
     if (!user || !db || dataScope === "none") return;
     const q = dataScope === "all" ? collection(db, "pensieri") : query(collection(db, "pensieri"), where("userId", "==", user.uid));
     setLoading(true); setRawItems([]); setRawScope("");
+    const read = snapshotReader((d) => ({ id: d.id, ...d.data() }));
     return onSnapshot(q, (s: any) => {
-      setRawItems(s.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+      setRawItems(read(s));
       setRawScope(s.metadata?.fromCache ? "" : dataScope);
       setLoading(false);
     }, () => { setLoading(false); notify("Impossibile leggere i progetti."); });
@@ -1312,8 +1315,9 @@ export default function App() {
   useEffect(() => {
     if (!user || !db || !adminChecked || isAdmin || tab !== "altri") { setPubItems([]); setPubLoading(false); return; }
     setPubLoading(true);
+    const read = snapshotReader((d) => ({ ...pubOf(d.data()), id: d.id, _anon: true }));
     return onSnapshot(collection(db, "testi"), (s: any) => {
-      setPubItems(s.docs.map((d: any) => ({ ...pubOf(d.data()), id: d.id, _anon: true })));
+      setPubItems(read(s));
       setPubLoading(false);
     }, () => { setPubLoading(false); notify("Impossibile leggere gli scritti degli altri."); });
   }, [user, adminChecked, isAdmin, tab]);
@@ -1844,26 +1848,43 @@ export default function App() {
   const endTour = (to?: string) => { if (user) tourMark(user.uid); holdTour(false); const m = tour; setTour(""); if (to) go(to); else if (m !== "film") tourNav("home"); };
   const tourLow = (navigator.hardwareConcurrency || 8) <= 4 || ((navigator as any).deviceMemory || 8) <= 3;
 
-  const prepared = useMemo(() => items.map((t) => {
-    const text = plain(t.content);
-    return { ...t, _tx: text, _words: text.trim().split(/\s+/).filter(Boolean).length, _img: /<img/.test(t.content || "") };
-  }), [items]);
+  const textMeta = useMemo(() => new WeakMap<object, { _tx: string; _words: number; _img: boolean }>(), []);
+  const metadata = useMemo(() => new Map(rawItems.map((t) => {
+    let meta = textMeta.get(t);
+    if (!meta) {
+      const text = plain(t.content);
+      meta = { _tx: text, _words: text.trim().split(/\s+/).filter(Boolean).length, _img: /<img/.test(t.content || "") };
+      textMeta.set(t, meta);
+    }
+    return [t.id, meta] as const;
+  })), [rawItems, textMeta]);
+  const prepared = useMemo(() => items.map((t) => ({ ...t, ...metadata.get(t.id)! })), [items, metadata]);
   const wordCounts = useMemo(() => new Map(prepared.map(t => [t.id, t._words])), [prepared]);
   const shown = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     return prepared
       .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!onlyMarked || t.isStarred) && (!unrated || !t.rating) && (statoF === "all" || (vals[t.id]?.stato || "da_leggere") === statoF) && (!q || `${t.title} ${isAdmin && !t.svelato && t.userId !== user?.uid ? "" : t.author} ${t._tx}`.toLowerCase().includes(q)))
       .sort((a, b) => sortBy === "rated" ? (b.rating || 0) - (a.rating || 0) || b.timestamp - a.timestamp : sortBy === "oldest" ? a.timestamp - b.timestamp : sortBy === "longest" ? (b.content?.length || 0) - (a.content?.length || 0) : sortBy === "shortest" ? (a.content?.length || 0) - (b.content?.length || 0) : b.timestamp - a.timestamp);
-  }, [prepared, search, sortBy, monthFilter, onlyMarked, unrated, statoF, vals, isAdmin, user]);
+  }, [prepared, deferredSearch, sortBy, monthFilter, onlyMarked, unrated, statoF, vals, isAdmin, user]);
   // scritti degli altri: tolti i propri, nell'ordine degli id (casuale e stabile: non tradisce né autore né data)
-  const pubShown = useMemo(() => {
-    const q = search.trim().toLowerCase(), mine = new Set(rawItems.map((t) => t.id));
+  const pubPrepared = useMemo(() => {
+    const mine = new Set(rawItems.map((t) => t.id));
     return pubItems.filter((t) => !mine.has(t.id)).map((t) => {
       const text = plain(t.content);
       return { ...t, _tx: text, _img: /<img/.test(t.content || "") };
-    }).filter((t) => !q || `${t.title || ""} ${t._tx}`.toLowerCase().includes(q));
-  }, [pubItems, rawItems, search]);
+    });
+  }, [pubItems, rawItems]);
+  const pubShown = useMemo(() => {
+    const q = deferredSearch.trim().toLowerCase();
+    return q ? pubPrepared.filter((t) => `${t.title || ""} ${t._tx}`.toLowerCase().includes(q)) : pubPrepared;
+  }, [pubPrepared, deferredSearch]);
   const words = useMemo(() => plain(content).trim().split(/\s+/).filter(Boolean).length, [content]);
+  const monthNow = mKey(Date.now());
+  const monthOpts = useMemo(() => Array.from(new Set<string>(items.map((t) => mKey(t.timestamp)))).sort().reverse(), [items]);
+  const thisMonth = useMemo(() => items.filter((t) => mKey(t.timestamp) === monthNow), [items, monthNow]);
+  const recent = useMemo(() => [...items].sort((a, b) => b.timestamp - a.timestamp).slice(0, 5), [items]);
+  const mItems = useMemo(() => items.filter((t) => mKey(t.timestamp) === month), [items, month]);
+  const ranked = useMemo(() => mItems.filter((t) => t.rating > 0 || t.isStarred).sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.isStarred ? 1 : 0) - (a.isStarred ? 1 : 0) || a.timestamp - b.timestamp), [mItems]);
 
   // ================= MOVIMENTO =================
   // la pagina nuova arriva dal lato verso cui ti sposti nel menu
@@ -2106,9 +2127,6 @@ export default function App() {
       { id: "altri", label: "Scritti degli altri", s: "Leggi", icon: BookOpen },
     ]),
   ]);
-  const monthOpts: string[] = Array.from(new Set<string>(items.map((t: any) => mKey(t.timestamp)))).sort().reverse();
-  const monthNow = mKey(Date.now());
-  const thisMonth = items.filter((t) => mKey(t.timestamp) === monthNow);
   const myName = profiles[user.uid]?.displayName || user.displayName || "Operatore";
   const first = myName.split(" ")[0];
   const dn = (uid: string, fb: string) => profiles[uid]?.displayName || fb;
@@ -2224,7 +2242,7 @@ export default function App() {
       </div>
     );
   };
-  const profilePage = (
+  const profilePage = tab === "profile" && (
     <div className="max-w-2xl mx-auto space-y-5">
       <div className="pn overflow-hidden">{profileView(user.uid, true)}</div>
       <button className="bt w-full" onClick={() => setOptOpen(true)}><Settings size={16} />Opzioni</button>
@@ -2241,7 +2259,6 @@ export default function App() {
     : [{ l: "I tuoi progetti", v: items.length, i: Bookmark, a: () => go("my_pages") },
       { l: "Questo mese", v: thisMonth.length, i: Activity, a: () => { go("my_pages"); setMonthFilter(monthNow); } },
       { l: "Parole scritte", v: items.reduce((a, t) => a + wc(t), 0), i: Pen, a: () => go("my_pages") }];
-  const recent = [...items].sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
   const heroMove = (e: any) => {
     // si misura sul contenitore e non sul pannello: il pannello si inclina e, all'ingresso, si muove e si rimpicciolisce; il suo rettangolo
     // dà coordinate sbagliate e a mouse fermo l'inclinazione sbagliata restava finché non si rimuoveva il puntatore (o si cambiava pagina)
@@ -2260,7 +2277,7 @@ export default function App() {
     ? `${thisMonth.length} ${thisMonth.length === 1 ? "scritto" : "scritti"} questo mese · ${toRate} da valutare`
     : `${items.length} ${items.length === 1 ? "progetto" : "progetti"} · ${items.reduce((a, t) => a + wc(t), 0).toLocaleString("it-IT")} parole`;
   const heroTitle = `Ciao ${first}, ${isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}`;
-  const homeView = (
+  const homeView = tab === "home" && (
     <div className="space-y-8">
       <Reveal fx={boot ? "still" : ""}><div className={`pn brandpanel hero p-8 md:p-12 ${boot ? "boot" : ""} ${logo3d ? "h3d" : ""}`} onPointerMove={heroMove} onPointerLeave={heroLeave}>{boot && <i className="boot-run" aria-hidden="true" />}<HeroRain on={G.rain} speed={G.spd} dens={G.rainD} fps={G.fps} />
         {logo3d ? (wide
@@ -2294,12 +2311,10 @@ export default function App() {
     </div>
   );
 
-  const mItems = items.filter((t) => mKey(t.timestamp) === month);
-  const ranked = mItems.filter((t) => t.rating > 0 || t.isStarred).sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.isStarred ? 1 : 0) - (a.isStarred ? 1 : 0) || a.timestamp - b.timestamp);
   const top = ranked.slice(0, 3), rest = ranked.slice(3);
   // il podio in 3D (WebGPU) a tutto schermo; altrimenti quello semplice
   const podium3d = !G.nomotion && !lite && !podiumFail && hasWebGPU() && !loading && ranked.length > 0;
-  const podiumPlates = [0, 1, 2].map((k) => { const t = top[k]; if (!t) return null;
+  const podiumPlates = (tab === "podio" ? [0, 1, 2] : []).map((k) => { const t = top[k]; if (!t) return null;
             return (
               <div data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className="pdm-card">
                 <div className="flex items-center justify-between gap-2"><span className="pdm-rank">{k + 1}° posto</span><Stars v={t.rating || 0} size={13} /></div>
@@ -2308,7 +2323,7 @@ export default function App() {
               </div>
             ); });
   // telefoni: i vincitori in schede sotto il palco 3D (le targhette sopra le coppe sarebbero troppo piccole)
-  const podiumList = top.map((t, k) => (
+  const podiumList = (tab === "podio" ? top : []).map((t, k) => (
     <div key={t.id} data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className={`pdm-row r${k + 1}`}>
       <span className="pdm-medal hd" aria-hidden="true">{k + 1}</span>
       <div className="min-w-0 flex-1">
@@ -2318,7 +2333,7 @@ export default function App() {
     </div>
   ));
   const shiftM = (d: number) => { const [y, m] = month.split("-").map(Number); setMonth(mKey(new Date(y, m - 1 + d, 1).getTime())); };
-  const podioView = (
+  const podioView = tab === "podio" && (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-2">
@@ -2361,7 +2376,7 @@ export default function App() {
     </div>
   );
 
-  const authors: any[] = Object.values(items.filter((t) => t.svelato || t.userId === user.uid).reduce((m: any, t) => { const k = t.userId || t.author; const a = (m[k] = m[k] || { name: dn(t.userId, t.author || "?"), uid: t.userId, n: 0, r: [], last: 0 }); a.n++; if (t.rating) a.r.push(t.rating); a.last = Math.max(a.last, t.timestamp); return m; }, {}))
+  const authors: any[] = Object.values((tab === "authors" ? items : []).filter((t) => t.svelato || t.userId === user.uid).reduce((m: any, t) => { const k = t.userId || t.author; const a = (m[k] = m[k] || { name: dn(t.userId, t.author || "?"), uid: t.userId, n: 0, r: [], last: 0 }); a.n++; if (t.rating) a.r.push(t.rating); a.last = Math.max(a.last, t.timestamp); return m; }, {}))
     .map((a: any) => ({ ...a, avg: a.r.length ? a.r.reduce((x: number, y: number) => x + y, 0) / a.r.length : 0 })).sort((a: any, b: any) => b.n - a.n);
   const authorsView = loading ? <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div> : authors.length === 0 ? (
     <div className="pn p-12 text-center max-w-md mx-auto"><Users className="mx-auto mb-4 mu" size={36} /><h3 className="hd text-xl font-bold">Ancora nessun autore</h3><p className="mu text-sm mt-1">Compariranno dopo lo svelamento del loro primo scritto.</p></div>
