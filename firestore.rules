@@ -69,6 +69,34 @@ service cloud.firestore {
         && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
+    // Copia pubblica e anonima di ogni scritto, con lo stesso id: solo titolo, testo e disegno.
+    // Niente autore, uid, date, voti né altro: la può leggere chiunque abbia un account, senza risalire a chi l'ha scritta
+    // (gli id sono casuali e lo scritto in pensieri/{id} resta leggibile solo dall'autore e dagli admin).
+    // La scrivono l'autore o un admin, e deve essere identica allo scritto: non ci si può infilare nient'altro.
+    function pensiero(id) {
+      return /databases/$(database)/documents/pensieri/$(id);
+    }
+    function copiaFedele(id) {
+      return request.resource.data.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h'])
+        && request.resource.data.get('title', null) == getAfter(pensiero(id)).data.get('title', null)
+        && request.resource.data.get('content', null) == getAfter(pensiero(id)).data.get('content', null)
+        && request.resource.data.get('strokes', null) == getAfter(pensiero(id)).data.get('strokes', null)
+        && request.resource.data.get('w', null) == getAfter(pensiero(id)).data.get('w', null)
+        && request.resource.data.get('h', null) == getAfter(pensiero(id)).data.get('h', null);
+    }
+    match /testi/{id} {
+      allow read: if signedIn();
+
+      allow create, update: if signedIn()
+        && existsAfter(pensiero(id))
+        && (getAfter(pensiero(id)).data.userId == request.auth.uid || isAdmin())
+        && copiaFedele(id);
+
+      // L'autore la toglie prima di eliminare lo scritto; l'admin anche quando lo scritto non c'è più.
+      allow delete: if isAdmin()
+        || (signedIn() && exists(pensiero(id)) && get(pensiero(id)).data.userId == request.auth.uid);
+    }
+
     // Notifica "hai ricevuto un voto": la crea l'admin allo svelamento, la legge e la segna come letta solo l'autore.
     match /notifiche/{id} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;

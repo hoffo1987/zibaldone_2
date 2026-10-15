@@ -5,15 +5,16 @@ import {
   signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset
 } from "firebase/auth";
 import {
-  getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, setDoc, getDoc, deleteField
+  getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, setDoc, getDoc, getDocs, deleteField
 } from "firebase/firestore";
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal, Clapperboard, Compass
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal, Clapperboard, Compass, BookOpen
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
+import { pubOf, pubSig } from "./testi";
 import { M, Words, Sheets, useFlip, useRail, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 import { Text3D, Terminal3D } from "./d3";
 import { renderLoop, holdLoops } from "./renderLoop";
@@ -799,7 +800,7 @@ const resolveG = (o: any): any => {
 let GSPD = 1;  // velocità globale delle animazioni (serve anche ai timer fuori da React)
 // prima apertura della sessione: l'ingresso nel Circuito si vede per intero una volta sola, poi le pagine entrano in modo asciutto
 const FIRST = (() => { try { const s = sessionStorage.getItem("circuito:ingresso"); sessionStorage.setItem("circuito:ingresso", "1"); return !s; } catch { return true; } })();
-const NAV_ORDER = ["home", "write", "my_pages", "read", "podio", "authors", "profile"];
+const NAV_ORDER = ["home", "write", "my_pages", "altri", "read", "podio", "authors", "profile"];
 
 const Scramble = ({ text, on }: any) => {
   const [t, setT] = useState(text);
@@ -1289,16 +1290,63 @@ export default function App() {
   }, []);
 
   // dati
-  const dataScope = isAdmin && ["read", "home", "podio", "authors"].includes(tab) ? "all" : ["my_pages", "home", "profile"].includes(tab) ? "mine" : "none";
+  // "altri" carica anche i propri scritti: servono solo a toglierli dall'elenco di quelli da leggere
+  const dataScope = isAdmin && ["read", "home", "podio", "authors"].includes(tab) ? "all" : ["my_pages", "home", "profile", "altri"].includes(tab) ? "mine" : "none";
+  // a quale lettura appartiene rawItems (e se viene davvero dal server): la pulizia delle copie orfane si fida solo dell'archivio completo
+  const [rawScope, setRawScope] = useState("");
   useEffect(() => {
     if (!user || !db || dataScope === "none") return;
     const q = dataScope === "all" ? collection(db, "pensieri") : query(collection(db, "pensieri"), where("userId", "==", user.uid));
-    setLoading(true); setRawItems([]);
+    setLoading(true); setRawItems([]); setRawScope("");
     return onSnapshot(q, (s: any) => {
       setRawItems(s.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+      setRawScope(s.metadata?.fromCache ? "" : dataScope);
       setLoading(false);
     }, () => { setLoading(false); notify("Impossibile leggere i progetti."); });
   }, [user, isAdmin, dataScope]);
+
+  // ---- scritti degli altri, per chi non è admin: si legge solo testi/{id}, la copia anonima (titolo, testo, disegno) ----
+  // Lo scritto vero (pensieri/{id}, con autore, date e voti) resta illeggibile per gli altri: al telefono non arriva nulla di più.
+  const [pubItems, setPubItems] = useState<any[]>([]);
+  const [pubLoading, setPubLoading] = useState(false);
+  useEffect(() => {
+    if (!user || !db || !adminChecked || isAdmin || tab !== "altri") { setPubItems([]); setPubLoading(false); return; }
+    setPubLoading(true);
+    return onSnapshot(collection(db, "testi"), (s: any) => {
+      setPubItems(s.docs.map((d: any) => ({ ...pubOf(d.data()), id: d.id, _anon: true })));
+      setPubLoading(false);
+    }, () => { setPubLoading(false); notify("Impossibile leggere gli scritti degli altri."); });
+  }, [user, adminChecked, isAdmin, tab]);
+  // La copia la tiene allineata chi può scrivere lo scritto: l'autore per i suoi, l'admin per tutti (anche quelli salvati
+  // prima che la copia esistesse, o da una versione vecchia dell'app). Ogni scritto si controlla una volta per versione.
+  const pubDone = useRef<Map<string, string>>(new Map());
+  const pubAll = useRef(false);
+  const pubSync = (id: string, t: any) => { pubDone.current.set(id, pubSig(t)); return setDoc(doc(db, "testi", id), pubOf(t)); };
+  useEffect(() => {
+    if (!db || !user || !adminChecked || loading || !rawScope) return;
+    const full = isAdmin && rawScope === "all" && !pubAll.current;
+    const todo = rawItems.filter((t) => (isAdmin || t.userId === user.uid) && pubDone.current.get(t.id) !== pubSig(t));
+    if (!todo.length && !full) return;
+    todo.forEach((t) => pubDone.current.set(t.id, pubSig(t)));
+    if (full) pubAll.current = true;
+    (async () => {
+      try {
+        const have = new Map<string, any>();
+        if (full) {
+          (await getDocs(collection(db, "testi"))).forEach((d: any) => have.set(d.id, d.data()));
+          // copie rimaste senza scritto (eliminato da una versione vecchia dell'app): non devono restare leggibili
+          const ids = new Set(rawItems.map((t) => t.id)), orphans = Array.from(have.keys()).filter((id) => !ids.has(id));
+          for (let i = 0; i < orphans.length; i += 400) { const b = writeBatch(db); orphans.slice(i, i + 400).forEach((id) => b.delete(doc(db, "testi", id))); await b.commit(); }
+        } else {
+          await Promise.all(todo.map(async (t) => { const s = await getDoc(doc(db, "testi", t.id)); if (s.exists()) have.set(t.id, s.data()); }));
+        }
+        for (const t of todo) if (!have.has(t.id) || pubSig(have.get(t.id)) !== pubSig(t)) await pubSync(t.id, t);
+      } catch (e) {
+        // niente nuovi tentativi in questa sessione: con le regole vecchie fallirebbe a ogni aggiornamento dell'archivio
+        console.warn("Copie anonime degli scritti non aggiornate (controlla le regole di Firestore)", e);
+      }
+    })();
+  }, [rawItems, rawScope, loading, isAdmin, adminChecked, user]);
 
   // bozza: ripristino + salvataggio automatico
   useEffect(() => {
@@ -1703,8 +1751,11 @@ export default function App() {
     if (new Blob([JSON.stringify(data)]).size > 950000) return notify("Progetto troppo pesante: riduci le immagini o il disegno.");
     setSaving(true);
     try {
-      if (editingId) await updateDoc(doc(db, "pensieri", editingId), { ...data, updatedAt: Date.now() });
-      else await addDoc(collection(db, "pensieri"), { ...data, author: profiles[user.uid]?.displayName || user.displayName || "Operatore", timestamp: Date.now(), userId: user.uid, isStarred: false });
+      let id = editingId;
+      if (id) await updateDoc(doc(db, "pensieri", id), { ...data, updatedAt: Date.now() });
+      else id = (await addDoc(collection(db, "pensieri"), { ...data, author: profiles[user.uid]?.displayName || user.displayName || "Operatore", timestamp: Date.now(), userId: user.uid, isStarred: false })).id;
+      // la copia anonima va dopo, a parte: se non riesce (regole non ancora pubblicate) lo scritto resta comunque salvato
+      pubSync(id!, data).catch((e: any) => console.warn("Copia anonima non salvata (controlla le regole di Firestore)", e));
       setDone(editingId ? "edit" : "new");
     } catch { notify("Salvataggio non riuscito. Riprova."); }
     setSaving(false);
@@ -1742,6 +1793,9 @@ export default function App() {
   const confirmDelete = async () => {
     const list = toDelete!; setToDelete(null); setSel(null); setGone(list);
     setTimeout(async () => {
+      // prima la copia anonima: le regole la lasciano togliere all'autore solo finché lo scritto esiste
+      try { const b = writeBatch(db); list.forEach((id) => b.delete(doc(db, "testi", id))); await b.commit(); }
+      catch (e) { console.warn("Copie anonime non eliminate (controlla le regole di Firestore)", e); }
       try { const b = writeBatch(db); list.forEach((id) => b.delete(doc(db, "pensieri", id))); await b.commit(); notify(list.length > 1 ? `${list.length} progetti eliminati.` : "Progetto eliminato."); }
       catch { notify("Eliminazione non riuscita: controlla i permessi."); }
       setGone([]); setIds([]); setSelMode(false);
@@ -1801,6 +1855,14 @@ export default function App() {
       .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!onlyMarked || t.isStarred) && (!unrated || !t.rating) && (statoF === "all" || (vals[t.id]?.stato || "da_leggere") === statoF) && (!q || `${t.title} ${isAdmin && !t.svelato && t.userId !== user?.uid ? "" : t.author} ${t._tx}`.toLowerCase().includes(q)))
       .sort((a, b) => sortBy === "rated" ? (b.rating || 0) - (a.rating || 0) || b.timestamp - a.timestamp : sortBy === "oldest" ? a.timestamp - b.timestamp : sortBy === "longest" ? (b.content?.length || 0) - (a.content?.length || 0) : sortBy === "shortest" ? (a.content?.length || 0) - (b.content?.length || 0) : b.timestamp - a.timestamp);
   }, [prepared, search, sortBy, monthFilter, onlyMarked, unrated, statoF, vals, isAdmin, user]);
+  // scritti degli altri: tolti i propri, nell'ordine degli id (casuale e stabile: non tradisce né autore né data)
+  const pubShown = useMemo(() => {
+    const q = search.trim().toLowerCase(), mine = new Set(rawItems.map((t) => t.id));
+    return pubItems.filter((t) => !mine.has(t.id)).map((t) => {
+      const text = plain(t.content);
+      return { ...t, _tx: text, _img: /<img/.test(t.content || "") };
+    }).filter((t) => !q || `${t.title || ""} ${t._tx}`.toLowerCase().includes(q));
+  }, [pubItems, rawItems, search]);
   const words = useMemo(() => plain(content).trim().split(/\s+/).filter(Boolean).length, [content]);
 
   // ================= MOVIMENTO =================
@@ -2039,7 +2101,10 @@ export default function App() {
     ...(isAdmin ? [
       { id: "read", label: "Tutti gli scritti", s: "Tutti", icon: Activity },
       { id: "podio", label: "Podio del mese", s: "Podio", icon: Trophy }, { id: "authors", label: "Autori", icon: Users },
-    ] : []),
+    ] : [
+      // per chi non è admin: gli scritti degli altri, solo da leggere e senza nomi
+      { id: "altri", label: "Scritti degli altri", s: "Leggi", icon: BookOpen },
+    ]),
   ]);
   const monthOpts: string[] = Array.from(new Set<string>(items.map((t: any) => mKey(t.timestamp)))).sort().reverse();
   const monthNow = mKey(Date.now());
@@ -2318,7 +2383,7 @@ export default function App() {
       ))}
     </div>
   );
-  const titles: any = { write: editingId ? "Modifica progetto" : "Nuovo progetto", my_pages: "I miei progetti", read: "Tutti gli scritti", home: "Panoramica", profile: "Il tuo profilo", podio: "Podio del mese", authors: "Autori" };
+  const titles: any = { write: editingId ? "Modifica progetto" : "Nuovo progetto", my_pages: "I miei progetti", read: "Tutti gli scritti", altri: "Scritti degli altri", home: "Panoramica", profile: "Il tuo profilo", podio: "Podio del mese", authors: "Autori" };
   const isList = ["my_pages", "read"].includes(tab);
 
   return shell(
@@ -2358,7 +2423,8 @@ export default function App() {
       <div className="md:ml-60 pb-28 md:pb-12 relative">
         <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12" style={{ ["--pdx" as any]: `${pdx.current}px` }}>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>{isList && !loading && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "progetto" : "progetti"}</p>}</div>
+            <div><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>{isList && !loading && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "progetto" : "progetti"}</p>}{tab === "altri" && !(pubLoading || loading) && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={pubShown.length} className="tick-n">{pubShown.length}</span> {pubShown.length === 1 ? "scritto da leggere" : "scritti da leggere"} · senza nomi né date</p>}</div>
+            {tab === "altri" && pubItems.length > 0 && <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>}
             {isList && (
               <div className="flex flex-wrap gap-2 items-center" data-tour="filters">
                 <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>
@@ -2377,6 +2443,38 @@ export default function App() {
           {tab === "profile" && profilePage}
           {tab === "podio" && podioView}
           {tab === "authors" && authorsView}
+          {/* SCRITTI DEGLI ALTRI (non admin): solo titolo, testo e disegno, da leggere */}
+          {tab === "altri" && (pubLoading || loading ? (
+            <Sheets />
+          ) : pubShown.length === 0 ? (
+            <div className="pn p-12 text-center max-w-md mx-auto up">
+              <BookOpen className="mx-auto mb-4 mu" size={36} />
+              <h3 className="hd text-xl font-bold mb-1">{search ? "Nessun risultato" : "Ancora niente da leggere"}</h3>
+              <p className="mu text-sm">{search ? "Prova con un'altra parola." : "Quando gli altri scriveranno, i loro testi compariranno qui, senza nome."}</p>
+            </div>
+          ) : (
+            <><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {pubShown.slice(0, visible).map((t, i) => {
+                const { w, h } = dims(t), j = i % 18, wave = (j % 3) * 65 + (j < 6 ? Math.floor(j / 3) * 65 : 0);
+                return (
+                  <Reveal key={t.id} flip={t.id} delay={wave} fx="sheet" className="h-full"><article data-doc={t.id} role="button" tabIndex={0} aria-label={`Leggi ${t.title || "lo scritto"}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }}
+                    className="pn card h-full overflow-hidden cursor-pointer">
+                    <div className="paper mm sm relative h-40 overflow-hidden">
+                      <div className="thumb absolute inset-0">
+                        {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
+                        <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{t._tx.slice(0, 260) || (t._img ? "Contenuto con immagini" : "")}</p>
+                      </div>
+                    </div>
+                    <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
+                      <h2 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title || "Senza titolo"}</h2>
+                    </div>
+                  </article></Reveal>
+                );
+              })}
+            </div>
+            {pubShown.length > visible && <div className="flex justify-center mt-8"><button className="bt !px-6 !py-3" onClick={() => setVisible((v) => v + 18)}>Mostra altri ({pubShown.length - visible})</button></div>}
+            </>
+          ))}
           {/* LISTA */}
           {isList && (loading ? (
             <Sheets />
@@ -2516,28 +2614,33 @@ export default function App() {
       {view && (() => {
         const sel = view; // durante l'uscita resta visibile l'ultimo scritto aperto
         const { w, h } = dims(sel);
-        const si = shown.findIndex((x) => x.id === sel.id);
-        const hidS = hid(sel), fresh = rvl === sel.id;
+        // scritto di un altro letto da chi non è admin: c'è solo la copia anonima, e il foglio mostra solo titolo e contenuto
+        const anon = !!sel._anon, list = anon ? pubShown : shown;
+        const si = list.findIndex((x) => x.id === sel.id);
+        const hidS = !anon && hid(sel), fresh = !anon && rvl === sel.id;
         // il circuito dell'autore: i suoi scritti in ordine di data. Solo autori visibili, e solo scritti già svelati
         // (altrimenti il raggruppamento tradirebbe chi ha scritto un testo ancora anonimo)
-        const mates = hidS ? [] : prepared.filter((x) => x.userId === sel.userId && !hid(x)).sort((a, b) => a.timestamp - b.timestamp);
+        const mates = anon || hidS ? [] : prepared.filter((x) => x.userId === sel.userId && !hid(x)).sort((a, b) => a.timestamp - b.timestamp);
         const mi = mates.findIndex((x) => x.id === sel.id), m0 = Math.max(0, Math.min(mi - 3, mates.length - 7)), near = mates.slice(m0, m0 + 7);
-        const own = sel.userId === user.uid;
+        const own = !anon && sel.userId === user.uid;
         return (
           <div className={`doc-ov fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm ${closing ? "out" : ""}`} onClick={closeView}>
             <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={sel.title} className="pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
               <div className="doc-hd relative overflow-hidden shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
                 {fresh && <span className="rvl-sweep" />}
-                <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
+                {anon ? <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
+                  <span className="rounded-full shrink-0 inline-flex items-center justify-center" style={{ width: 44, height: 44, background: "var(--sf)", border: "1px solid var(--ln)" }}><BookOpen size={20} className="mu" /></span>
+                  <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title || "Senza titolo"}</h2><div className="mu text-xs truncate">Scritto anonimo · solo lettura</div></div>
+                </div> : <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
                   {hidS ? who(sel, 44) : <button type="button" onClick={() => setViewProf(sel.userId)} className="shrink-0" aria-label="Apri profilo">{fresh ? <span className="rvl-av"><i className="rg" /><i className="rg" /><span className="pf-av"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></span></span> : <Avatar p={profiles[sel.userId]} name={sel.author} size={44} />}</button>}
                   <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
-                </div>
+                </div>}
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end self-end md:self-auto w-full md:w-auto">
-                  <button className="bt flex-1 md:flex-none justify-center !p-2" title="Copia testo" aria-label="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>
-                  {isAdmin && <button className="bt flex-1 md:flex-none justify-center !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} aria-label="Segnalibro" onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /></button>}
-                  {canEdit(sel) && <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={() => startEdit(sel)} title="Modifica" aria-label="Modifica"><Pencil size={15} /></button>}
-                  {canEdit(sel) && <button className="bt dng flex-1 md:flex-none justify-center !p-2" onClick={() => setToDelete([sel.id])} title="Elimina" aria-label="Elimina"><Trash2 size={15} /></button>}
-                  {si >= 0 && shown.length > 1 && <><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si <= 0} onClick={() => stepTo(shown[si - 1], -1)} aria-label="Scritto precedente"><ChevronLeft size={15} /></button><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si >= shown.length - 1} onClick={() => stepTo(shown[si + 1], 1)} aria-label="Scritto successivo"><ChevronRight size={15} /></button></>}
+                  {!anon && <button className="bt flex-1 md:flex-none justify-center !p-2" title="Copia testo" aria-label="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>}
+                  {isAdmin && !anon && <button className="bt flex-1 md:flex-none justify-center !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} aria-label="Segnalibro" onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /></button>}
+                  {!anon && canEdit(sel) && <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={() => startEdit(sel)} title="Modifica" aria-label="Modifica"><Pencil size={15} /></button>}
+                  {!anon && canEdit(sel) && <button className="bt dng flex-1 md:flex-none justify-center !p-2" onClick={() => setToDelete([sel.id])} title="Elimina" aria-label="Elimina"><Trash2 size={15} /></button>}
+                  {si >= 0 && list.length > 1 && <><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si <= 0} onClick={() => stepTo(list[si - 1], -1)} aria-label="Scritto precedente"><ChevronLeft size={15} /></button><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si >= list.length - 1} onClick={() => stepTo(list[si + 1], 1)} aria-label="Scritto successivo"><ChevronRight size={15} /></button></>}
                   <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={closeView} title="Chiudi" aria-label="Chiudi"><X size={15} /></button>
                 </div>
               </div>
@@ -2545,13 +2648,13 @@ export default function App() {
               {/* la pista di lettura: si disegna aprendo il foglio, poi segue lo scorrimento; in fondo il nodo diventa ambra */}
               <div ref={railRef} className="read-rail" aria-hidden="true"><i /><b /></div>
               <div key={sel.id} ref={readRef} data-sheet-scroll="" className={`overflow-y-auto flex-1 min-h-0 ${swap ? "doc-swap" : ""}`} style={{ ["--dir" as any]: swap || 1 }}>
-              {isAdmin && <div className="flex items-center gap-3 px-4 py-2 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
+              {isAdmin && !anon && <div className="flex items-center gap-3 px-4 py-2 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
               {hidS && <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 py-2.5 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
                 <div className="text-sm min-w-0"><b>Autore nascosto.</b> <span className="mu">{sel.rating > 0 ? "Puoi svelarlo: dopo lo svelamento il voto non si cambia più." : "Dai da 1 a 5 stelle per poterlo svelare."}</span></div>
                 <button type="button" className={`bt w-full sm:w-auto shrink-0 ${confirmRvl ? "on" : ""}`} disabled={!(sel.rating > 0)} onClick={() => confirmRvl ? reveal(sel) : setConfirmRvl(true)}><Eye size={15} />{confirmRvl ? "Conferma: voto definitivo" : "Svela autore"}</button>
               </div>}
-              {!isAdmin && sel.svelato && sel.rating > 0 && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Il tuo voto</span><Stars v={sel.rating} size={22} /></div>}
-              {isAdmin && <>
+              {!isAdmin && !anon && sel.svelato && sel.rating > 0 && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Il tuo voto</span><Stars v={sel.rating} size={22} /></div>}
+              {isAdmin && !anon && <>
                 <button type="button" onClick={() => setPanelOpen(!panelOpen)} aria-expanded={panelOpen} className="w-full flex items-center justify-between gap-3 px-4 py-2.5 border-b text-sm text-left" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
                   <span className="mu">Stato e nota privata <span className="font-semibold" style={{ color: "var(--ink)" }}>· {(STATI.find(([k]) => k === (vals[sel.id]?.stato || "da_leggere")) || ["", "Da leggere"])[1]}{vals[sel.id]?.nota ? " · con nota" : ""}</span></span>
                   <ChevronDown size={16} className="mu shrink-0" style={{ transform: panelOpen ? "rotate(180deg)" : "none", transition: "transform .25s" }} />
