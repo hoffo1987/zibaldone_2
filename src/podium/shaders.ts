@@ -6,19 +6,23 @@
 //  - gi: sonde di luce (cubo ambientale) aggiornate a turno, ognuna con 128 raggi fissi per direzione su forme
 //    semplificate: niente casualità, niente sfarfallio; i rimbalzi multipli arrivano dal riuso delle sonde stesse;
 //  - scene: materiali (marmo triplanare, numeri incisi con intarsio di metallo, velluto, stoffa, metalli), luce diretta,
-//    illuminazione globale, riflessi planari del pavimento e della cubemap della sala, cielo, pulviscolo nei raggi;
-//  - vol: fasci di luce a risoluzione ridotta accumulati nel tempo; post: bloom e composizione (ACES, sRGB, dithering).
+//    illuminazione globale, riflessi planari del pavimento e della cubemap della sala, cielo, pulviscolo nei raggi; contro
+//    lo sfarfallio: lobo speculare allargato dove la normale cambia dentro il pixel, bordi e incisioni filtrati
+//    sull'impronta del pixel, granelli e stelle mai più piccoli di un pixel;
+//  - vol: fasci di luce a risoluzione ridotta accumulati nel tempo; post: risoluzione dell'MSAA pesata sulla luminanza,
+//    bloom, ACES e sRGB, poi il passaggio ai pixel dello schermo (Catmull-Rom) con il dithering.
 import { ROOM, WINDOW, LIGHT_RECT, LIGHT_DEPTH, PROXY_BOXES, PROXY_CYLS, PROXY_SPHS, CARPET, Mat, STEP_H, STEP_X, STEP_TOP, STEP_D, TROPHY_Z, BANNERS } from "./stage";
 import type { Tier } from "./device";
 
-// qualità per fascia di potenza della GPU (device.ts). maxScale: risoluzione massima rispetto ai pixel del dispositivo
-// (oltre 1 è supercampionamento); maxPixels: tetto dei pixel disegnati
-export type PodiumQuality = { tier: Tier; mobile: boolean; shadow: [number, number]; planarScale: number; envSize: number; volScale: number; steps: number; giPeriod: number; dust: number; bloom: number; maxScale: number; maxPixels: number };
+// qualità per fascia di potenza della GPU (device.ts). minScale, maxScale: risoluzione della scena rispetto ai pixel del
+// dispositivo (oltre 1 è supercampionamento; il passaggio finale la riporta ai pixel dello schermo); maxPixels: tetto dei
+// pixel disegnati
+export type PodiumQuality = { tier: Tier; mobile: boolean; shadow: [number, number]; planarScale: number; envSize: number; volScale: number; steps: number; giPeriod: number; dust: number; bloom: number; minScale: number; maxScale: number; maxPixels: number };
 const QUALITY: Record<Tier, Omit<PodiumQuality, "tier" | "mobile">> = {
-  low: { shadow: [768, 886], planarScale: 0.4, envSize: 128, volScale: 0.35, steps: 28, giPeriod: 24, dust: 200, bloom: 5, maxScale: 1, maxPixels: 1.1e6 },
-  medium: { shadow: [1024, 1182], planarScale: 0.5, envSize: 256, volScale: 0.4, steps: 40, giPeriod: 16, dust: 500, bloom: 5, maxScale: 1, maxPixels: 3.7e6 },
-  high: { shadow: [1536, 1772], planarScale: 0.6, envSize: 256, volScale: 0.5, steps: 48, giPeriod: 12, dust: 900, bloom: 6, maxScale: 1.25, maxPixels: 6.5e6 },
-  ultra: { shadow: [2048, 2363], planarScale: 0.75, envSize: 512, volScale: 0.6, steps: 64, giPeriod: 6, dust: 1400, bloom: 6, maxScale: 1.5, maxPixels: 9.5e6 },
+  low: { shadow: [768, 886], planarScale: 0.4, envSize: 128, volScale: 0.35, steps: 28, giPeriod: 24, dust: 200, bloom: 5, minScale: 0.5, maxScale: 1, maxPixels: 1.1e6 },
+  medium: { shadow: [1024, 1182], planarScale: 0.5, envSize: 256, volScale: 0.4, steps: 40, giPeriod: 16, dust: 500, bloom: 5, minScale: 0.6, maxScale: 1, maxPixels: 3.7e6 },
+  high: { shadow: [1536, 1772], planarScale: 0.6, envSize: 256, volScale: 0.5, steps: 48, giPeriod: 12, dust: 900, bloom: 6, minScale: 0.7, maxScale: 1.25, maxPixels: 6.5e6 },
+  ultra: { shadow: [2048, 2363], planarScale: 0.75, envSize: 512, volScale: 0.6, steps: 64, giPeriod: 6, dust: 1400, bloom: 6, minScale: 0.8, maxScale: 1.5, maxPixels: 9.5e6 },
 };
 export const podiumQuality = (tier: Tier, mobile = false): PodiumQuality => ({ tier, mobile: mobile || tier === "low", ...QUALITY[tier] });
 
@@ -30,6 +34,14 @@ export const FRAME_FLOATS = 16 + 15 * 4 + 3 * 4; // matrice della luce + 15 vec4
 export const PASS_FLOATS = 16 + 5 * 4; // matrice + 5 vec4
 
 // ---------------------------------------------------------------------------------------------------------------------
+// valori non finiti a zero e un tetto alla luce (sotto il massimo dei float a 16 bit): un solo pixel NaN, allargato dal
+// bloom, diventerebbe un quadrato nero sullo schermo
+const finite = /* wgsl */ `
+fn finite3(c: vec3f) -> vec3f {
+  let bad = (bitcast<vec3u>(c) & vec3u(0x7f800000u)) == vec3u(0x7f800000u);
+  return clamp(select(c, vec3f(0.0), bad), vec3f(0.0), vec3f(4096.0));
+}
+`;
 const structs = /* wgsl */ `
 struct Frame {
   light: mat4x4f,
@@ -45,7 +57,7 @@ struct Pass { vp: mat4x4f, pos: vec4f, right: vec4f, up: vec4f, fwd: vec4f, misc
 // pos.w tan(fov/2); right.w, up.w centro ottico (px); fwd.w altezza di riferimento (px); misc: -, modo (0 scena,
 // 1 riflesso del pavimento, 2 cubemap), larghezza e altezza del bersaglio (px)
 const PI = 3.14159265;
-`;
+${finite}`;
 
 const noise = /* wgsl */ `
 fn hash2(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453); }
@@ -92,8 +104,8 @@ fn cloudDensity(q: vec2f, t: f32) -> f32 {
 
 const sky = /* wgsl */ `
 // sun: con il disco dell'astro (le sonde lo escludono: la luce diretta arriva già dalla mappa d'ombra, e un disco così
-// piccolo preso da pochi raggi fissi farebbe saltare le sonde mentre si muove)
-fn sky(d: vec3f, sun: bool) -> vec3f {
+// piccolo preso da pochi raggi fissi farebbe saltare le sonde mentre si muove). fp: celle delle stelle per pixel
+fn sky(d: vec3f, sun: bool, fp: f32) -> vec3f {
   let night = F.sunCol.w; let L = F.sun.xyz;
   let up = saturate(d.y * 1.5 + 0.08);
   var c = mix(F.skyHor.rgb, F.skyTop.rgb, pow(up, 0.6));
@@ -108,7 +120,9 @@ fn sky(d: vec3f, sun: bool) -> vec3f {
   if (sun) { c += F.sunCol.rgb * (disk * spots * mix(90.0, 22.0, night) * (1.0 - 0.8 * saturate(cl)) + pow(cd, 900.0) * 7.0); }
   let sq = d.xy / max(-d.z, 0.06) * 110.0; let g = floor(sq);
   let sp = vec2f(hash2(g + 3.1), hash2(g + 9.7)) * 0.7 + 0.15;
-  let st = step(0.975, hash2(g)) * (1.0 - smoothstep(0.0, 0.06, length(fract(sq) - sp))) * (0.6 + 0.4 * sin(F.tileA.w * 2.0 + hash2(g + 7.0) * 40.0));
+  // stelle più piccole di un pixel: si allargano e si attenuano (niente sfarfallio)
+  let rs = clamp(fp * 0.7, 0.06, 0.15);
+  let st = step(0.975, hash2(g)) * (1.0 - smoothstep(0.0, rs, length(fract(sq) - sp))) * (0.0036 / (rs * rs)) * (0.6 + 0.4 * sin(F.tileA.w * 2.0 + hash2(g + 7.0) * 40.0));
   c += vec3f(0.85, 0.9, 1.0) * st * night * (1.0 - saturate(cl)) * 1.2;
   return c;
 }
@@ -127,7 +141,7 @@ fn animate(p: vec3f, n: vec3f, m: u32, uv: vec2f) -> Moved {
     o.p = vec3f(c.x + q.x * cs - q.y * sn, p.y + a.y, c.y + q.x * sn + q.y * cs);
     o.n = vec3f(n.x * cs - n.z * sn, n.y, n.x * sn + n.z * cs);
   } else if (m == ${Mat.banner}u) {
-    let t = F.tileA.w; let w = pow(uv.y, 1.4);
+    let t = F.tileA.w; let w = pow(saturate(uv.y), 1.4);
     let ph = t * 0.9 + uv.x * 4.0 + uv.y * 2.0; let ph2 = t * 1.9 + uv.x * 9.0 + uv.y * 4.0;
     let dz = w * (0.07 * sin(ph) + 0.025 * sin(ph2));
     let dzu = w * (0.28 * cos(ph) + 0.225 * cos(ph2)); let dzv = w * (0.14 * cos(ph) + 0.1 * cos(ph2));
@@ -398,7 +412,7 @@ var<workgroup> acc: array<vec3f, 64>;
       let st = sqrt(u1); let ct = sqrt(1.0 - u1);
       let d = normalize(t1 * (st * cos(ph)) + t2 * (st * sin(ph)) + ax * ct);
       let h = traceProxy(pos, d);
-      if (h.m == 0u) { sum += sky(d, false); continue; }
+      if (h.m == 0u) { sum += sky(d, false, 0.0); continue; }
       let hp = pos + d * h.t;
       let alb = proxyAlbedo(h.m);
       let ndl = max(dot(h.n, F.sun.xyz), 0.0);
@@ -417,7 +431,7 @@ var<workgroup> acc: array<vec3f, 64>;
     let k = probe * 6u + axis;
     if (inside) { giBuf[k] = vec4f(0.0); }
     else {
-      let est = acc[0] / 128.0; let old = giBuf[k];
+      let est = finite3(acc[0] / 128.0); let old = giBuf[k];
       giBuf[k] = vec4f(mix(old.rgb, est, select(0.5, 1.0, old.w == 0.0)), 1.0);
     }
   }
@@ -472,9 +486,11 @@ fn surfaceAt(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, g: Grads) -> Surf
       // velluto con il gallone d'oro
       let t = textureSampleGrad(fabricTex, anisoSamp, p.xz * 6.0, g.px.xz * 6.0, g.py.xz * 6.0);
       let e = ${f(CARPET.hw)} - abs(p.x);
-      s.alb = F.carpet.rgb * t.r; s.rough = 0.95; s.sheen = 0.6;
       s.n = normalize(vec3f((t.g - 0.5) * 0.5, 1.0, (t.b - 0.5) * 0.5));
-      if (e > 0.07 && e < 0.17 && n0.y > 0.5) { s.alb = METALS[0] * (0.7 + 0.3 * t.r); s.metal = 0.85; s.rough = 0.4; s.sheen = 0.0; }
+      // il gallone con i bordi filtrati sull'impronta del pixel (un taglio netto fa i gradini lungo tutto il tappeto)
+      let fw = max(abs(g.px.x) + abs(g.py.x), 1e-5);
+      let gal = saturate((e - 0.07) / fw + 0.5) * saturate((0.17 - e) / fw + 0.5) * step(0.5, n0.y);
+      s.alb = mix(F.carpet.rgb * t.r, METALS[0] * (0.7 + 0.3 * t.r), gal); s.metal = 0.85 * gal; s.rough = mix(0.95, 0.4, gal); s.sheen = 0.6 * (1.0 - gal);
     }
     case ${Mat.wall}u: {
       let t = triMarble(p * 0.55, n0, 0.35, 0.15, g, &nn);
@@ -499,9 +515,11 @@ fn surfaceAt(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, g: Grads) -> Surf
         if (gu > 0.0 && gu < 1.0 && gv > 0.0 && gv < 1.0) {
           let du = vec2f(0.5 / 1024.0, 0.0); let dv = vec2f(0.0, 0.5 / 1024.0);
           let c = vec2f((f32(i) + gu) * 0.25, gv * 0.5);
-          let mk = textureSampleLevel(decalTex, linSamp, c, 0.0).r;
-          let gx = textureSampleLevel(decalTex, linSamp, c + du * 3.0, 0.0).r - textureSampleLevel(decalTex, linSamp, c - du * 3.0, 0.0).r;
-          let gy = textureSampleLevel(decalTex, linSamp, c + dv * 3.0, 0.0).r - textureSampleLevel(decalTex, linSamp, c - dv * 3.0, 0.0).r;
+          // atlante con le mip letto sull'impronta del pixel: da lontano l'incisione si ammorbidisce invece di sfarfallare
+          let J = vec2f(0.54 / gh, -0.5 * fh / gh); let cx = g.ux * J; let cy = g.uy * J;
+          let mk = textureSampleGrad(decalTex, linSamp, c, cx, cy).r;
+          let gx = textureSampleGrad(decalTex, linSamp, c + du * 3.0, cx, cy).r - textureSampleGrad(decalTex, linSamp, c - du * 3.0, cx, cy).r;
+          let gy = textureSampleGrad(decalTex, linSamp, c + dv * 3.0, cx, cy).r - textureSampleGrad(decalTex, linSamp, c - dv * 3.0, cx, cy).r;
           s.n = normalize(s.n + vec3f(-gx, gy, 0.0) * 1.4);
           s.alb = mix(s.alb, METALS[i], mk); s.metal = mk * 0.7; s.rough = mix(s.rough, 0.32, mk);
           s.ao *= 1.0 - 0.6 * saturate((abs(gx) + abs(gy)) * 1.5);
@@ -522,8 +540,10 @@ fn surfaceAt(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, g: Grads) -> Surf
       let sc = vec2f(10.0, 30.0);
       let t = textureSampleGrad(fabricTex, anisoSamp, uv * sc, g.ux * sc, g.uy * sc);
       s.alb = F.banner.rgb * t.r; s.rough = 0.92; s.sheen = 0.5;
-      let em = textureSampleLevel(decalTex, linSamp, vec2f(uv.x * 0.5, 0.5 + clamp((uv.y - 0.06) * 2.6, 0.0, 1.0) * 0.5), 0.0).r * step(uv.y, 0.44);
-      let edge = step(min(uv.x, 1.0 - uv.x), 0.045) + step(uv.y, 0.025);
+      let ek = vec2f(0.5, 1.3);
+      let em = textureSampleGrad(decalTex, linSamp, vec2f(uv.x * 0.5, 0.5 + clamp((uv.y - 0.06) * 2.6, 0.0, 1.0) * 0.5), g.ux * ek, g.uy * ek).r * step(uv.y, 0.44);
+      let fw = max(abs(g.ux) + abs(g.uy), vec2f(1e-5));
+      let edge = saturate((0.045 - min(uv.x, 1.0 - uv.x)) / fw.x + 0.5) + saturate((0.025 - uv.y) / fw.y + 0.5);
       let gold = saturate(em + edge);
       s.alb = mix(s.alb, METALS[0] * (0.75 + 0.25 * t.r), gold); s.metal = gold * 0.85; s.rough = mix(s.rough, 0.45, gold);
       s.n = normalize(n0 + vec3f((t.g - 0.5), 0.0, (t.b - 0.5)) * 0.4);
@@ -560,52 +580,58 @@ fn contactAO(p: vec3f, n: vec3f) -> f32 {
   return ao;
 }
 fn ggx(nh: f32, r: f32) -> f32 { let a = r * r; let a2 = a * a; let d = nh * nh * (a2 - 1.0) + 1.0; return a2 / (PI * d * d); }
-fn fresnel(f0: vec3f, c: f32) -> vec3f { return f0 + (1.0 - f0) * pow(1.0 - c, 5.0); }
+// potenze come prodotti: pow con la base negativa (1 - n·v appena sotto zero per arrotondamento) non dà un numero
+fn fresnel(f0: vec3f, c: f32) -> vec3f { let m = 1.0 - saturate(c); let m2 = m * m; return f0 + (1.0 - f0) * (m2 * m2 * m); }
 fn dfg(nv: f32, r: f32) -> vec2f {
   let c0 = vec4f(-1.0, -0.0275, -0.572, 0.022); let c1 = vec4f(1.0, 0.0425, 1.04, -0.04);
   let q = r * c0 + c1; let a = min(q.x * q.x, exp2(-9.28 * nv)) * q.x + q.y;
   return vec2f(-1.04, 1.04) * a + q.zw;
 }
-// luce che lascia la superficie verso l'osservatore in eye; px: pixel (per il riflesso planare)
-fn shade(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, eye: vec3f, px: vec2f, g: Grads) -> vec3f {
+// luce che lascia la superficie verso l'osservatore in eye; px: pixel (per il riflesso planare); kr: allargamento del
+// lobo speculare dove la normale cambia molto dentro il pixel
+fn shade(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, eye: vec3f, px: vec2f, g: Grads, kr: f32) -> vec3f {
   let s = surfaceAt(m, p, n0, uv, vao, g);
+  let a = s.rough * s.rough; let rough = sqrt(sqrt(saturate(a * a + kr)));
   let n = s.n; let V = normalize(eye - p); let L = F.sun.xyz;
-  let nv = max(dot(n, V), 1e-3); let ndl = max(dot(n, L), 0.0);
+  let nv = clamp(dot(n, V), 1e-3, 1.0); let ndl = max(dot(n, L), 0.0);
   var vis = 0.0;
   if (ndl > 0.0 && dot(n0, L) > -0.05) { vis = sunLight(p + n0 * 0.012, P.misc.y == 0.0); }
   let light = F.sunCol.rgb * F.sun.w * vis * ndl;
   let ao = s.ao * contactAO(p, n0);
   let gi = (giAt(p + n0 * 0.3, n) + F.skyHor.w) * ao;
   let f0 = mix(vec3f(0.04), s.alb, s.metal);
-  let H = normalize(L + V);
-  let spec = light * fresnel(f0, max(dot(V, H), 0.0)) * ggx(max(dot(n, H), 0.0), max(s.rough, 0.05)) * 0.25 / nv;
+  let hv = L + V; let H = hv * inverseSqrt(max(dot(hv, hv), 1e-12)); // astro esattamente dietro il punto: niente 0/0
+  let spec = light * fresnel(f0, dot(V, H)) * ggx(saturate(dot(n, H)), max(rough, 0.05)) * 0.25 / nv;
   var col = s.alb * (1.0 - s.metal) * (light / PI + gi) + spec;
   // velluto e stoffa: riflesso radente
-  col += s.sheen * pow(1.0 - nv, 4.0) * (gi + light * 0.1) * s.alb * 2.0;
+  let g1 = 1.0 - nv; let g2 = g1 * g1;
+  col += s.sheen * g2 * g2 * (gi + light * 0.1) * s.alb * 2.0;
   // riflessi: pavimento (planare), superfici lucide (cubemap della sala), altrimenti l'ambiente delle sonde
-  let ab = dfg(nv, s.rough);
+  let ab = dfg(nv, rough);
   let spF = f0 * ab.x + ab.y;
   var refl = gi * 0.6;
   if (P.misc.y == 0.0) {
     if (s.kind == 1u) {
       let uvp = px / P.misc.zw + n.xz * 0.04;
-      refl = textureSampleLevel(planarTex, linSamp, uvp, s.rough * 8.0).rgb;
+      refl = textureSampleLevel(planarTex, linSamp, uvp, rough * 8.0).rgb;
     } else if (s.kind == 2u) {
-      refl = textureSampleLevel(envTex, linSamp, reflect(-V, n), s.rough * 7.0).rgb;
+      refl = textureSampleLevel(envTex, linSamp, reflect(-V, n), rough * 7.0).rgb;
     }
   }
   col += refl * spF * ao;
   // coppa sotto il puntatore: un bagliore del suo metallo sui bordi
   if (m >= ${Mat.cupGold}u && m <= ${Mat.cupBronze}u) {
     let k = m - ${Mat.cupGold}u;
-    col += METALS[k] * METALS[k] * F.cups[k].z * (0.04 + 0.9 * pow(1.0 - nv, 3.0)) * mix(0.55, 0.3, F.sunCol.w);
+    col += METALS[k] * METALS[k] * F.cups[k].z * (0.04 + 0.9 * g2 * g1) * mix(0.55, 0.3, F.sunCol.w);
   }
   return col;
 }
 `;
 
 export const sceneShader = (q: PodiumQuality) => /* wgsl */ `${structs}${noise}${frameBindings("read")}${passBinding}${sky}${lightFns(q)}${giFns}${material}${animFns}
-struct VOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f, @location(3) @interpolate(flat) m: u32, @location(4) ao: f32 };
+// centroid: con l'MSAA un pixel coperto solo in parte si calcola dentro il triangolo; al centro del pixel, fuori da un
+// triangolo visto di taglio (i fianchi dei montanti), la posizione interpolata può smettere di essere un numero
+struct VOut { @builtin(position) pos: vec4f, @location(0) @interpolate(perspective, centroid) wp: vec3f, @location(1) @interpolate(perspective, centroid) n: vec3f, @location(2) @interpolate(perspective, centroid) uv: vec2f, @location(3) @interpolate(flat) m: u32, @location(4) @interpolate(perspective, centroid) ao: f32 };
 @vertex fn vsScene(@location(0) p: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f, @location(3) m: f32, @location(4) ao: f32) -> VOut {
   var o: VOut;
   let mi = u32(m + 0.5);
@@ -620,9 +646,13 @@ struct VOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
   // derivate calcolate qui, nel flusso uniforme: i materiali le usano per filtrare le texture
   var g: Grads; g.px = dpdx(i.wp); g.py = dpdy(i.wp); g.ux = dpdx(i.uv); g.uy = dpdy(i.uv);
   let n = normalize(i.n);
+  // antialiasing speculare (Kaplanyan, Tokuyoshi): la varianza della normale nel pixel allarga il lobo, così i riflessi
+  // di coppe, scanalature e modanature non sfarfallano
+  let dnx = dpdx(n); let dny = dpdy(n);
+  let kr = min(0.3 * (dot(dnx, dnx) + dot(dny, dny)), 0.2);
   var eye = P.pos.xyz;
   if (P.misc.y == 1.0) { eye.y = -eye.y; }
-  return vec4f(shade(i.m, i.wp, n, i.uv, i.ao, eye, i.pos.xy, g), 1.0);
+  return vec4f(finite3(shade(i.m, i.wp, n, i.uv, i.ao, eye, i.pos.xy, g, kr)), 1.0);
 }
 // cielo: solo dove nessuna superficie è stata disegnata (profondità 1)
 @vertex fn vsSky(@builtin(vertex_index) k: u32) -> @builtin(position) vec4f {
@@ -632,7 +662,7 @@ struct VOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
 @fragment fn fsSky(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   var d = camRay(fc.xy);
   if (P.misc.y == 1.0) { d.y = -d.y; }
-  return vec4f(sky(d, true), 1.0);
+  return vec4f(finite3(sky(d, true, 220.0 * P.pos.w / P.fwd.w)), 1.0);
 }
 // pulviscolo: granelli che fluttuano e brillano solo dentro i raggi
 struct DOut { @builtin(position) pos: vec4f, @location(0) c: vec2f, @location(1) @interpolate(flat) col: vec3f };
@@ -646,10 +676,12 @@ struct DOut { @builtin(position) pos: vec4f, @location(0) c: vec2f, @location(1)
   let vis = sunLight(p, false);
   let tw = 0.55 + 0.45 * sin(t * (1.5 + seed.y * 2.0) + fi);
   let c = vec2f(f32(k & 1u), f32(k >> 1u)) * 2.0 - 1.0;
-  let size = 0.006 + 0.006 * seed.z;
+  // granelli più piccoli di un pixel e mezzo: si allargano e si attenuano (stessa luce, niente sfarfallio)
+  let size0 = 0.006 + 0.006 * seed.z;
+  let size = max(size0, 1.5 * max(dot(p - P.pos.xyz, P.fwd.xyz), 0.1) * P.pos.w / P.fwd.w);
   o.pos = P.vp * vec4f(p + (P.right.xyz * c.x + P.up.xyz * c.y) * size, 1.0);
   if (vis < 0.02) { o.pos = vec4f(2.0, 2.0, 2.0, 1.0); }
-  o.c = c; o.col = F.sunCol.rgb * F.sun.w * vis * tw * 0.08;
+  o.c = c; o.col = F.sunCol.rgb * F.sun.w * vis * tw * 0.08 * (size0 / size) * (size0 / size);
   return o;
 }
 @fragment fn fsDust(i: DOut) -> @location(0) vec4f {
@@ -702,28 +734,31 @@ fn fogLight(p: vec3f) -> f32 {
     T *= exp(-dens * dt);
   }
   let prev = textureLoad(volPrev, vec2i(fc.xy), 0);
-  return mix(prev, vec4f(acc, T), F.darkStone.w);
+  return vec4f(finite3(mix(prev.rgb, acc, F.darkStone.w)), saturate(mix(prev.a, T, F.darkStone.w)));
 }
 `;
 
 // ---------------------------------------------------------------------------------------------------------------------
-// composizione: scena + nebbia, bloom (riduzione a 13 campioni, ricostruzione a tenda), ACES, sRGB, dithering
-export const postShader = /* wgsl */ `
-@group(0) @binding(0) var srcTex: texture_2d<f32>;
+// composizione: scena + nebbia, bloom (riduzione a 13 campioni, ricostruzione a tenda), ACES e sRGB alla risoluzione della
+// scena; poi il passaggio ai pixel dello schermo (Catmull-Rom) con il dithering
+const postHead = /* wgsl */ `
 @group(0) @binding(1) var samp: sampler;
 @group(0) @binding(2) var auxTex: texture_2d<f32>;
-@group(0) @binding(3) var<uniform> post: vec4f; // esposizione, intensità del bloom, fotogramma, primo livello (1)
+@group(0) @binding(3) var<uniform> post: vec4f; // esposizione, intensità del bloom, fotogramma, primo livello (1); nel passaggio finale: larghezza e altezza dello schermo, fotogramma
 @vertex fn vsFull(@builtin(vertex_index) k: u32) -> @builtin(position) vec4f {
   let p = vec2f(f32((k << 1u) & 2u), f32(k & 2u));
   return vec4f(p * 2.0 - 1.0, 0.0, 1.0);
 }
+${finite}`;
+export const postShader = /* wgsl */ `${postHead}
+@group(0) @binding(0) var srcTex: texture_2d<f32>;
 fn ign(p: vec2f) -> f32 { return fract(52.9829189 * fract(dot(p, vec2f(0.06711056, 0.00583715)))); }
 // scena risolta + fasci di luce (risoluzione ridotta, interpolati)
 @fragment fn fsCombine(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   let size = vec2f(textureDimensions(srcTex));
   let c = textureLoad(srcTex, vec2i(fc.xy), 0).rgb;
   let v = textureSampleLevel(auxTex, samp, fc.xy / size, 0.0);
-  return vec4f(c * v.a + v.rgb, 1.0);
+  return vec4f(finite3(c * v.a + v.rgb), 1.0);
 }
 @fragment fn fsDown(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   let ts = 1.0 / vec2f(textureDimensions(srcTex));
@@ -744,15 +779,47 @@ fn ign(p: vec2f) -> f32 { return fract(52.9829189 * fract(dot(p, vec2f(0.0671105
   o += textureSampleLevel(srcTex, samp, uv + ts * vec2f(-1, -1), 0.0).rgb + textureSampleLevel(srcTex, samp, uv + ts * vec2f(1, -1), 0.0).rgb + textureSampleLevel(srcTex, samp, uv + ts * vec2f(-1, 1), 0.0).rgb + textureSampleLevel(srcTex, samp, uv + ts * vec2f(1, 1), 0.0).rgb;
   return vec4f(o / 16.0, 1.0);
 }
-@fragment fn fsFinal(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+// bloom, esposizione, vignettatura, ACES e sRGB, alla risoluzione della scena: il ricampionamento che segue lavora su
+// valori già compressi (attorno al disco del sole un filtro nitido su valori HDR farebbe aloni scuri)
+@fragment fn fsTone(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   let size = vec2f(textureDimensions(srcTex)); let uv = fc.xy / size;
   var c = textureLoad(srcTex, vec2i(fc.xy), 0).rgb;
   c = mix(c, textureSampleLevel(auxTex, samp, uv, 0.0).rgb, post.y);
   c *= post.x;
   let q = uv - 0.5; c *= 1.0 - 0.25 * dot(q, q);
   c = saturate(c * (2.51 * c + 0.03) / (c * (2.43 * c + 0.59) + 0.14));
-  var s = select(1.055 * pow(c, vec3f(1.0 / 2.4)) - 0.055, c * 12.92, c <= vec3f(0.0031308));
-  s += (ign(fc.xy + post.z * 7.0) - 0.5) / 255.0;
-  return vec4f(s, 1.0);
+  return vec4f(select(1.055 * pow(c, vec3f(1.0 / 2.4)) - 0.055, c * 12.92, c <= vec3f(0.0031308)), 1.0);
+}
+// dall'immagine della scena (risoluzione adattiva, anche oltre i pixel dello schermo) ai pixel veri: Catmull-Rom con nove
+// letture bilineari, più nitido del bilineare del browser e senza scalini; il dithering ai pixel dello schermo
+@fragment fn fsFinal(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  let src = vec2f(textureDimensions(srcTex));
+  let sp = fc.xy / post.xy * src;
+  let t1 = floor(sp - 0.5) + 0.5; let f = sp - t1;
+  let w0 = f * (-0.5 + f * (1.0 - 0.5 * f)); let w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  let w2 = f * (0.5 + f * (2.0 - 1.5 * f)); let w3 = f * f * (-0.5 + 0.5 * f);
+  let w12 = w1 + w2;
+  let a = (t1 - 1.0) / src; let b = (t1 + w2 / w12) / src; let d = (t1 + 2.0) / src;
+  var c = (textureSampleLevel(srcTex, samp, vec2f(a.x, a.y), 0.0).rgb * w0.x + textureSampleLevel(srcTex, samp, vec2f(b.x, a.y), 0.0).rgb * w12.x + textureSampleLevel(srcTex, samp, vec2f(d.x, a.y), 0.0).rgb * w3.x) * w0.y;
+  c += (textureSampleLevel(srcTex, samp, vec2f(a.x, b.y), 0.0).rgb * w0.x + textureSampleLevel(srcTex, samp, vec2f(b.x, b.y), 0.0).rgb * w12.x + textureSampleLevel(srcTex, samp, vec2f(d.x, b.y), 0.0).rgb * w3.x) * w12.y;
+  c += (textureSampleLevel(srcTex, samp, vec2f(a.x, d.y), 0.0).rgb * w0.x + textureSampleLevel(srcTex, samp, vec2f(b.x, d.y), 0.0).rgb * w12.x + textureSampleLevel(srcTex, samp, vec2f(d.x, d.y), 0.0).rgb * w3.x) * w3.y;
+  return vec4f(saturate(c) + (ign(fc.xy + post.z * 7.0) - 0.5) / 255.0, 1.0);
+}
+`;
+// risoluzione dell'MSAA pesata sulla luminanza (Karis), al posto della media dell'hardware: dove un bordo scuro passa
+// davanti al finestrone o a un riflesso, la media lineare dei valori HDR dà al campione chiaro tutto il pixel (bordi a
+// gradini); pesati, i quattro campioni contano come li vede l'occhio dopo il tonemapping
+export const combineMSShader = /* wgsl */ `${postHead}
+@group(0) @binding(0) var msTex: texture_multisampled_2d<f32>;
+@fragment fn fsCombineMS(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  let p = vec2i(fc.xy);
+  var sum = vec3f(0.0); var ws = 0.0;
+  for (var k = 0; k < 4; k++) {
+    let c = finite3(textureLoad(msTex, p, k).rgb);
+    let w = 1.0 / (1.0 + max(max(c.r, c.g), c.b) * post.x);
+    sum += c * w; ws += w;
+  }
+  let v = textureSampleLevel(auxTex, samp, fc.xy / vec2f(textureDimensions(msTex)), 0.0);
+  return vec4f(finite3(sum / ws * v.a + v.rgb), 1.0);
 }
 `;

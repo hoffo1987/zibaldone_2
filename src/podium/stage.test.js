@@ -1,5 +1,5 @@
 import { WINDOW, ROOM, STEP_X, STEP_TOP, STEP_D, TROPHY_TOP, CARPET, LIGHT_PLANE, LIGHT_DEPTH, Mat, camera, project, viewProj, celestial, lightMatrix, moodAt, DAY, NIGHT } from "./stage";
-import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, podiumQuality, GI_PROBES } from "./shaders";
+import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, combineMSShader, podiumQuality, GI_PROBES } from "./shaders";
 import { buildScene, VERTEX_FLOATS } from "./meshes";
 import { tierFor, capTier } from "./device";
 
@@ -43,7 +43,7 @@ test("day and night blend smoothly and the shaders embed the scene", () => {
   expect(moodAt(0).sunI).toBeCloseTo(DAY.sunI, 9); expect(moodAt(1).sunI).toBeCloseTo(NIGHT.sunI, 9);
   expect(moodAt(0.5).sun[2]).toBeCloseTo((DAY.sun[2] + NIGHT.sun[2]) / 2, 6);
   for (const q of [podiumQuality("low", true), podiumQuality("medium"), podiumQuality("high"), podiumQuality("ultra")]) {
-    const all = [texgenShader, mipShader("rgba8unorm", false), mipShader("rgba16float", true), cloudShader, shadowShader, giShader(q), sceneShader(q), volShader(q), postShader];
+    const all = [texgenShader, mipShader("rgba8unorm", false), mipShader("rgba16float", true), cloudShader, shadowShader, giShader(q), sceneShader(q), volShader(q), postShader, combineMSShader];
     for (const src of all) expect(src).not.toMatch(/NaN|undefined|Infinity|\$\{/);
     for (const src of [giShader(q), sceneShader(q), volShader(q)]) expect(src).toContain("fn sunLight(");
     // le sonde si aggiornano a turno, ognuna con raggi fissi: nessun numero casuale nel calcolo
@@ -53,7 +53,23 @@ test("day and night blend smoothly and the shaders embed the scene", () => {
     expect(body).not.toMatch(/ign\(|hash2\(|tileB\.w|tileA\.w/);
   }
   for (const e of ["vsScene", "fsScene", "vsSky", "fsSky", "vsDust", "fsDust"]) expect(sceneShader(podiumQuality("high"))).toContain(`fn ${e}(`);
-  for (const e of ["fsCombine", "fsDown", "fsUp", "fsFinal"]) expect(postShader).toContain(`fn ${e}(`);
+  for (const e of ["fsCombine", "fsDown", "fsUp", "fsTone", "fsFinal"]) expect(postShader).toContain(`fn ${e}(`);
+  expect(combineMSShader).toContain("fn fsCombineMS(");
+});
+
+test("no pixel turns NaN in the shading, and none could reach the bloom (where it became a black square)", () => {
+  for (const q of [podiumQuality("low", true), podiumQuality("ultra")]) {
+    const scene = sceneShader(q);
+    // MSAA: the fragment of a partly covered pixel is computed inside the triangle, never extrapolated past an edge-on one
+    for (const v of ["wp: vec3f", "n: vec3f", "uv: vec2f", "ao: f32"]) expect(scene).toContain(`@interpolate(perspective, centroid) ${v}`);
+    // no power of a base that rounding can push below zero (1 - n·v)
+    expect(scene).not.toMatch(/pow\(1\.0 - /);
+    expect(scene).toContain("finite3(shade("); expect(scene).toContain("finite3(sky(");
+    expect(giShader(q)).toContain("finite3(acc[0]");
+    expect(volShader(q)).toContain("finite3(mix(prev.rgb");
+  }
+  expect(postShader.slice(postShader.indexOf("fn fsCombine("), postShader.indexOf("fn fsDown("))).toContain("finite3(");
+  expect(combineMSShader).toContain("finite3(textureLoad(msTex");
 });
 
 test("the light map follows the light from the window plane, and the camera matrix agrees with the projection", () => {
@@ -126,7 +142,10 @@ test("the GPU tier follows the measured power, phones stay at most medium, and q
     expect(order[i].shadow[0]).toBeGreaterThanOrEqual(order[i - 1].shadow[0]);
     expect(order[i].maxPixels).toBeGreaterThan(order[i - 1].maxPixels);
     expect(order[i].giPeriod).toBeLessThanOrEqual(order[i - 1].giPeriod);
+    expect(order[i].minScale).toBeGreaterThanOrEqual(order[i - 1].minScale);
   }
+  // the scene never drops below its tier's floor, and every tier can reach the screen's own pixels
+  for (const q of order) { expect(q.minScale).toBeLessThan(1); expect(q.maxScale).toBeGreaterThanOrEqual(1); }
   expect(podiumQuality("low").mobile).toBe(true); expect(podiumQuality("ultra").mobile).toBe(false);
 });
 
