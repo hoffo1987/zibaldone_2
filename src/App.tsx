@@ -2242,6 +2242,16 @@ export default function App() {
                 <div className="pdm-who flex items-center gap-2 mt-1.5 min-w-0">{who(t, 18)}<span className="mu text-xs truncate">{wn(t)}</span></div>
               </div>
             ); });
+  // telefoni: i vincitori in schede sotto il palco 3D (le targhette sopra le coppe sarebbero troppo piccole)
+  const podiumList = top.map((t, k) => (
+    <div key={t.id} data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className={`pdm-row r${k + 1}`}>
+      <span className="pdm-medal hd" aria-hidden="true">{k + 1}</span>
+      <div className="min-w-0 flex-1">
+        <div className="pdm-row-title hd">{t.title}</div>
+        <div className="pdm-row-meta">{who(t, 18)}<span className="who">{wn(t)}</span><span className="stars"><Stars v={t.rating || 0} size={12} /></span></div>
+      </div>
+    </div>
+  ));
   const shiftM = (d: number) => { const [y, m] = month.split("-").map(Number); setMonth(mKey(new Date(y, m - 1 + d, 1).getTime())); };
   const podioView = (
     <div>
@@ -2252,7 +2262,7 @@ export default function App() {
           <button className="bt !p-2.5" onClick={() => shiftM(1)} aria-label="Mese successivo"><ChevronRight size={16} /></button>
         </div>
         <div className="flex items-center gap-3 text-sm mu">
-          <span>{mItems.length} scritti · {mItems.filter((t) => !t.rating).length} da valutare</span>
+          <span>{mItems.length} {mItems.length === 1 ? "scritto" : "scritti"} · {mItems.filter((t) => !t.rating).length} da valutare</span>
           <button className="bt" onClick={() => { setTab("read"); setMonthFilter(month); setSortBy("newest"); }}>Valuta ora</button>
         </div>
       </div>
@@ -2263,7 +2273,7 @@ export default function App() {
             <p className="mu text-sm mb-5">Dai un voto da 1 a 5 stelle agli scritti: i più votati salgono qui sul podio.</p>
             <button className="bt pri" onClick={() => { setTab("read"); setMonthFilter(month); }}>Apri gli scritti del mese</button></div>
         ) : (<>
-          {podium3d ? <PodiumSlot /> : <>
+          {podium3d ? <PodiumSlot list={podiumList} /> : <>
           <div className="grid md:grid-cols-3 gap-5 items-end">
             {[1, 0, 2].map((k) => { const t = top[k]; if (!t) return <div key={k} className="hidden md:block" />;
               return (

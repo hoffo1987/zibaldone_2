@@ -43,9 +43,11 @@ const cross = (a: number[], b: number[]) => [a[1] * b[2] - a[2] * b[1], a[2] * b
 export function camera(w: number, h: number, left = 0, top = 0): Cam {
   const cw = Math.max(1, w - left), ch = Math.max(1, h - top), aspect = cw / ch;
   const tan = Math.tan((22 * Math.PI) / 180);
-  const narrow = Math.max(0, 1.5 - aspect);
-  const pos = [0, 2.75 + narrow * 0.9, 10.2 + narrow * 10];
-  const target = [0, 2.6 + narrow * 0.4, ROOM.back];
+  // schermi stretti (telefoni): la camera arretra quanto basta perché i tre gradini entrino in larghezza, non di più
+  const fitZ = 3.95 / (tan * aspect);
+  const narrow = Math.max(0, 1 - aspect);
+  const pos = [0, 2.75 + narrow * 0.6, Math.max(10.2, fitZ)];
+  const target = [0, 2.6 + narrow * 1.2, ROOM.back];
   const fwd = norm([target[0] - pos[0], target[1] - pos[1], target[2] - pos[2]]);
   const right = norm(cross(fwd, [0, 1, 0])), up = cross(right, fwd);
   return { pos, right, up, fwd, tan: tan * (h / ch), cx: left + cw / 2, cy: top + ch / 2, h, w };
