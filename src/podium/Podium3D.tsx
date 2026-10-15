@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { renderLoop } from "../renderLoop";
-import { acquireEngine, releaseEngine } from "../logo3d/engine";
+import { acquirePodiumDevice, releasePodiumDevice, capTier, type Tier } from "./device";
 import { PodiumView, podiumQuality } from "./engine";
-import { STEP_X, STEP_D, STEP_TOP, TROPHY_TOP, camera, project } from "./stage";
+import { STEP_X, STEP_D, STEP_TOP, DAIS, TROPHY_TOP, TROPHY_K, TROPHY_Z, camera, project, type Cam, type CamMotion } from "./stage";
 
 export type PodiumProps = {
   dark: boolean;
@@ -17,25 +17,34 @@ const SLOT = "podium-slot"; // spazio lasciato libero nella pagina: lì la camer
 // sotto questa larghezza la sala è un palco a tutta larghezza dentro la pagina e i vincitori sono schede sotto di esso
 // (la stessa soglia del CSS: .podium-list e .podium-slot)
 const NARROW = "(max-width: 767px)";
+// risoluzione di partenza (rispetto ai pixel del dispositivo) e fotogrammi al secondo per fascia
+const START_SCALE: Record<Tier, number> = { low: 0.85, medium: 0.9, high: 1, ultra: 1.25 };
+const FPS: Record<Tier, number> = { low: 60, medium: 60, high: 60, ultra: 120 };
 
 // La sala del podio.
 //  - Schermi larghi: a tutto schermo. Lo strato della scena sta dietro ai contenuti (sopra lo sfondo) e scorre con la
 //    pagina; le targhette stanno in uno strato sopra i contenuti, proiettate sopra le coppe con la stessa camera.
-//  - Telefoni: la scena vive dentro lo spazio della pagina (scorre come il resto, nessuno strato fisso che salta quando la
-//    barra del browser si nasconde) e le targhette diventano schede leggibili sotto il palco (le disegna la pagina).
-// I numeri dei posti sono incisi nel marmo dei gradini.
+//  - Telefoni: la scena vive dentro lo spazio della pagina (scorre come il resto) e le targhette diventano schede sotto il
+//    palco (le disegna la pagina).
+// La sala è viva: la camera respira e segue il puntatore, si trascina per girare attorno al podio, le coppe ruotano sui
+// piedistalli e al passaggio si sollevano e brillano; un clic (o un tocco) su coppa o gradino apre lo scritto.
+// Qualità e risoluzione seguono la potenza misurata della GPU e il tempo reale di ogni fotogramma.
 export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
   const host = useRef<HTMLDivElement>(null);
   const over = useRef<HTMLDivElement>(null);
   const plateEls = useRef<(HTMLDivElement | null)[]>([]);
+  const hoverPlate = useRef(-1);
   const [root, setRoot] = useState<Element | null>(null);
   const [shown, setShown] = useState(false);
   const [gen, setGen] = useState(0);
   const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
+  const [hud, setHud] = useState("");
   const darkRef = useRef(dark); darkRef.current = dark;
+  const platesRef = useRef(plates); platesRef.current = plates;
   const fail = useRef(onFail); fail.current = onFail;
   const retries = useRef(0);
   const placeRef = useRef<(() => void) | null>(null);
+  const showHud = useRef(/podiohud/.test(window.location.search)).current;
   useEffect(() => { setRoot(host.current?.closest(".root") || document.querySelector(".root") || document.body); }, []);
   useEffect(() => { placeRef.current?.(); }, [plates, root]);
   useEffect(() => {
@@ -47,45 +56,108 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
   useEffect(() => {
     const slot = document.getElementById(SLOT);
     const el = narrow ? slot : host.current;
-    if (!el) { const id = window.setTimeout(() => setGen((g) => g + 1), 120); return () => clearTimeout(id); } // la pagina non ha ancora lo spazio
+    if (!el || !slot) { const id = window.setTimeout(() => setGen((g) => g + 1), 120); return () => clearTimeout(id); } // la pagina non ha ancora lo spazio
     const mobile = narrow || window.matchMedia("(pointer:coarse)").matches;
     const cv = document.createElement("canvas");
     cv.className = "podium-canvas";
     cv.setAttribute("aria-hidden", "true");
-    let alive = true, view: PodiumView | null = null;
+    let alive = true, view: PodiumView | null = null, tier: Tier = mobile ? "low" : "medium";
+    let q = podiumQuality(tier, mobile);
     const cleanups: (() => void)[] = [];
-    let W = 0, H = 0, left = 0, top = 0, ratio = 1, scale = 1;
+    let W = 0, H = 0, left = 0, top = 0, ratio = 1, scale = START_SCALE[tier];
 
     const measure = () => {
+      const dpr = window.devicePixelRatio || 1;
       if (narrow) {
         // il palco: larghezza piena, altezza fissata dal CSS su svh (non cambia quando la barra del browser si muove)
         W = el.clientWidth; H = el.clientHeight; left = 0; top = 0;
-        ratio = Math.min(window.devicePixelRatio || 1, 1.5) * scale;
-        return;
-      }
-      // inquadratura: area libera della pagina (a destra della barra laterale, sotto titolo e mese)
-      W = window.innerWidth; H = window.innerHeight;
-      const aside = document.querySelector("aside");
-      left = aside && getComputedStyle(aside).display !== "none" ? aside.getBoundingClientRect().right : 0;
-      if (slot) {
+      } else {
+        // inquadratura: area libera della pagina (a destra della barra laterale, sotto titolo e mese)
+        W = window.innerWidth; H = window.innerHeight;
+        const aside = document.querySelector("aside");
+        left = aside && getComputedStyle(aside).display !== "none" ? aside.getBoundingClientRect().right : 0;
         top = Math.max(0, slot.getBoundingClientRect().top + window.scrollY);
         slot.style.height = `${Math.max(460, H - top - 16)}px`;
       }
-      ratio = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 1.5) * scale;
+      ratio = Math.min(dpr, narrow ? 1.5 : 2) * scale;
+      // tetto dei pixel della fascia (un 4K con la scheda integrata non si disegna a piena risoluzione)
+      const px = W * H * ratio * ratio;
+      if (px > q.maxPixels) ratio *= Math.sqrt(q.maxPixels / px);
     };
+    const cam = (): Cam | null => view?.camera || (W && H ? camera(Math.max(1, Math.round(W * ratio)), Math.max(1, Math.round(H * ratio)), left * ratio, top * ratio) : null);
     const place = () => {
-      if (narrow || !W || !H) return;
-      const c = camera(Math.max(1, Math.round(W * ratio)), Math.max(1, Math.round(H * ratio)), left * ratio, top * ratio);
+      const c = cam();
+      if (narrow || !c) return;
       // la camera lavora in pixel dell'immagine: si riporta tutto in pixel CSS
       const k = 1 / ratio;
       STEP_X.forEach((x, i) => {
-        const tp = project(c, [x, TROPHY_TOP[i] + 0.22, -0.15]), a = project(c, [x - 1.1, STEP_TOP[i], STEP_D]), b = project(c, [x + 1.1, STEP_TOP[i], STEP_D]);
+        const tp = project(c, [x, TROPHY_TOP[i] + 0.22, TROPHY_Z]), a = project(c, [x - 1.1, STEP_TOP[i], STEP_D]), b = project(c, [x + 1.1, STEP_TOP[i], STEP_D]);
         const p = plateEls.current[i];
         if (p && tp && a && b) { p.style.width = `${Math.max(150, (b.x - a.x) * k * 0.94)}px`; p.style.transform = `translate(${tp.x * k}px, ${tp.y * k}px) translate(-50%, -100%)`; }
       });
     };
     placeRef.current = place;
     const fit = () => { if (!alive) return; measure(); view?.resize(W, H, ratio, left, top); place(); };
+
+    // ---------- puntatore: parallasse, trascinamento, coppa sotto il puntatore, clic ----------
+    const ptr = { x: 0, y: 0, in: false, cx: -1, cy: -1 };
+    const drag = { on: false, id: -1, x0: 0, y0: 0, yaw0: 0, moved: 0, at: -1e9 };
+    let yawTarget = 0, hover = -1;
+    // coordinate del puntatore nell'immagine della scena (pixel CSS)
+    const local = (e: PointerEvent) => {
+      if (narrow) { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+      return { x: e.clientX, y: e.clientY + window.scrollY };
+    };
+    // il posto (0, 1, 2) sotto il punto: rettangolo proiettato di coppa e gradino
+    const pick = (x: number, y: number) => {
+      const c = cam(); if (!c) return -1;
+      const k = 1 / ratio;
+      for (let i = 0; i < 3; i++) {
+        if (!platesRef.current[i] && !narrow) continue;
+        const t = TROPHY_K[i];
+        const pts = [[STEP_X[i] - 1.1, DAIS, STEP_D], [STEP_X[i] + 1.1, DAIS, STEP_D], [STEP_X[i] - 1.1, STEP_TOP[i], STEP_D], [STEP_X[i] + 1.1, STEP_TOP[i], STEP_D],
+          [STEP_X[i] - 0.42 * t, TROPHY_TOP[i] + 0.05, TROPHY_Z], [STEP_X[i] + 0.42 * t, TROPHY_TOP[i] + 0.05, TROPHY_Z]].map((p) => project(c, p));
+        if (pts.some((p) => !p)) continue;
+        const xs = pts.map((p) => p!.x * k), ys = pts.map((p) => p!.y * k);
+        if (x >= Math.min(...xs) && x <= Math.max(...xs) && y >= Math.min(...ys) && y <= Math.max(...ys)) return i;
+      }
+      return -1;
+    };
+    const open = (i: number) => {
+      const target = narrow ? document.querySelectorAll(".podium-list .pdm-row")[i] : plateEls.current[i]?.querySelector("[role=button]");
+      (target as HTMLElement | null)?.click();
+    };
+    const onMove = (e: PointerEvent) => {
+      ptr.x = (e.clientX / window.innerWidth) * 2 - 1; ptr.y = (e.clientY / window.innerHeight) * 2 - 1; ptr.in = true;
+      const p = local(e); ptr.cx = p.x; ptr.cy = p.y;
+      if (drag.on && e.pointerId === drag.id) {
+        drag.moved = Math.max(drag.moved, Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0));
+        yawTarget = Math.max(-0.42, Math.min(0.42, drag.yaw0 - (e.clientX - drag.x0) * (narrow ? 0.005 : 0.0028)));
+      }
+    };
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      drag.on = true; drag.id = e.pointerId; drag.x0 = e.clientX; drag.y0 = e.clientY; drag.yaw0 = yawTarget; drag.moved = 0;
+      const p = local(e); ptr.cx = p.x; ptr.cy = p.y;
+      try { slot.setPointerCapture(e.pointerId); } catch {}
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!drag.on || e.pointerId !== drag.id) return;
+      drag.on = false; drag.at = performance.now();
+      try { slot.releasePointerCapture(e.pointerId); } catch {}
+      if (drag.moved < 8) { const p = local(e), i = pick(p.x, p.y); if (i >= 0) open(i); }
+    };
+    const onLeave = () => { ptr.in = false; ptr.cx = ptr.cy = -1; };
+    slot.classList.add("live");
+    slot.addEventListener("pointermove", onMove); slot.addEventListener("pointerdown", onDown);
+    slot.addEventListener("pointerup", onUp); slot.addEventListener("pointercancel", onUp); slot.addEventListener("pointerleave", onLeave);
+    if (!narrow) window.addEventListener("pointermove", onMove, { passive: true });
+    cleanups.push(() => {
+      slot.classList.remove("live"); slot.style.cursor = "";
+      slot.removeEventListener("pointermove", onMove); slot.removeEventListener("pointerdown", onDown);
+      slot.removeEventListener("pointerup", onUp); slot.removeEventListener("pointercancel", onUp); slot.removeEventListener("pointerleave", onLeave);
+      window.removeEventListener("pointermove", onMove);
+    });
 
     if (narrow) {
       el.appendChild(cv);
@@ -98,7 +170,7 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       const scroll = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; const y = `translate3d(0, ${-window.scrollY}px, 0)`; el.style.transform = y; if (over.current) over.current.style.transform = y; }); };
       window.addEventListener("scroll", scroll, { passive: true }); window.addEventListener("resize", fit);
       const tick = window.setInterval(fit, 1000); // il titolo e la barra del mese possono cambiare altezza
-      cleanups.push(() => { window.removeEventListener("scroll", scroll); window.removeEventListener("resize", fit); clearInterval(tick); cancelAnimationFrame(raf); cv.remove(); if (slot) slot.style.height = ""; });
+      cleanups.push(() => { window.removeEventListener("scroll", scroll); window.removeEventListener("resize", fit); clearInterval(tick); cancelAnimationFrame(raf); cv.remove(); slot.style.height = ""; });
       el.appendChild(cv);
       scroll();
     }
@@ -108,47 +180,92 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       if (!alive) return; alive = false;
       if (retries.current++ < RETRIES) { setShown(false); setGen((g) => g + 1); } else fail.current();
     };
-    acquireEngine().then(async (e) => {
+    acquirePodiumDevice().then(async (dev) => {
       if (!alive) return;
-      e.onLost.add(lost); cleanups.push(() => e.onLost.delete(lost));
-      if (e.lost) { lost(); return; }
-      view = new PodiumView(e.device, cv, podiumQuality(mobile));
+      dev.onLost.add(lost); cleanups.push(() => dev.onLost.delete(lost));
+      if (dev.lost) { lost(); return; }
+      // ?podiotier=low|medium|high|ultra forza una fascia (prove); ?podiohud mostra fascia, risoluzione e tempi
+      const forced = new URLSearchParams(window.location.search).get("podiotier") as Tier | null;
+      tier = forced && forced in START_SCALE ? forced : capTier(dev.tier, mobile); q = podiumQuality(tier, mobile); scale = Math.min(q.maxScale, START_SCALE[tier]);
+      view = new PodiumView(dev.device, cv, q, dev.timestamps);
       view.onError = (err) => { if (alive) { console.warn("Podio 3D: errore WebGPU, si usa il podio semplice.", err.message); alive = false; fail.current(); } };
       await view.ready();
       if (!alive) return;
       fit();
+      console.info(`Podio 3D: GPU ${dev.adapter.vendor || "?"} ${dev.adapter.architecture || ""}, ${Math.round(dev.gflops)} GFLOPS → fascia ${tier}`);
+      const fps = FPS[tier], budget = (1000 / fps) * 0.7;
       const t0 = performance.now();
-      let last = t0, first = true, night = darkRef.current ? 1 : 0, slow = 0, fast = 0, avg = 16.7, drawn = t0;
+      let last = t0, first = true, night = darkRef.current ? 1 : 0, frames = 0, slowUntil = 0, avg = 1000 / fps, drawn = t0, hudAt = 0;
+      const sm = { x: 0, y: 0, yaw: 0 };
+      const cups = new Float32Array(12), hot = [0, 0, 0];
+      for (let i = 0; i < 3; i++) cups[i * 4] = i * 2.1;
+      const motion: CamMotion = { x: 0, y: 0, z: 0, yaw: 0 };
       cleanups.push(renderLoop((now) => {
         const dt = Math.min(0.05, (now - last) / 1000); last = now;
-        night += ((darkRef.current ? 1 : 0) - night) * (1 - Math.exp(-dt * 2.2)); // il sole lascia il posto alla luna piano piano
-        if (!view!.render((now - t0) / 1000, night)) return;
-        // risoluzione adattiva sui fotogrammi davvero disegnati: scende solo se la fluidità cala davvero
+        const t = (now - t0) / 1000, ease = (rate: number) => 1 - Math.exp(-dt * rate);
+        night += ((darkRef.current ? 1 : 0) - night) * ease(2.2); // il sole lascia il posto alla luna piano piano
+        // camera: respiro lento, parallasse col puntatore, ritorno dolce dopo il trascinamento
+        if (!drag.on && now - drag.at > 2500) yawTarget *= 1 - ease(0.6);
+        const amp = narrow ? 0.5 : 1;
+        sm.x += ((ptr.in && !narrow ? ptr.x : 0) - sm.x) * ease(2.5); sm.y += ((ptr.in && !narrow ? ptr.y : 0) - sm.y) * ease(2.5);
+        sm.yaw += (yawTarget - sm.yaw) * ease(drag.on ? 10 : 3);
+        motion.x = (0.45 * Math.sin(t * 0.13) + 0.6 * sm.x) * amp;
+        motion.y = (0.14 * Math.sin(t * 0.09 + 1) - 0.3 * sm.y) * amp;
+        motion.z = -0.7 * (0.5 + 0.5 * Math.sin(t * 0.06 - 1.2)) * amp;
+        motion.yaw = 0.035 * Math.sin(t * 0.05) * amp + sm.yaw;
+        // coppe: girano piano, quella sotto il puntatore (o la cui targhetta è sotto il puntatore) si solleva e brilla
+        hover = drag.on && drag.moved > 8 ? -1 : ptr.cx >= 0 ? pick(ptr.cx, ptr.cy) : -1;
+        if (hover < 0 && hoverPlate.current >= 0) hover = hoverPlate.current;
+        for (let i = 0; i < 3; i++) {
+          hot[i] += ((hover === i ? 1 : 0) - hot[i]) * ease(6);
+          cups[i * 4] += dt * (0.22 + 2.2 * hot[i]);
+          cups[i * 4 + 1] = 0.07 * hot[i] * TROPHY_K[i] + 0.012 * Math.sin(t * 1.3 + i * 2);
+          cups[i * 4 + 2] = hot[i];
+          plateEls.current[i]?.classList.toggle("hot", hover === i);
+        }
+        slot.style.cursor = hover >= 0 ? "pointer" : drag.on && drag.moved > 8 ? "grabbing" : "grab";
+        if (!view!.render(t, night, motion, cups)) return;
+        place();
+        // risoluzione adattiva sul tempo reale della GPU (marche temporali) o, dove manca, sul ritmo dei fotogrammi
         avg += (now - drawn - avg) * 0.05; drawn = now;
-        if (avg > 24) { fast = 0; if (++slow > 90 && scale > 0.6) { slow = 0; scale *= 0.85; fit(); } }
-        else if (avg < 18) { slow = 0; if (++fast > 240 && scale < 1) { fast = 0; scale = Math.min(1, scale / 0.85); fit(); } }
-        if (first) { first = false; requestAnimationFrame(() => cv.classList.add("on")); setShown(true); place(); }
-      }, () => 60, el, () => { last = performance.now(); drawn = last; }));
+        if (++frames % 45 === 0) {
+          const gpu = view!.gpuMs, old = scale;
+          if (gpu > 0) {
+            if (gpu > budget * 1.15 && scale > 0.5) { scale = Math.max(0.5, scale * Math.max(0.7, Math.min(0.95, Math.sqrt(budget / gpu)))); slowUntil = now + 6000; }
+            else if (gpu < budget * 0.6 && scale < q.maxScale && now > slowUntil) scale = Math.min(q.maxScale, scale * Math.min(1.15, Math.sqrt((budget * 0.85) / gpu)));
+          } else if (avg > (1000 / fps) * 1.45 && scale > 0.6) { scale *= 0.88; slowUntil = now + 6000; }
+          else if (avg < (1000 / fps) * 1.1 && scale < Math.min(1, q.maxScale) && now > slowUntil) scale = Math.min(1, scale / 0.9);
+          if (Math.abs(scale - old) > 0.01) fit();
+        }
+        if (showHud && now - hudAt > 500) {
+          hudAt = now;
+          setHud(`${tier} · ${Math.round(dev.gflops)} GFLOPS · ${Math.round(W * ratio)}×${Math.round(H * ratio)} (×${scale.toFixed(2)}) · GPU ${view!.gpuMs ? view!.gpuMs.toFixed(1) + " ms" : "n/d"} · ${Math.round(1000 / avg)} fps`);
+        }
+        if (first) { first = false; requestAnimationFrame(() => cv.classList.add("on")); setShown(true); }
+      }, () => fps, el, () => { last = performance.now(); drawn = last; }));
     }).catch((err) => { if (alive) { console.warn("Podio 3D: WebGPU non disponibile, si usa il podio semplice.", err?.message || err); alive = false; fail.current(); } });
 
     return () => {
       alive = false;
       placeRef.current = null;
       cleanups.splice(0).reverse().forEach((fn) => fn());
+      plateEls.current.forEach((p) => p?.classList.remove("hot"));
       view?.destroy();
-      releaseEngine();
+      releasePodiumDevice();
     };
-  }, [gen, narrow]);
+  }, [gen, narrow, showHud]);
 
-  if (narrow) return <span ref={host as any} hidden />;
+  const hudEl = showHud && hud ? <div className="podium-hud">{hud}</div> : null;
+  if (narrow) return <span ref={host as any} hidden>{hudEl && root ? createPortal(hudEl, root) : null}</span>;
   const order = [1, 0, 2];
   return (
     <>
       <div ref={host} className={`podium-scene ${shown ? "on" : ""}`} aria-hidden="true"><div className="podium-scene-bg" /><i className="podium-scene-scrim" /></div>
       {root && createPortal(
         <div ref={over} className={`podium-over ${shown ? "on" : ""}`}>
-          {order.map((i) => plates[i] ? <div key={`p${i}`} ref={(p) => { plateEls.current[i] = p; }} className={`podium3d-plate r${i + 1}`}>{plates[i]}</div> : null)}
+          {order.map((i) => plates[i] ? <div key={`p${i}`} ref={(p) => { plateEls.current[i] = p; }} className={`podium3d-plate r${i + 1}`} onPointerEnter={() => { hoverPlate.current = i; }} onPointerLeave={() => { hoverPlate.current = -1; }}>{plates[i]}</div> : null)}
         </div>, root)}
+      {hudEl && root ? createPortal(hudEl, root) : null}
     </>
   );
 }

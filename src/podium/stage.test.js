@@ -1,6 +1,7 @@
 import { WINDOW, ROOM, STEP_X, STEP_TOP, STEP_D, TROPHY_TOP, CARPET, LIGHT_PLANE, LIGHT_DEPTH, Mat, camera, project, viewProj, celestial, lightMatrix, moodAt, DAY, NIGHT } from "./stage";
 import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, podiumQuality, GI_PROBES } from "./shaders";
 import { buildScene, VERTEX_FLOATS } from "./meshes";
+import { tierFor, capTier } from "./device";
 
 // dentro il vano del finestrone (rettangolo con l'arco in cima), lontano dal telaio
 const inWindow = (x, y) => (y > WINDOW.ya ? Math.hypot(x, y - WINDOW.ya) < WINDOW.r - WINDOW.frame : Math.abs(x) < WINDOW.r - WINDOW.frame && y > WINDOW.y0 + WINDOW.frame);
@@ -41,7 +42,7 @@ test("the camera frames the podium inside the free area of the page, on desktop 
 test("day and night blend smoothly and the shaders embed the scene", () => {
   expect(moodAt(0).sunI).toBeCloseTo(DAY.sunI, 9); expect(moodAt(1).sunI).toBeCloseTo(NIGHT.sunI, 9);
   expect(moodAt(0.5).sun[2]).toBeCloseTo((DAY.sun[2] + NIGHT.sun[2]) / 2, 6);
-  for (const q of [podiumQuality(false), podiumQuality(true)]) {
+  for (const q of [podiumQuality("low", true), podiumQuality("medium"), podiumQuality("high"), podiumQuality("ultra")]) {
     const all = [texgenShader, mipShader("rgba8unorm", false), mipShader("rgba16float", true), cloudShader, shadowShader, giShader(q), sceneShader(q), volShader(q), postShader];
     for (const src of all) expect(src).not.toMatch(/NaN|undefined|Infinity|\$\{/);
     for (const src of [giShader(q), sceneShader(q), volShader(q)]) expect(src).toContain("fn sunLight(");
@@ -51,7 +52,7 @@ test("day and night blend smoothly and the shaders embed the scene", () => {
     const body = giShader(q).slice(giShader(q).indexOf("fn gi("));
     expect(body).not.toMatch(/ign\(|hash2\(|tileB\.w|tileA\.w/);
   }
-  for (const e of ["vsScene", "fsScene", "vsSky", "fsSky", "vsDust", "fsDust"]) expect(sceneShader(podiumQuality(false))).toContain(`fn ${e}(`);
+  for (const e of ["vsScene", "fsScene", "vsSky", "fsSky", "vsDust", "fsDust"]) expect(sceneShader(podiumQuality("high"))).toContain(`fn ${e}(`);
   for (const e of ["fsCombine", "fsDown", "fsUp", "fsFinal"]) expect(postShader).toContain(`fn ${e}(`);
 });
 
@@ -68,7 +69,7 @@ test("the light map follows the light from the window plane, and the camera matr
       expect(c[2]).toBeGreaterThan(0); expect(c[2]).toBeLessThan(1);
     }
   }
-  const cam = camera(1440, 900, 240, 230), vp = viewProj(cam);
+  const cam = camera(1440, 900, 240, 230, { x: 0.3, y: -0.1, z: -0.5, yaw: 0.2 }), vp = viewProj(cam);
   for (const p of [[0, 1.9, 0.9], [-2.35, 0.36, 0.92], [6, 10.6, -4.9]]) {
     const c = mul(vp, p), s = project(cam, p);
     expect(((c[0] / c[3]) * 0.5 + 0.5) * 1440).toBeCloseTo(s.x, 2);
@@ -114,5 +115,29 @@ test("the hall is built from clean meshes: finite vertices, valid indices, outwa
     }
     expect(bad).toBe(0);
     if (!mobile) expect(n).toBeLessThan(400000);
+  }
+});
+
+test("the GPU tier follows the measured power, phones stay at most medium, and quality grows with the tier", () => {
+  expect([300, 1500, 4000, 12000].map(tierFor)).toEqual(["low", "medium", "high", "ultra"]);
+  expect(capTier("ultra", true)).toBe("medium"); expect(capTier("ultra", false)).toBe("ultra"); expect(capTier("low", true)).toBe("low");
+  const order = ["low", "medium", "high", "ultra"].map((t) => podiumQuality(t));
+  for (let i = 1; i < order.length; i++) {
+    expect(order[i].shadow[0]).toBeGreaterThanOrEqual(order[i - 1].shadow[0]);
+    expect(order[i].maxPixels).toBeGreaterThan(order[i - 1].maxPixels);
+    expect(order[i].giPeriod).toBeLessThanOrEqual(order[i - 1].giPeriod);
+  }
+  expect(podiumQuality("low").mobile).toBe(true); expect(podiumQuality("ultra").mobile).toBe(false);
+});
+
+test("while the camera breathes and turns, the podium stays in the free area of the page", () => {
+  for (const m of [{ x: 0.45 + 0.6, y: 0.44, z: -0.7, yaw: 0.42 + 0.035 }, { x: -1.05, y: -0.44, z: 0, yaw: -0.455 }]) {
+    const c = camera(1440, 900, 240, 230, m);
+    STEP_X.forEach((x) => {
+      for (const sx of [-1.1, 1.1]) {
+        const p = project(c, [x + sx, 0.36, STEP_D]);
+        expect(p.x).toBeGreaterThan(240); expect(p.x).toBeLessThan(1440); expect(p.y).toBeGreaterThan(230); expect(p.y).toBeLessThan(900);
+      }
+    });
   }
 });

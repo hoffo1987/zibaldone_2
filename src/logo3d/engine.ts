@@ -16,6 +16,7 @@ export const webgpuAvailable = () => typeof navigator !== "undefined" && !!navig
 // troppo per un logo decorativo, e si preferisce l'SVG
 let allowSoftware = false;
 export const allowSoftwareAdapter = (on: boolean) => { allowSoftware = on; };
+export const softwareAdapterAllowed = () => allowSoftware;
 
 type Pipelines = { plate: GPURenderPipeline; base: GPURenderPipeline; fancy: GPURenderPipeline | null; rim: GPURenderPipeline; ring: GPURenderPipeline; sprite: GPURenderPipeline; particle: GPURenderPipeline };
 type Batches = Omit<Meshes, "vertices" | "colors" | "indices">;

@@ -3,7 +3,8 @@
 // Unità: metri; y in alto, la camera guarda verso -z.
 
 // codici dei materiali (attributo dei vertici, letto dagli shader)
-export const Mat = { floor: 1, carpet: 2, wall: 3, coffer: 4, ceiling: 5, wainscot: 6, stone: 7, darkStone: 8, step1: 9, step2: 10, step3: 11, frame: 12, pedestal: 13, banner: 14, gold: 20, silver: 21, bronze: 22 };
+export const Mat = { floor: 1, carpet: 2, wall: 3, coffer: 4, ceiling: 5, wainscot: 6, stone: 7, darkStone: 8, step1: 9, step2: 10, step3: 11, frame: 12, pedestal: 13, banner: 14, gold: 20, silver: 21, bronze: 22, cupGold: 23, cupSilver: 24, cupBronze: 25 };
+// le coppe hanno codici propri (stesso metallo del posto): girano sul piedistallo e si sollevano al passaggio del puntatore
 
 export const ROOM = { x: 9, y: 12, back: -7, front: 18 };
 // finestrone: rettangolo con l'arco a tutto sesto (centro a quota ya, raggio = mezza larghezza), strombo profondo depth
@@ -37,17 +38,27 @@ export const PROXY_SPHS = STEP_X.map((x, i) => ({ c: [x, STEP_TOP[i] + 0.7 * TRO
 // ---------- camera ----------
 // Ferma (i fasci si accumulano nel tempo senza scie). Il centro ottico sta nel mezzo dell'area dei contenuti.
 export type Cam = { pos: number[]; right: number[]; up: number[]; fwd: number[]; tan: number; cx: number; cy: number; h: number; w: number };
+// movimento della camera: spostamento (m) e rotazione attorno al podio (rad); la deriva lenta, il mouse e il trascinamento
+export type CamMotion = { x: number; y: number; z: number; yaw: number };
+export const STILL: CamMotion = { x: 0, y: 0, z: 0, yaw: 0 };
+export const TROPHY_Z = -0.15;
 const norm = (v: number[]) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 const cross = (a: number[], b: number[]) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 // w, h: viewport in pixel; left: larghezza coperta a sinistra (barra laterale); top: altezza occupata in alto
-export function camera(w: number, h: number, left = 0, top = 0): Cam {
+export function camera(w: number, h: number, left = 0, top = 0, m: CamMotion = STILL): Cam {
   const cw = Math.max(1, w - left), ch = Math.max(1, h - top), aspect = cw / ch;
   const tan = Math.tan((22 * Math.PI) / 180);
   // schermi stretti (telefoni): la camera arretra quanto basta perché i tre gradini entrino in larghezza, non di più
   const fitZ = 3.95 / (tan * aspect);
   const narrow = Math.max(0, 1 - aspect);
-  const pos = [0, 2.75 + narrow * 0.6, Math.max(10.2, fitZ)];
-  const target = [0, 2.6 + narrow * 1.2, ROOM.back];
+  const p0 = [0, 2.75 + narrow * 0.6, Math.max(10.2, fitZ)];
+  const t0 = [0, 2.6 + narrow * 1.2, ROOM.back];
+  // la camera gira attorno al centro del podio e si sposta; il punto guardato segue a metà (parallasse)
+  const cy = Math.cos(m.yaw), sy = Math.sin(m.yaw);
+  const rot = (p: number[]) => [p[0] * cy + p[2] * sy, p[1], -p[0] * sy + p[2] * cy];
+  const pr = rot(p0), tr = rot(t0);
+  const pos = [pr[0] + m.x, pr[1] + m.y, pr[2] + m.z];
+  const target = [tr[0] + m.x * 0.5, tr[1] + m.y * 0.5, tr[2]];
   const fwd = norm([target[0] - pos[0], target[1] - pos[1], target[2] - pos[2]]);
   const right = norm(cross(fwd, [0, 1, 0])), up = cross(right, fwd);
   return { pos, right, up, fwd, tan: tan * (h / ch), cx: left + cw / 2, cy: top + ch / 2, h, w };

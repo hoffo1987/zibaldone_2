@@ -252,7 +252,7 @@ export function buildScene(mobile: boolean): SceneMesh {
   mark("trophies", () => {
     // coppe tornite: piede, stelo con il nodo, calice con il labbro e l'interno; due anse
     STEP_X.forEach((x, i) => {
-      const k = TROPHY_K[i], top = DAIS + STEP_H[i], z = -0.15, m = Mat.gold + i;
+      const k = TROPHY_K[i], top = DAIS + STEP_H[i], z = -0.15, m = Mat.cupGold + i;
       B.box([x, top + 0.07 * k, z], [0.24 * k, 0.07 * k, 0.24 * k], 0.015, Mat.pedestal);
       const y = top + 0.14 * k, P = (pts: number[][]) => pts.map(([r, h]) => [r * k, y + h * k] as [number, number]);
       B.lathe(x, z, [

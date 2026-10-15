@@ -12,7 +12,7 @@
 // Al massimo due fotogrammi in coda sulla GPU.
 import { buildScene, VERTEX_FLOATS } from "./meshes";
 import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, GI_PROBES, FRAME_FLOATS, PASS_FLOATS, type PodiumQuality } from "./shaders";
-import { camera, viewProj, celestial, moodAt, lightMatrix, LIGHT_RECT, type Cam } from "./stage";
+import { camera, viewProj, celestial, moodAt, lightMatrix, LIGHT_RECT, STILL, type Cam, type CamMotion } from "./stage";
 
 export { podiumQuality, type PodiumQuality } from "./shaders";
 
@@ -109,12 +109,18 @@ export class PodiumView {
   private groups: any = null;
   private sized: Sized | null = null;
   private cam: Cam | null = null;
+  private base: { pw: number; ph: number; left: number; top: number } | null = null;
+  private motion: CamMotion = STILL;
+  private readonly cups = new Float32Array(12);
+  // tempo della GPU per fotogramma (ms), misurato con le marche temporali dove il dispositivo le offre
+  private readonly ts: { set: GPUQuerySet; resolve: GPUBuffer; read: GPUBuffer[]; busy: boolean[] } | null = null;
+  gpuMs = 0;
   private frameNo = 0; private vflip = 0; private fresh = true; private warm = false; private envAll = true;
   private inflight = 0;
   private dead = false;
   onError: ((e: Error) => void) | null = null;
 
-  constructor(private readonly device: GPUDevice, readonly canvas: HTMLCanvasElement, readonly q: PodiumQuality) {
+  constructor(private readonly device: GPUDevice, readonly canvas: HTMLCanvasElement, readonly q: PodiumQuality, timestamps = false) {
     const ctx = canvas.getContext("webgpu");
     if (!ctx) throw new Error("Contesto WebGPU non disponibile");
     this.ctx = ctx;
@@ -127,6 +133,12 @@ export class PodiumView {
     this.passBuf = { main: buf("podium-pass", PASS_FLOATS * 4, UNI), planar: buf("podium-pass-planar", PASS_FLOATS * 4, UNI), env: FACES.map((_, i) => buf(`podium-pass-env${i}`, PASS_FLOATS * 4, UNI)) };
     this.postBuf = [buf("podium-post0", 16, UNI), buf("podium-post1", 16, UNI)];
     this.gi = buf("podium-gi", GI_PROBES * 6 * 16, GPUBufferUsage.STORAGE);
+    if (timestamps) this.ts = {
+      set: d.createQuerySet({ type: "timestamp", count: 2 }),
+      resolve: buf("podium-ts", 16, GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC),
+      read: [0, 1, 2].map((i) => buf(`podium-ts-read${i}`, 16, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST)),
+      busy: [false, false, false],
+    };
 
     const mesh = buildScene(q.mobile);
     this.ranges = mesh.ranges;
@@ -221,7 +233,7 @@ export class PodiumView {
       arrayStride: VERTEX_FLOATS * 4,
       attributes: full
         ? [{ shaderLocation: 0, offset: 0, format: "float32x3" }, { shaderLocation: 1, offset: 12, format: "float32x3" }, { shaderLocation: 2, offset: 24, format: "float32x2" }, { shaderLocation: 3, offset: 32, format: "float32" }, { shaderLocation: 4, offset: 36, format: "float32" }]
-        : [{ shaderLocation: 0, offset: 0, format: "float32x3" }],
+        : [{ shaderLocation: 0, offset: 0, format: "float32x3" }, { shaderLocation: 2, offset: 24, format: "float32x2" }, { shaderLocation: 3, offset: 32, format: "float32" }],
     }];
     const sceneLayout = pl(L.frame, L.pass);
     type RO = { vs: string; fs: string; msaa: boolean; cull?: GPUCullMode; depth: "write" | "test" | "sky"; strip?: boolean; add?: boolean; buffers?: boolean; depthFormat?: GPUTextureFormat };
@@ -272,7 +284,7 @@ export class PodiumView {
     this.groups = {
       clouds: d.createBindGroup({ layout: clouds.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.frameBuf } }, { binding: 1, resource: this.cloud.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }] }),
       cloudMips: this.mipGroups(mip16, this.cloud, this.cloud.mipLevelCount),
-      shadow: d.createBindGroup({ layout: shadow.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.frameBuf, offset: 0, size: 64 } }] }),
+      shadow: d.createBindGroup({ layout: shadow.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.frameBuf } }] }),
       gi: this.frameGroup(L.frameRW, dummyCube, dummy2d),
       // nei riflessi la cubemap e il riflesso planare non si leggono (e non si possono leggere mentre si disegnano)
       frameOff: this.frameGroup(L.frame, dummyCube, dummy2d),
@@ -300,7 +312,8 @@ export class PodiumView {
   // w, h: viewport in pixel CSS; ratio: pixel del dispositivo per pixel CSS; left, top: barra laterale e intestazione
   resize(w: number, h: number, ratio: number, left: number, top: number) {
     const pw = Math.max(1, Math.round(w * ratio)), ph = Math.max(1, Math.round(h * ratio));
-    this.cam = camera(pw, ph, left * ratio, top * ratio);
+    this.base = { pw, ph, left: left * ratio, top: top * ratio };
+    this.cam = camera(pw, ph, left * ratio, top * ratio, this.motion);
     if (!this.pipes || this.dead || (this.sized && pw === this.sized.pw && ph === this.sized.ph)) return;
     const d = this.device, q = this.q, L = this.layouts, P = this.pipes;
     this.sized?.textures.forEach((t) => t.destroy());
@@ -352,9 +365,10 @@ export class PodiumView {
     u.set([
       L[0], L[1], L[2], m.sunI, ...m.sun, night, ...m.skyTop, m.exposure, ...m.skyHor, m.ambient,
       ...m.wall, m.fog, ...m.wainscot, m.dust, ...m.ceiling, m.cover, ...m.tileA, t, ...m.tileB, this.frameNo % 4096,
-      ...m.stone, q.steps, ...m.darkStone, this.fresh ? 1 : 0.3, ...m.carpet, turn, ...m.banner, 0, ...m.frame, 0,
+      ...m.stone, q.steps, ...m.darkStone, this.fresh ? 1 : 0.45, ...m.carpet, turn, ...m.banner, 0, ...m.frame, 0,
       s.pw, s.ph, s.vw, s.vh,
     ], 16);
+    u.set(this.cups, 76);
     this.device.queue.writeBuffer(this.frameBuf, 0, u);
     return m;
   }
@@ -366,9 +380,9 @@ export class PodiumView {
     cp.end();
   }
 
-  private lightPasses(enc: GPUCommandEncoder) {
+  private lightPasses(enc: GPUCommandEncoder, stamp = false) {
     const P = this.pipes, G = this.groups;
-    const cp = enc.beginComputePass({ label: "podium-clouds" });
+    const cp = enc.beginComputePass({ label: "podium-clouds", ...(stamp && this.ts ? { timestampWrites: { querySet: this.ts.set, beginningOfPassWriteIndex: 0 } } : {}) });
     cp.setPipeline(P.clouds); cp.setBindGroup(0, G.clouds); cp.dispatchWorkgroups(Math.ceil(CLOUD[0] / 8), Math.ceil(CLOUD[1] / 8));
     this.runMips(cp, P.mip16, G.cloudMips, CLOUD[0], CLOUD[1]);
     cp.end();
@@ -384,9 +398,14 @@ export class PodiumView {
     for (const [name, [first, count]] of Object.entries(this.ranges)) if (!skip.includes(name) && count > 0) p.drawIndexed(count, 1, first);
   }
 
-  // t: secondi; night: 0 giorno … 1 notte. Restituisce false se il fotogramma è stato saltato (GPU indietro)
-  render(t: number, night: number) {
-    if (this.dead || !this.pipes || !this.sized || !this.cam || this.inflight >= 2) return false;
+  // t: secondi; night: 0 giorno … 1 notte; motion: camera; cups: per coppa [angolo, sollevamento, bagliore].
+  // Restituisce false se il fotogramma è stato saltato (GPU indietro)
+  render(t: number, night: number, motion: CamMotion = STILL, cups?: ArrayLike<number>) {
+    if (this.dead || !this.pipes || !this.sized || !this.base || this.inflight >= 3) return false;
+    this.motion = motion;
+    if (cups) this.cups.set(cups);
+    const b = this.base;
+    this.cam = camera(b.pw, b.ph, b.left, b.top, motion);
     const d = this.device, q = this.q, s = this.sized, P = this.pipes, G = this.groups, c = this.cam;
     const first = !this.warm;
     if (first) d.pushErrorScope("validation");
@@ -411,7 +430,7 @@ export class PodiumView {
     post[3] = 0; d.queue.writeBuffer(this.postBuf[1], 0, post);
 
     const enc = d.createCommandEncoder({ label: "podium" });
-    this.lightPasses(enc);
+    this.lightPasses(enc, true);
     this.giPass(enc);
 
     // cubemap: una faccia per fotogramma (tutte e sei la prima volta)
@@ -448,16 +467,26 @@ export class PodiumView {
       p.end();
     }
     const v = this.vflip;
-    const full = (view: GPUTextureView, pipe: GPURenderPipeline, groups: GPUBindGroup[], load = false) => {
-      const p = enc.beginRenderPass({ colorAttachments: [{ view, loadOp: load ? "load" : "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }] });
+    const full = (view: GPUTextureView, pipe: GPURenderPipeline, groups: GPUBindGroup[], load = false, stamp = false) => {
+      const p = enc.beginRenderPass({ colorAttachments: [{ view, loadOp: load ? "load" : "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], ...(stamp && this.ts ? { timestampWrites: { querySet: this.ts.set, endOfPassWriteIndex: 1 } } : {}) });
       p.setPipeline(pipe); groups.forEach((g, i) => p.setBindGroup(i, g)); p.draw(3); p.end();
     };
     full(s.vol[v].createView(), P.vol, [s.frameMain, G.passMain, s.volGroups[v]]);
     full(s.comb, P.combine, [s.combine[v]]);
     s.bloom.forEach((b, k) => full(b.createView(), P.down, [s.down[k]]));
     for (let k = s.bloom.length - 1; k >= 1; k--) full(s.bloom[k - 1].createView(), P.up, [s.up[k - 1]], true);
-    full(this.ctx.getCurrentTexture().createView(), P.final, [s.final]);
+    full(this.ctx.getCurrentTexture().createView(), P.final, [s.final], false, true);
+    const ts = this.ts, slot = ts ? ts.busy.indexOf(false) : -1;
+    if (ts && slot >= 0) { enc.resolveQuerySet(ts.set, 0, 2, ts.resolve, 0); enc.copyBufferToBuffer(ts.resolve, 0, ts.read[slot], 0, 16); ts.busy[slot] = true; }
     d.queue.submit([enc.finish()]);
+    if (ts && slot >= 0) {
+      const rb = ts.read[slot];
+      rb.mapAsync(GPUMapMode.READ).then(() => {
+        const v = new BigUint64Array(rb.getMappedRange().slice(0)); rb.unmap(); ts.busy[slot] = false;
+        const ms = Number(v[1] - v[0]) / 1e6;
+        if (ms > 0 && ms < 1000) this.gpuMs = this.gpuMs ? this.gpuMs + (ms - this.gpuMs) * 0.1 : ms;
+      }, () => { ts.busy[slot] = false; });
+    }
     if (first) d.popErrorScope().then((e) => { if (e && !this.dead) { this.dead = true; this.onError?.(new Error(e.message)); } }, () => {});
 
     this.vflip = 1 - v; this.frameNo++; this.fresh = false;
@@ -471,7 +500,8 @@ export class PodiumView {
     this.dead = true;
     this.sized?.textures.forEach((t) => t.destroy()); this.sized = null;
     this.ownTextures.splice(0).forEach((t) => t.destroy());
-    [this.frameBuf, this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, ...this.postBuf, this.gi, this.vbuf, this.ibuf].forEach((b) => b.destroy());
+    this.ts?.set.destroy();
+    [...(this.ts ? [this.ts.resolve, ...this.ts.read] : []), this.frameBuf, this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, ...this.postBuf, this.gi, this.vbuf, this.ibuf].forEach((b) => b.destroy());
     try { this.ctx.unconfigure(); } catch {}
   }
 }

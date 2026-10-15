@@ -42,8 +42,18 @@ con le nuvole: la mappa d'ombra è presa sul piano del vetro lungo la luce e fil
 distanza dall'ostacolo), quindi le ombre di telaio, podio e coppe sono morbide e seguono l'astro a ogni fotogramma.
 L'illuminazione globale usa una griglia di sonde aggiornate a turno con raggi fissi (nessun numero casuale: niente rumore né
 sfarfallio sulle pareti) e i rimbalzi multipli; il pavimento ha il riflesso planare, le superfici lucide una cubemap della
-sala aggiornata una faccia per fotogramma. MSAA 4×, fasci di luce nel pulviscolo a risoluzione ridotta, bloom e ACES; la
-risoluzione scende da sola se la GPU non sta al passo. Le targhette dei vincitori restano HTML, proiettate sopra le coppe.
+sala aggiornata una faccia per fotogramma. MSAA 4×, fasci di luce nel pulviscolo a risoluzione ridotta, bloom e ACES.
+La sala è viva: la camera respira e segue il mouse, si trascina per girare attorno al podio, le coppe ruotano sui
+piedistalli e al passaggio si sollevano e brillano, gli stendardi ondeggiano; un clic o un tocco su coppa o gradino apre
+lo scritto. Le targhette dei vincitori restano HTML, proiettate sopra le coppe; sui telefoni la sala è un palco dentro la
+pagina e i vincitori sono schede sotto di esso.
+
+Il podio usa un suo dispositivo WebGPU (GPU ad alte prestazioni) e al primo avvio misura con una prova di qualche
+decina di millisecondi la potenza di calcolo della scheda (ricordata per una settimana): ne esce una fascia
+(bassa, media, alta, ultra) che sceglie ombre, riflessi, fasci, sonde e risoluzione massima, fino al supercampionamento
+sulle schede più potenti; i telefoni restano al massimo nella fascia media. Durante la visita la risoluzione segue il
+tempo reale della GPU per fotogramma (marche temporali WebGPU, dove disponibili). Con `?podiohud` nell'indirizzo compare
+un riquadro con fascia, potenza misurata, risoluzione e tempi; `?podiotier=low|medium|high|ultra` forza una fascia.
 Senza WebGPU, con il movimento ridotto, con il preset leggero o se la GPU dà errore resta il podio semplice.
 
 In **Opzioni → Musica e feedback** si può attivare **Musica di sottofondo** e regolare il volume separatamente dai bip.

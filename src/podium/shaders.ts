@@ -8,18 +8,25 @@
 //  - scene: materiali (marmo triplanare, numeri incisi con intarsio di metallo, velluto, stoffa, metalli), luce diretta,
 //    illuminazione globale, riflessi planari del pavimento e della cubemap della sala, cielo, pulviscolo nei raggi;
 //  - vol: fasci di luce a risoluzione ridotta accumulati nel tempo; post: bloom e composizione (ACES, sRGB, dithering).
-import { ROOM, WINDOW, LIGHT_RECT, LIGHT_DEPTH, PROXY_BOXES, PROXY_CYLS, PROXY_SPHS, CARPET, Mat, STEP_H, STEP_X, STEP_TOP, STEP_D } from "./stage";
+import { ROOM, WINDOW, LIGHT_RECT, LIGHT_DEPTH, PROXY_BOXES, PROXY_CYLS, PROXY_SPHS, CARPET, Mat, STEP_H, STEP_X, STEP_TOP, STEP_D, TROPHY_Z, BANNERS } from "./stage";
+import type { Tier } from "./device";
 
-export type PodiumQuality = { mobile: boolean; shadow: [number, number]; planarScale: number; envSize: number; volScale: number; steps: number; giPeriod: number; dust: number; bloom: number };
-export const podiumQuality = (mobile: boolean): PodiumQuality => mobile
-  ? { mobile, shadow: [768, 886], planarScale: 0.4, envSize: 128, volScale: 0.35, steps: 32, giPeriod: 24, dust: 220, bloom: 5 }
-  : { mobile, shadow: [1536, 1772], planarScale: 0.5, envSize: 256, volScale: 0.5, steps: 48, giPeriod: 12, dust: 700, bloom: 6 };
+// qualità per fascia di potenza della GPU (device.ts). maxScale: risoluzione massima rispetto ai pixel del dispositivo
+// (oltre 1 è supercampionamento); maxPixels: tetto dei pixel disegnati
+export type PodiumQuality = { tier: Tier; mobile: boolean; shadow: [number, number]; planarScale: number; envSize: number; volScale: number; steps: number; giPeriod: number; dust: number; bloom: number; maxScale: number; maxPixels: number };
+const QUALITY: Record<Tier, Omit<PodiumQuality, "tier" | "mobile">> = {
+  low: { shadow: [768, 886], planarScale: 0.4, envSize: 128, volScale: 0.35, steps: 28, giPeriod: 24, dust: 200, bloom: 5, maxScale: 1, maxPixels: 1.1e6 },
+  medium: { shadow: [1024, 1182], planarScale: 0.5, envSize: 256, volScale: 0.4, steps: 40, giPeriod: 16, dust: 500, bloom: 5, maxScale: 1, maxPixels: 3.7e6 },
+  high: { shadow: [1536, 1772], planarScale: 0.6, envSize: 256, volScale: 0.5, steps: 48, giPeriod: 12, dust: 900, bloom: 6, maxScale: 1.25, maxPixels: 6.5e6 },
+  ultra: { shadow: [2048, 2363], planarScale: 0.75, envSize: 512, volScale: 0.6, steps: 64, giPeriod: 6, dust: 1400, bloom: 6, maxScale: 1.5, maxPixels: 9.5e6 },
+};
+export const podiumQuality = (tier: Tier, mobile = false): PodiumQuality => ({ tier, mobile: mobile || tier === "low", ...QUALITY[tier] });
 
 const f = (x: number) => (Number.isInteger(x) ? `${x}.0` : x.toFixed(5));
 const v3 = (a: number[]) => `vec3f(${a.map(f).join(", ")})`;
 export const GI_DIM = [18, 10, 16], GI_MIN = [-8.6, 0.25, -6.6], GI_MAX = [8.6, 11.6, 13];
 export const GI_PROBES = GI_DIM[0] * GI_DIM[1] * GI_DIM[2];
-export const FRAME_FLOATS = 16 + 15 * 4; // matrice della luce + 15 vec4
+export const FRAME_FLOATS = 16 + 15 * 4 + 3 * 4; // matrice della luce + 15 vec4 + le tre coppe
 export const PASS_FLOATS = 16 + 5 * 4; // matrice + 5 vec4
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -29,6 +36,7 @@ struct Frame {
   sun: vec4f, sunCol: vec4f, skyTop: vec4f, skyHor: vec4f,
   wall: vec4f, wainscot: vec4f, ceiling: vec4f, tileA: vec4f, tileB: vec4f, stone: vec4f, darkStone: vec4f, carpet: vec4f, banner: vec4f, frameC: vec4f,
   res: vec4f,
+  cups: array<vec4f, 3>, // per coppa: angolo, sollevamento, bagliore (puntatore sopra)
 };
 // w: sun.w intensità; sunCol.w notte; skyTop.w esposizione; skyHor.w luce minima; wall.w nebbia; wainscot.w pulviscolo;
 //    ceiling.w nuvole; tileA.w tempo; tileB.w fotogramma; stone.w passi della nebbia; darkStone.w fusione temporale;
@@ -103,6 +111,30 @@ fn sky(d: vec3f, sun: bool) -> vec3f {
   let st = step(0.975, hash2(g)) * (1.0 - smoothstep(0.0, 0.06, length(fract(sq) - sp))) * (0.6 + 0.4 * sin(F.tileA.w * 2.0 + hash2(g + 7.0) * 40.0));
   c += vec3f(0.85, 0.9, 1.0) * st * night * (1.0 - saturate(cl)) * 1.2;
   return c;
+}
+`;
+
+// animazione dei vertici: coppe che girano e si sollevano, stendardi che ondeggiano
+const animFns = /* wgsl */ `
+struct Moved { p: vec3f, n: vec3f };
+var<private> CUP_X: array<f32, 3> = array<f32, 3>(${STEP_X.map(f).join(", ")});
+fn animate(p: vec3f, n: vec3f, m: u32, uv: vec2f) -> Moved {
+  var o: Moved; o.p = p; o.n = n;
+  if (m >= ${Mat.cupGold}u && m <= ${Mat.cupBronze}u) {
+    let k = m - ${Mat.cupGold}u; let a = F.cups[k];
+    let c = vec2f(CUP_X[k], ${f(TROPHY_Z)}); let cs = cos(a.x); let sn = sin(a.x);
+    let q = p.xz - c;
+    o.p = vec3f(c.x + q.x * cs - q.y * sn, p.y + a.y, c.y + q.x * sn + q.y * cs);
+    o.n = vec3f(n.x * cs - n.z * sn, n.y, n.x * sn + n.z * cs);
+  } else if (m == ${Mat.banner}u) {
+    let t = F.tileA.w; let w = pow(uv.y, 1.4);
+    let ph = t * 0.9 + uv.x * 4.0 + uv.y * 2.0; let ph2 = t * 1.9 + uv.x * 9.0 + uv.y * 4.0;
+    let dz = w * (0.07 * sin(ph) + 0.025 * sin(ph2));
+    let dzu = w * (0.28 * cos(ph) + 0.225 * cos(ph2)); let dzv = w * (0.14 * cos(ph) + 0.1 * cos(ph2));
+    o.p = p + vec3f(w * 0.03 * sin(t * 0.7 + uv.y * 1.5), 0.0, dz);
+    o.n = normalize(n - vec3f(dzu / ${f(BANNERS[0].x1 - BANNERS[0].x0)}, -dzv / ${f(BANNERS[0].y1 - BANNERS[0].y0)}, 0.0) * sign(n.z));
+  }
+  return o;
 }
 `;
 
@@ -269,9 +301,13 @@ export const cloudShader = /* wgsl */ `${structs}${noise}
 `;
 
 // profondità dal piano del vetro
-export const shadowShader = /* wgsl */ `
-@group(0) @binding(0) var<uniform> light: mat4x4f;
-@vertex fn vsShadow(@location(0) p: vec3f) -> @builtin(position) vec4f { return light * vec4f(p, 1.0); }
+export const shadowShader = /* wgsl */ `${structs}
+@group(0) @binding(0) var<uniform> F: Frame;
+${animFns}
+@vertex fn vsShadow(@location(0) p: vec3f, @location(2) uv: vec2f, @location(3) m: f32) -> @builtin(position) vec4f {
+  let a = animate(p, vec3f(0.0, 0.0, 1.0), u32(m + 0.5), uv);
+  return F.light * vec4f(a.p, 1.0);
+}
 `;
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -492,6 +528,7 @@ fn surfaceAt(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, g: Grads) -> Surf
       s.alb = mix(s.alb, METALS[0] * (0.75 + 0.25 * t.r), gold); s.metal = gold * 0.85; s.rough = mix(s.rough, 0.45, gold);
       s.n = normalize(n0 + vec3f((t.g - 0.5), 0.0, (t.b - 0.5)) * 0.4);
     }
+    case ${Mat.cupGold}u, ${Mat.cupSilver}u, ${Mat.cupBronze}u: { s.alb = METALS[m - ${Mat.cupGold}u]; s.metal = 1.0; s.rough = 0.1; s.kind = 2u; }
     case ${Mat.gold}u, ${Mat.silver}u, ${Mat.bronze}u: {
       let k = m - ${Mat.gold}u;
       s.alb = METALS[k]; s.metal = 1.0; s.rough = 0.12; s.kind = 2u;
@@ -558,18 +595,25 @@ fn shade(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, eye: vec3f, px: vec2f
     }
   }
   col += refl * spF * ao;
+  // coppa sotto il puntatore: un bagliore del suo metallo sui bordi
+  if (m >= ${Mat.cupGold}u && m <= ${Mat.cupBronze}u) {
+    let k = m - ${Mat.cupGold}u;
+    col += METALS[k] * METALS[k] * F.cups[k].z * (0.04 + 0.9 * pow(1.0 - nv, 3.0)) * mix(0.55, 0.3, F.sunCol.w);
+  }
   return col;
 }
 `;
 
-export const sceneShader = (q: PodiumQuality) => /* wgsl */ `${structs}${noise}${frameBindings("read")}${passBinding}${sky}${lightFns(q)}${giFns}${material}
+export const sceneShader = (q: PodiumQuality) => /* wgsl */ `${structs}${noise}${frameBindings("read")}${passBinding}${sky}${lightFns(q)}${giFns}${material}${animFns}
 struct VOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f, @location(3) @interpolate(flat) m: u32, @location(4) ao: f32 };
 @vertex fn vsScene(@location(0) p: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f, @location(3) m: f32, @location(4) ao: f32) -> VOut {
   var o: VOut;
+  let mi = u32(m + 0.5);
+  let a = animate(p, n, mi, uv);
   // riflesso del pavimento: la sala capovolta sotto il piano y = 0, vista dalla camera vera
-  let cp = select(p, vec3f(p.x, -p.y, p.z), P.misc.y == 1.0);
+  let cp = select(a.p, vec3f(a.p.x, -a.p.y, a.p.z), P.misc.y == 1.0);
   o.pos = P.vp * vec4f(cp, 1.0);
-  o.wp = p; o.n = n; o.uv = uv; o.m = u32(m + 0.5); o.ao = ao;
+  o.wp = a.p; o.n = a.n; o.uv = uv; o.m = mi; o.ao = ao;
   return o;
 }
 @fragment fn fsScene(i: VOut) -> @location(0) vec4f {
