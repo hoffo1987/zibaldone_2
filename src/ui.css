@@ -136,7 +136,9 @@ transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s cubic-bezier(.1
 .cpov{background:rgba(0,0,0,.4);animation:fd .25s both}
 .cp{position:fixed;left:0;right:0;bottom:0;top:auto;margin:0;width:auto;border-radius:24px 24px 0 0;padding-bottom:calc(1.5rem + env(safe-area-inset-bottom))!important;animation:sheet .4s var(--ez) both;max-height:80dvh;overflow-y:auto}
 .backdrop-blur-sm{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
-header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--pn)}
+/* A transformed header becomes the containing block of the fixed notification sheet, pushing its title and close
+   button above the screen. On mobile the header is opaque and needs neither a filter nor a compositing transform. */
+header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;transform:none;background:var(--pn)}
 .card:hover{transform:none;box-shadow:var(--sh1)}
 }
 @property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
