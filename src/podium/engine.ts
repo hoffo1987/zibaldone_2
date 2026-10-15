@@ -1,40 +1,118 @@
-// Motore WebGPU della sala del podio: usa lo stesso GPUDevice del logo (acquireEngine). Ogni fotogramma:
-//  1. compute: mappa della luce sul piano del finestrone (telaio, nuvole, ostacoli)        512×640
-//  2. compute: sonde dell'illuminazione globale (ping-pong tra due buffer)                  2880 sonde × 6 direzioni
-//  3. render:  fasci di luce a metà risoluzione, mescolati con il fotogramma precedente     rgba16float
-//  4. render:  la sala (superfici, riflessi, nebbia, ACES, sRGB)                             rgba8unorm
-//  5. render:  FXAA sul canvas
-// Un solo writeBuffer da 304 byte; al massimo due fotogrammi in coda sulla GPU.
-import { shadowShader, giShader, volShader, mainShader, presentShader, GI_PROBES, U_FLOATS, SHADOW_DIM } from "./shaders";
-import { camera, celestial, moodAt, type Cam } from "./stage";
+// Motore WebGPU della sala del podio: usa lo stesso GPUDevice del logo (acquireEngine). Una volta all'avvio: geometrie
+// (meshes.ts), texture procedurali di marmo e stoffa con le mip, l'atlante dei numeri incisi e dell'emblema (Canvas 2D).
+// Ogni fotogramma:
+//  1. compute: nuvole sul piano del vetro + mip (la penombra delle nuvole sceglie il livello)
+//  2. render:  profondità dal piano del vetro lungo la luce (mappa d'ombra, filtrata poi con PCSS)
+//  3. compute: un dodicesimo delle sonde di luce, raggi fissi (niente sfarfallio), rimbalzi multipli dal riuso
+//  4. render:  una faccia della cubemap della sala (riflessi delle superfici lucide) + mip
+//  5. render:  la sala capovolta per il riflesso del pavimento, a risoluzione ridotta + mip
+//  6. render:  la sala con MSAA 4×: superfici, cielo, pulviscolo nei raggi
+//  7. render:  fasci di luce a risoluzione ridotta, accumulati con il fotogramma precedente
+//  8. render:  composizione, bloom, ACES, sRGB sul canvas
+// Al massimo due fotogrammi in coda sulla GPU.
+import { buildScene, VERTEX_FLOATS } from "./meshes";
+import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, GI_PROBES, FRAME_FLOATS, PASS_FLOATS, type PodiumQuality } from "./shaders";
+import { camera, viewProj, celestial, moodAt, lightMatrix, LIGHT_RECT, type Cam } from "./stage";
 
-export type PodiumQuality = { mobile: boolean; volScale: number; steps: number };
-export const podiumQuality = (mobile: boolean): PodiumQuality => (mobile ? { mobile, volScale: 0.4, steps: 32 } : { mobile, volScale: 0.5, steps: 56 });
+export { podiumQuality, type PodiumQuality } from "./shaders";
 
-type Layouts = Record<"shadow" | "gi" | "vol" | "main" | "present", GPUBindGroupLayout>;
+const MSAA = 4;
+const HDR: GPUTextureFormat = "rgba16float";
+const CLOUD = [512, Math.round((512 * (LIGHT_RECT.y1 - LIGHT_RECT.y0)) / (LIGHT_RECT.x1 - LIGHT_RECT.x0))];
+const ENV_POS = [0, 3.0, 0.6]; // centro della cubemap: sopra il primo gradino, all'altezza delle coppe
+const PLANAR_MIPS = 6, ENV_MIPS = 8;
+const RT = GPUTextureUsage;
+const mipCount = (w: number, h: number) => Math.floor(Math.log2(Math.max(w, h))) + 1;
+
+// facce della cubemap (convenzione WebGPU: +X, -X, +Y, -Y, +Z, -Z): direzione, destra e alto dell'immagine
+const FACES: [number[], number[], number[]][] = [
+  [[1, 0, 0], [0, 0, -1], [0, 1, 0]], [[-1, 0, 0], [0, 0, 1], [0, 1, 0]],
+  [[0, 1, 0], [1, 0, 0], [0, 0, -1]], [[0, -1, 0], [1, 0, 0], [0, 0, 1]],
+  [[0, 0, 1], [1, 0, 0], [0, 1, 0]], [[0, 0, -1], [-1, 0, 0], [0, 1, 0]],
+];
+
+// atlante delle incisioni (canale rosso): in alto i numeri 1, 2, 3 (celle 256×512, schiacciate in orizzontale perché il
+// gradino le stende su un quadrato), in basso a sinistra l'emblema degli stendardi (corona d'alloro e stella)
+function decalCanvas() {
+  const S = 1024, cv = document.createElement("canvas");
+  cv.width = S; cv.height = S;
+  const g = cv.getContext("2d");
+  if (!g) return cv;
+  g.fillStyle = "#000"; g.fillRect(0, 0, S, S);
+  g.fillStyle = "#fff"; g.strokeStyle = "#fff";
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.filter = "blur(2px)";
+  ["1", "2", "3"].forEach((d, i) => {
+    g.setTransform(0.5, 0, 0, 1, i * 256 + 128, 268);
+    g.font = "700 470px Georgia, 'Times New Roman', serif";
+    g.fillText(d, 0, 0);
+  });
+  // emblema: il quadrato dell'atlante copre 2,2 × 2,6 m di stoffa, si allarga in orizzontale per tenerlo tondo
+  g.setTransform(1.17, 0, 0, 1, 256, 768);
+  g.filter = "blur(1.2px)";
+  g.lineWidth = 9; g.beginPath(); g.arc(0, 0, 205, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = 4; g.beginPath(); g.arc(0, 0, 186, 0, Math.PI * 2); g.stroke();
+  for (const s of [-1, 1]) {
+    // rami d'alloro: foglie a goccia lungo un arco, dal basso verso l'alto
+    for (let k = 0; k < 11; k++) {
+      const a = Math.PI / 2 + s * (0.35 + k * 0.215), r = 150;
+      const x = Math.cos(a) * r, y = Math.sin(a) * r;
+      for (const side of [-1, 1]) {
+        g.save(); g.translate(x, y); g.rotate(a + s * Math.PI / 2 + side * 0.55 * s);
+        g.beginPath(); g.ellipse(0, -side * 17, 9, 22, 0, 0, Math.PI * 2); g.fill(); g.restore();
+      }
+    }
+    g.lineWidth = 5; g.beginPath(); g.arc(0, 0, 150, Math.PI / 2 + s * 0.3, Math.PI / 2 + s * 2.55, s < 0); g.stroke();
+  }
+  g.beginPath();
+  for (let k = 0; k < 10; k++) { const r = k % 2 ? 38 : 92, a = -Math.PI / 2 + (k * Math.PI) / 5; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+  g.closePath(); g.fill();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  return cv;
+}
+
+type Sized = {
+  pw: number; ph: number; vw: number; vh: number; rw: number; rh: number;
+  textures: GPUTexture[];
+  color: GPUTextureView; depth: GPUTextureView; scene: GPUTextureView; comb: GPUTextureView;
+  vol: GPUTexture[]; planar: GPUTexture; planarDepth: GPUTextureView; bloom: GPUTexture[];
+  frameMain: GPUBindGroup; volGroups: GPUBindGroup[]; planarMips: GPUBindGroup[];
+  combine: GPUBindGroup[]; down: GPUBindGroup[]; up: GPUBindGroup[]; final: GPUBindGroup;
+};
 
 export class PodiumView {
   private readonly ctx: GPUCanvasContext;
   private readonly format: GPUTextureFormat;
-  private readonly ubuf: GPUBuffer;
-  private readonly gi: [GPUBuffer, GPUBuffer];
+  private readonly frameBuf: GPUBuffer;
+  private readonly passBuf: { main: GPUBuffer; planar: GPUBuffer; env: GPUBuffer[] };
+  private readonly postBuf: [GPUBuffer, GPUBuffer]; // primo livello del bloom / tutti gli altri
+  private readonly gi: GPUBuffer;
+  private readonly vbuf: GPUBuffer;
+  private readonly ibuf: GPUBuffer;
+  private readonly ranges: Record<string, [number, number]>;
   private readonly shadow: GPUTexture;
-  private readonly u = new Float32Array(U_FLOATS);
-  private readonly layouts: Layouts;
-  private pipes!: { shadow: GPUComputePipeline; gi: GPUComputePipeline; vol: GPURenderPipeline; main: GPURenderPipeline; present: GPURenderPipeline };
-  private readonly linear: GPUSampler;
-  private readonly shadowGroup: GPUBindGroup;
-  private readonly giGroups: GPUBindGroup[];
-  private volGroups: GPUBindGroup[] = [];
-  private mainGroups: GPUBindGroup[] = [];
-  private presentGroup: GPUBindGroup | null = null;
-  private vol: GPUTexture[] = [];
-  private scene: GPUTexture | null = null;
-  private size = { pw: 0, ph: 0, vw: 0, vh: 0 };
+  private readonly cloud: GPUTexture;
+  private readonly marble: GPUTexture;
+  private readonly fabric: GPUTexture;
+  private readonly decal: GPUTexture;
+  private readonly env: GPUTexture;
+  private readonly envDepth: GPUTexture;
+  private readonly dummy2d: GPUTexture;
+  private readonly dummyCube: GPUTexture;
+  private readonly samplers: { cmp: GPUSampler; lin: GPUSampler; aniso: GPUSampler };
+  private readonly layouts: { frameRW: GPUBindGroupLayout; frame: GPUBindGroupLayout; pass: GPUBindGroupLayout; volx: GPUBindGroupLayout; post: GPUBindGroupLayout };
+  private readonly frameData = new Float32Array(FRAME_FLOATS);
+  private readonly passData = new Float32Array(PASS_FLOATS);
+  private readonly postData = new Float32Array(4);
+  private readonly ownTextures: GPUTexture[] = [];
+  private pipes: any = null;
+  private groups: any = null;
+  private sized: Sized | null = null;
   private cam: Cam | null = null;
-  private frameNo = 0; private flip = 0; private vflip = 0; private fresh = true;
+  private frameNo = 0; private vflip = 0; private fresh = true; private warm = false; private envAll = true;
   private inflight = 0;
   private dead = false;
+  onError: ((e: Error) => void) | null = null;
 
   constructor(private readonly device: GPUDevice, readonly canvas: HTMLCanvasElement, readonly q: PodiumQuality) {
     const ctx = canvas.getContext("webgpu");
@@ -42,100 +120,358 @@ export class PodiumView {
     this.ctx = ctx;
     this.format = navigator.gpu.getPreferredCanvasFormat();
     ctx.configure({ device, format: this.format, alphaMode: "opaque" });
-    const d = device, C = GPUShaderStage.COMPUTE, Fr = GPUShaderStage.FRAGMENT;
-    this.ubuf = d.createBuffer({ label: "podium-u", size: U_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.gi = [0, 1].map((i) => d.createBuffer({ label: `podium-gi${i}`, size: GI_PROBES * 6 * 16, usage: GPUBufferUsage.STORAGE })) as [GPUBuffer, GPUBuffer];
-    this.shadow = d.createTexture({ label: "podium-shadow", size: SHADOW_DIM, format: "rg32float", usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
-    this.linear = d.createSampler({ magFilter: "linear", minFilter: "linear" });
-    const uni = (v: number) => ({ visibility: v, buffer: { type: "uniform" as const } });
-    const tex = (v: number, t: GPUTextureSampleType = "unfilterable-float") => ({ visibility: v, texture: { sampleType: t } });
-    const ro = (v: number) => ({ visibility: v, buffer: { type: "read-only-storage" as const } });
-    const L = (entries: any[]) => d.createBindGroupLayout({ entries: entries.map((e, i) => ({ binding: i, ...e })) });
-    this.layouts = {
-      shadow: L([uni(C), { visibility: C, storageTexture: { access: "write-only", format: "rg32float" } }]),
-      gi: L([uni(C), tex(C), ro(C), { visibility: C, buffer: { type: "storage" } }]),
-      vol: L([uni(Fr), tex(Fr), ro(Fr), tex(Fr, "float")]),
-      main: L([uni(Fr), tex(Fr), ro(Fr), tex(Fr, "float"), { visibility: Fr, sampler: {} }]),
-      present: L([tex(Fr, "float"), { visibility: Fr, sampler: {} }]),
+    const d = device;
+    const buf = (label: string, size: number, usage: number) => d.createBuffer({ label, size, usage });
+    const UNI = GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST;
+    this.frameBuf = buf("podium-frame", FRAME_FLOATS * 4, UNI);
+    this.passBuf = { main: buf("podium-pass", PASS_FLOATS * 4, UNI), planar: buf("podium-pass-planar", PASS_FLOATS * 4, UNI), env: FACES.map((_, i) => buf(`podium-pass-env${i}`, PASS_FLOATS * 4, UNI)) };
+    this.postBuf = [buf("podium-post0", 16, UNI), buf("podium-post1", 16, UNI)];
+    this.gi = buf("podium-gi", GI_PROBES * 6 * 16, GPUBufferUsage.STORAGE);
+
+    const mesh = buildScene(q.mobile);
+    this.ranges = mesh.ranges;
+    this.vbuf = buf("podium-vertices", mesh.vertices.byteLength, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
+    this.ibuf = buf("podium-indices", mesh.indices.byteLength, GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST);
+    d.queue.writeBuffer(this.vbuf, 0, mesh.vertices);
+    d.queue.writeBuffer(this.ibuf, 0, mesh.indices);
+
+    const tex = (desc: GPUTextureDescriptor) => { const t = d.createTexture(desc); this.ownTextures.push(t); return t; };
+    this.shadow = tex({ label: "podium-shadow", size: q.shadow, format: "depth32float", usage: RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING });
+    this.cloud = tex({ label: "podium-clouds", size: CLOUD, format: HDR, mipLevelCount: mipCount(CLOUD[0], CLOUD[1]), usage: RT.STORAGE_BINDING | RT.TEXTURE_BINDING });
+    const ms = q.mobile ? 512 : 1024;
+    this.marble = tex({ label: "podium-marble", size: [ms, ms], format: "rgba8unorm", mipLevelCount: mipCount(ms, ms), usage: RT.STORAGE_BINDING | RT.TEXTURE_BINDING });
+    this.fabric = tex({ label: "podium-fabric", size: [256, 256], format: "rgba8unorm", mipLevelCount: mipCount(256, 256), usage: RT.STORAGE_BINDING | RT.TEXTURE_BINDING });
+    this.decal = tex({ label: "podium-decal", size: [1024, 1024], format: "rgba8unorm", usage: RT.TEXTURE_BINDING | RT.COPY_DST | RT.RENDER_ATTACHMENT });
+    this.env = tex({ label: "podium-env", size: [q.envSize, q.envSize, 6], format: HDR, mipLevelCount: ENV_MIPS, usage: RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING | RT.STORAGE_BINDING });
+    this.envDepth = tex({ label: "podium-env-depth", size: [q.envSize, q.envSize], format: "depth24plus", usage: RT.RENDER_ATTACHMENT });
+    this.dummy2d = tex({ label: "podium-dummy", size: [1, 1], format: HDR, usage: RT.TEXTURE_BINDING });
+    this.dummyCube = tex({ label: "podium-dummy-cube", size: [1, 1, 6], format: HDR, usage: RT.TEXTURE_BINDING });
+
+    this.samplers = {
+      cmp: d.createSampler({ compare: "less", magFilter: "linear", minFilter: "linear" }),
+      lin: d.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear" }),
+      aniso: d.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", maxAnisotropy: 8 }),
     };
-    const shadowView = this.shadow.createView();
-    this.shadowGroup = d.createBindGroup({ layout: this.layouts.shadow, entries: [{ binding: 0, resource: { buffer: this.ubuf } }, { binding: 1, resource: shadowView }] });
-    // gi[f] → gi[1-f]: il compute legge il fotogramma precedente e scrive il nuovo
-    this.giGroups = [0, 1].map((f) => d.createBindGroup({ layout: this.layouts.gi, entries: [{ binding: 0, resource: { buffer: this.ubuf } }, { binding: 1, resource: shadowView }, { binding: 2, resource: { buffer: this.gi[f] } }, { binding: 3, resource: { buffer: this.gi[1 - f] } }] }));
+
+    const C = GPUShaderStage.COMPUTE, VF = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, Fr = GPUShaderStage.FRAGMENT;
+    const frameEntries = (v: number, gi: GPUBufferBindingType): GPUBindGroupLayoutEntry[] => [
+      { binding: 0, visibility: v, buffer: { type: "uniform" } },
+      { binding: 1, visibility: v, texture: { sampleType: "depth" } },
+      { binding: 2, visibility: v, sampler: { type: "comparison" } },
+      { binding: 3, visibility: v, texture: { sampleType: "float" } },
+      { binding: 4, visibility: v, sampler: { type: "filtering" } },
+      { binding: 5, visibility: v, buffer: { type: gi } },
+      { binding: 6, visibility: v, texture: { sampleType: "float" } },
+      { binding: 7, visibility: v, texture: { sampleType: "float" } },
+      { binding: 8, visibility: v, texture: { sampleType: "float" } },
+      { binding: 9, visibility: v, sampler: { type: "filtering" } },
+      { binding: 10, visibility: v, texture: { sampleType: "float", viewDimension: "cube" } },
+      { binding: 11, visibility: v, texture: { sampleType: "float" } },
+    ];
+    this.layouts = {
+      frameRW: d.createBindGroupLayout({ label: "podium-frame-rw", entries: frameEntries(C, "storage") }),
+      frame: d.createBindGroupLayout({ label: "podium-frame", entries: frameEntries(VF, "read-only-storage") }),
+      pass: d.createBindGroupLayout({ label: "podium-pass", entries: [{ binding: 0, visibility: VF, buffer: { type: "uniform" } }] }),
+      volx: d.createBindGroupLayout({ label: "podium-volx", entries: [{ binding: 0, visibility: Fr, texture: { sampleType: "depth", multisampled: true } }, { binding: 1, visibility: Fr, texture: { sampleType: "unfilterable-float" } }] }),
+      post: d.createBindGroupLayout({ label: "podium-post", entries: [{ binding: 0, visibility: Fr, texture: { sampleType: "float" } }, { binding: 1, visibility: Fr, sampler: { type: "filtering" } }, { binding: 2, visibility: Fr, texture: { sampleType: "float" } }, { binding: 3, visibility: Fr, buffer: { type: "uniform" } }] }),
+    };
+
+    // le sei camere della cubemap non cambiano mai
+    const E = q.envSize;
+    FACES.forEach(([fwd, right, up], i) => {
+      const c: Cam = { pos: ENV_POS, right, up, fwd, tan: 1, cx: E / 2, cy: E / 2, h: E, w: E };
+      this.device.queue.writeBuffer(this.passBuf.env[i], 0, this.packPass(c, viewProj(c, 0.05, 90), 2, E, E));
+    });
+  }
+
+  private packPass(c: Cam, vp: Float32Array, mode: number, tw: number, th: number, sx = 1, sy = 1) {
+    const p = this.passData;
+    p.set(vp, 0);
+    p.set([c.pos[0], c.pos[1], c.pos[2], c.tan, c.right[0], c.right[1], c.right[2], c.cx * sx, c.up[0], c.up[1], c.up[2], c.cy * sy, c.fwd[0], c.fwd[1], c.fwd[2], c.h * sy, 0, mode, tw, th], 16);
+    return p;
+  }
+
+  private frameGroup(layout: GPUBindGroupLayout, env: GPUTextureView, planar: GPUTextureView) {
+    const s = this.samplers;
+    const res = [this.frameBuf, this.shadow.createView(), s.cmp, this.cloud.createView(), s.lin, this.gi, this.marble.createView(), this.fabric.createView(), this.decal.createView(), s.aniso, env, planar];
+    return this.device.createBindGroup({ layout, entries: res.map((r, i) => ({ binding: i, resource: r instanceof GPUBuffer ? { buffer: r } : r })) });
+  }
+
+  // catena delle mip con il compute (riduzione 2×2): un gruppo per livello
+  private mipGroups(pipe: GPUComputePipeline, t: GPUTexture, levels: number, array = false) {
+    const out: GPUBindGroup[] = [];
+    for (let k = 1; k < levels; k++) {
+      const view = (l: number) => t.createView(array ? { dimension: "2d-array", baseMipLevel: l, mipLevelCount: 1, baseArrayLayer: 0, arrayLayerCount: 6 } : { baseMipLevel: l, mipLevelCount: 1 });
+      out.push(this.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: view(k - 1) }, { binding: 1, resource: view(k) }] }));
+    }
+    return out;
+  }
+  private runMips(cp: GPUComputePassEncoder, pipe: GPUComputePipeline, groups: GPUBindGroup[], w: number, h: number, layers = 1) {
+    cp.setPipeline(pipe);
+    groups.forEach((g, k) => { cp.setBindGroup(0, g); cp.dispatchWorkgroups(Math.ceil(Math.max(1, w >> (k + 1)) / 8), Math.ceil(Math.max(1, h >> (k + 1)) / 8), layers); });
   }
 
   async ready() {
-    const d = this.device;
+    const d = this.device, q = this.q, L = this.layouts;
     const mod = (code: string, label: string) => d.createShaderModule({ label, code });
-    const layout = (l: GPUBindGroupLayout) => d.createPipelineLayout({ bindGroupLayouts: [l] });
-    const vol = mod(volShader, "podium-vol"), main = mod(mainShader, "podium-main"), present = mod(presentShader, "podium-present");
-    const render = (m: GPUShaderModule, l: GPUBindGroupLayout, fs: string, format: GPUTextureFormat) =>
-      d.createRenderPipelineAsync({ layout: layout(l), vertex: { module: m, entryPoint: "vsFull" }, fragment: { module: m, entryPoint: fs, targets: [{ format }] }, primitive: { topology: "triangle-list" } });
-    const [shadow, gi, pv, pm, pp] = await Promise.all([
-      d.createComputePipelineAsync({ layout: layout(this.layouts.shadow), compute: { module: mod(shadowShader, "podium-shadow"), entryPoint: "shadow" } }),
-      d.createComputePipelineAsync({ layout: layout(this.layouts.gi), compute: { module: mod(giShader, "podium-gi"), entryPoint: "gi" } }),
-      render(vol, this.layouts.vol, "fsVol", "rgba16float"),
-      render(main, this.layouts.main, "fsMain", "rgba8unorm"),
-      render(present, this.layouts.present, "fsPresent", this.format),
+    const scene = mod(sceneShader(q), "podium-scene"), post = mod(postShader, "podium-post"), vol = mod(volShader(q), "podium-vol");
+    const pl = (...g: GPUBindGroupLayout[]) => d.createPipelineLayout({ bindGroupLayouts: g });
+    const compute = (code: string, label: string, entryPoint: string, layout: GPUPipelineLayout | "auto" = "auto") => d.createComputePipelineAsync({ label, layout, compute: { module: mod(code, label), entryPoint } });
+    const vertexLayout = (full: boolean): GPUVertexBufferLayout[] => [{
+      arrayStride: VERTEX_FLOATS * 4,
+      attributes: full
+        ? [{ shaderLocation: 0, offset: 0, format: "float32x3" }, { shaderLocation: 1, offset: 12, format: "float32x3" }, { shaderLocation: 2, offset: 24, format: "float32x2" }, { shaderLocation: 3, offset: 32, format: "float32" }, { shaderLocation: 4, offset: 36, format: "float32" }]
+        : [{ shaderLocation: 0, offset: 0, format: "float32x3" }],
+    }];
+    const sceneLayout = pl(L.frame, L.pass);
+    type RO = { vs: string; fs: string; msaa: boolean; cull?: GPUCullMode; depth: "write" | "test" | "sky"; strip?: boolean; add?: boolean; buffers?: boolean; depthFormat?: GPUTextureFormat };
+    const render = (o: RO) => d.createRenderPipelineAsync({
+      layout: sceneLayout,
+      vertex: { module: scene, entryPoint: o.vs, buffers: o.buffers ? vertexLayout(true) : [] },
+      fragment: { module: scene, entryPoint: o.fs, targets: [{ format: HDR, blend: o.add ? { color: { srcFactor: "one", dstFactor: "one" }, alpha: { srcFactor: "one", dstFactor: "one" } } : undefined }] },
+      primitive: { topology: o.strip ? "triangle-strip" : "triangle-list", cullMode: o.cull ?? "none", frontFace: "ccw" },
+      depthStencil: { format: o.depthFormat ?? "depth32float", depthWriteEnabled: o.depth === "write", depthCompare: o.depth === "sky" ? "less-equal" : "less" },
+      multisample: { count: o.msaa ? MSAA : 1 },
+    });
+    const full = (module: GPUShaderModule, fs: string, layout: GPUPipelineLayout, format: GPUTextureFormat, add = false) => d.createRenderPipelineAsync({
+      layout, vertex: { module, entryPoint: "vsFull" },
+      fragment: { module, entryPoint: fs, targets: [{ format, blend: add ? { color: { srcFactor: "one", dstFactor: "one" }, alpha: { srcFactor: "one", dstFactor: "one" } } : undefined }] },
+      primitive: { topology: "triangle-list" },
+    });
+    const postLayout = pl(L.post);
+    const [texgen, mip8, mip16, mipCube, clouds, gi, shadow, main, sky, dust, flat, flatSky, volP, combine, down, up, final] = await Promise.all([
+      compute(texgenShader, "podium-texgen", "texgen"),
+      compute(mipShader("rgba8unorm", false), "podium-mip8", "mip"),
+      compute(mipShader("rgba16float", false), "podium-mip16", "mip"),
+      compute(mipShader("rgba16float", true), "podium-mipcube", "mip"),
+      compute(cloudShader, "podium-clouds", "clouds"),
+      compute(giShader(q), "podium-gi", "gi", pl(L.frameRW)),
+      d.createRenderPipelineAsync({
+        label: "podium-shadow", layout: "auto",
+        vertex: { module: mod(shadowShader, "podium-shadow"), entryPoint: "vsShadow", buffers: vertexLayout(false) },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "less" },
+      }),
+      render({ vs: "vsScene", fs: "fsScene", msaa: true, cull: "back", depth: "write", buffers: true }),
+      render({ vs: "vsSky", fs: "fsSky", msaa: true, depth: "sky" }),
+      render({ vs: "vsDust", fs: "fsDust", msaa: true, depth: "test", strip: true, add: true }),
+      // riflessi (cubemap e pavimento): l'immagine è specchiata, l'avvolgimento dei triangoli si inverte
+      render({ vs: "vsScene", fs: "fsScene", msaa: false, cull: "front", depth: "write", buffers: true, depthFormat: "depth24plus" }),
+      render({ vs: "vsSky", fs: "fsSky", msaa: false, depth: "sky", depthFormat: "depth24plus" }),
+      full(vol, "fsVol", pl(L.frame, L.pass, L.volx), HDR),
+      full(post, "fsCombine", postLayout, HDR),
+      full(post, "fsDown", postLayout, HDR),
+      full(post, "fsUp", postLayout, HDR, true),
+      full(post, "fsFinal", postLayout, this.format),
     ]);
-    this.pipes = { shadow, gi, vol: pv, main: pm, present: pp };
+    if (this.dead) return;
+    this.pipes = { mip8, mip16, mipCube, clouds, gi, shadow, main, sky, dust, flat, flatSky, vol: volP, combine, down, up, final };
+
+    // gruppi che non dipendono dalle dimensioni del canvas
+    const dummy2d = this.dummy2d.createView(), dummyCube = this.dummyCube.createView({ dimension: "cube" });
+    this.groups = {
+      clouds: d.createBindGroup({ layout: clouds.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.frameBuf } }, { binding: 1, resource: this.cloud.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }] }),
+      cloudMips: this.mipGroups(mip16, this.cloud, this.cloud.mipLevelCount),
+      shadow: d.createBindGroup({ layout: shadow.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.frameBuf, offset: 0, size: 64 } }] }),
+      gi: this.frameGroup(L.frameRW, dummyCube, dummy2d),
+      // nei riflessi la cubemap e il riflesso planare non si leggono (e non si possono leggere mentre si disegnano)
+      frameOff: this.frameGroup(L.frame, dummyCube, dummy2d),
+      envMips: this.mipGroups(mipCube, this.env, ENV_MIPS, true),
+      envFaces: FACES.map((_, i) => this.env.createView({ dimension: "2d", baseArrayLayer: i, arrayLayerCount: 1, baseMipLevel: 0, mipLevelCount: 1 })),
+      passMain: d.createBindGroup({ layout: L.pass, entries: [{ binding: 0, resource: { buffer: this.passBuf.main } }] }),
+      passPlanar: d.createBindGroup({ layout: L.pass, entries: [{ binding: 0, resource: { buffer: this.passBuf.planar } }] }),
+      passEnv: this.passBuf.env.map((b) => d.createBindGroup({ layout: L.pass, entries: [{ binding: 0, resource: { buffer: b } }] })),
+      envView: this.env.createView({ dimension: "cube" }),
+    };
+
+    // texture procedurali e atlante delle incisioni, una volta
+    d.queue.copyExternalImageToTexture({ source: decalCanvas() }, { texture: this.decal }, [1024, 1024]);
+    const enc = d.createCommandEncoder({ label: "podium-init" });
+    const cp = enc.beginComputePass();
+    cp.setPipeline(texgen);
+    cp.setBindGroup(0, d.createBindGroup({ layout: texgen.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.marble.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }, { binding: 1, resource: this.fabric.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }] }));
+    cp.dispatchWorkgroups(Math.ceil(this.marble.width / 8), Math.ceil(this.marble.height / 8));
+    this.runMips(cp, mip8, this.mipGroups(mip8, this.marble, this.marble.mipLevelCount), this.marble.width, this.marble.height);
+    this.runMips(cp, mip8, this.mipGroups(mip8, this.fabric, this.fabric.mipLevelCount), this.fabric.width, this.fabric.height);
+    cp.end();
+    d.queue.submit([enc.finish()]);
   }
 
   // w, h: viewport in pixel CSS; ratio: pixel del dispositivo per pixel CSS; left, top: barra laterale e intestazione
   resize(w: number, h: number, ratio: number, left: number, top: number) {
     const pw = Math.max(1, Math.round(w * ratio)), ph = Math.max(1, Math.round(h * ratio));
     this.cam = camera(pw, ph, left * ratio, top * ratio);
-    if (pw === this.size.pw && ph === this.size.ph) return;
-    const d = this.device;
+    if (!this.pipes || this.dead || (this.sized && pw === this.sized.pw && ph === this.sized.ph)) return;
+    const d = this.device, q = this.q, L = this.layouts, P = this.pipes;
+    this.sized?.textures.forEach((t) => t.destroy());
     this.canvas.width = pw; this.canvas.height = ph;
-    const vw = Math.max(1, Math.round(pw * this.q.volScale)), vh = Math.max(1, Math.round(ph * this.q.volScale));
-    this.size = { pw, ph, vw, vh };
-    this.vol.forEach((t) => t.destroy()); this.scene?.destroy();
-    this.vol = [0, 1].map((i) => d.createTexture({ label: `podium-vol${i}`, size: [vw, vh], format: "rgba16float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING }));
-    this.scene = d.createTexture({ label: "podium-scene", size: [pw, ph], format: "rgba8unorm", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-    const shadowView = this.shadow.createView(), u = { binding: 0, resource: { buffer: this.ubuf } };
-    // vol[v] si scrive leggendo vol[1-v]; la scena legge il volume appena scritto e le sonde più recenti
-    this.volGroups = [0, 1].flatMap((g) => [0, 1].map((v) => d.createBindGroup({ layout: this.layouts.vol, entries: [u, { binding: 1, resource: shadowView }, { binding: 2, resource: { buffer: this.gi[g] } }, { binding: 3, resource: this.vol[1 - v].createView() }] })));
-    this.mainGroups = [0, 1].flatMap((g) => [0, 1].map((v) => d.createBindGroup({ layout: this.layouts.main, entries: [u, { binding: 1, resource: shadowView }, { binding: 2, resource: { buffer: this.gi[g] } }, { binding: 3, resource: this.vol[v].createView() }, { binding: 4, resource: this.linear }] })));
-    this.presentGroup = d.createBindGroup({ layout: this.layouts.present, entries: [{ binding: 0, resource: this.scene.createView() }, { binding: 1, resource: this.linear }] });
+    const textures: GPUTexture[] = [];
+    const tex = (label: string, tw: number, th: number, format: GPUTextureFormat, usage: number, o: { samples?: number; mips?: number } = {}) => {
+      const t = d.createTexture({ label, size: [Math.max(1, tw), Math.max(1, th)], format, usage, sampleCount: o.samples ?? 1, mipLevelCount: o.mips ?? 1 });
+      textures.push(t); return t;
+    };
+    const vw = Math.max(1, Math.round(pw * q.volScale)), vh = Math.max(1, Math.round(ph * q.volScale));
+    const rw = Math.max(1, Math.round(pw * q.planarScale)), rh = Math.max(1, Math.round(ph * q.planarScale));
+    const color = tex("podium-msaa", pw, ph, HDR, RT.RENDER_ATTACHMENT, { samples: MSAA });
+    const depth = tex("podium-depth", pw, ph, "depth32float", RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING, { samples: MSAA });
+    const scene = tex("podium-scene", pw, ph, HDR, RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING);
+    const comb = tex("podium-comb", pw, ph, HDR, RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING);
+    const vol = [0, 1].map((i) => tex(`podium-vol${i}`, vw, vh, HDR, RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING));
+    const planarMips = Math.min(PLANAR_MIPS, mipCount(rw, rh));
+    const planar = tex("podium-planar", rw, rh, HDR, RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING | RT.STORAGE_BINDING, { mips: planarMips });
+    const planarDepth = tex("podium-planar-depth", rw, rh, "depth24plus", RT.RENDER_ATTACHMENT);
+    const bloom: GPUTexture[] = [];
+    for (let k = 0; k < q.bloom; k++) bloom.push(tex(`podium-bloom${k}`, pw >> (k + 1), ph >> (k + 1), HDR, RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING));
+    const lin = this.samplers.lin, dummy = this.dummy2d.createView();
+    const postGroup = (src: GPUTextureView, aux: GPUTextureView, first: boolean) => d.createBindGroup({ layout: L.post, entries: [{ binding: 0, resource: src }, { binding: 1, resource: lin }, { binding: 2, resource: aux }, { binding: 3, resource: { buffer: this.postBuf[first ? 0 : 1] } }] });
+    const depthView = depth.createView();
+    this.sized = {
+      pw, ph, vw, vh, rw, rh, textures,
+      color: color.createView(), depth: depthView, scene: scene.createView(), comb: comb.createView(),
+      vol, planar, planarDepth: planarDepth.createView(), bloom,
+      frameMain: this.frameGroup(L.frame, this.groups.envView, planar.createView()),
+      // vol[v] si scrive leggendo vol[1-v]
+      volGroups: [0, 1].map((v) => d.createBindGroup({ layout: L.volx, entries: [{ binding: 0, resource: depthView }, { binding: 1, resource: vol[1 - v].createView() }] })),
+      planarMips: this.mipGroups(P.mip16, planar, planarMips),
+      combine: [0, 1].map((v) => postGroup(scene.createView(), vol[v].createView(), false)),
+      down: bloom.map((b, k) => postGroup(k === 0 ? comb.createView() : bloom[k - 1].createView(), dummy, k === 0)),
+      up: bloom.slice(1).map((b) => postGroup(b.createView(), dummy, false)),
+      final: postGroup(comb.createView(), bloom[0].createView(), false),
+    };
     this.fresh = true;
   }
 
   get camera() { return this.cam; }
 
+  private writeFrame(t: number, night: number, turn: number) {
+    const s = this.sized!, m = moodAt(night), q = this.q;
+    const a = celestial(t, false), b = celestial(t, true);
+    const l = a.map((x, i) => x + (b[i] - x) * night), n = Math.hypot(l[0], l[1], l[2]), L = l.map((x) => x / n);
+    const u = this.frameData;
+    u.set(lightMatrix(L), 0);
+    u.set([
+      L[0], L[1], L[2], m.sunI, ...m.sun, night, ...m.skyTop, m.exposure, ...m.skyHor, m.ambient,
+      ...m.wall, m.fog, ...m.wainscot, m.dust, ...m.ceiling, m.cover, ...m.tileA, t, ...m.tileB, this.frameNo % 4096,
+      ...m.stone, q.steps, ...m.darkStone, this.fresh ? 1 : 0.3, ...m.carpet, turn, ...m.banner, 0, ...m.frame, 0,
+      s.pw, s.ph, s.vw, s.vh,
+    ], 16);
+    this.device.queue.writeBuffer(this.frameBuf, 0, u);
+    return m;
+  }
+
+  private giPass(enc: GPUCommandEncoder) {
+    const cp = enc.beginComputePass({ label: "podium-gi" });
+    cp.setPipeline(this.pipes.gi); cp.setBindGroup(0, this.groups.gi);
+    cp.dispatchWorkgroups(Math.ceil(GI_PROBES / this.q.giPeriod) * 6);
+    cp.end();
+  }
+
+  private lightPasses(enc: GPUCommandEncoder) {
+    const P = this.pipes, G = this.groups;
+    const cp = enc.beginComputePass({ label: "podium-clouds" });
+    cp.setPipeline(P.clouds); cp.setBindGroup(0, G.clouds); cp.dispatchWorkgroups(Math.ceil(CLOUD[0] / 8), Math.ceil(CLOUD[1] / 8));
+    this.runMips(cp, P.mip16, G.cloudMips, CLOUD[0], CLOUD[1]);
+    cp.end();
+    const sp = enc.beginRenderPass({ label: "podium-shadow", colorAttachments: [], depthStencilAttachment: { view: this.shadow.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" } });
+    sp.setPipeline(P.shadow); sp.setBindGroup(0, G.shadow);
+    sp.setVertexBuffer(0, this.vbuf); sp.setIndexBuffer(this.ibuf, "uint32");
+    sp.drawIndexed(this.ibuf.size / 4);
+    sp.end();
+  }
+
+  private drawScene(p: GPURenderPassEncoder, skip: string[]) {
+    p.setVertexBuffer(0, this.vbuf); p.setIndexBuffer(this.ibuf, "uint32");
+    for (const [name, [first, count]] of Object.entries(this.ranges)) if (!skip.includes(name) && count > 0) p.drawIndexed(count, 1, first);
+  }
+
   // t: secondi; night: 0 giorno … 1 notte. Restituisce false se il fotogramma è stato saltato (GPU indietro)
   render(t: number, night: number) {
-    if (this.dead || !this.pipes || !this.scene || !this.cam || this.inflight >= 2) return false;
-    const { pw, ph, vw, vh } = this.size, c = this.cam, m = moodAt(night), L = celestial(t, night > 0.5), u = this.u;
-    u.set([...c.pos, c.tan, ...c.right, c.cx, ...c.up, c.cy, ...c.fwd, c.h], 0);
-    u.set([L[0], L[1], L[2], m.sunI, ...m.sun, night, ...m.skyTop, m.exposure, ...m.skyHor, m.ambient], 16);
-    u.set([...m.wall, m.fog, ...m.wainscot, m.dust, ...m.tileA, m.cover, ...m.tileB, t, ...m.stone, this.frameNo % 4096, ...m.dark, this.q.steps, ...m.column, this.fresh ? 1 : 0.1], 32);
-    u.set([...m.carpet, 0, ...m.banner, 0, ...m.frame, 0, pw, ph, vw, vh], 60);
-    this.device.queue.writeBuffer(this.ubuf, 0, u);
-    const d = this.device, enc = d.createCommandEncoder({ label: "podium" }), g = this.flip, v = this.vflip;
-    const cp = enc.beginComputePass();
-    cp.setPipeline(this.pipes.shadow); cp.setBindGroup(0, this.shadowGroup); cp.dispatchWorkgroups(Math.ceil(SHADOW_DIM[0] / 8), Math.ceil(SHADOW_DIM[1] / 8));
-    cp.setPipeline(this.pipes.gi); cp.setBindGroup(0, this.giGroups[g]); cp.dispatchWorkgroups(Math.ceil((GI_PROBES * 6) / 64));
-    cp.end();
-    const latest = 1 - g;
-    const pass = (view: GPUTextureView, pipe: GPURenderPipeline, group: GPUBindGroup) => {
-      const p = enc.beginRenderPass({ colorAttachments: [{ view, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }] });
-      p.setPipeline(pipe); p.setBindGroup(0, group); p.draw(3); p.end();
+    if (this.dead || !this.pipes || !this.sized || !this.cam || this.inflight >= 2) return false;
+    const d = this.device, q = this.q, s = this.sized, P = this.pipes, G = this.groups, c = this.cam;
+    const first = !this.warm;
+    if (first) d.pushErrorScope("validation");
+
+    // all'avvio le sonde si riempiono subito (due giri completi: anche il secondo rimbalzo), poi un turno per fotogramma
+    if (!this.warm) {
+      for (let k = 0; k < q.giPeriod * 2; k++) {
+        this.writeFrame(t, night, k % q.giPeriod);
+        const enc = d.createCommandEncoder({ label: "podium-warm" });
+        if (k === 0) this.lightPasses(enc);
+        this.giPass(enc);
+        d.queue.submit([enc.finish()]);
+      }
+      this.warm = true;
+    }
+    const m = this.writeFrame(t, night, this.frameNo % q.giPeriod);
+    d.queue.writeBuffer(this.passBuf.main, 0, this.packPass(c, viewProj(c), 0, s.pw, s.ph));
+    const kx = s.rw / s.pw, ky = s.rh / s.ph;
+    d.queue.writeBuffer(this.passBuf.planar, 0, this.packPass(c, viewProj(c), 1, s.rw, s.rh, kx, ky));
+    const post = this.postData;
+    post.set([m.exposure, 0.075 / q.bloom, this.frameNo % 4096, 1]); d.queue.writeBuffer(this.postBuf[0], 0, post);
+    post[3] = 0; d.queue.writeBuffer(this.postBuf[1], 0, post);
+
+    const enc = d.createCommandEncoder({ label: "podium" });
+    this.lightPasses(enc);
+    this.giPass(enc);
+
+    // cubemap: una faccia per fotogramma (tutte e sei la prima volta)
+    const faces = this.envAll ? [0, 1, 2, 3, 4, 5] : [this.frameNo % 6];
+    this.envAll = false;
+    for (const f of faces) {
+      const p = enc.beginRenderPass({ label: "podium-env", colorAttachments: [{ view: G.envFaces[f], loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: this.envDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" } });
+      p.setBindGroup(0, G.frameOff); p.setBindGroup(1, G.passEnv[f]);
+      p.setPipeline(P.flat); this.drawScene(p, ["trophies"]);
+      p.setPipeline(P.flatSky); p.draw(3);
+      p.end();
+    }
+    // riflesso del pavimento
+    {
+      const p = enc.beginRenderPass({ label: "podium-planar", colorAttachments: [{ view: s.planar.createView({ baseMipLevel: 0, mipLevelCount: 1 }), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: s.planarDepth, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" } });
+      p.setBindGroup(0, G.frameOff); p.setBindGroup(1, G.passPlanar);
+      p.setPipeline(P.flat); this.drawScene(p, ["floor"]);
+      p.setPipeline(P.flatSky); p.draw(3);
+      p.end();
+    }
+    {
+      const cp = enc.beginComputePass({ label: "podium-mips" });
+      this.runMips(cp, P.mipCube, G.envMips, q.envSize, q.envSize, 6);
+      this.runMips(cp, P.mip16, s.planarMips, s.rw, s.rh);
+      cp.end();
+    }
+    // la sala
+    {
+      const p = enc.beginRenderPass({ label: "podium-main", colorAttachments: [{ view: s.color, resolveTarget: s.scene, loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: s.depth, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" } });
+      p.setBindGroup(0, s.frameMain); p.setBindGroup(1, G.passMain);
+      p.setPipeline(P.main); this.drawScene(p, []);
+      p.setPipeline(P.sky); p.draw(3);
+      p.setPipeline(P.dust); p.draw(4, q.dust);
+      p.end();
+    }
+    const v = this.vflip;
+    const full = (view: GPUTextureView, pipe: GPURenderPipeline, groups: GPUBindGroup[], load = false) => {
+      const p = enc.beginRenderPass({ colorAttachments: [{ view, loadOp: load ? "load" : "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }] });
+      p.setPipeline(pipe); groups.forEach((g, i) => p.setBindGroup(i, g)); p.draw(3); p.end();
     };
-    pass(this.vol[v].createView(), this.pipes.vol, this.volGroups[latest * 2 + v]);
-    pass(this.scene.createView(), this.pipes.main, this.mainGroups[latest * 2 + v]);
-    pass(this.ctx.getCurrentTexture().createView(), this.pipes.present, this.presentGroup!);
+    full(s.vol[v].createView(), P.vol, [s.frameMain, G.passMain, s.volGroups[v]]);
+    full(s.comb, P.combine, [s.combine[v]]);
+    s.bloom.forEach((b, k) => full(b.createView(), P.down, [s.down[k]]));
+    for (let k = s.bloom.length - 1; k >= 1; k--) full(s.bloom[k - 1].createView(), P.up, [s.up[k - 1]], true);
+    full(this.ctx.getCurrentTexture().createView(), P.final, [s.final]);
     d.queue.submit([enc.finish()]);
-    this.flip = latest; this.vflip = 1 - v; this.frameNo++; this.fresh = false;
+    if (first) d.popErrorScope().then((e) => { if (e && !this.dead) { this.dead = true; this.onError?.(new Error(e.message)); } }, () => {});
+
+    this.vflip = 1 - v; this.frameNo++; this.fresh = false;
     this.inflight++;
     d.queue.onSubmittedWorkDone().then(() => { this.inflight--; }, () => { this.inflight = 0; });
     return true;
   }
 
   destroy() {
-    if (this.dead) return;
+    if (this.dead && !this.sized && !this.ownTextures.length) return;
     this.dead = true;
-    this.vol.forEach((t) => t.destroy()); this.scene?.destroy(); this.shadow.destroy(); this.ubuf.destroy(); this.gi.forEach((b) => b.destroy());
+    this.sized?.textures.forEach((t) => t.destroy()); this.sized = null;
+    this.ownTextures.splice(0).forEach((t) => t.destroy());
+    [this.frameBuf, this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, ...this.postBuf, this.gi, this.vbuf, this.ibuf].forEach((b) => b.destroy());
     try { this.ctx.unconfigure(); } catch {}
   }
 }

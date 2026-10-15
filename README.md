@@ -31,13 +31,20 @@ caricamento animato. Dove WebGPU non c'è, l'adattatore è solo software o il di
 stessa scena (stessa animazione, stesse luci e materiali calcolati in JavaScript) è disegnata in Canvas 2D
 (`src/logo2d/`); il logo SVG resta solo se manca anche il Canvas 2D.
 
-Il **podio del mese** è una sala in 3D (WebGPU, `src/podium/`): i gradini con le cime d'oro, d'argento e di bronzo, un
-pavimento lucido e un finestrone da cui entrano fasci di luce che si muovono di continuo, del sole in modalità chiara e
-della luna (con le stelle) in modalità scura. La scena è fatta di forme analitiche intersecate in forma chiusa; un compute
-shader aggiorna a ogni fotogramma una griglia di sonde di luce (illuminazione globale dinamica: la luce rimbalza su
-pavimento, pareti e podio), i fasci nel pulviscolo si calcolano a metà risoluzione e la risoluzione scende da sola se la
-GPU non sta al passo. Le targhette dei vincitori restano HTML, proiettate sui gradini. Senza WebGPU, con il movimento
-ridotto o con il preset leggero resta il podio semplice.
+Il **podio del mese** è una sala da cerimonia in 3D a tutto schermo (WebGPU, `src/podium/`), fatta di mesh vere generate
+all'avvio (`meshes.ts`): colonne doriche tornite con 20 scanalature e rastremazione, trabeazione, soffitto a cassettoni,
+zoccolatura e cornici modanate, un finestrone ad arco con telaio e raggiera, stendardi con le pieghe e la coda a rondine,
+coppe tornite con le anse. I gradini sono di marmo con la cima incorniciata d'oro, d'argento e di bronzo e il numero del
+posto inciso con l'intarsio di metallo. Marmo venato (con le sue normali) e trama del tessuto sono texture procedurali
+generate sulla GPU con le mip; i materiali usano la proiezione triplanare e il filtro anisotropo.
+Dal finestrone entra la luce del sole (modalità chiara) o della luna con le stelle (modalità scura), che si muove di continuo
+con le nuvole: la mappa d'ombra è presa sul piano del vetro lungo la luce e filtrata con PCSS (la penombra cresce con la
+distanza dall'ostacolo), quindi le ombre di telaio, podio e coppe sono morbide e seguono l'astro a ogni fotogramma.
+L'illuminazione globale usa una griglia di sonde aggiornate a turno con raggi fissi (nessun numero casuale: niente rumore né
+sfarfallio sulle pareti) e i rimbalzi multipli; il pavimento ha il riflesso planare, le superfici lucide una cubemap della
+sala aggiornata una faccia per fotogramma. MSAA 4×, fasci di luce nel pulviscolo a risoluzione ridotta, bloom e ACES; la
+risoluzione scende da sola se la GPU non sta al passo. Le targhette dei vincitori restano HTML, proiettate sopra le coppe.
+Senza WebGPU, con il movimento ridotto, con il preset leggero o se la GPU dà errore resta il podio semplice.
 
 In **Opzioni → Musica e feedback** si può attivare **Musica di sottofondo** e regolare il volume separatamente dai bip.
 Il brano allegato, Mii Channel (Plaza), è in `public/audio/mii-channel-plaza.mp3` e viene riprodotto in loop.

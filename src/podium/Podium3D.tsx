@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { renderLoop } from "../renderLoop";
 import { acquireEngine, releaseEngine } from "../logo3d/engine";
 import { PodiumView, podiumQuality } from "./engine";
-import { STEP_X, STEP_D, STEP_TOP, STEP_H, TROPHY_TOP, camera, project } from "./stage";
+import { STEP_X, STEP_D, STEP_TOP, TROPHY_TOP, camera, project } from "./stage";
 
 export type PodiumProps = {
   dark: boolean;
@@ -16,12 +16,12 @@ const RETRIES = 1;
 const SLOT = "podium-slot"; // spazio lasciato libero nella pagina: lì la camera inquadra il podio
 
 // La sala del podio a tutto schermo. Lo strato della scena sta dietro ai contenuti della pagina (sopra lo sfondo) e scorre
-// con la pagina; numeri e targhette stanno in uno strato sopra i contenuti (cliccabili), proiettati con la stessa camera.
+// con la pagina; le targhette stanno in uno strato sopra i contenuti (cliccabili), proiettate con la stessa camera. I numeri
+// dei posti sono incisi nel marmo dei gradini (nella scena).
 export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
   const host = useRef<HTMLDivElement>(null);
   const over = useRef<HTMLDivElement>(null);
   const plateEls = useRef<(HTMLDivElement | null)[]>([]);
-  const numEls = useRef<(HTMLSpanElement | null)[]>([]);
   const [root, setRoot] = useState<Element | null>(null);
   const [shown, setShown] = useState(false);
   const [gen, setGen] = useState(0);
@@ -61,10 +61,8 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       const k = 1 / ratio;
       STEP_X.forEach((x, i) => {
         const tp = project(c, [x, TROPHY_TOP[i] + 0.22, -0.15]), a = project(c, [x - 1.1, STEP_TOP[i], STEP_D]), b = project(c, [x + 1.1, STEP_TOP[i], STEP_D]);
-        const f = project(c, [x, STEP_TOP[i] - STEP_H[i] * 0.5 + 0.08, STEP_D + 0.01]);
-        const p = plateEls.current[i], n = numEls.current[i];
+        const p = plateEls.current[i];
         if (p && tp && a && b) { p.style.width = `${Math.max(mobile ? 90 : 130, (b.x - a.x) * k * 0.94)}px`; p.style.transform = `translate(${tp.x * k}px, ${tp.y * k}px) translate(-50%, -100%)`; }
-        if (n && f) { n.style.transform = `translate(${f.x * k}px, ${f.y * k}px) translate(-50%, -50%)`; n.style.fontSize = `${Math.max(16, f.scale * k * STEP_H[i] * 0.62)}px`; }
       });
     };
     placeRef.current = place;
@@ -86,6 +84,7 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       e.onLost.add(lost); cleanups.push(() => e.onLost.delete(lost));
       if (e.lost) { lost(); return; }
       view = new PodiumView(e.device, cv, podiumQuality(mobile));
+      view.onError = (err) => { if (alive) { console.warn("Podio 3D: errore WebGPU, si usa il podio semplice.", err.message); alive = false; fail.current(); } };
       await view.ready();
       if (!alive) return;
       fit();
@@ -117,7 +116,6 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       <div ref={host} className={`podium-scene ${shown ? "on" : ""}`} aria-hidden="true"><div className="podium-scene-bg" /><i className="podium-scene-scrim" /></div>
       {root && createPortal(
         <div ref={over} className={`podium-over ${shown ? "on" : ""}`}>
-          {order.map((i) => <span key={`n${i}`} ref={(n) => { numEls.current[i] = n; }} className={`podium3d-num r${i + 1}`} aria-hidden="true">{i + 1}</span>)}
           {order.map((i) => plates[i] ? <div key={`p${i}`} ref={(p) => { plateEls.current[i] = p; }} className={`podium3d-plate r${i + 1}`}>{plates[i]}</div> : null)}
         </div>, root)}
     </>
