@@ -1,4 +1,4 @@
-import { renderLoop, holdLoops } from "./renderLoop";
+import { renderLoop, holdLoops, refreshes, steadyFps } from "./renderLoop";
 
 let pending, observer, hidden, next;
 beforeEach(() => {
@@ -45,4 +45,22 @@ test("holds every loop while a full-screen scene covers the site, then resumes",
   holdLoops(false); tick(50);
   expect(a).toHaveBeenCalledTimes(2); expect(b).toHaveBeenCalledTimes(2);
   stopA(); stopB();
+});
+
+test("tells fps the display refresh period, so a loop can draw on an exact multiple of it", () => {
+  const seen = [], draw = jest.fn(), p = 1000 / 144;
+  const stop = renderLoop(draw, (vsync) => { seen.push(vsync); return steadyFps(60, vsync); });
+  for (let i = 0; i <= 200; i++) tick(i * p);
+  expect(seen[seen.length - 1]).toBeCloseTo(p, 3);
+  // at 144 Hz, 60 wanted: every other refresh, 72 even frames a second (not 48 uneven ones)
+  draw.mockClear();
+  for (let i = 201; i <= 344; i++) tick(i * p);
+  expect(draw).toHaveBeenCalledTimes(72);
+  stop();
+});
+
+test("steady pacing picks the refresh multiple nearest to the wanted rate", () => {
+  expect([60, 75, 90, 120, 144, 165, 240].map((hz) => refreshes(60, 1000 / hz))).toEqual([1, 1, 1, 2, 2, 3, 4]);
+  expect(refreshes(30, 1000 / 60)).toBe(2);
+  expect(steadyFps(60, 0)).toBe(60);
 });

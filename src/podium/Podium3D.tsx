@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { renderLoop } from "../renderLoop";
+import { renderLoop, refreshes, steadyFps } from "../renderLoop";
 import { acquirePodiumDevice, releasePodiumDevice, capTier, type Tier } from "./device";
 import { PodiumView, podiumQuality } from "./engine";
 import { STEP_X, STEP_D, STEP_TOP, DAIS, TROPHY_TOP, TROPHY_K, TROPHY_Z, camera, project, type Cam, type CamMotion } from "./stage";
@@ -17,9 +17,11 @@ const SLOT = "podium-slot"; // spazio lasciato libero nella pagina: lì la camer
 // sotto questa larghezza la sala è un palco a tutta larghezza dentro la pagina e i vincitori sono schede sotto di esso
 // (la stessa soglia del CSS: .podium-list e .podium-slot)
 const NARROW = "(max-width: 767px)";
-// risoluzione di partenza (rispetto ai pixel del dispositivo) e fotogrammi al secondo per fascia
+// risoluzione di partenza della scena per fascia (rispetto ai pixel del dispositivo)
 const START_SCALE: Record<Tier, number> = { low: 0.85, medium: 0.9, high: 1, ultra: 1.25 };
-const FPS: Record<Tier, number> = { low: 60, medium: 60, high: 60, ultra: 120 };
+// circa 60 fotogrammi al secondo su un multiplo esatto del refresh (a 144 Hz uno sì e uno no: 72 regolari invece di 48 a
+// strappi): in una sala che si muove piano la risoluzione conta più dei fotogrammi in più
+const FPS = 60;
 
 // La sala del podio.
 //  - Schermi larghi: a tutto schermo. Lo strato della scena sta dietro ai contenuti (sopra lo sfondo) e scorre con la
@@ -64,7 +66,8 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
     let alive = true, view: PodiumView | null = null, tier: Tier = mobile ? "low" : "medium";
     let q = podiumQuality(tier, mobile);
     const cleanups: (() => void)[] = [];
-    let W = 0, H = 0, left = 0, top = 0, ratio = 1, scale = START_SCALE[tier];
+    // ratio: pixel della scena per pixel CSS; out: pixel del canvas per pixel CSS (quelli dello schermo)
+    let W = 0, H = 0, left = 0, top = 0, ratio = 1, out = 1, scale = START_SCALE[tier], cap = 4, frameMs = 1000 / FPS;
 
     const measure = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -79,10 +82,12 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
         top = Math.max(0, slot.getBoundingClientRect().top + window.scrollY);
         slot.style.height = `${Math.max(460, H - top - 16)}px`;
       }
-      ratio = Math.min(dpr, narrow ? 1.5 : 2) * scale;
+      out = Math.min(dpr, 2);
+      const base = Math.min(dpr, narrow ? 1.5 : 2);
       // tetto dei pixel della fascia (un 4K con la scheda integrata non si disegna a piena risoluzione)
-      const px = W * H * ratio * ratio;
-      if (px > q.maxPixels) ratio *= Math.sqrt(q.maxPixels / px);
+      cap = Math.sqrt(q.maxPixels / Math.max(1, W * H * base * base));
+      scale = Math.min(scale, cap);
+      ratio = base * scale;
     };
     const cam = (): Cam | null => view?.camera || (W && H ? camera(Math.max(1, Math.round(W * ratio)), Math.max(1, Math.round(H * ratio)), left * ratio, top * ratio) : null);
     const place = () => {
@@ -97,7 +102,7 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       });
     };
     placeRef.current = place;
-    const fit = () => { if (!alive) return; measure(); view?.resize(W, H, ratio, left, top); place(); };
+    const fit = () => { if (!alive) return; measure(); view?.resize(W, H, ratio, out, left, top); place(); };
 
     // ---------- puntatore: parallasse, trascinamento, coppa sotto il puntatore, clic ----------
     const ptr = { x: 0, y: 0, in: false, cx: -1, cy: -1 };
@@ -184,8 +189,10 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       if (!alive) return;
       dev.onLost.add(lost); cleanups.push(() => dev.onLost.delete(lost));
       if (dev.lost) { lost(); return; }
-      // ?podiotier=low|medium|high|ultra forza una fascia (prove); ?podiohud mostra fascia, risoluzione e tempi
-      const forced = new URLSearchParams(window.location.search).get("podiotier") as Tier | null;
+      // ?podiotier=low|medium|high|ultra forza una fascia (prove); ?podiohud mostra fascia, risoluzione e tempi; ?podiot=s
+      // ferma la sala all'istante s (confronti fotogramma per fotogramma)
+      const params = new URLSearchParams(window.location.search), forced = params.get("podiotier") as Tier | null;
+      const still = params.has("podiot") ? Number(params.get("podiot")) || 0 : null;
       tier = forced && forced in START_SCALE ? forced : capTier(dev.tier, mobile); q = podiumQuality(tier, mobile); scale = Math.min(q.maxScale, START_SCALE[tier]);
       view = new PodiumView(dev.device, cv, q, dev.timestamps);
       view.onError = (err) => { if (alive) { console.warn("Podio 3D: errore WebGPU, si usa il podio semplice.", err.message); alive = false; fail.current(); } };
@@ -193,16 +200,16 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       if (!alive) return;
       fit();
       console.info(`Podio 3D: GPU ${dev.adapter.vendor || "?"} ${dev.adapter.architecture || ""}, ${Math.round(dev.gflops)} GFLOPS → fascia ${tier}`);
-      const fps = FPS[tier], budget = (1000 / fps) * 0.7;
+      const pace = (vsync: number) => { frameMs = vsync ? refreshes(FPS, vsync) * vsync : 1000 / FPS; return steadyFps(FPS, vsync); };
       const t0 = performance.now();
-      let last = t0, first = true, night = darkRef.current ? 1 : 0, frames = 0, slowUntil = 0, avg = 1000 / fps, drawn = t0, hudAt = 0;
+      let last = t0, first = true, night = darkRef.current ? 1 : 0, frames = 0, slowUntil = 0, avg = 1000 / FPS, drawn = t0, hudAt = 0;
       const sm = { x: 0, y: 0, yaw: 0 };
       const cups = new Float32Array(12), hot = [0, 0, 0];
       for (let i = 0; i < 3; i++) cups[i * 4] = i * 2.1;
       const motion: CamMotion = { x: 0, y: 0, z: 0, yaw: 0 };
       cleanups.push(renderLoop((now) => {
-        const dt = Math.min(0.05, (now - last) / 1000); last = now;
-        const t = (now - t0) / 1000, ease = (rate: number) => 1 - Math.exp(-dt * rate);
+        const dt = still === null ? Math.min(0.05, (now - last) / 1000) : 0; last = now;
+        const t = still ?? (now - t0) / 1000, ease = (rate: number) => 1 - Math.exp(-dt * rate);
         night += ((darkRef.current ? 1 : 0) - night) * ease(2.2); // il sole lascia il posto alla luna piano piano
         // camera: respiro lento, parallasse col puntatore, ritorno dolce dopo il trascinamento
         if (!drag.on && now - drag.at > 2500) yawTarget *= 1 - ease(0.6);
@@ -226,23 +233,31 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
         slot.style.cursor = hover >= 0 ? "pointer" : drag.on && drag.moved > 8 ? "grabbing" : "grab";
         if (!view!.render(t, night, motion, cups)) return;
         place();
-        // risoluzione adattiva sul tempo reale della GPU (marche temporali) o, dove manca, sul ritmo dei fotogrammi
+        // risoluzione adattiva sul tempo reale della GPU (marche temporali) o, dove manca, sul ritmo dei fotogrammi. Il
+        // bilancio è tre quarti del fotogramma (il resto al browser); la parte fissa (nuvole, ombre, sonde, cubemap) non
+        // cambia con i pixel, quella variabile cresce col quadrato della scala: la scala giusta si calcola, poi si
+        // raggiunge a passi (in giù subito, in su con calma)
         avg += (now - drawn - avg) * 0.05; drawn = now;
-        if (++frames % 45 === 0) {
-          const gpu = view!.gpuMs, old = scale;
+        if (++frames % 30 === 0) {
+          const gpu = view!.gpuMs, old = scale, budget = frameMs * 0.75;
           if (gpu > 0) {
-            if (gpu > budget * 1.15 && scale > 0.5) { scale = Math.max(0.5, scale * Math.max(0.7, Math.min(0.95, Math.sqrt(budget / gpu)))); slowUntil = now + 6000; }
-            else if (gpu < budget * 0.6 && scale < q.maxScale && now > slowUntil) scale = Math.min(q.maxScale, scale * Math.min(1.15, Math.sqrt((budget * 0.85) / gpu)));
-          } else if (avg > (1000 / fps) * 1.45 && scale > 0.6) { scale *= 0.88; slowUntil = now + 6000; }
-          else if (avg < (1000 / fps) * 1.1 && scale < Math.min(1, q.maxScale) && now > slowUntil) scale = Math.min(1, scale / 0.9);
-          if (Math.abs(scale - old) > 0.01) fit();
+            const fixed = Math.min(view!.gpuFixedMs, gpu * 0.9);
+            const want = Math.min(q.maxScale, cap, Math.max(q.minScale, scale * Math.sqrt(Math.max(0.1, budget - fixed) / (gpu - fixed))));
+            if (want < scale * 0.97) { scale = Math.max(want, scale * 0.8); slowUntil = now + 4000; }
+            else if (want > scale * 1.03 && now > slowUntil) scale = Math.min(want, scale * 1.1);
+            // vicino ai pixel dello schermo si va a 1:1 esatto (ricampionare dell'1% ammorbidisce senza guadagno)
+            if (Math.abs(scale - 1) < 0.06 && want > 0.97) scale = Math.min(1, cap);
+          } else if (avg > frameMs * 1.3 && scale > q.minScale) { scale = Math.max(q.minScale, scale * 0.9); slowUntil = now + 6000; }
+          else if (avg < frameMs * 1.1 && scale < Math.min(1, q.maxScale, cap) && now > slowUntil) scale = Math.min(1, q.maxScale, cap, scale / 0.92 > 0.94 ? 1 : scale / 0.92);
+          if (Math.abs(scale - old) > 0.005) fit();
         }
         if (showHud && now - hudAt > 500) {
           hudAt = now;
-          setHud(`${tier} · ${Math.round(dev.gflops)} GFLOPS · ${Math.round(W * ratio)}×${Math.round(H * ratio)} (×${scale.toFixed(2)}) · GPU ${view!.gpuMs ? view!.gpuMs.toFixed(1) + " ms" : "n/d"} · ${Math.round(1000 / avg)} fps`);
+          const gpu = view!.gpuMs ? `GPU ${view!.gpuMs.toFixed(1)} ms (fissi ${view!.gpuFixedMs.toFixed(1)})` : "GPU n/d";
+          setHud(`${tier} · ${Math.round(dev.gflops)} GFLOPS · scena ${Math.round(W * ratio)}×${Math.round(H * ratio)} (×${scale.toFixed(2)}) → ${Math.round(W * out)}×${Math.round(H * out)} · ${gpu} · ${Math.round(1000 / avg)} fps`);
         }
         if (first) { first = false; requestAnimationFrame(() => cv.classList.add("on")); setShown(true); }
-      }, () => fps, el, () => { last = performance.now(); drawn = last; }));
+      }, pace, el, () => { last = performance.now(); drawn = last; }));
     }).catch((err) => { if (alive) { console.warn("Podio 3D: WebGPU non disponibile, si usa il podio semplice.", err?.message || err); alive = false; fail.current(); } });
 
     return () => {
