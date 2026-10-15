@@ -22,9 +22,10 @@ const server = http.createServer((req, res) => {
     const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8').replaceAll('%PUBLIC_URL%', '').replace('</body>', '<script src="/preview.js"></script></body>');
     res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(html); return;
   }
-  const file = /^\/[\w.-]+\.js$/.test(name) ? path.join(output, name) : name === '/favicon.svg' || name === '/manifest.json' ? path.join(root, 'public', name) : null;
+  const asset = /^\/(freddy|fonts)\/[\w.-]+$/.test(name) || name === '/favicon.svg' || name === '/manifest.json';
+  const file = /^\/[\w.-]+\.js$/.test(name) ? path.join(output, name) : asset ? path.join(root, 'public', name) : null;
   if (!file || !fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
-  res.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript; charset=utf-8' : name.endsWith('.svg') ? 'image/svg+xml' : 'application/json');
+  res.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript; charset=utf-8' : name.endsWith('.svg') ? 'image/svg+xml' : name.endsWith('.css') ? 'text/css' : name.endsWith('.json') ? 'application/json' : 'application/octet-stream');
   fs.createReadStream(file).pipe(res);
 });
 compiler.watch({}, (error, stats) => {

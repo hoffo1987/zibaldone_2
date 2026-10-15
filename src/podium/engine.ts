@@ -15,6 +15,7 @@
 import { buildScene, VERTEX_FLOATS } from "./meshes";
 import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, combineMSShader, GI_PROBES, FRAME_FLOATS, PASS_FLOATS, type PodiumQuality } from "./shaders";
 import { camera, viewProj, celestial, moodAt, lightMatrix, LIGHT_RECT, STILL, type Cam, type CamMotion } from "./stage";
+import type { Freddy } from './freddy';
 
 export { podiumQuality, type PodiumQuality } from "./shaders";
 
@@ -156,6 +157,10 @@ export class PodiumView {
   private frameNo = 0; private vflip = 0; private fresh = true; private warm = false; private envAll = true;
   private inflight = 0;
   private dead = false;
+  private freddy: Freddy | null = null;
+  private freddyPending: Promise<boolean> | null = null;
+  private freddyAbort = new AbortController();
+  private freddyVisible = false;
   onError: ((e: Error) => void) | null = null;
 
   constructor(private readonly device: GPUDevice, readonly canvas: HTMLCanvasElement, readonly q: PodiumQuality, timestamps = false) {
@@ -422,6 +427,24 @@ export class PodiumView {
 
   get camera() { return this.cam; }
 
+  prepareSecret(): Promise<boolean> {
+    if (this.dead) return Promise.resolve(false);
+    if (this.freddy) return Promise.resolve(true);
+    if (!this.freddyPending) this.freddyPending = import('./freddy')
+      .then(({ Freddy }) => {
+        if (this.dead) return null;
+        return Freddy.load(this.device, [this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, this.frameBuf], this.freddyAbort.signal);
+      }).then(model => {
+        if (!model) return false;
+        if (this.dead) { model.destroy(); return false; }
+        this.freddy = model; return true;
+      }).catch(err => {
+        if (!this.dead) console.warn('Impossibile caricare la sorpresa del podio.', err);
+        return false;
+      }).finally(() => { this.freddyPending = null; });
+    return this.freddyPending;
+  }
+
   private writeFrame(t: number, night: number, turn: number) {
     const s = this.sized!, m = moodAt(night), q = this.q;
     const a = celestial(t, false), b = celestial(t, true);
@@ -456,6 +479,7 @@ export class PodiumView {
     sp.setPipeline(P.shadow); sp.setBindGroup(0, G.shadow);
     sp.setVertexBuffer(0, this.vbuf); sp.setIndexBuffer(this.ibuf, "uint32");
     sp.drawIndexed(this.ibuf.size / 4);
+    if (this.freddyVisible) this.freddy?.draw(sp, 8);
     sp.end();
   }
 
@@ -478,7 +502,7 @@ export class PodiumView {
 
   // t: secondi; night: 0 giorno … 1 notte; motion: camera; cups: per coppa [angolo, sollevamento, bagliore].
   // Restituisce false se il fotogramma è stato saltato (GPU indietro)
-  render(t: number, night: number, motion: CamMotion = STILL, cups?: ArrayLike<number>) {
+  render(t: number, night: number, motion: CamMotion = STILL, cups?: ArrayLike<number>, secretSeconds = -1, reducedMotion = false) {
     if (this.dead || !this.pipes || !this.sized || !this.base || this.inflight >= 3) return false;
     this.motion = motion;
     if (cups) this.cups.set(cups);
@@ -486,6 +510,10 @@ export class PodiumView {
     this.cam = camera(b.pw, b.ph, b.left, b.top, motion);
     const d = this.device, q = this.q, s = this.sized, P = this.pipes, G = this.groups, c = this.cam;
     const first = !this.warm;
+    const visible = secretSeconds >= 0 && !!this.freddy;
+    if (visible !== this.freddyVisible) this.envAll = true; // No stale face retains Freddy after switching to day.
+    this.freddyVisible = visible;
+    if (this.freddyVisible) this.freddy!.update(secretSeconds, reducedMotion);
     if (first) d.pushErrorScope("validation");
 
     // all'avvio le sonde si riempiono subito (due giri completi: anche il secondo rimbalzo), poi un turno per fotogramma
@@ -521,12 +549,14 @@ export class PodiumView {
       const stamp = this.ts && f === faces[faces.length - 1] ? { timestampWrites: { querySet: this.ts.set, endOfPassWriteIndex: 1 } } : {};
       const p = enc.beginRenderPass({ label: "podium-env", colorAttachments: [{ view: G.envFaces[f], loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: this.envDepthView, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" }, ...stamp });
       p.executeBundles([G.envBundles[f]]);
+      if (this.freddyVisible) this.freddy?.draw(p, f + 2);
       p.end();
     }
     // riflesso del pavimento
     {
       const p = enc.beginRenderPass({ label: "podium-planar", colorAttachments: [{ view: s.planar, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: s.planarDepth, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" } });
       p.executeBundles([G.planarBundle]);
+      if (this.freddyVisible) this.freddy?.draw(p, 1);
       p.end();
     }
     {
@@ -541,6 +571,7 @@ export class PodiumView {
       const color: GPURenderPassColorAttachment = s.scene ? { view: s.color, resolveTarget: s.scene, loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 1] } : { view: s.color, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] };
       const p = enc.beginRenderPass({ label: "podium-main", colorAttachments: [color], depthStencilAttachment: { view: s.depth, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" } });
       p.executeBundles([s.bundle]);
+      if (this.freddyVisible) this.freddy?.draw(p, 0);
       p.end();
     }
     const v = this.vflip;
@@ -579,6 +610,7 @@ export class PodiumView {
   destroy() {
     if (this.dead && !this.sized && !this.ownTextures.length) return;
     this.dead = true;
+    this.freddyAbort.abort(); this.freddy?.destroy(); this.freddy = null;
     this.sized?.textures.forEach((t) => t.destroy()); this.sized = null;
     this.ownTextures.splice(0).forEach((t) => t.destroy());
     this.ts?.set.destroy();

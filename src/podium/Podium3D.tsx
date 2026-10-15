@@ -4,6 +4,7 @@ import { renderLoop, refreshes, steadyFps } from "../renderLoop";
 import { acquirePodiumDevice, releasePodiumDevice, capTier, type Tier } from "./device";
 import { PodiumView, podiumQuality } from "./engine";
 import { STEP_X, STEP_D, STEP_TOP, DAIS, TROPHY_TOP, TROPHY_K, TROPHY_Z, camera, project, type Cam, type CamMotion } from "./stage";
+import { pickSecretPane, WindowSecret } from './secret';
 
 export type PodiumProps = {
   dark: boolean;
@@ -46,9 +47,11 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
   const fail = useRef(onFail); fail.current = onFail;
   const retries = useRef(0);
   const placeRef = useRef<(() => void) | null>(null);
+  const resetSecretRef = useRef<(() => void) | null>(null);
   const showHud = useRef(/podiohud/.test(window.location.search)).current;
   useEffect(() => { setRoot(host.current?.closest(".root") || document.querySelector(".root") || document.body); }, []);
   useEffect(() => { placeRef.current?.(); }, [plates, root]);
+  useEffect(() => { resetSecretRef.current?.(); }, [dark]);
   useEffect(() => {
     const mq = window.matchMedia(NARROW), on = () => setNarrow(mq.matches);
     mq.addEventListener?.("change", on);
@@ -66,6 +69,10 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
     let alive = true, view: PodiumView | null = null, tier: Tier = mobile ? "low" : "medium";
     let q = podiumQuality(tier, mobile);
     const cleanups: (() => void)[] = [];
+    const secret = new WindowSecret();
+    let secretReady = false, secretStart = -1;
+    resetSecretRef.current = () => { secret.reset(); secretStart = -1; };
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     // ratio: pixel della scena per pixel CSS; out: pixel del canvas per pixel CSS (quelli dello schermo)
     let W = 0, H = 0, left = 0, top = 0, ratio = 1, out = 1, scale = START_SCALE[tier], cap = 4, frameMs = 1000 / FPS;
 
@@ -113,6 +120,48 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       if (narrow) { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
       return { x: e.clientX, y: e.clientY + window.scrollY };
     };
+    // Listen above the slot as well: on desktop the upper glass extends behind the heading.
+    // Interactive page controls keep their own clicks, and a drag/scroll/cancel never counts as a tap.
+    const tap = { id: -1, x: 0, y: 0, moved: false };
+    const paneAt = (e: PointerEvent) => {
+      if (!view || !shownCanvas() || !darkRef.current || !el.isConnected) return -1;
+      if ((e.target as Element)?.closest?.('button,a,input,textarea,select,[role=button],aside,header,[role=dialog],[aria-modal=true],.cp,.cpov')) return -1;
+      const p = local(e), c = cam();
+      if (!c || p.x < 0 || p.y < 0 || p.x > W || p.y > H) return -1;
+      if (pick(p.x, p.y) >= 0) return -1; // A trophy in front of the glass keeps its normal action.
+      return pickSecretPane(c, p.x * ratio, p.y * ratio);
+    };
+    const shownCanvas = () => cv.classList.contains('on');
+    const secretDown = (e: PointerEvent) => {
+      if (!e.isPrimary || e.button !== 0) { tap.id = -1; return; }
+      tap.id = e.pointerId; tap.x = e.clientX; tap.y = e.clientY; tap.moved = false;
+    };
+    const secretMove = (e: PointerEvent) => {
+      if (e.pointerId === tap.id && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) >= 8) tap.moved = true;
+    };
+    const cancelTap = () => { tap.id = -1; };
+    const secretUp = (e: PointerEvent) => {
+      if (e.pointerId !== tap.id) return;
+      tap.id = -1;
+      if (tap.moved || Math.hypot(e.clientX - tap.x, e.clientY - tap.y) >= 8) return;
+      const pane = paneAt(e);
+      secret.tap(pane, darkRef.current);
+      if (secret.progress > 0 && !secretReady) view?.prepareSecret().then(ready => {
+        if (!alive) return;
+        secretReady = ready;
+        if (!ready) secret.reset(); // A failed load can be retried with a fresh sequence.
+      });
+    };
+    document.addEventListener('pointerdown', secretDown, true);
+    document.addEventListener('pointermove', secretMove, true);
+    document.addEventListener('pointerup', secretUp, true);
+    document.addEventListener('pointercancel', cancelTap, true);
+    window.addEventListener('scroll', cancelTap, true);
+    cleanups.push(() => {
+      document.removeEventListener('pointerdown', secretDown, true); document.removeEventListener('pointermove', secretMove, true);
+      document.removeEventListener('pointerup', secretUp, true); document.removeEventListener('pointercancel', cancelTap, true);
+      window.removeEventListener('scroll', cancelTap, true);
+    });
     // il posto (0, 1, 2) sotto il punto: rettangolo proiettato di coppa e gradino
     const pick = (x: number, y: number) => {
       const c = cam(); if (!c) return -1;
@@ -120,11 +169,18 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       for (let i = 0; i < 3; i++) {
         if (!platesRef.current[i] && !narrow) continue;
         const t = TROPHY_K[i];
-        const pts = [[STEP_X[i] - 1.1, DAIS, STEP_D], [STEP_X[i] + 1.1, DAIS, STEP_D], [STEP_X[i] - 1.1, STEP_TOP[i], STEP_D], [STEP_X[i] + 1.1, STEP_TOP[i], STEP_D],
-          [STEP_X[i] - 0.42 * t, TROPHY_TOP[i] + 0.05, TROPHY_Z], [STEP_X[i] + 0.42 * t, TROPHY_TOP[i] + 0.05, TROPHY_Z]].map((p) => project(c, p));
-        if (pts.some((p) => !p)) continue;
-        const xs = pts.map((p) => p!.x * k), ys = pts.map((p) => p!.y * k);
-        if (x >= Math.min(...xs) && x <= Math.max(...xs) && y >= Math.min(...ys) && y <= Math.max(...ys)) return i;
+        // Separate the wide step from the narrow trophy: the glass beside the cup is not part of its hit area.
+        const boxes = [
+          [[STEP_X[i] - 1.1, DAIS, STEP_D], [STEP_X[i] + 1.1, DAIS, STEP_D], [STEP_X[i] - 1.1, STEP_TOP[i], STEP_D], [STEP_X[i] + 1.1, STEP_TOP[i], STEP_D]],
+          [[STEP_X[i] - 0.48 * t, STEP_TOP[i], TROPHY_Z], [STEP_X[i] + 0.48 * t, STEP_TOP[i], TROPHY_Z],
+            [STEP_X[i] - 0.48 * t, TROPHY_TOP[i] + 0.14 * t, TROPHY_Z], [STEP_X[i] + 0.48 * t, TROPHY_TOP[i] + 0.14 * t, TROPHY_Z]],
+        ];
+        for (const box of boxes) {
+          const pts = box.map(p => project(c, p));
+          if (pts.some(p => !p)) continue;
+          const xs = pts.map(p => p!.x * k), ys = pts.map(p => p!.y * k);
+          if (x >= Math.min(...xs) && x <= Math.max(...xs) && y >= Math.min(...ys) && y <= Math.max(...ys)) return i;
+        }
       }
       return -1;
     };
@@ -150,7 +206,9 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       if (!drag.on || e.pointerId !== drag.id) return;
       drag.on = false; drag.at = performance.now();
       try { slot.releasePointerCapture(e.pointerId); } catch {}
-      if (drag.moved < 8) { const p = local(e), i = pick(p.x, p.y); if (i >= 0) open(i); }
+      if (e.type !== 'pointercancel' && drag.moved < 8) { const p = local(e);
+        const i = pick(p.x, p.y); if (i >= 0) open(i);
+      }
     };
     const onLeave = () => { ptr.in = false; ptr.cx = ptr.cy = -1; };
     slot.classList.add("live");
@@ -203,13 +261,16 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       const pace = (vsync: number) => { frameMs = vsync ? refreshes(FPS, vsync) * vsync : 1000 / FPS; return steadyFps(FPS, vsync); };
       const t0 = performance.now();
       let last = t0, first = true, night = darkRef.current ? 1 : 0, frames = 0, slowUntil = 0, avg = 1000 / FPS, drawn = t0, hudAt = 0;
-      const sm = { x: 0, y: 0, yaw: 0 };
+      const sm = { x: 0, y: 0, yaw: 0, secretPan: 0 };
       const cups = new Float32Array(12), hot = [0, 0, 0];
       for (let i = 0; i < 3; i++) cups[i * 4] = i * 2.1;
       const motion: CamMotion = { x: 0, y: 0, z: 0, yaw: 0 };
       cleanups.push(renderLoop((now) => {
         const dt = still === null ? Math.min(0.05, (now - last) / 1000) : 0; last = now;
         const t = still ?? (now - t0) / 1000, ease = (rate: number) => 1 - Math.exp(-dt * rate);
+        if (!darkRef.current) { secret.reset(); secretStart = -1; }
+        if (secret.revealed && secretReady && secretStart < 0) secretStart = now;
+        const secretSeconds = secretStart < 0 ? -1 : (now - secretStart) / 1000;
         night += ((darkRef.current ? 1 : 0) - night) * ease(2.2); // il sole lascia il posto alla luna piano piano
         // camera: respiro lento, parallasse col puntatore, ritorno dolce dopo il trascinamento
         if (!drag.on && now - drag.at > 2500) yawTarget *= 1 - ease(0.6);
@@ -220,6 +281,10 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
         motion.y = (0.14 * Math.sin(t * 0.09 + 1) - 0.3 * sm.y) * amp;
         motion.z = -0.7 * (0.5 + 0.5 * Math.sin(t * 0.06 - 1.2)) * amp;
         motion.yaw = 0.035 * Math.sin(t * 0.05) * amp + sm.yaw;
+        // The left aisle lies outside a portrait crop. Ease it into view only after the secret is revealed.
+        const pan = secretSeconds >= 0 ? (narrow ? 1.8 : W - left < 900 ? 1 : 0) : 0;
+        sm.secretPan += (pan - sm.secretPan) * (reduced.matches ? 1 : 1 - Math.exp(-Math.min(0.05, (now - drawn) / 1000) * 3));
+        motion.x -= sm.secretPan;
         // coppe: girano piano, quella sotto il puntatore (o la cui targhetta è sotto il puntatore) si solleva e brilla
         hover = drag.on && drag.moved > 8 ? -1 : ptr.cx >= 0 ? pick(ptr.cx, ptr.cy) : -1;
         if (hover < 0 && hoverPlate.current >= 0) hover = hoverPlate.current;
@@ -231,7 +296,7 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
           plateEls.current[i]?.classList.toggle("hot", hover === i);
         }
         slot.style.cursor = hover >= 0 ? "pointer" : drag.on && drag.moved > 8 ? "grabbing" : "grab";
-        if (!view!.render(t, night, motion, cups)) return;
+        if (!view!.render(t, night, motion, cups, secretSeconds, reduced.matches)) return;
         place();
         // risoluzione adattiva sul tempo reale della GPU (marche temporali) o, dove manca, sul ritmo dei fotogrammi. Il
         // bilancio è tre quarti del fotogramma (il resto al browser); la parte fissa (nuvole, ombre, sonde, cubemap) non
@@ -263,6 +328,7 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
     return () => {
       alive = false;
       placeRef.current = null;
+      resetSecretRef.current = null;
       cleanups.splice(0).reverse().forEach((fn) => fn());
       plateEls.current.forEach((p) => p?.classList.remove("hot"));
       view?.destroy();

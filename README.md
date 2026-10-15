@@ -119,6 +119,22 @@ confronti fotogramma per fotogramma). Per provarlo in locale senza accesso: `npm
 `http://127.0.0.1:4175/?podiohud` (`&dark` per la notte).
 Senza WebGPU, con il movimento ridotto, con il preset leggero o se la GPU dà errore resta il podio semplice.
 
+### Sorpresa notturna nella sala
+
+Solo in modalità scura, toccare i sei riquadri centrali del finestrone: prima i due nell'arco
+interno, poi i due centrali, infine i due inferiori; per ogni coppia, sinistra e poi destra.
+Toccare il vetro visibile, evitando le targhette e le coppe davanti. Un tocco fuori sequenza
+ricomincia il conteggio; trascinamenti, scorrimenti e tocchi annullati non contano.
+Al sesto tocco Freddy spunta dalla colonna sinistra, inclinato, e saluta con la mano libera
+sulla destra per chi guarda; il microfono rimane nell'altra mano abbassata.
+Cambio tema e uscita dalla pagina azzerano la sorpresa. Nei formati stretti la camera
+si sposta leggermente per mostrare la colonna e il saluto.
+
+Geometria, texture e renderer della sorpresa vengono caricati al primo tocco corretto,
+senza download o passaggi GPU aggiuntivi nella normale visita della sala. Il modello
+condivide profondità, ombre, riflessi e composizione HDR del podio. Le risorse vengono
+liberate uscendo dalla scena. Provenienza e comandi di conversione: `public/freddy/README.md`.
+
 In **Opzioni → Musica e feedback** si può attivare **Musica di sottofondo** e regolare il volume separatamente dai bip.
 Il brano allegato, Mii Channel (Plaza), è in `public/audio/mii-channel-plaza.mp3` e viene riprodotto in loop.
 La musica è inizialmente spenta e il file non viene richiesto finché non è attivata.

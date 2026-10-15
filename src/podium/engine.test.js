@@ -48,6 +48,26 @@ function gpu() {
 }
 afterEach(() => { jest.restoreAllMocks(); delete navigator.gpu; });
 
+test('the secret shares scene passes only while revealed and clears every reflection when hidden', async () => {
+  const { device, stats } = gpu();
+  const view = new PodiumView(device, document.createElement('canvas'), podiumQuality('low', true));
+  await view.ready(); view.resize(800, 600, 1, 1, 0, 0);
+  view.render(20, 1); await device.queue.onSubmittedWorkDone();
+  const model = { update: jest.fn(), draw: jest.fn(), destroy: jest.fn() };
+  view.freddy = model;
+  view.render(21, 1); await device.queue.onSubmittedWorkDone();
+  expect(model.draw).not.toHaveBeenCalled();
+  stats.passes = [];
+  view.render(22, 1, undefined, undefined, 0.5, true); await device.queue.onSubmittedWorkDone();
+  expect(model.update).toHaveBeenCalledWith(0.5, true);
+  expect(model.draw.mock.calls.map(args => args[1]).sort()).toEqual([0,1,2,3,4,5,6,7,8]);
+  model.draw.mockClear(); stats.passes = [];
+  view.render(23, 0, undefined, undefined, -1); await device.queue.onSubmittedWorkDone();
+  expect(model.draw).not.toHaveBeenCalled();
+  expect(stats.passes.filter(p => p.label === 'podium-env')).toHaveLength(6);
+  view.destroy(); expect(model.destroy).toHaveBeenCalledTimes(1);
+});
+
 test.each([['low', true], ['high', false]])('keeps the complete %s scene and updates mipmaps only for the changed cube face', async (tier, mobile) => {
   const { device, stats } = gpu(), q = podiumQuality(tier, mobile);
   const view = new PodiumView(device, document.createElement('canvas'), q);

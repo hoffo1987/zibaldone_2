@@ -5,3 +5,4 @@ android/gradlew text eol=lf
 *.png binary
 *.woff2 binary
 *.jar binary
+*.bin binary
