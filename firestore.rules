@@ -7,7 +7,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.get('releasePublisher', false) != true;
     }
 
     function isAdmin() {
@@ -96,7 +96,8 @@ service cloud.firestore {
 
     // Annunci globali immutabili. L'identità della CI può pubblicare annunci, mai amministrare gli scritti.
     function releasePublisher() {
-      return signedIn() && exists(/databases/$(database)/documents/release_publishers/$(request.auth.uid));
+      return request.auth != null && request.auth.token.get('releasePublisher', false) == true
+        && exists(/databases/$(database)/documents/release_publishers/$(request.auth.uid));
     }
     function validoAnnuncio(d, id) {
       return id.matches('^[a-f0-9]{40}$')
@@ -109,7 +110,7 @@ service cloud.firestore {
         && d.timestamp > 0 && d.timestamp <= request.time.toMillis() + 60000;
     }
     match /aggiornamenti/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() || releasePublisher();
       allow create: if (isAdmin() || releasePublisher()) && validoAnnuncio(request.resource.data, id);
       allow update, delete: if false;
     }

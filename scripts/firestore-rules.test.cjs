@@ -13,7 +13,7 @@ before(async () => {
   env = await initializeTestEnvironment({ projectId: 'demo-circuito', firestore: { rules: fs.readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8180 } });
   await env.clearFirestore();
   owner = env.authenticatedContext('owner').firestore(); other = env.authenticatedContext('other').firestore(); admin = env.authenticatedContext('admin').firestore(); guest = env.unauthenticatedContext().firestore();
-  publisher = env.authenticatedContext('publisher').firestore();
+  publisher = env.authenticatedContext('publisher', { releasePublisher:true }).firestore();
   await env.withSecurityRulesDisabled(async ctx => {
     const db = ctx.firestore();
     await setDoc(doc(db, 'admins', 'admin'), {});
@@ -102,6 +102,8 @@ test('gli utenti non possono inviare falsi annunci o diventare publisher', async
 test('il publisher non può leggere originali o valutazioni, né diventare admin', async () => {
   await assertFails(getDoc(doc(publisher,'pensieri','complete')));await assertFails(getDoc(doc(publisher,'valutazioni','complete')));
   await assertFails(setDoc(doc(publisher,'admins','publisher'),{}));
+  await assertFails(getDoc(doc(publisher,'testi','diary')));
+  await assertFails(publish(publisher,'publisher-diary',{...original('diary'),userId:'publisher'}));
 });
 test('le ricevute di lettura sono private e modificabili soltanto dal proprietario', async () => {
   const receipt=doc(owner,'letture_aggiornamenti','owner','annunci',releaseId);

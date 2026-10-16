@@ -27,7 +27,7 @@ async function waitForProduction(commit) {
 async function publish(commit) {
   if(process.env.GITHUB_ACTIONS==='true') {
     const changed=execFileSync('git',['diff','--name-only','HEAD^','HEAD'],{encoding:'utf8'}).trim().split('\n');
-    if(!changed.some(p=>/^(src\/|public\/|android\/|ios\/|capacitor\.config|package(-lock)?\.json|release-notes\.json|scripts\/build)/.test(p))) {
+    if(!changed.some(p=>/^(src\/|public\/|android\/|ios\/|capacitor\.config|package(-lock)?\.json|release-notes\.json|firestore\.rules|scripts\/(build|announce-update\.cjs))/.test(p))) {
       console.log('No application changes; no announcement.'); return;
     }
   }
