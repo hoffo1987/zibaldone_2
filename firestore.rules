@@ -94,6 +94,37 @@ service cloud.firestore {
       allow delete: if isAdmin() || (signedIn() && exists(pensiero(id)) && get(pensiero(id)).data.userId == request.auth.uid);
     }
 
+    // Annunci globali immutabili. L'identità della CI può pubblicare annunci, mai amministrare gli scritti.
+    function releasePublisher() {
+      return signedIn() && exists(/databases/$(database)/documents/release_publishers/$(request.auth.uid));
+    }
+    function validoAnnuncio(d, id) {
+      return id.matches('^[a-f0-9]{40}$')
+        && d.keys().hasOnly(['titolo', 'messaggio', 'versione', 'timestamp', 'commit'])
+        && d.keys().hasAll(['titolo', 'messaggio', 'versione', 'timestamp', 'commit'])
+        && d.titolo is string && d.titolo.size() > 0 && d.titolo.size() <= 140
+        && d.messaggio is string && d.messaggio.size() > 0 && d.messaggio.size() <= 1600
+        && d.versione is string && d.versione.matches('^[0-9]+[.][0-9]+[.][0-9]+$')
+        && d.commit == id && d.timestamp is number
+        && d.timestamp > 0 && d.timestamp <= request.time.toMillis() + 60000;
+    }
+    match /aggiornamenti/{id} {
+      allow read: if signedIn();
+      allow create: if (isAdmin() || releasePublisher()) && validoAnnuncio(request.resource.data, id);
+      allow update, delete: if false;
+    }
+    match /release_publishers/{uid} { allow read, write: if false; }
+    match /letture_aggiornamenti/{uid}/annunci/{id} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && exists(/databases/$(database)/documents/aggiornamenti/$(id))
+        && request.resource.data.keys().hasOnly(['letta', 'timestamp'])
+        && request.resource.data.keys().hasAll(['letta', 'timestamp'])
+        && request.resource.data.letta == true && request.resource.data.timestamp is number
+        && request.resource.data.timestamp > 0 && request.resource.data.timestamp <= request.time.toMillis() + 60000;
+      allow delete: if false;
+    }
+
     // Notifica "hai ricevuto un voto": la crea l'admin allo svelamento, la legge e la segna come letta solo l'autore.
     match /notifiche/{id} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;

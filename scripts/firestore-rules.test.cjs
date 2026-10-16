@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
 const { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, writeBatch, deleteDoc } = require('firebase/firestore');
-let env, owner, other, admin, guest;
+let env, owner, other, admin, guest, publisher;
 const original = (kind = 'complete') => ({ kind, title: 'Una pagina', content: '<p>Prima parte. CONTENUTO RISERVATO, testo integrale dello scritto.</p>', excerpt: kind === 'complete' ? 'Prima parte.' : '', strokes: [], w: 900, h: 600, author: 'Autore privato', userId: 'owner', timestamp: 1, isStarred: false });
 const projection = d => d.kind === 'diary'
   ? { version: 2, kind: d.kind, title: d.title, content: d.content, strokes: d.strokes, w: d.w, h: d.h }
@@ -13,9 +13,11 @@ before(async () => {
   env = await initializeTestEnvironment({ projectId: 'demo-circuito', firestore: { rules: fs.readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8180 } });
   await env.clearFirestore();
   owner = env.authenticatedContext('owner').firestore(); other = env.authenticatedContext('other').firestore(); admin = env.authenticatedContext('admin').firestore(); guest = env.unauthenticatedContext().firestore();
+  publisher = env.authenticatedContext('publisher').firestore();
   await env.withSecurityRulesDisabled(async ctx => {
     const db = ctx.firestore();
     await setDoc(doc(db, 'admins', 'admin'), {});
+    await setDoc(doc(db, 'release_publishers', 'publisher'), {});
     for (const [id, kind] of [['complete', 'complete'], ['diary', 'diary']]) { const d = original(kind); await setDoc(doc(db, 'pensieri', id), d); await setDoc(doc(db, 'testi', id), projection(d)); }
     await setDoc(doc(db, 'testi', 'legacy'), { title: 'Vecchia copia', content: 'INTEGRALE NON LEGGIBILE' });
     const legacy = original(); delete legacy.kind; delete legacy.excerpt;
@@ -84,4 +86,29 @@ test('le vecchie app salvano ancora gli originali, senza poter pubblicare copie 
 });
 test('non si possono inviare notifiche di voto per i pensieri del diario', async () => {
   await assertFails(setDoc(doc(admin, 'notifiche', 'diary-vote'), { userId:'owner', pensieroId:'diary', titolo:'Diario', voto:5, timestamp:3, letta:false }));
+});
+const releaseId = 'a'.repeat(40), release = { titolo:'App aggiornata',messaggio:'Le novità di Il Circuito.',versione:'1.0.5',timestamp:Date.now(),commit:releaseId };
+test('il publisher crea un solo annuncio condiviso e gli utenti possono leggerlo', async () => {
+  await assertSucceeds(setDoc(doc(publisher,'aggiornamenti',releaseId),release));
+  await assertSucceeds(getDoc(doc(owner,'aggiornamenti',releaseId))); await assertSucceeds(getDoc(doc(other,'aggiornamenti',releaseId)));
+  await assertFails(getDoc(doc(guest,'aggiornamenti',releaseId)));
+  await assertFails(updateDoc(doc(publisher,'aggiornamenti',releaseId),{messaggio:'sostituito'}));
+});
+test('gli utenti non possono inviare falsi annunci o diventare publisher', async () => {
+  const id='b'.repeat(40);await assertFails(setDoc(doc(owner,'aggiornamenti',id),{...release,commit:id}));
+  await assertFails(setDoc(doc(owner,'release_publishers','owner'),{}));
+  const bad='c'.repeat(40);await assertFails(setDoc(doc(publisher,'aggiornamenti',bad),{...release,commit:bad,messaggio:'x'.repeat(1601)}));
+});
+test('il publisher non può leggere originali o valutazioni, né diventare admin', async () => {
+  await assertFails(getDoc(doc(publisher,'pensieri','complete')));await assertFails(getDoc(doc(publisher,'valutazioni','complete')));
+  await assertFails(setDoc(doc(publisher,'admins','publisher'),{}));
+});
+test('le ricevute di lettura sono private e modificabili soltanto dal proprietario', async () => {
+  const receipt=doc(owner,'letture_aggiornamenti','owner','annunci',releaseId);
+  await assertSucceeds(setDoc(receipt,{letta:true,timestamp:Date.now()}));
+  await assertSucceeds(getDoc(receipt));
+  await assertFails(getDoc(doc(other,'letture_aggiornamenti','owner','annunci',releaseId)));
+  await assertFails(setDoc(doc(other,'letture_aggiornamenti','owner','annunci',releaseId),{letta:true,timestamp:1}));
+  await assertFails(updateDoc(receipt,{letta:false}));
+  await assertFails(setDoc(doc(owner,'letture_aggiornamenti','owner','annunci','d'.repeat(40)),{letta:true,timestamp:1}));
 });

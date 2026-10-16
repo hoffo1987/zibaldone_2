@@ -27,6 +27,22 @@ con `npx firebase-tools deploy --only firestore:rules`. I backup dei dati sono l
 
 ## Sviluppo e verifica
 
+Gli aggiornamenti riusciti di `main` generano automaticamente un annuncio nel pannello Notifiche, per tutti gli
+utenti. La pipeline pubblica dopo controlli, build Android/iOS e conferma del deployment di produzione Vercel;
+ignora revisioni superate e modifiche alla sola documentazione. Un nuovo tentativo dello stesso commit non duplica
+l’annuncio. `release-notes.json` può personalizzare titolo e messaggio della versione; altrimenti usa un testo generico.
+
+Gli annunci sono immutabili in `aggiornamenti/{commit}`. Le letture sono private per account, in
+`letture_aggiornamenti/{uid}/annunci/{commit}`, e si sincronizzano tra dispositivi. La CI accede con un utente tecnico
+non amministratore, configurato con i segreti GitHub `FIREBASE_RELEASE_EMAIL` e `FIREBASE_RELEASE_PASSWORD`;
+non conserva credenziali Google di amministrazione nel repository. Le regole consentono la pubblicazione soltanto
+agli admin e alle identità registrate in `release_publishers`.
+
+Il download Android al login resta neutro: non sono disponibili benchmark comparativi su dispositivo che dimostrino
+prestazioni migliori del browser. L’app Capacitor esegue lo stesso codice web in Android WebView.
+
+`npm run test:releases` verifica che annunci duplicati, deploy falliti o revisioni superate non producano notifiche.
+
 Usare Node.js 24 e il lockfile npm incluso:
 
 ```sh

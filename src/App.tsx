@@ -5,7 +5,7 @@ import {
   signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset
 } from "firebase/auth";
 import {
-  getFirestore, collection, onSnapshot, doc, writeBatch, query, where, setDoc, getDoc, getDocs, deleteField
+  getFirestore, collection, onSnapshot, doc, writeBatch, query, where, orderBy, limit, setDoc, getDoc, getDocs, deleteField
 } from "firebase/firestore";
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
@@ -16,6 +16,8 @@ import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
 import { pubOf, pubSig, readPublic, isDiary, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, type WritingKind } from "./testi";
 import { snapshotReader } from "./snapshot";
+import NotificationPanel from "./NotificationPanel";
+import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt } from "./WritingSections";
 import { M, Words, Sheets, useFlip, useRail, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 import { Text3D, Terminal3D } from "./d3";
@@ -1004,26 +1006,6 @@ const Reveal = ({ children, delay = 0, className = "", fx = "", style, flip }: a
   return <div ref={ref} data-flip={flip} className={`rv ${fx ? `fx-${fx}` : ""} ${on ? "in" : ""} ${className}`} style={{ animationDelay: `${delay}ms`, ["--rd" as any]: `${delay}ms`, ...style }}>{children}</div>;
 };
 
-const NotifPanel = ({ list, onRead, onOpen }: any) => {
-  const [fresh] = useState<string[]>(() => list.filter((n: any) => !n.letta).map((n: any) => n.id));
-  useEffect(() => {
-    if (!fresh.length) return;
-    const t = setTimeout(() => onRead(fresh), 1400);
-    return () => clearTimeout(t);
-  }, []);
-  if (!list.length) return <p className="mu text-sm">Nessuna notifica per ora. Quando uno dei tuoi scritti riceve un voto lo trovi qui.</p>;
-  return (
-    <div className="space-y-2 max-h-[55dvh] overflow-y-auto">
-      {list.map((n: any) => (
-        <button type="button" key={n.id} onClick={onOpen} className="nv w-full text-left rounded-xl p-3 flex gap-3 items-start" style={{ background: fresh.includes(n.id) ? "color-mix(in srgb,var(--ac) 12%,transparent)" : "var(--sf)", border: "1px solid var(--ln)" }}>
-          <Award size={18} style={{ color: "var(--am)" }} className="shrink-0 mt-0.5" />
-          <span className="min-w-0 flex-1"><span className="block text-sm font-semibold truncate">«{n.titolo}»</span><span className="block mu text-xs mb-1.5">Hai ricevuto un voto · {fmtDate(n.timestamp)}</span><Stars v={n.voto} size={16} /></span>
-        </button>
-      ))}
-    </div>
-  );
-};
-
 export default function App() {
   // auth
   const [user, setUser] = useState<any>(null);
@@ -1136,6 +1118,22 @@ export default function App() {
     })();
   }, [rawItems, vals, valsReady, isAdmin]);
   const [notifs, setNotifs] = useState<any[]>([]);
+  const [updates, setUpdates] = useState<UpdateAnnouncement[]>([]);
+  const [updateReads, setUpdateReads] = useState<Record<string, boolean>>({});
+  const [updateReadsReady, setUpdateReadsReady] = useState(false);
+  const allNotifs = useMemo(() => mergeNotifications(notifs, updateReadsReady ? updates : [], updateReads), [notifs, updates, updateReads, updateReadsReady]);
+  useEffect(() => {
+    setUpdates([]); setUpdateReads({}); setUpdateReadsReady(false);
+    if (!user || !db) return;
+    const offUpdates = onSnapshot(query(collection(db, "aggiornamenti"), orderBy("timestamp", "desc"), limit(30)), s => {
+      setUpdates(s.docs.map(d => ({ id: d.id, ...d.data() } as UpdateAnnouncement)));
+    }, () => {});
+    const offReads = onSnapshot(collection(db, "letture_aggiornamenti", user.uid, "annunci"), s => {
+      const reads: Record<string, boolean> = {}; s.forEach(d => { reads[d.id] = d.data().letta === true; });
+      setUpdateReads(reads); setUpdateReadsReady(true);
+    }, () => { setUpdateReads({}); setUpdateReadsReady(true); });
+    return () => { offUpdates(); offReads(); };
+  }, [user]);
   useEffect(() => {
     if (!user || !db) { setNotifs([]); return; }
     return onSnapshot(query(collection(db, "notifiche"), where("userId", "==", user.uid)), (s: any) => setNotifs(s.docs.map((d: any) => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => b.timestamp - a.timestamp)), () => {});
@@ -1291,7 +1289,7 @@ export default function App() {
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get("mode") === "resetPassword" && p.get("oobCode")) { setResetCode(p.get("oobCode")); setAuthLoading(false); return; }
-    return onAuthStateChanged(auth, (u: any) => { if (u && eggGet() === 2) eggSet(0); setRawItems([]); setPubItems([]); setVals({}); setNotifs([]); setAdminChecked(false); setIsAdmin(false); pubDone.current.clear(); pubAll.current = false; setSel(null); setUser(u); setAuthLoading(false); });
+    return onAuthStateChanged(auth, (u: any) => { if (u && eggGet() === 2) eggSet(0); setRawItems([]); setPubItems([]); setVals({}); setNotifs([]); setUpdates([]); setUpdateReads({}); setUpdateReadsReady(false); setAdminChecked(false); setIsAdmin(false); pubDone.current.clear(); pubAll.current = false; setSel(null); setUser(u); setAuthLoading(false); });
   }, []);
 
   // dati
@@ -1780,7 +1778,16 @@ export default function App() {
     catch { notify("Operazione non riuscita."); }
     setIds([]); setSelMode(false);
   };
-  const markRead = async (ids: string[]) => { try { const b = writeBatch(db); ids.forEach((id) => b.update(doc(db, "notifiche", id), { letta: true })); await b.commit(); } catch {} };
+  const markRead = async (ids: string[]) => {
+    if (!user || !db) return;
+    const split = splitNotificationIds(ids);
+    try {
+      const b = writeBatch(db);
+      split.personal.forEach(id => b.update(doc(db, "notifiche", id), { letta: true }));
+      split.updates.forEach(id => b.set(doc(db, "letture_aggiornamenti", user.uid, "annunci", id), { letta: true, timestamp: Date.now() }));
+      await b.commit();
+    } catch { notify("Non è stato possibile segnare le notifiche come lette. Riprova riaprendo il pannello."); }
+  };
   const reveal = async (t: any) => {
     if (!isAdmin || !canEvaluate(t) || t.svelato || !(t.rating > 0)) return;
     try {
@@ -2153,10 +2160,10 @@ export default function App() {
     ? <span className="rounded-full shrink-0 inline-flex items-center justify-center" style={{ width: size, height: size, background: "var(--sf)", border: "1px dashed var(--mu)" }}><EyeOff size={size * 0.5} className="mu" /></span>
     : <Avatar p={profiles[t.userId]} name={t.author} size={size} />;
   const wn = (t: any) => hid(t) ? "Autore nascosto" : dn(t.userId, t.author);
-  const unread = notifs.filter((n) => !n.letta).length;
+  const unread = allNotifs.filter((n) => !n.letta).length;
   const bell = (r: boolean) => (
     <Pop label="Notifiche" right={r} cls="bt !p-2 relative" tour="bell" trigger={<><Bell size={18} />{unread > 0 && <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center" style={{ background: "var(--am)", color: "#3b2a00" }}>{unread}</span>}</>}>
-      {(close: any) => <NotifPanel list={notifs} onRead={markRead} onOpen={() => { close(); go("my_pages"); }} />}
+      {(close: any) => <NotificationPanel list={allNotifs} onRead={markRead} onOpen={() => { close(); go("my_pages"); }} stars={v => <Stars v={v} size={16} />} />}
     </Pop>
   );
   const wc = (t: any) => wordCounts.get(t.id) || 0;

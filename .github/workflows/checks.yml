@@ -18,6 +18,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run typecheck:egg
       - run: npm test -- --watchAll=false --runInBand
+      - run: npm run test:releases
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -89,3 +90,23 @@ jobs:
           name: ios-simulator-release
           path: ios/DerivedData/Build/Products/Release-iphonesimulator/*.app
           retention-days: 14
+  announce:
+    if: github.event_name == 'push'
+    needs: [verify, android, ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Notify all users after successful production release
+        run: node scripts/announce-update.cjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FIREBASE_RELEASE_EMAIL: ${{ secrets.FIREBASE_RELEASE_EMAIL }}
+          FIREBASE_RELEASE_PASSWORD: ${{ secrets.FIREBASE_RELEASE_PASSWORD }}

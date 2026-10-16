@@ -33,6 +33,7 @@
   },
   "scripts": {
     "test:rules": "node --test scripts/firestore-rules.test.cjs",
+    "test:releases": "node --test scripts/announce-update.test.cjs",
     "fonts:update": "node scripts/vendor-fonts.cjs",
     "benchmark": "node scripts/benchmark.cjs",
     "sprites:cloud": "node scripts/build-cloud-atlas.cjs",
