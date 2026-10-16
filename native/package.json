@@ -1,0 +1,47 @@
+{
+  "name": "il-circuito-native-preview",
+  "version": "0.1.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@expo-google-fonts/bricolage-grotesque": "^0.4.1",
+    "@expo-google-fonts/instrument-sans": "^0.4.2",
+    "@native-html/render": "^1.0.4",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "domhandler": "^6.0.1",
+    "expo": "~58.0.13",
+    "expo-asset": "~58.0.16",
+    "expo-build-properties": "~58.0.10",
+    "expo-constants": "~58.0.12",
+    "expo-font": "~58.0.8",
+    "expo-linear-gradient": "~58.0.3",
+    "expo-linking": "~58.0.13",
+    "expo-router": "~58.0.22",
+    "expo-status-bar": "~58.0.3",
+    "expo-system-ui": "~58.0.6",
+    "firebase": "^12.19.0",
+    "htmlparser2": "^10.1.0",
+    "lucide-react-native": "^1.58.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.0",
+    "react-native-svg": "15.16.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~58.0.4",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test scripts/model.test.cjs",
+    "build:android": "powershell -NoProfile -File scripts/build-android.ps1",
+    "lint": "expo lint"
+  },
+  "private": true
+}

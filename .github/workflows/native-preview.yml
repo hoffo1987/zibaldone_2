@@ -1,0 +1,64 @@
+name: Native preview checks
+on:
+  push:
+    branches: [main]
+    paths: ['native/**', 'src/notifications.ts', '.github/workflows/native-preview.yml']
+  pull_request:
+    paths: ['native/**', 'src/notifications.ts', '.github/workflows/native-preview.yml']
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: native/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck && npm run lint && npm test
+      - run: npx expo prebuild --platform android --no-install
+      - run: bash gradlew :app:assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a --max-workers=4
+        working-directory: native/android
+        env:
+          NODE_ENV: production
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-preview-android-release
+          path: native/android/app/build/outputs/apk/release/*.apk
+  ios:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: native/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx expo prebuild --platform ios
+      - name: Compile native Release for iPhone and iPad simulator
+        run: >-
+          xcodebuild -workspace ios/IlCircuitoNativo.xcworkspace -scheme IlCircuitoNativo
+          -configuration Release -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath ios/DerivedData CODE_SIGNING_ALLOWED=NO build
+        env:
+          NODE_ENV: production
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-preview-ios-simulator-release
+          path: native/ios/DerivedData/Build/Products/Release-iphonesimulator/*.app
