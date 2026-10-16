@@ -5,7 +5,7 @@ import {
   signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset
 } from "firebase/auth";
 import {
-  getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, setDoc, getDoc, getDocs, deleteField
+  getFirestore, collection, onSnapshot, doc, writeBatch, query, where, setDoc, getDoc, getDocs, deleteField
 } from "firebase/firestore";
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
@@ -14,8 +14,9 @@ import {
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
-import { pubOf, pubSig } from "./testi";
+import { pubOf, pubSig, readPublic, isDiary, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, type WritingKind } from "./testi";
 import { snapshotReader } from "./snapshot";
+import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt } from "./WritingSections";
 import { M, Words, Sheets, useFlip, useRail, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 import { Text3D, Terminal3D } from "./d3";
 import { renderLoop, holdLoops } from "./renderLoop";
@@ -801,7 +802,7 @@ const resolveG = (o: any): any => {
 let GSPD = 1;  // velocità globale delle animazioni (serve anche ai timer fuori da React)
 // prima apertura della sessione: l'ingresso nel Circuito si vede per intero una volta sola, poi le pagine entrano in modo asciutto
 const FIRST = (() => { try { const s = sessionStorage.getItem("circuito:ingresso"); sessionStorage.setItem("circuito:ingresso", "1"); return !s; } catch { return true; } })();
-const NAV_ORDER = ["home", "write", "my_pages", "altri", "read", "podio", "authors", "profile"];
+const NAV_ORDER = ["home", "write", "my_pages", "altri", "read", "diario", "podio", "authors", "profile"];
 
 const Scramble = ({ text, on }: any) => {
   const [t, setT] = useState(text);
@@ -1085,6 +1086,7 @@ export default function App() {
   const [search, setSearch] = useState("");
   const deferredSearch = React.useDeferredValue(search);
   const [sortBy, setSortBy] = useState("newest");
+  const [kindFilter, setKindFilter] = useState("all");
   const [vals, setVals] = useState<any>({});
   const [valsReady, setValsReady] = useState(false);
   useEffect(() => {
@@ -1111,7 +1113,7 @@ export default function App() {
   useEffect(() => {
     if (!db || !isAdmin || !valsReady) return;
     const oldVote = (t: any) => t.rating !== undefined && !t.svelato;
-    const todo = rawItems.filter((t) => (oldVote(t) || t.isStarred === true) && !migTried.current.has(t.id));
+    const todo = rawItems.filter((t) => !isDiary(t) && (oldVote(t) || t.isStarred === true) && !migTried.current.has(t.id));
     if (!todo.length) return;
     todo.forEach((t) => migTried.current.add(t.id));
     (async () => {
@@ -1138,7 +1140,7 @@ export default function App() {
     if (!user || !db) { setNotifs([]); return; }
     return onSnapshot(query(collection(db, "notifiche"), where("userId", "==", user.uid)), (s: any) => setNotifs(s.docs.map((d: any) => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => b.timestamp - a.timestamp)), () => {});
   }, [user]);
-  useEffect(() => { setVisible(18); }, [search, sortBy, monthFilter, onlyMarked, unrated, tab]);
+  useEffect(() => { setVisible(18); }, [search, sortBy, monthFilter, kindFilter, onlyMarked, unrated, tab]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
   useEffect(() => {
     if (!user || !db) return;
@@ -1181,6 +1183,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [kind, setKind] = useState<WritingKind>("complete");
   const [strokes, setStrokes] = useState<any[]>([]);
   const [hist, setHist] = useState<any[][]>([]);
   const [fut, setFut] = useState<any[][]>([]);
@@ -1288,16 +1291,16 @@ export default function App() {
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get("mode") === "resetPassword" && p.get("oobCode")) { setResetCode(p.get("oobCode")); setAuthLoading(false); return; }
-    return onAuthStateChanged(auth, (u: any) => { if (u && eggGet() === 2) eggSet(0); setUser(u); setAuthLoading(false); });
+    return onAuthStateChanged(auth, (u: any) => { if (u && eggGet() === 2) eggSet(0); setRawItems([]); setPubItems([]); setVals({}); setNotifs([]); setAdminChecked(false); setIsAdmin(false); pubDone.current.clear(); pubAll.current = false; setSel(null); setUser(u); setAuthLoading(false); });
   }, []);
 
   // dati
   // "altri" carica anche i propri scritti: servono solo a toglierli dall'elenco di quelli da leggere
-  const dataScope = isAdmin && ["read", "home", "podio", "authors"].includes(tab) ? "all" : ["my_pages", "home", "profile", "altri"].includes(tab) ? "mine" : "none";
+  const dataScope = isAdmin && ["read", "diario", "home", "podio", "authors"].includes(tab) ? "all" : ["my_pages", "home", "profile", "altri", "diario"].includes(tab) ? "mine" : "none";
   // a quale lettura appartiene rawItems (e se viene davvero dal server): la pulizia delle copie orfane si fida solo dell'archivio completo
   const [rawScope, setRawScope] = useState("");
   useEffect(() => {
-    if (!user || !db || dataScope === "none") return;
+    if (!user || !db || !adminChecked || dataScope === "none") return;
     const q = dataScope === "all" ? collection(db, "pensieri") : query(collection(db, "pensieri"), where("userId", "==", user.uid));
     setLoading(true); setRawItems([]); setRawScope("");
     const read = snapshotReader((d) => ({ id: d.id, ...d.data() }));
@@ -1305,18 +1308,19 @@ export default function App() {
       setRawItems(read(s));
       setRawScope(s.metadata?.fromCache ? "" : dataScope);
       setLoading(false);
-    }, () => { setLoading(false); notify("Impossibile leggere i progetti."); });
-  }, [user, isAdmin, dataScope]);
+    }, () => { setLoading(false); notify("Impossibile leggere gli scritti."); });
+  }, [user, adminChecked, isAdmin, dataScope]);
 
-  // ---- scritti degli altri, per chi non è admin: si legge solo testi/{id}, la copia anonima (titolo, testo, disegno) ----
+  // Letture condivise: testi v2 contiene il diario integrale oppure soltanto l’estratto dei completi, mai l’identità.
   // Lo scritto vero (pensieri/{id}, con autore, date e voti) resta illeggibile per gli altri: al telefono non arriva nulla di più.
   const [pubItems, setPubItems] = useState<any[]>([]);
   const [pubLoading, setPubLoading] = useState(false);
   useEffect(() => {
-    if (!user || !db || !adminChecked || isAdmin || tab !== "altri") { setPubItems([]); setPubLoading(false); return; }
+    if (!user || !db || !adminChecked || isAdmin || !["altri", "diario"].includes(tab)) { setPubItems([]); setPubLoading(false); return; }
     setPubLoading(true);
-    const read = snapshotReader((d) => ({ ...pubOf(d.data()), id: d.id, _anon: true }));
-    return onSnapshot(collection(db, "testi"), (s: any) => {
+    const read = snapshotReader((d) => readPublic(d.data(), d.id));
+    const feed = query(collection(db, "testi"), where("version", "==", PUBLIC_VERSION));
+    return onSnapshot(feed, (s: any) => {
       setPubItems(read(s));
       setPubLoading(false);
     }, () => { setPubLoading(false); notify("Impossibile leggere gli scritti degli altri."); });
@@ -1355,18 +1359,18 @@ export default function App() {
   // bozza: ripristino + salvataggio automatico
   useEffect(() => {
     // a ogni cambio di account riparto da un foglio vuoto: altrimenti il testo di chi è uscito finirebbe nella bozza di chi entra
-    setEditingId(null); setTitle(""); setContent(""); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
     if (!draftKey) return;
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) || "null");
-      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setStrokes(d.strokes || []); setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
+      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setKind(writingKind(d)); setStrokes(d.strokes || []); setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
     } catch {}
   }, [draftKey]);
   useEffect(() => {
     if (!draftKey || editingId || (!title && !plain(content).trim() && !strokes.length)) return;
-    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, strokes, height })); } catch {} }, 800);
+    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, kind, strokes, height })); } catch {} }, 800);
     return () => clearTimeout(t);
-  }, [title, content, strokes, height, editingId, draftKey]);
+  }, [title, content, kind, strokes, height, editingId, draftKey]);
   useEffect(() => { if (tab === "write" && editorRef.current) editorRef.current.innerHTML = clean(content); }, [tab, loadTick]);
 
   // scorciatoie disegno
@@ -1736,12 +1740,12 @@ export default function App() {
   };
 
   const resetForm = () => {
-    setEditingId(null); setTitle(""); setContent(""); setStrokes([]); setHist([]); setFut([]); setHeight(600);
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setStrokes([]); setHist([]); setFut([]); setHeight(600);
     setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
     try { localStorage.removeItem(draftKey); } catch {}
   };
   const startEdit = (t: any) => {
-    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setStrokes(t.strokes || []);
+    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setStrokes(t.strokes || []);
     setHist([]); setFut([]); setHeight(t.h || 600); setSel(null); setDrawing(false); setTab("write"); setLoadTick((n) => n + 1);
   };
 
@@ -1750,16 +1754,18 @@ export default function App() {
     const html = clean(editorRef.current?.innerHTML || "");
     if (!user || !(plain(html).trim() || /<img/.test(html) || strokes.length)) return;
     const st = strokes.map((s) => ({ ...s, points: s.points.map((p: any) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 })) }));
-    const data = { title: title.trim() || "Senza titolo", content: html, strokes: st, w: Math.round(canvasRef.current?.clientWidth || 900), h: Math.round(height) };
+    const data = { title: title.trim() || "Senza titolo", kind, excerpt: kind === "complete" ? excerptOf(html) : "", content: html, strokes: st, w: Math.round(canvasRef.current?.clientWidth || 900), h: Math.round(height) };
     // il limite di Firestore è di ~1 MB in byte (non in caratteri: accenti ed emoji ne pesano di più)
     if (new Blob([JSON.stringify(data)]).size > 950000) return notify("Progetto troppo pesante: riduci le immagini o il disegno.");
     setSaving(true);
     try {
-      let id = editingId;
-      if (id) await updateDoc(doc(db, "pensieri", id), { ...data, updatedAt: Date.now() });
-      else id = (await addDoc(collection(db, "pensieri"), { ...data, author: profiles[user.uid]?.displayName || user.displayName || "Operatore", timestamp: Date.now(), userId: user.uid, isStarred: false })).id;
-      // la copia anonima va dopo, a parte: se non riesce (regole non ancora pubblicate) lo scritto resta comunque salvato
-      pubSync(id!, data).catch((e: any) => console.warn("Copia anonima non salvata (controlla le regole di Firestore)", e));
+      const ref = editingId ? doc(db, "pensieri", editingId) : doc(collection(db, "pensieri"));
+      const b = writeBatch(db);
+      if (editingId) b.update(ref, { ...data, updatedAt: Date.now() });
+      else b.set(ref, { ...data, author: profiles[user.uid]?.displayName || user.displayName || "Operatore", timestamp: Date.now(), userId: user.uid, isStarred: false });
+      b.set(doc(db, "testi", ref.id), pubOf(data));
+      await b.commit();
+      pubDone.current.set(ref.id, pubSig(data));
       setDone(editingId ? "edit" : "new");
     } catch { notify("Salvataggio non riuscito. Riprova."); }
     setSaving(false);
@@ -1768,14 +1774,15 @@ export default function App() {
   // --- azioni lista ---
   const canEdit = (t: any) => isAdmin || t.userId === user?.uid;
   const bulkMark = async () => {
-    const chosen = items.filter((t) => ids.includes(t.id)); const val = !chosen.every((t) => t.isStarred);
+    if (!isAdmin) return;
+    const chosen = items.filter((t) => ids.includes(t.id) && canEvaluate(t)); const val = !chosen.every((t) => t.isStarred);
     try { const b = writeBatch(db); chosen.forEach((t) => b.set(doc(db, "valutazioni", t.id), { segnalibro: val, updatedAt: Date.now() }, { merge: true })); await b.commit(); notify(val ? "Segnalibro aggiunto." : "Segnalibro rimosso."); }
     catch { notify("Operazione non riuscita."); }
     setIds([]); setSelMode(false);
   };
   const markRead = async (ids: string[]) => { try { const b = writeBatch(db); ids.forEach((id) => b.update(doc(db, "notifiche", id), { letta: true })); await b.commit(); } catch {} };
   const reveal = async (t: any) => {
-    if (!isAdmin || t.svelato || !(t.rating > 0)) return;
+    if (!isAdmin || !canEvaluate(t) || t.svelato || !(t.rating > 0)) return;
     try {
       const b = writeBatch(db);
       b.update(doc(db, "pensieri", t.id), { svelato: true, rating: t.rating });
@@ -1787,20 +1794,20 @@ export default function App() {
     setConfirmRvl(false);
   };
   const rate = async (t: any, n: number) => {
-    if (!isAdmin || t.svelato) return;
+    if (!isAdmin || !canEvaluate(t) || t.svelato) return;
     buzz(12);
     try { await setDoc(doc(db, "valutazioni", t.id), { voto: n, updatedAt: Date.now() }, { merge: true }); }
     catch { return notify("Voto non salvato: pubblica le nuove regole di Firestore."); }
     if (sel?.id === t.id) setSel({ ...sel, rating: n });
   };
-  const star = async (t: any) => { if (isAdmin) { buzz(12); try { await setDoc(doc(db, "valutazioni", t.id), { segnalibro: !t.isStarred, updatedAt: Date.now() }, { merge: true }); } catch { return notify("Segnalibro non salvato: pubblica le nuove regole di Firestore."); } if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
+  const star = async (t: any) => { if (isAdmin && canEvaluate(t)) { buzz(12); try { await setDoc(doc(db, "valutazioni", t.id), { segnalibro: !t.isStarred, updatedAt: Date.now() }, { merge: true }); } catch { return notify("Segnalibro non salvato: pubblica le nuove regole di Firestore."); } if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
   const confirmDelete = async () => {
     const list = toDelete!; setToDelete(null); setSel(null); setGone(list);
     setTimeout(async () => {
       // prima la copia anonima: le regole la lasciano togliere all'autore solo finché lo scritto esiste
       try { const b = writeBatch(db); list.forEach((id) => b.delete(doc(db, "testi", id))); await b.commit(); }
       catch (e) { console.warn("Copie anonime non eliminate (controlla le regole di Firestore)", e); }
-      try { const b = writeBatch(db); list.forEach((id) => b.delete(doc(db, "pensieri", id))); await b.commit(); notify(list.length > 1 ? `${list.length} progetti eliminati.` : "Progetto eliminato."); }
+      try { const b = writeBatch(db); list.forEach((id) => b.delete(doc(db, "pensieri", id))); await b.commit(); notify(list.length > 1 ? `${list.length} scritti eliminati.` : "Scritto eliminato."); }
       catch { notify("Eliminazione non riuscita: controlla i permessi."); }
       setGone([]); setIds([]); setSelMode(false);
     }, 300 / GSPD);
@@ -1815,7 +1822,8 @@ export default function App() {
   };
   const stepTo = (t: any, d: number) => { setSwap(d); setSel(t); };
   const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
-  const go = (t: string) => { if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
+  const newWriting = (k: WritingKind) => { if (editingId) { go("write"); notify("Completa o annulla la modifica in corso prima di creare un nuovo scritto."); return; } setKind(k); go("write"); };
+  const go = (t: string) => { if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setKindFilter("all"); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
 
   // ================= SUONO E PRESENTAZIONE =================
   // cambio di sezione: i due click salgono andando avanti nel menu e scendono tornando indietro (anche col tasto Indietro)
@@ -1844,7 +1852,7 @@ export default function App() {
   }, [wantTour, tourName]);
   const holdTour = (on: boolean) => { setTourHold(on); holdLoops(on); };
   // il tour cambia sezione senza riempire la cronologia: alla fine il tasto Indietro non ripercorre i passi
-  const tourNav = (t: string) => { history.replaceState({ tab: t }, ""); setSel(null); setTab(t); setSelMode(false); setIds([]); setSearch(""); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
+  const tourNav = (t: string) => { history.replaceState({ tab: t }, ""); setSel(null); setTab(t); setSelMode(false); setIds([]); setSearch(""); setKindFilter("all"); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
   const endTour = (to?: string) => { if (user) tourMark(user.uid); holdTour(false); const m = tour; setTour(""); if (to) go(to); else if (m !== "film") tourNav("home"); };
   const tourLow = (navigator.hardwareConcurrency || 8) <= 4 || ((navigator as any).deviceMemory || 8) <= 3;
 
@@ -1863,14 +1871,15 @@ export default function App() {
   const shown = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     return prepared
+      .filter((t) => (tab !== "read" || !isDiary(t)) && (kindFilter === "all" || writingKind(t) === kindFilter))
       .filter((t) => (monthFilter === "all" || mKey(t.timestamp) === monthFilter) && (!onlyMarked || t.isStarred) && (!unrated || !t.rating) && (statoF === "all" || (vals[t.id]?.stato || "da_leggere") === statoF) && (!q || `${t.title} ${isAdmin && !t.svelato && t.userId !== user?.uid ? "" : t.author} ${t._tx}`.toLowerCase().includes(q)))
       .sort((a, b) => sortBy === "rated" ? (b.rating || 0) - (a.rating || 0) || b.timestamp - a.timestamp : sortBy === "oldest" ? a.timestamp - b.timestamp : sortBy === "longest" ? (b.content?.length || 0) - (a.content?.length || 0) : sortBy === "shortest" ? (a.content?.length || 0) - (b.content?.length || 0) : b.timestamp - a.timestamp);
-  }, [prepared, deferredSearch, sortBy, monthFilter, onlyMarked, unrated, statoF, vals, isAdmin, user]);
+  }, [prepared, deferredSearch, sortBy, monthFilter, onlyMarked, unrated, statoF, vals, isAdmin, user, tab, kindFilter]);
   // scritti degli altri: tolti i propri, nell'ordine degli id (casuale e stabile: non tradisce né autore né data)
   const pubPrepared = useMemo(() => {
     const mine = new Set(rawItems.map((t) => t.id));
-    return pubItems.filter((t) => !mine.has(t.id)).map((t) => {
-      const text = plain(t.content);
+    return pubItems.filter((t) => !isDiary(t) && !mine.has(t.id)).map((t) => {
+      const text = isDiary(t) ? plain(t.content) : t.excerpt || "";
       return { ...t, _tx: text, _img: /<img/.test(t.content || "") };
     });
   }, [pubItems, rawItems]);
@@ -1878,13 +1887,19 @@ export default function App() {
     const q = deferredSearch.trim().toLowerCase();
     return q ? pubPrepared.filter((t) => `${t.title || ""} ${t._tx}`.toLowerCase().includes(q)) : pubPrepared;
   }, [pubPrepared, deferredSearch]);
+  const diaryShown = useMemo(() => {
+    const own = new Map(rawItems.map(t => [t.id, t]));
+    const feed = isAdmin ? prepared.filter(isDiary) : pubItems.filter(isDiary).map(t => own.get(t.id) || t);
+    const q = deferredSearch.trim().toLowerCase();
+    return feed.filter(t => !q || `${t.title} ${plain(t.content)} ${isAdmin ? t.author || "" : ""}`.toLowerCase().includes(q)).sort((a, b) => a.id.localeCompare(b.id));
+  }, [rawItems, prepared, pubItems, isAdmin, deferredSearch]);
   const words = useMemo(() => plain(content).trim().split(/\s+/).filter(Boolean).length, [content]);
   const monthNow = mKey(Date.now());
   const monthOpts = useMemo(() => Array.from(new Set<string>(items.map((t) => mKey(t.timestamp)))).sort().reverse(), [items]);
   const thisMonth = useMemo(() => items.filter((t) => mKey(t.timestamp) === monthNow), [items, monthNow]);
   const recent = useMemo(() => [...items].sort((a, b) => b.timestamp - a.timestamp).slice(0, 5), [items]);
-  const mItems = useMemo(() => items.filter((t) => mKey(t.timestamp) === month), [items, month]);
-  const ranked = useMemo(() => mItems.filter((t) => t.rating > 0 || t.isStarred).sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.isStarred ? 1 : 0) - (a.isStarred ? 1 : 0) || a.timestamp - b.timestamp), [mItems]);
+  const mItems = useMemo(() => items.filter((t) => !isDiary(t) && mKey(t.timestamp) === month), [items, month]);
+  const ranked = useMemo(() => rankWritings(mItems), [mItems]);
 
   // ================= MOVIMENTO =================
   // la pagina nuova arriva dal lato verso cui ti sposti nel menu
@@ -2117,20 +2132,21 @@ export default function App() {
 
   const nav: any[] = ([
     { id: "home", label: "Panoramica", s: "Home", icon: LayoutDashboard },
-    { id: "write", label: editingId ? "Modifica" : "Nuovo progetto", s: editingId ? "Modifica" : "Nuovo", icon: Pen },
-    { id: "my_pages", label: "I miei progetti", s: "Miei", icon: Bookmark },
+    { id: "write", label: editingId ? "Modifica" : "Nuovo scritto", s: editingId ? "Modifica" : "Nuovo", icon: Pen },
+    { id: "my_pages", label: "I miei scritti", s: "Miei", icon: Bookmark },
     ...(isAdmin ? [
-      { id: "read", label: "Tutti gli scritti", s: "Tutti", icon: Activity },
+      { id: "read", label: "Scritti completi", s: "Scritti", icon: Activity },
       { id: "podio", label: "Podio del mese", s: "Podio", icon: Trophy }, { id: "authors", label: "Autori", icon: Users },
     ] : [
       // per chi non è admin: gli scritti degli altri, solo da leggere e senza nomi
-      { id: "altri", label: "Scritti degli altri", s: "Leggi", icon: BookOpen },
+      { id: "altri", label: "Scritti completi", s: "Scritti", icon: BookOpen },
     ]),
+    { id: "diario", label: "Diario", s: "Diario", icon: BookOpen },
   ]);
   const myName = profiles[user.uid]?.displayName || user.displayName || "Operatore";
   const first = myName.split(" ")[0];
   const dn = (uid: string, fb: string) => profiles[uid]?.displayName || fb;
-  const hid = (t: any) => isAdmin && !t.svelato && t.userId !== user.uid;
+  const hid = (t: any) => isAdmin && !isDiary(t) && !t.svelato && t.userId !== user.uid;
   // funzioni e non componenti: definite qui dentro, come componenti cambierebbero tipo a ogni render e React smonterebbe
   // e rimonterebbe righe e avatar (le righe ripetevano l'animazione d'ingresso a ogni aggiornamento della pagina)
   const who = (t: any, size: number) => hid(t)
@@ -2149,7 +2165,8 @@ export default function App() {
       {rank && <span className="hd w-8 text-center font-bold mu">{rank}</span>}
       {who(t, 36)}
       <div className="flex-1 min-w-0"><div className="font-semibold truncate">{t.title}</div><div className="mu text-xs">{wn(t)} · {fmtDate(t.timestamp)}</div></div>
-      {isAdmin && <Stars v={t.rating || 0} size={14} />}
+      <span className={`kind-badge ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span>
+      {isAdmin && canEvaluate(t) && <Stars v={t.rating || 0} size={14} />}
     </button>
   );
 
@@ -2189,7 +2206,7 @@ export default function App() {
   const profileView = (uid: string, own: boolean) => {
     const p = profiles[uid] || {};
     const name = p.displayName || (own ? user.displayName : items.find((t) => t.userId === uid)?.author) || "Operatore";
-    const mine = items.filter((t) => t.userId === uid);
+    const mine = items.filter((t) => t.userId === uid && (!isDiary(t) || own));
     const showStats = own || (isAdmin && ["read", "home", "podio", "authors"].includes(tab));
     const words = mine.reduce((a, t) => a + wc(t), 0);
     const badges = [mine.length >= 1 && "Primo scritto", mine.length >= 5 && "Costante", mine.length >= 20 && "Prolifico", mine.some((t) => t.strokes?.length) && "Disegnatore", mine.some((t) => /<img/.test(t.content || "")) && "Fotografo", words >= 1000 && "Mille parole"].filter(Boolean) as string[];
@@ -2255,8 +2272,8 @@ export default function App() {
     ? [{ l: "Scritti ricevuti", v: items.length, i: Cpu, a: () => go("read") },
       { l: "Autori", v: new Set(items.map((t) => t.userId)).size, i: Users, a: () => go("authors") },
       { l: "Questo mese", v: thisMonth.length, i: Activity, a: () => { go("read"); setMonthFilter(monthNow); } },
-      { l: "Da valutare", v: thisMonth.filter((t) => !t.rating).length, i: Star, a: () => { go("read"); setMonthFilter(monthNow); setUnrated(true); } }]
-    : [{ l: "I tuoi progetti", v: items.length, i: Bookmark, a: () => go("my_pages") },
+      { l: "Da valutare", v: thisMonth.filter((t) => !isDiary(t) && !t.rating).length, i: Star, a: () => { go("read"); setMonthFilter(monthNow); setUnrated(true); } }]
+    : [{ l: "I tuoi scritti", v: items.length, i: Bookmark, a: () => go("my_pages") },
       { l: "Questo mese", v: thisMonth.length, i: Activity, a: () => { go("my_pages"); setMonthFilter(monthNow); } },
       { l: "Parole scritte", v: items.reduce((a, t) => a + wc(t), 0), i: Pen, a: () => go("my_pages") }];
   const heroMove = (e: any) => {
@@ -2267,7 +2284,7 @@ export default function App() {
     el.style.setProperty("--nx", String((x / r.width - 0.5) * 2)); el.style.setProperty("--ny", String((y / r.height - 0.5) * 2));
   };
   const heroLeave = (e: any) => { ["--nx", "--ny"].forEach((k) => e.currentTarget.style.removeProperty(k)); };
-  const toRate = thisMonth.filter((t) => !t.rating).length;
+  const toRate = thisMonth.filter((t) => !isDiary(t) && !t.rating).length;
   // primo ingresso della sessione: la corrente percorre il bordo del pannello e lo accende; dopo, la home entra asciutta
   const boot = heroIntro.current && G.reveal;
   // 3D nel pannello: il logo WebGPU (non con le animazioni spente), il terminale che batte il comando e risponde con i numeri veri
@@ -2275,7 +2292,7 @@ export default function App() {
   const termUser = isAdmin ? "admin" : first.toLowerCase().replace(/[^a-z0-9]/g, "") || "utente", termCmd = isAdmin ? "ls --nuovi" : "scrivi --nuovo";
   const termOut = loading ? "lettura dell'archivio…" : isAdmin
     ? `${thisMonth.length} ${thisMonth.length === 1 ? "scritto" : "scritti"} questo mese · ${toRate} da valutare`
-    : `${items.length} ${items.length === 1 ? "progetto" : "progetti"} · ${items.reduce((a, t) => a + wc(t), 0).toLocaleString("it-IT")} parole`;
+    : `${items.length} ${items.length === 1 ? "scritto" : "scritti"} · ${items.reduce((a, t) => a + wc(t), 0).toLocaleString("it-IT")} parole`;
   const heroTitle = `Ciao ${first}, ${isAdmin ? "ecco cosa è arrivato." : "cosa vuoi scrivere oggi?"}`;
   const homeView = tab === "home" && (
     <div className="space-y-8">
@@ -2292,20 +2309,24 @@ export default function App() {
           ? <div className="b-1 zl relative z-[1] w-fit max-w-full" style={{ ["--z" as any]: "100px" }}>{logo3d && <i className="zsh-rect" style={{ ["--sd" as any]: "-100px" }} aria-hidden="true" />}<Terminal3D user={termUser} cmd={termCmd} out={termOut} run={!G.nomotion} delay={boot ? 1150 : 380} /></div>
           : <div className="b-1"><span className="hero-term"><i className="hero-led" />{termUser + "@circuito:~$ " + termCmd}<b className="caret" /></span></div>}
         <h2 className="zl hd text-3xl md:text-5xl font-bold max-w-xl leading-tight relative z-[1]" style={{ ["--z" as any]: "70px" }}>{G.d3 ? <Text3D text={heroTitle} layers={12} anim={G.titles} className="t3-hero t3-glint" delay={boot ? 420 : 0} /> : <Words text={heroTitle} on={G.titles} />}</h2>
-        <p className="zl mu mt-3 max-w-md b-2" style={{ ["--z" as any]: "40px" }}>{isAdmin ? `Ci sono ${thisMonth.filter((t) => !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Scrivi liberamente, aggiungi foto e disegni. A fine mese gli scritti vengono letti e i migliori selezionati."}</p>
+        <p className="zl mu mt-3 max-w-md b-2" style={{ ["--z" as any]: "40px" }}>{isAdmin ? `Ci sono ${thisMonth.filter((t) => !isDiary(t) && !t.rating).length} scritti di ${mLabel(monthNow)} ancora senza voto.` : "Uno scritto da sviluppare o un pensiero da condividere? Scegli il tuo spazio: gli scritti completi partecipano al podio, il diario si legge senza voti."}</p>
         <div className="zl flex flex-wrap gap-2 mt-7 b-3" style={{ ["--z" as any]: "55px" }} data-tour="hero-actions" data-tour-fit="">
-          <button className="bt cta !px-5 !py-3" onClick={() => go("write")} data-tour="cta" data-snd="nav"><Pen size={16} />Scrivi un progetto</button>
+          <button className="bt cta !px-5 !py-3" onClick={() => go("write")} data-tour="cta" data-snd="nav"><Pen size={16} />Scrivi uno scritto</button>
           {isAdmin && toRate > 0 && <button className="bt ghost !px-5 !py-3" onClick={() => { go("read"); setMonthFilter(monthNow); setUnrated(true); }}><Star size={16} />Valuta ora ({toRate})</button>}
           {isAdmin && <button className="bt ghost !px-5 !py-3" onClick={() => go("podio")}><Trophy size={16} />Vai al podio</button>}
         </div>
       </div></Reveal>
+      <div className="grid md:grid-cols-2 gap-4">
+        <button className="pn card p-6 text-left" onClick={() => go(isAdmin ? "read" : "altri")}><span className="kind-badge">Scritti completi</span><h3 className="hd text-xl font-bold mt-3">Dai forma alle tue idee</h3><p className="mu text-sm mt-2">Temi e racconti, estratti da leggere e selezione del mese.</p></button>
+        <button className="pn card p-6 text-left diary-intro" onClick={() => go("diario")}><span className="kind-badge diary">Diario</span><h3 className="hd text-xl font-bold mt-3">Lascia un pensiero</h3><p className="mu text-sm mt-2">Pagine anonime da leggere per intero, senza voti o categorie.</p></button>
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((x, i) => <Reveal key={x.l} delay={(boot ? 620 : 0) + i * 70} className="h-full"><button type="button" onClick={x.a} data-snd="nav" className="pn card stat p-5 h-full w-full"><ArrowUpRight size={18} className="go" aria-hidden="true" /><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3 tabular-nums"><CountUp v={x.v} on={G.reveal} delay={(boot ? 620 : 0) + i * 70 + 150} /></div><div className="mu text-sm">{x.l}</div></button></Reveal>)}
       </div>
       <Reveal delay={boot ? 820 : 0}><div className="pn p-2">
-        <div className="flex items-center justify-between px-4 pt-4 pb-2"><h3 className="hd text-lg font-bold">Ultimi progetti</h3><button type="button" data-snd="nav" className="mu text-sm lk inline-flex items-center gap-1" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>
+        <div className="flex items-center justify-between px-4 pt-4 pb-2"><h3 className="hd text-lg font-bold">Ultimi scritti</h3><button type="button" data-snd="nav" className="mu text-sm lk inline-flex items-center gap-1" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>
         {loading ? <div className="p-6 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
-          : recent.length === 0 ? <p className="mu text-sm px-4 pb-5">Ancora niente qui. Il primo progetto comparirà in questa lista.</p>
+          : recent.length === 0 ? <p className="mu text-sm px-4 pb-5">Ancora niente qui. Il primo scritto comparirà in questa lista.</p>
           : recent.map((t, i) => row(t, i))}
       </div></Reveal>
     </div>
@@ -2376,7 +2397,7 @@ export default function App() {
     </div>
   );
 
-  const authors: any[] = Object.values((tab === "authors" ? items : []).filter((t) => t.svelato || t.userId === user.uid).reduce((m: any, t) => { const k = t.userId || t.author; const a = (m[k] = m[k] || { name: dn(t.userId, t.author || "?"), uid: t.userId, n: 0, r: [], last: 0 }); a.n++; if (t.rating) a.r.push(t.rating); a.last = Math.max(a.last, t.timestamp); return m; }, {}))
+  const authors: any[] = Object.values((tab === "authors" ? items : []).filter((t) => !isDiary(t)).filter((t) => t.svelato || t.userId === user.uid).reduce((m: any, t) => { const k = t.userId || t.author; const a = (m[k] = m[k] || { name: dn(t.userId, t.author || "?"), uid: t.userId, n: 0, r: [], last: 0 }); a.n++; if (t.rating) a.r.push(t.rating); a.last = Math.max(a.last, t.timestamp); return m; }, {}))
     .map((a: any) => ({ ...a, avg: a.r.length ? a.r.reduce((x: number, y: number) => x + y, 0) / a.r.length : 0 })).sort((a: any, b: any) => b.n - a.n);
   const authorsView = loading ? <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div> : authors.length === 0 ? (
     <div className="pn p-12 text-center max-w-md mx-auto"><Users className="mx-auto mb-4 mu" size={36} /><h3 className="hd text-xl font-bold">Ancora nessun autore</h3><p className="mu text-sm mt-1">Compariranno dopo lo svelamento del loro primo scritto.</p></div>
@@ -2398,7 +2419,7 @@ export default function App() {
       ))}
     </div>
   );
-  const titles: any = { write: editingId ? "Modifica progetto" : "Nuovo progetto", my_pages: "I miei progetti", read: "Tutti gli scritti", altri: "Scritti degli altri", home: "Panoramica", profile: "Il tuo profilo", podio: "Podio del mese", authors: "Autori" };
+  const titles: any = { write: editingId ? "Modifica scritto" : "Nuovo scritto", my_pages: "I miei scritti", read: "Scritti completi", altri: "Scritti completi", diario: "Diario", home: "Panoramica", profile: "Il tuo profilo", podio: "Podio del mese", authors: "Autori" };
   const isList = ["my_pages", "read"].includes(tab);
 
   return shell(
@@ -2438,11 +2459,13 @@ export default function App() {
       <div className="md:ml-60 pb-28 md:pb-12 relative">
         <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12" style={{ ["--pdx" as any]: `${pdx.current}px` }}>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>{isList && !loading && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "progetto" : "progetti"}</p>}{tab === "altri" && !(pubLoading || loading) && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={pubShown.length} className="tick-n">{pubShown.length}</span> {pubShown.length === 1 ? "scritto da leggere" : "scritti da leggere"} · senza nomi né date</p>}</div>
-            {tab === "altri" && pubItems.length > 0 && <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>}
+            <div><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>{isList && !loading && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "scritto" : "scritti"}</p>}{tab === "altri" && !(pubLoading || loading) && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={pubShown.length} className="tick-n">{pubShown.length}</span> {pubShown.length === 1 ? "scritto da leggere" : "scritti da leggere"} · senza nomi né date</p>}</div>
+            {["altri", "diario"].includes(tab) && <div className="sr-only" aria-live="polite">{tab === "diario" ? diaryShown.length : pubShown.length} pagine</div>}
+            {["altri", "diario"].includes(tab) && <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>}
             {isList && (
               <div className="flex flex-wrap gap-2 items-center" data-tour="filters">
                 <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>
+                {tab === "my_pages" && <select className="inp !w-auto" aria-label="Tipo di scritto" value={kindFilter} onChange={e => setKindFilter(e.target.value)}><option value="all">Tutti i tipi</option><option value="complete">Scritti completi</option><option value="diary">Pensieri del diario</option></select>}
                 <select className="inp !w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>{Object.keys(SORTS).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}</select>
                 <select className="inp !w-auto" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}><option value="all">Tutti i mesi</option>{monthOpts.map((k) => <option key={k} value={k}>{mLabel(k)}</option>)}</select>
                 {isAdmin && tab === "read" && <select className="inp !w-auto" value={statoF} onChange={(e) => setStatoF(e.target.value)}><option value="all">Tutti gli stati</option>{STATI.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
@@ -2458,6 +2481,10 @@ export default function App() {
           {tab === "profile" && profilePage}
           {tab === "podio" && podioView}
           {tab === "authors" && authorsView}
+          {["altri", "read", "diario"].includes(tab) && <WritingIntro diary={tab === "diario"} onWrite={() => newWriting(tab === "diario" ? "diary" : "complete")} />}
+          {tab === "diario" && (pubLoading || loading ? <Sheets /> : diaryShown.length === 0
+            ? <div className="pn p-10 text-center"><BookOpen size={34} className="mx-auto mu mb-4" /><h3 className="hd text-xl font-bold">{search ? "Nessun pensiero trovato" : "Il diario aspetta la prima pagina"}</h3><p className="mu text-sm mt-2">{search ? "Prova un’altra parola." : "Non serve avere tutto chiaro per cominciare a scrivere."}</p></div>
+            : <><DiaryCards items={diaryShown.slice(0, visible)} onOpen={openView} author={t => isAdmin ? `Autore: ${dn(t.userId, t.author)}` : t.userId === user.uid ? "Il tuo pensiero · anonimo agli altri" : "Una voce del Circuito"} drawing={t => t.strokes?.length ? <Drawing strokes={t.strokes} {...dims(t)} className="w-full mt-3" /> : null} />{diaryShown.length > visible && <button className="bt mt-6" onClick={() => setVisible(v => v + 18)}>Altri pensieri</button>}</>)}
           {/* SCRITTI DEGLI ALTRI (non admin): solo titolo, testo e disegno, da leggere */}
           {tab === "altri" && (pubLoading || loading ? (
             <Sheets />
@@ -2481,7 +2508,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
-                      <h2 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title || "Senza titolo"}</h2>
+                      <span className="kind-badge mb-2">Scritto completo · estratto</span><h2 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title || "Senza titolo"}</h2><p className="mu text-xs mt-3">Il testo integrale è riservato all’autore e all’amministratore.</p>
                     </div>
                   </article></Reveal>
                 );
@@ -2496,9 +2523,9 @@ export default function App() {
           ) : shown.length === 0 ? (
             <div className="pn p-12 text-center max-w-md mx-auto up">
               <Cpu className="mx-auto mb-4 mu" size={36} />
-              <h3 className="hd text-xl font-bold mb-1">{search ? "Nessun risultato" : "Ancora nessun progetto"}</h3>
+              <h3 className="hd text-xl font-bold mb-1">{search ? "Nessun risultato" : "Ancora nessuno scritto"}</h3>
               <p className="mu text-sm mb-5">{search ? "Prova con un'altra parola." : "Crea il primo: puoi scrivere, aggiungere foto e disegnare."}</p>
-              {!search && <button className="bt pri" onClick={() => go("write")}><Plus size={15} />Nuovo progetto</button>}
+              {!search && <button className="bt pri" onClick={() => go("write")}><Plus size={15} />Nuovo scritto</button>}
             </div>
           ) : (
             <><div ref={gridRef} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -2514,15 +2541,15 @@ export default function App() {
                         {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
                         <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{t._tx.slice(0, 260) || (t._img ? "Contenuto con immagini" : "")}</p>
                       </div>
-                      {isAdmin && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span className="absolute top-2 left-2 text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: vals[t.id].stato === "scelto" ? "var(--am)" : "rgba(255,255,255,.92)", color: vals[t.id].stato === "scelto" ? "#3b2a00" : "#0E1F1D", boxShadow: "var(--sh1)" }}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}
+                      {isAdmin && canEvaluate(t) && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span className="absolute top-2 left-2 text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: vals[t.id].stato === "scelto" ? "var(--am)" : "rgba(255,255,255,.92)", color: vals[t.id].stato === "scelto" ? "#3b2a00" : "#0E1F1D", boxShadow: "var(--sh1)" }}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}
                       {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
-                      {isAdmin && !selMode && <button type="button" aria-label="Segnalibro" title={t.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={(e) => { e.stopPropagation(); star(t); }} className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110" style={{ background: "rgba(255,255,255,.92)", boxShadow: "var(--sh1)" }}><Bookmark size={16} style={t.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : { color: "#64748b" }} /></button>}
+                      {isAdmin && canEvaluate(t) && !selMode && <button type="button" aria-label="Segnalibro" title={t.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={(e) => { e.stopPropagation(); star(t); }} className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110" style={{ background: "rgba(255,255,255,.92)", boxShadow: "var(--sh1)" }}><Bookmark size={16} style={t.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : { color: "#64748b" }} /></button>}
                     </div>
                     <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
-                      <h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
+                      <span className={`kind-badge mb-2 ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span><h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
                       <div className="mt-2 flex items-center gap-2 mu text-xs">{who(t, 22)}<span className="truncate flex-1">{wn(t)}</span><span className="shrink-0">{fmtDate(t.timestamp)}</span></div>
-                      {isAdmin && <div className="mt-3"><Stars v={t.rating || 0} onSet={t.svelato ? undefined : (n: number) => rate(t, n)} size={15} /></div>}
-                      {!isAdmin && t.svelato && t.rating > 0 && <div className="mt-3 flex items-center gap-2"><Stars v={t.rating} size={15} /><span className="mu text-xs">voto ricevuto</span></div>}
+                      {isAdmin && canEvaluate(t) && <div className="mt-3"><Stars v={t.rating || 0} onSet={t.svelato ? undefined : (n: number) => rate(t, n)} size={15} /></div>}
+                      {!isAdmin && !isDiary(t) && t.svelato && t.rating > 0 && <div className="mt-3 flex items-center gap-2"><Stars v={t.rating} size={15} /><span className="mu text-xs">voto ricevuto</span></div>}
                     </div>
                   </article></Reveal>
                 );
@@ -2535,7 +2562,8 @@ export default function App() {
           {/* EDITOR */}
           {tab === "write" && (
             <form onSubmit={submit} className="space-y-4 fadein">
-              <input className="inp !text-xl !py-3 hd font-bold" placeholder="Nome del progetto" value={title} onChange={(e) => setTitle(e.target.value)} required />
+              <KindPicker value={kind} onChange={setKind} locked={!!editingId} />
+              <input maxLength={200} aria-label="Titolo dello scritto" className="inp !text-xl !py-3 hd font-bold" placeholder={kind === "diary" ? "Dai un titolo al tuo pensiero" : "Titolo dello scritto"} value={title} onChange={(e) => setTitle(e.target.value)} required />
               <div className="pn">
                 <div className="p-2 rounded-t-[17px]" style={{ background: "var(--sf)" }}>
                   <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl" style={{ background: "var(--ln)" }} data-tour="editor-mode">
@@ -2594,7 +2622,7 @@ export default function App() {
                     {strokes.map((s, i) => <Shape key={i} s={s} />)}
                     {cur && <Shape s={cur} />}
                   </svg>
-                  <div ref={editorRef} contentEditable={!drawing} suppressContentEditableWarning data-ph="Scrivi appunti, formule, note di cablaggio…"
+                  <div ref={editorRef} contentEditable={!drawing} suppressContentEditableWarning data-ph={kind === "diary" ? "Che cosa ti passa per la testa? Questo spazio è tuo…" : "Comincia il tuo tema, racconto o scritto…"}
                     className="rt relative p-6 outline-none" style={{ minHeight: height, caretColor: "#0F8B7A" }}
                     onInput={(e: any) => { fixFonts(); setContent(e.currentTarget.innerHTML); }} onClick={pickImg}
                     onKeyDown={(e) => { if (e.key === "Enter") document.execCommand("formatBlock", false, "div"); }} />
@@ -2607,7 +2635,7 @@ export default function App() {
               </div>
               <div className="flex gap-2 justify-end">
                 {(editingId || title || strokes.length > 0 || words > 0) && <button type="button" className="bt" onClick={() => { if (confirm("Scartare le modifiche?")) resetForm(); }}>{editingId ? "Annulla modifica" : "Scarta bozza"}</button>}
-                <button className="bt on !px-6 !py-3" disabled={saving} data-tour="save">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{editingId ? "Salva modifiche" : "Salva progetto"}</button>
+                <button className="bt on !px-6 !py-3" disabled={saving} data-tour="save">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{editingId ? "Salva modifiche" : kind === "diary" ? "Pubblica nel diario" : "Invia scritto completo"}</button>
               </div>
             </form>
           )}
@@ -2620,7 +2648,7 @@ export default function App() {
         <div className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-40 pn shadow-xl flex items-center gap-2 p-2 popx">
           <span className="text-sm px-2">{ids.length} selezionati</span>
           <button className="bt" onClick={() => setIds(ids.length === shown.length ? [] : shown.map((t) => t.id))}>Tutti</button>
-          {isAdmin && <button className="bt" disabled={!ids.length} onClick={bulkMark}><Bookmark size={15} />Segnalibro</button>}
+          {isAdmin && items.some(t => ids.includes(t.id) && canEvaluate(t)) && <button className="bt" disabled={!ids.length} onClick={bulkMark}><Bookmark size={15} />Segnalibro</button>}
           <button className="bt dng" disabled={!ids.length} onClick={() => setToDelete(ids)}><Trash2 size={15} />Elimina</button>
         </div>
       )}
@@ -2630,12 +2658,12 @@ export default function App() {
         const sel = view; // durante l'uscita resta visibile l'ultimo scritto aperto
         const { w, h } = dims(sel);
         // scritto di un altro letto da chi non è admin: c'è solo la copia anonima, e il foglio mostra solo titolo e contenuto
-        const anon = !!sel._anon, list = anon ? pubShown : shown;
+        const anon = !!sel._anon, diary = isDiary(sel), list = tab === "diario" ? diaryShown : anon ? pubShown : shown;
         const si = list.findIndex((x) => x.id === sel.id);
         const hidS = !anon && hid(sel), fresh = !anon && rvl === sel.id;
         // il circuito dell'autore: i suoi scritti in ordine di data. Solo autori visibili, e solo scritti già svelati
         // (altrimenti il raggruppamento tradirebbe chi ha scritto un testo ancora anonimo)
-        const mates = anon || hidS ? [] : prepared.filter((x) => x.userId === sel.userId && !hid(x)).sort((a, b) => a.timestamp - b.timestamp);
+        const mates = anon || hidS || diary ? [] : prepared.filter((x) => !isDiary(x) && x.userId === sel.userId && !hid(x)).sort((a, b) => a.timestamp - b.timestamp);
         const mi = mates.findIndex((x) => x.id === sel.id), m0 = Math.max(0, Math.min(mi - 3, mates.length - 7)), near = mates.slice(m0, m0 + 7);
         const own = !anon && sel.userId === user.uid;
         return (
@@ -2645,14 +2673,14 @@ export default function App() {
                 {fresh && <span className="rvl-sweep" />}
                 {anon ? <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
                   <span className="rounded-full shrink-0 inline-flex items-center justify-center" style={{ width: 44, height: 44, background: "var(--sf)", border: "1px solid var(--ln)" }}><BookOpen size={20} className="mu" /></span>
-                  <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title || "Senza titolo"}</h2><div className="mu text-xs truncate">Scritto anonimo · solo lettura</div></div>
+                  <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title || "Senza titolo"}</h2><div className="mu text-xs truncate">{diary ? "Pensiero anonimo · lettura integrale" : "Scritto anonimo · estratto"}</div></div>
                 </div> : <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
                   {hidS ? who(sel, 44) : <button type="button" onClick={() => setViewProf(sel.userId)} className="shrink-0" aria-label="Apri profilo">{fresh ? <span className="rvl-av"><i className="rg" /><i className="rg" /><span className="pf-av"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></span></span> : <Avatar p={profiles[sel.userId]} name={sel.author} size={44} />}</button>}
                   <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
                 </div>}
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end self-end md:self-auto w-full md:w-auto">
                   {!anon && <button className="bt flex-1 md:flex-none justify-center !p-2" title="Copia testo" aria-label="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>}
-                  {isAdmin && !anon && <button className="bt flex-1 md:flex-none justify-center !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} aria-label="Segnalibro" onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /></button>}
+                  {isAdmin && !anon && !diary && <button className="bt flex-1 md:flex-none justify-center !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} aria-label="Segnalibro" onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /></button>}
                   {!anon && canEdit(sel) && <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={() => startEdit(sel)} title="Modifica" aria-label="Modifica"><Pencil size={15} /></button>}
                   {!anon && canEdit(sel) && <button className="bt dng flex-1 md:flex-none justify-center !p-2" onClick={() => setToDelete([sel.id])} title="Elimina" aria-label="Elimina"><Trash2 size={15} /></button>}
                   {si >= 0 && list.length > 1 && <><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si <= 0} onClick={() => stepTo(list[si - 1], -1)} aria-label="Scritto precedente"><ChevronLeft size={15} /></button><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si >= list.length - 1} onClick={() => stepTo(list[si + 1], 1)} aria-label="Scritto successivo"><ChevronRight size={15} /></button></>}
@@ -2663,23 +2691,24 @@ export default function App() {
               {/* la pista di lettura: si disegna aprendo il foglio, poi segue lo scorrimento; in fondo il nodo diventa ambra */}
               <div ref={railRef} className="read-rail" aria-hidden="true"><i /><b /></div>
               <div key={sel.id} ref={readRef} data-sheet-scroll="" className={`overflow-y-auto flex-1 min-h-0 ${swap ? "doc-swap" : ""}`} style={{ ["--dir" as any]: swap || 1 }}>
-              {isAdmin && !anon && <div className="flex items-center gap-3 px-4 py-2 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
-              {hidS && <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 py-2.5 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
+              {isAdmin && !anon && !diary && <div className="flex items-center gap-3 px-4 py-2 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
+              {hidS && !diary && <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 py-2.5 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
                 <div className="text-sm min-w-0"><b>Autore nascosto.</b> <span className="mu">{sel.rating > 0 ? "Puoi svelarlo: dopo lo svelamento il voto non si cambia più." : "Dai da 1 a 5 stelle per poterlo svelare."}</span></div>
                 <button type="button" className={`bt w-full sm:w-auto shrink-0 ${confirmRvl ? "on" : ""}`} disabled={!(sel.rating > 0)} onClick={() => confirmRvl ? reveal(sel) : setConfirmRvl(true)}><Eye size={15} />{confirmRvl ? "Conferma: voto definitivo" : "Svela autore"}</button>
               </div>}
-              {!isAdmin && !anon && sel.svelato && sel.rating > 0 && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Il tuo voto</span><Stars v={sel.rating} size={22} /></div>}
-              {isAdmin && !anon && <>
+              {!isAdmin && !anon && !diary && sel.svelato && sel.rating > 0 && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Il tuo voto</span><Stars v={sel.rating} size={22} /></div>}
+              {isAdmin && !anon && !diary && <>
                 <button type="button" onClick={() => setPanelOpen(!panelOpen)} aria-expanded={panelOpen} className="w-full flex items-center justify-between gap-3 px-4 py-2.5 border-b text-sm text-left" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
                   <span className="mu">Stato e nota privata <span className="font-semibold" style={{ color: "var(--ink)" }}>· {(STATI.find(([k]) => k === (vals[sel.id]?.stato || "da_leggere")) || ["", "Da leggere"])[1]}{vals[sel.id]?.nota ? " · con nota" : ""}</span></span>
                   <ChevronDown size={16} className="mu shrink-0" style={{ transform: panelOpen ? "rotate(180deg)" : "none", transition: "transform .25s" }} />
                 </button>
                 {panelOpen && <PannelloAdmin db={db} id={sel.id} notify={notify} />}
               </>}
-                <div className="paper mm relative" data-sheet-paper="" style={{ aspectRatio: `${w}/${h}` }}>
+                {(diary || anon) && <ReadingNotice item={sel} />}
+                {anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`paper ${diary ? "diary-paper" : "mm"} relative`} data-sheet-paper="" style={{ aspectRatio: `${w}/${h}` }}>
                   {sel.strokes?.length > 0 && <Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" />}
                   <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: clean(sel.content) }} />
-                </div>
+                </div>}
                 {near.length > 1 && (
                   <Reveal>
                     <nav className="cx" aria-label={own ? "I tuoi scritti" : `Scritti di ${dn(sel.userId, sel.author)}`}>
@@ -2714,7 +2743,7 @@ export default function App() {
       {toDelete && (
         <div className="fade fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60" onClick={() => setToDelete(null)}>
           <div className="pn p-6 max-w-sm w-full pop" onClick={(e) => e.stopPropagation()}>
-            <h3 className="hd text-xl font-bold mb-1">{toDelete.length > 1 ? `Eliminare ${toDelete.length} progetti?` : "Eliminare il progetto?"}</h3>
+            <h3 className="hd text-xl font-bold mb-1">{toDelete.length > 1 ? `Eliminare ${toDelete.length} scritti?` : "Eliminare lo scritto?"}</h3>
             <p className="mu text-sm mb-5">L'operazione non si può annullare.</p>
             <div className="flex gap-2 justify-end"><button className="bt" onClick={() => setToDelete(null)}>Annulla</button><button className="bt on !bg-red-600 !border-red-600 !text-white" onClick={confirmDelete}>Elimina</button></div>
           </div>
@@ -2726,10 +2755,10 @@ export default function App() {
         <div className="fade fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="pn p-8 max-w-sm w-full text-center pop">
             <svg viewBox="0 0 64 64" width="72" height="72" className="mx-auto mb-3" fill="none" stroke="var(--ac)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><circle cx="32" cy="32" r="28" opacity=".3" /><path className="tick" d="M18 33l9 9 19-20" /></svg>
-            <h3 className="hd text-2xl font-bold">{done === "edit" ? "Modifiche salvate" : "Progetto salvato"}</h3>
-            <div className="flex gap-2 mt-6 justify-center">
+            <h3 className="hd text-2xl font-bold">{done === "edit" ? "Modifiche salvate" : kind === "diary" ? "Pensiero pubblicato" : "Scritto inviato"}</h3>
+            <div className="flex flex-wrap gap-2 mt-6 justify-center">
               <button className="bt" onClick={() => { setDone(null); resetForm(); }}><Plus size={15} />Nuovo</button>
-              <button className="bt pri" onClick={() => { setDone(null); resetForm(); go("my_pages"); }}>Vai ai miei progetti</button>
+              <button className="bt pri" onClick={() => { const destination = kind === "diary" ? "diario" : "my_pages"; setDone(null); resetForm(); go(destination); }}>{kind === "diary" ? "Apri il diario" : "Vai ai miei scritti"}</button>
             </div>
           </div>
         </div>

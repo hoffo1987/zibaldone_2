@@ -1,0 +1,56 @@
+import React from "react";
+import { BookOpen, FileText, ArrowUpRight, EyeOff, LockKeyhole, Pen } from "lucide-react";
+import { plain } from "./sanitize";
+import { isDiary, type WritingKind } from "./testi";
+import "./writing.css";
+
+export function KindPicker({ value, onChange, locked = false }: { value: WritingKind; onChange: (v: WritingKind) => void; locked?: boolean }) {
+  return <fieldset className="writing-picker pn p-4 md:p-5">
+    <legend className="hd font-bold px-2">Che cosa stai scrivendo?</legend>
+    <div className="grid sm:grid-cols-2 gap-3">
+      {([{ id: "complete", title: "Scritto completo", text: "Un tema, un racconto, una riflessione sviluppata. Partecipa alla selezione del mese.", icon: FileText },
+        { id: "diary", title: "Pensiero del diario", text: "Un pensiero libero, un frammento della giornata. Si legge per intero, senza voti.", icon: BookOpen }] as const).map(x =>
+        <label key={x.id} className={`kind-option ${value === x.id ? "selected" : ""} ${x.id}`}>
+          <input type="radio" name="writing-kind" value={x.id} checked={value === x.id} disabled={locked} onChange={() => onChange(x.id)} />
+          <x.icon size={23} aria-hidden="true" /><span><b className="hd block text-base">{x.title}</b><span className="mu text-sm block mt-1">{x.text}</span></span>
+        </label>)}
+    </div>
+    <p className="mu text-xs mt-3">{locked ? "Il tipo resta quello scelto alla pubblicazione. Puoi modificare titolo e contenuto." : value === "diary"
+      ? "Tutti gli utenti potranno leggere il pensiero per intero. Il tuo nome sarà visibile solo a te e all’amministratore. Evita firme o dettagli che ti identifichino."
+      : "Gli altri utenti vedranno soltanto un breve estratto. Il testo integrale, le immagini e i disegni saranno accessibili a te e all’amministratore."}</p>
+  </fieldset>;
+}
+
+export function WritingIntro({ diary, onWrite }: { diary: boolean; onWrite: () => void }) {
+  return <section className={`writing-intro pn ${diary ? "diary-intro" : "complete-intro"}`}>
+    <div className="writing-symbol" aria-hidden="true">{diary ? <BookOpen size={36} /> : <FileText size={36} />}</div>
+    <div className="relative"><p className="writing-eyebrow">{diary ? "Il quaderno del Circuito" : "La biblioteca del Circuito"}</p>
+      <h2 className="hd text-2xl md:text-3xl font-bold mt-2">{diary ? "Una pausa, una pagina." : "Scritti che prendono forma."}</h2>
+      <p className="mu mt-3 max-w-2xl">{diary ? "Le cose che passano per la testa, senza dover diventare un tema. Qui ogni pensiero ha spazio: lo leggiamo per intero, senza nomi, voti o classifiche."
+        : "Temi, racconti e riflessioni a cui dedicare tempo. Qui trovi gli estratti; l’amministratore legge i testi integrali e seleziona gli scritti per il podio del mese."}</p>
+      <div className="writing-promises"><span><EyeOff size={14} />{diary ? "Anonimo agli altri utenti" : "Lettura anonima"}</span><span>{diary ? <BookOpen size={14} /> : <LockKeyhole size={14} />}{diary ? "Lettura integrale" : "Solo un estratto pubblico"}</span></div>
+      <button className="bt mt-5" onClick={onWrite}><Pen size={15} />{diary ? "Affida un pensiero al diario" : "Scrivi uno scritto completo"}<ArrowUpRight size={15} /></button>
+    </div>
+  </section>;
+}
+
+export function DiaryCards({ items, onOpen, author, drawing }: { items: any[]; onOpen: (t: any, e: any) => void; author: (t: any) => string; drawing: (t: any) => React.ReactNode }) {
+  return <div className="diary-grid grid sm:grid-cols-2 gap-5">
+    {items.map(t => <article key={t.id} data-doc={t.id} className="diary-card pn" role="button" tabIndex={0} aria-label={`Leggi il pensiero ${t.title}`} onClick={e => onOpen(t, e)} onKeyDown={e => { if (["Enter", " "].includes(e.key)) { e.preventDefault(); onOpen(t, e); } }}>
+      <div className="diary-card-top"><BookOpen size={17} /><span>{author(t)}</span><ArrowUpRight size={17} className="ml-auto" /></div>
+      <div className="paper diary-paper"><h3 className="hd font-bold text-xl">{t.title}</h3><p className="whitespace-pre-line mt-4 line-clamp-6">{plain(t.content).trim() || "Un pensiero disegnato, oltre le parole."}</p>{drawing(t)}</div>
+      <p className="mu text-xs mt-4">Un pensiero da leggere, senza giudizi.</p>
+    </article>)}
+  </div>;
+}
+
+export function ReadingNotice({ item }: { item: any }) {
+  return <div className={`reading-notice ${isDiary(item) ? "diary-notice" : ""}`} role="note">
+    {isDiary(item) ? <><EyeOff size={19} /><div><b>Pensiero del diario · lettura integrale</b><p>Il nome dell’autore è visibile solo all’amministratore e all’autore stesso. Questo pensiero non riceve voti, categorie o posizioni in classifica.</p></div></>
+      : <><LockKeyhole size={19} /><div><b>Stai leggendo soltanto un estratto</b><p>Per tutelare lo scritto, il testo integrale, le immagini e i disegni sono riservati all’autore e all’amministratore.</p></div></>}
+  </div>;
+}
+
+export function PublicExcerpt({ excerpt }: { excerpt: string }) {
+  return <div className="paper excerpt-paper p-6 md:p-10" data-sheet-paper=""><p className="whitespace-pre-wrap text-lg leading-relaxed">{excerpt || "Questo scritto non contiene un estratto testuale disponibile."}{excerpt && "…"}</p><div className="excerpt-end" aria-hidden="true" /><p className="mu text-sm mt-5 flex items-center gap-2"><LockKeyhole size={16} />Il resto dello scritto rimane riservato.</p></div>;
+}

@@ -18,6 +18,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run typecheck:egg
       - run: npm test -- --watchAll=false --runInBand
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify Firestore privacy rules in emulator
+        run: npx -y firebase-tools@latest emulators:exec --only firestore --project demo-circuito 'npm run test:rules'
       - run: npm run build
       - uses: actions/upload-artifact@v4
         with:

@@ -8,5 +8,6 @@ build
 .optimization/
 dist-apk/
 *.log
+.firebase/
 *.jks
 *.keystore

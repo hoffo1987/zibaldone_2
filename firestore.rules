@@ -15,86 +15,83 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    match /pensieri/{id} {
-      allow read: if signedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-
-      allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred'])
-        && request.resource.data.keys().hasAll(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred'])
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.isStarred == false
-        && request.resource.data.title is string
-        && request.resource.data.content is string
-        && request.resource.data.strokes is list
-        && request.resource.data.author is string
-        && request.resource.data.w is number
-        && request.resource.data.h is number
-        && request.resource.data.timestamp is number;
-
-      allow update: if signedIn() && (
-        (
-          // L'autore modifica solo il contenuto.
-          resource.data.userId == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'updatedAt'])
-          && request.resource.data.title is string
-          && request.resource.data.content is string
-          && request.resource.data.strokes is list
-        ) || (
-          isAdmin()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'updatedAt', 'rating', 'isStarred', 'svelato'])
-          // Il segnalibro vive in valutazioni/{id}.segnalibro (privato): nello scritto si può solo azzerare il vecchio campo.
-          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isStarred']) || request.resource.data.isStarred == false)
-
-          // Il voto vive in valutazioni/{id}.voto (privato). Nello scritto entra solo allo svelamento,
-          // identico al voto privato; prima dello svelamento si può solo togliere il vecchio campo rating.
-          // Dopo lo svelamento non si cambia più.
-          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['rating'])
-              || (resource.data.get('svelato', false) != true
-                  && (!('rating' in request.resource.data)
-                      || (request.resource.data.get('svelato', false) == true
-                          && request.resource.data.rating is int
-                          && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
-                          && request.resource.data.rating == get(/databases/$(database)/documents/valutazioni/$(id)).data.get('voto', 0)))))
-
-          // Lo svelamento si fa una sola volta e solo insieme a un voto.
-          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['svelato'])
-              || (request.resource.data.svelato == true
-                  && resource.data.get('svelato', false) != true
-                  && request.resource.data.get('rating', 0) > 0))
-        )
-      );
-
-      allow delete: if signedIn()
-        && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    // Copia pubblica e anonima di ogni scritto, con lo stesso id: solo titolo, testo e disegno.
-    // Niente autore, uid, date, voti né altro: la può leggere chiunque abbia un account, senza risalire a chi l'ha scritta
-    // (gli id sono casuali e lo scritto in pensieri/{id} resta leggibile solo dall'autore e dagli admin).
-    // La scrivono l'autore o un admin, e deve essere identica allo scritto: non ci si può infilare nient'altro.
-    function pensiero(id) {
-      return /databases/$(database)/documents/pensieri/$(id);
+    // pensieri: originali privati, tipo immutabile; i documenti senza kind sono scritti completi.
+    // testi v2: diario integrale anonimo oppure solo estratto, senza identità, date, voti o allegati dei completi.
+    function pensiero(id) { return /databases/$(database)/documents/pensieri/$(id); }
+    function tipo(d) { return d.get('kind', 'complete'); }
+    function completo(id) { return exists(pensiero(id)) && tipo(get(pensiero(id)).data) == 'complete'; }
+    function validoOriginale(d) {
+      return d.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred', 'kind', 'excerpt', 'updatedAt', 'rating', 'svelato'])
+        && d.keys().hasAll(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred'])
+        && d.title is string && d.title.size() > 0 && d.title.size() <= 200
+        && d.content is string && d.content.size() <= 950000
+        && d.strokes is list && d.strokes.size() <= 10000
+        && d.w is number && d.w > 0 && d.w <= 200000
+        && d.h is number && d.h > 0 && d.h <= 200000
+        && d.author is string && d.author.size() <= 200
+        && d.userId is string && d.timestamp is number && d.isStarred is bool
+        && d.get('updatedAt', 0) is number
+        && tipo(d) in ['complete', 'diary']
+        && d.get('excerpt', '') is string && d.get('excerpt', '').size() <= 480
+        && d.get('svelato', false) is bool
+        && (!('rating' in d) || (d.rating is int && d.rating >= 1 && d.rating <= 5))
+        && (tipo(d) == 'complete' || (!('rating' in d) && d.isStarred == false && d.get('svelato', false) == false && d.get('excerpt', '') == ''));
     }
     function copiaFedele(id) {
-      return request.resource.data.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h'])
-        && request.resource.data.get('title', null) == getAfter(pensiero(id)).data.get('title', null)
-        && request.resource.data.get('content', null) == getAfter(pensiero(id)).data.get('content', null)
-        && request.resource.data.get('strokes', null) == getAfter(pensiero(id)).data.get('strokes', null)
-        && request.resource.data.get('w', null) == getAfter(pensiero(id)).data.get('w', null)
-        && request.resource.data.get('h', null) == getAfter(pensiero(id)).data.get('h', null);
+      let d = request.resource.data;
+      let original = getAfter(pensiero(id)).data;
+      return d.get('version', 0) == 2 && d.kind == tipo(original) && d.title == original.title
+        && ((d.kind == 'diary'
+          && d.keys().hasOnly(['version', 'kind', 'title', 'content', 'strokes', 'w', 'h'])
+          && d.keys().hasAll(['version', 'kind', 'title', 'content', 'strokes', 'w', 'h'])
+          && d.content == original.content && d.strokes == original.strokes && d.w == original.w && d.h == original.h)
+        || (d.kind == 'complete'
+          && d.keys().hasOnly(['version', 'kind', 'title', 'excerpt'])
+          && d.keys().hasAll(['version', 'kind', 'title', 'excerpt'])
+          && d.excerpt is string && d.excerpt.size() <= 480
+          && d.excerpt.size() <= original.content.size() * 0.3
+          && d.excerpt == original.get('excerpt', d.excerpt)));
+    }
+    function pubblicazioneAllineata(id) {
+      let d = request.resource.data;
+      let pub = getAfter(/databases/$(database)/documents/testi/$(id)).data;
+      return pub.version == 2 && pub.kind == tipo(d) && pub.title == d.title
+        && ((tipo(d) == 'diary' && pub.content == d.content && pub.strokes == d.strokes && pub.w == d.w && pub.h == d.h)
+          || (tipo(d) == 'complete' && pub.excerpt == d.get('excerpt', '')));
+    }
+    match /pensieri/{id} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn() && validoOriginale(request.resource.data)
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.isStarred == false && !('rating' in request.resource.data)
+        && request.resource.data.get('svelato', false) == false
+        // Le vecchie app possono ancora salvare un completo privato, mai una copia integrale pubblica.
+        && (!('kind' in request.resource.data) || pubblicazioneAllineata(id));
+      allow update: if signedIn() && validoOriginale(request.resource.data)
+        && tipo(request.resource.data) == tipo(resource.data)
+        && (!('kind' in request.resource.data) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind']) || pubblicazioneAllineata(id))
+        && ((resource.data.userId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'updatedAt']))
+        || (isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'updatedAt', 'rating', 'isStarred', 'svelato'])
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isStarred']) || request.resource.data.isStarred == false)
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['rating'])
+            || (tipo(resource.data) == 'complete' && resource.data.get('svelato', false) != true
+              && (!('rating' in request.resource.data)
+                || (request.resource.data.get('svelato', false) == true
+                  && request.resource.data.rating == get(/databases/$(database)/documents/valutazioni/$(id)).data.get('voto', 0)))))
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['svelato'])
+            || (tipo(resource.data) == 'complete' && request.resource.data.svelato == true
+              && resource.data.get('svelato', false) != true && request.resource.data.get('rating', 0) > 0))));
+      allow delete: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
     match /testi/{id} {
-      allow read: if signedIn();
-
-      allow create, update: if signedIn()
-        && existsAfter(pensiero(id))
-        && (getAfter(pensiero(id)).data.userId == request.auth.uid || isAdmin())
-        && copiaFedele(id);
-
-      // L'autore la toglie prima di eliminare lo scritto; l'admin anche quando lo scritto non c'è più.
-      allow delete: if isAdmin()
-        || (signedIn() && exists(pensiero(id)) && get(pensiero(id)).data.userId == request.auth.uid);
+      // Vecchie copie integrali senza versione non sono più leggibili dagli utenti.
+      // I nuovi client interrogano esclusivamente where(version == 2).
+      allow read: if signedIn() && (isAdmin() || resource.data.version == 2);
+      allow create, update: if signedIn() && existsAfter(pensiero(id))
+        && (getAfter(pensiero(id)).data.userId == request.auth.uid || isAdmin()) && copiaFedele(id);
+      allow delete: if isAdmin() || (signedIn() && exists(pensiero(id)) && get(pensiero(id)).data.userId == request.auth.uid);
     }
 
     // Notifica "hai ricevuto un voto": la crea l'admin allo svelamento, la legge e la segna come letta solo l'autore.
@@ -102,6 +99,8 @@ service cloud.firestore {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
 
       allow create: if isAdmin()
+        && completo(request.resource.data.pensieroId)
+        && request.resource.data.userId == get(pensiero(request.resource.data.pensieroId)).data.userId
         && request.resource.data.keys().hasOnly(['userId', 'pensieroId', 'titolo', 'voto', 'timestamp', 'letta'])
         && request.resource.data.keys().hasAll(['userId', 'pensieroId', 'titolo', 'voto', 'timestamp', 'letta'])
         && request.resource.data.userId is string
@@ -122,7 +121,7 @@ service cloud.firestore {
     // Voto, segnalibro, stato e nota privata di ogni scritto: solo admin, l'autore non li vede mai.
     match /valutazioni/{id} {
       allow read, delete: if isAdmin();
-      allow create, update: if isAdmin()
+      allow create, update: if isAdmin() && completo(id)
         && request.resource.data.keys().hasOnly(['stato', 'nota', 'voto', 'segnalibro', 'updatedAt'])
         && request.resource.data.get('stato', 'da_leggere') in ['da_leggere', 'letto', 'shortlist', 'scelto']
         && request.resource.data.get('nota', '') is string && request.resource.data.get('nota', '').size() <= 2000

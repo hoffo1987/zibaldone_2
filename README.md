@@ -1,6 +1,30 @@
 # zibaldone_2 · Il Circuito
 Created with CodeSandbox
 
+## Diario e scritti completi
+
+Ogni invio sceglie tra **Scritto completo** e **Pensiero del diario**. La scelta resta fissa dopo la pubblicazione;
+titolo, testo, foto e disegni restano modificabili. Gli scritti precedenti sono considerati completi.
+
+- Il Diario è leggibile per intero da tutti gli utenti registrati, senza nomi né date pubbliche. Solo autore e admin
+  possono conoscere l'identità. Non riceve voti, stati, note di valutazione o segnalibri e non partecipa al podio.
+- Gli scritti completi partecipano alla selezione mensile. Gli altri utenti ricevono un estratto di al massimo il 30%
+  del testo e 480 byte; il lettore mostra un avviso. HTML integrale, immagini e disegni restano all'autore e agli admin.
+- `pensieri/{id}` contiene l'originale privato. `testi/{id}` versione 2 contiene esclusivamente la proiezione consentita,
+  senza identità o valutazioni. Salvataggio e modifica delle nuove pagine aggiornano entrambi i documenti atomicamente.
+- Le regole negano le vecchie copie pubbliche integrali, anche se richieste direttamente o da una vecchia app.
+  Le vecchie app possono ancora salvare originali privati come scritti completi. Il nuovo client aggiorna le proiezioni
+  degli originali accessibili all'utente; l'admin sincronizza l'archivio completo.
+
+Il progetto Firebase esistente è configurato in `.firebaserc`. Per verificare le regole localmente (JDK 21):
+
+```sh
+npx firebase-tools emulators:exec --only firestore --project demo-circuito 'npm run test:rules'
+```
+
+La CI esegue questi test senza credenziali o accesso ai dati reali. Dopo averli verificati, le regole si distribuiscono
+con `npx firebase-tools deploy --only firestore:rules`. I backup dei dati sono locali e ignorati da Git.
+
 ## Sviluppo e verifica
 
 Usare Node.js 24 e il lockfile npm incluso:
