@@ -17,6 +17,9 @@ Richiede Node compatibile con Expo SDK 58, JDK 21, Android SDK/NDK (installati a
 da Gradle se le licenze Android sono accettate), oppure Xcode su macOS per iOS.
 Su Windows installare anche **CMake 3.31.6** da Android Studio → SDK Manager → SDK Tools:
 la versione 3.22.1 contiene un Ninja che non gestisce i lunghi percorsi del codice generato.
+Lo script Windows assegna temporaneamente una lettera di unità libera alla cartella del progetto
+e la usa solo per gli oggetti CMake in `.optimization/cxx/`; le sorgenti restano nel percorso
+originale. La lettera viene liberata anche se la compilazione fallisce.
 
 ```powershell
 cd native
