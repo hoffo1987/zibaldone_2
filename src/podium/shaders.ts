@@ -591,6 +591,10 @@ fn dfg(nv: f32, r: f32) -> vec2f {
 // lobo speculare dove la normale cambia molto dentro il pixel
 fn shade(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, eye: vec3f, px: vec2f, g: Grads, kr: f32) -> vec3f {
   let s = surfaceAt(m, p, n0, uv, vao, g);
+  return shadeSurface(s, m, p, n0, eye, px, kr);
+}
+// Imported meshes use exactly the room's BRDF, probe irradiance, PCSS shadows and environment reflections.
+fn shadeSurface(s: Surf, m: u32, p: vec3f, n0: vec3f, eye: vec3f, px: vec2f, kr: f32) -> vec3f {
   let a = s.rough * s.rough; let rough = sqrt(sqrt(saturate(a * a + kr)));
   let n = s.n; let V = normalize(eye - p); let L = F.sun.xyz;
   let nv = clamp(dot(n, V), 1e-3, 1.0); let ndl = max(dot(n, L), 0.0);
@@ -598,7 +602,11 @@ fn shade(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, eye: vec3f, px: vec2f
   if (ndl > 0.0 && dot(n0, L) > -0.05) { vis = sunLight(p + n0 * 0.012, P.misc.y == 0.0); }
   let light = F.sunCol.rgb * F.sun.w * vis * ndl;
   let ao = s.ao * contactAO(p, n0);
-  let gi = (giAt(p + n0 * 0.3, n) + F.skyHor.w) * ao;
+  // During the reveal, lift existing bounced light around the alcove on every surface,
+  // including the column and floor. Its direction and colour still come from the room probes.
+  let alcove = p - vec3f(-5.5, 3.0, -2.8);
+  let bounce = 1.0 + 4.0 * F.banner.w * exp(-dot(alcove, alcove) / 12.0);
+  let gi = (giAt(p + n0 * 0.3, n) + F.skyHor.w) * ao * bounce;
   let f0 = mix(vec3f(0.04), s.alb, s.metal);
   let hv = L + V; let H = hv * inverseSqrt(max(dot(hv, hv), 1e-12)); // astro esattamente dietro il punto: niente 0/0
   let spec = light * fresnel(f0, dot(V, H)) * ggx(saturate(dot(n, H)), max(rough, 0.05)) * 0.25 / nv;
@@ -627,6 +635,8 @@ fn shade(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, eye: vec3f, px: vec2f
   return col;
 }
 `;
+
+export const modelLightingShader = (q: PodiumQuality) => `${structs}${noise}${frameBindings("read")}${passBinding}${lightFns(q)}${giFns}${material}`;
 
 export const sceneShader = (q: PodiumQuality) => /* wgsl */ `${structs}${noise}${frameBindings("read")}${passBinding}${sky}${lightFns(q)}${giFns}${material}${animFns}
 // centroid: con l'MSAA un pixel coperto solo in parte si calcola dentro il triangolo; al centro del pixel, fuori da un

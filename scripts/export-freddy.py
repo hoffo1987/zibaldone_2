@@ -28,11 +28,12 @@ def turn(name, degrees, axis='Y'):
     bpy.context.view_layer.update()
 
 # Free hand on the viewer's right; the microphone hand stays lowered.
-turn('R_Shoulder_jnt', -77)
-turn('L_Shoulder_jnt', 38)
-turn('L_Elbow_jnt', -132)
+turn('R_Shoulder_jnt', -112)
+turn('L_Shoulder_jnt', -65)
+turn('L_Elbow_jnt', -29)
 turn('L_Wrist_jnt', -82, 'Z')
-turn('Head_jnt', 9)
+# Lean from the waist, keeping both feet grounded. The live renderer aims the head at the camera.
+turn('Spine_jnt', 24)
 turn('ExoJaw_jnt', 5, 'X')
 
 # Convert Blender Z-up / -Y-forward to the room's Y-up / +Z-forward, at 3.4 metres tall.
@@ -40,6 +41,11 @@ k = 3.4 / 4.987485
 convert = Matrix(((k,0,0,0),(0,0,k,0.003),(0,-k,0,0),(0,0,0,1)))
 world = convert @ obj.matrix_world
 normal = world.to_3x3().inverted().transposed()
+head = rig.pose.bones['Head_jnt']
+head_pivot = convert @ rig.matrix_world @ head.head
+head_names = {head.name, *(b.name for b in head.children_recursive)}
+head_groups = {g.index for g in obj.vertex_groups if g.name in head_names}
+head_weights = [min(1, sum(g.weight for g in v.groups if g.group in head_groups)) for v in obj.data.vertices]
 def evaluated():
     ev = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
     mesh = ev.to_mesh(preserve_all_data_layers=True, depsgraph=bpy.context.evaluated_depsgraph_get())
@@ -60,8 +66,8 @@ for material in range(len(obj.data.materials)):
     for mat, loops, ids in triangles:
         if mat != material: continue
         for loop, vid in zip(loops, ids):
-            values = (*p0[vid], *n0[loop], uv[loop][0], 1-uv[loop][1], *(p1[vid]-p0[vid]), *(n1[loop]-n0[loop]))
-            key = struct.pack('<14f', *values)
+            values = (*p0[vid], *n0[loop], uv[loop][0], 1-uv[loop][1], *(p1[vid]-p0[vid]), *(n1[loop]-n0[loop]), head_weights[vid])
+            key = struct.pack('<15f', *values)
             if key not in lookup:
                 lookup[key] = len(vertices)
                 vertices.append(key)
@@ -71,7 +77,7 @@ with open(os.path.join(output,'freddy.bin'),'wb') as f:
     f.write(b''.join(vertices))
     f.write(struct.pack('<%dI' % len(indices),*indices))
 with open(os.path.join(output,'freddy.json'),'w') as f:
-    json.dump({'version':1,'vertexCount':len(vertices),'indexCount':len(indices),'stride':56,'ranges':ranges,
+    json.dump({'version':2,'vertexCount':len(vertices),'indexCount':len(indices),'stride':60,'headPivot':list(head_pivot),'ranges':ranges,
                'materials':['body','endo','eye','microphone']},f,separators=(',',':'))
 print('FREDDY:',len(vertices),'vertices,',len(indices)//3,'triangles')
 

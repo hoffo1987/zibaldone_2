@@ -161,6 +161,7 @@ export class PodiumView {
   private freddyPending: Promise<boolean> | null = null;
   private freddyAbort = new AbortController();
   private freddyVisible = false;
+  private secretLight = 0;
   onError: ((e: Error) => void) | null = null;
 
   constructor(private readonly device: GPUDevice, readonly canvas: HTMLCanvasElement, readonly q: PodiumQuality, timestamps = false) {
@@ -433,7 +434,7 @@ export class PodiumView {
     if (!this.freddyPending) this.freddyPending = import('./freddy')
       .then(({ Freddy }) => {
         if (this.dead) return null;
-        return Freddy.load(this.device, [this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, this.frameBuf], this.freddyAbort.signal);
+        return Freddy.load(this.device, [this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, this.frameBuf], this.freddyAbort.signal, this.q, this.layouts.frame, this.layouts.pass);
       }).then(model => {
         if (!model) return false;
         if (this.dead) { model.destroy(); return false; }
@@ -454,7 +455,7 @@ export class PodiumView {
     u.set([
       L[0], L[1], L[2], m.sunI, ...m.sun, night, ...m.skyTop, m.exposure, ...m.skyHor, m.ambient,
       ...m.wall, m.fog, ...m.wainscot, m.dust, ...m.ceiling, m.cover, ...m.tileA, t, ...m.tileB, this.frameNo % 4096,
-      ...m.stone, q.steps, ...m.darkStone, this.fresh ? 1 : 0.45, ...m.carpet, turn, ...m.banner, 0, ...m.frame, 0,
+      ...m.stone, q.steps, ...m.darkStone, this.fresh ? 1 : 0.45, ...m.carpet, turn, ...m.banner, this.secretLight, ...m.frame, 0,
       s.pw, s.ph, s.vw, s.vh,
     ], 16);
     u.set(this.cups, 76);
@@ -513,7 +514,8 @@ export class PodiumView {
     const visible = secretSeconds >= 0 && !!this.freddy;
     if (visible !== this.freddyVisible) this.envAll = true; // No stale face retains Freddy after switching to day.
     this.freddyVisible = visible;
-    if (this.freddyVisible) this.freddy!.update(secretSeconds, reducedMotion);
+    this.secretLight = visible ? Math.min(1, secretSeconds / 1.1) : 0;
+    if (this.freddyVisible) this.freddy!.update(secretSeconds, reducedMotion, c.pos);
     if (first) d.pushErrorScope("validation");
 
     // all'avvio le sonde si riempiono subito (due giri completi: anche il secondo rimbalzo), poi un turno per fotogramma
@@ -549,14 +551,14 @@ export class PodiumView {
       const stamp = this.ts && f === faces[faces.length - 1] ? { timestampWrites: { querySet: this.ts.set, endOfPassWriteIndex: 1 } } : {};
       const p = enc.beginRenderPass({ label: "podium-env", colorAttachments: [{ view: G.envFaces[f], loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: this.envDepthView, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" }, ...stamp });
       p.executeBundles([G.envBundles[f]]);
-      if (this.freddyVisible) this.freddy?.draw(p, f + 2);
+      if (this.freddyVisible) this.freddy?.draw(p, f + 2, G.frameOff);
       p.end();
     }
     // riflesso del pavimento
     {
       const p = enc.beginRenderPass({ label: "podium-planar", colorAttachments: [{ view: s.planar, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: s.planarDepth, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" } });
       p.executeBundles([G.planarBundle]);
-      if (this.freddyVisible) this.freddy?.draw(p, 1);
+      if (this.freddyVisible) this.freddy?.draw(p, 1, G.frameOff);
       p.end();
     }
     {
@@ -571,7 +573,7 @@ export class PodiumView {
       const color: GPURenderPassColorAttachment = s.scene ? { view: s.color, resolveTarget: s.scene, loadOp: "clear", storeOp: "discard", clearValue: [0, 0, 0, 1] } : { view: s.color, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] };
       const p = enc.beginRenderPass({ label: "podium-main", colorAttachments: [color], depthStencilAttachment: { view: s.depth, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" } });
       p.executeBundles([s.bundle]);
-      if (this.freddyVisible) this.freddy?.draw(p, 0);
+      if (this.freddyVisible) this.freddy?.draw(p, 0, s.frameMain);
       p.end();
     }
     const v = this.vflip;

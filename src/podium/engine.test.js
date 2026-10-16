@@ -59,11 +59,16 @@ test('the secret shares scene passes only while revealed and clears every reflec
   expect(model.draw).not.toHaveBeenCalled();
   stats.passes = [];
   view.render(22, 1, undefined, undefined, 0.5, true); await device.queue.onSubmittedWorkDone();
-  expect(model.update).toHaveBeenCalledWith(0.5, true);
+  expect(model.update).toHaveBeenCalledWith(0.5, true, view.camera.pos);
   expect(model.draw.mock.calls.map(args => args[1]).sort()).toEqual([0,1,2,3,4,5,6,7,8]);
+  for (const [, pass, lighting] of model.draw.mock.calls) {
+    if (pass !== 8) expect(lighting).toBe(pass === 0 ? view.sized.frameMain : view.groups.frameOff);
+  }
+  expect(view.secretLight).toBeGreaterThan(0);
   model.draw.mockClear(); stats.passes = [];
   view.render(23, 0, undefined, undefined, -1); await device.queue.onSubmittedWorkDone();
   expect(model.draw).not.toHaveBeenCalled();
+  expect(view.secretLight).toBe(0);
   expect(stats.passes.filter(p => p.label === 'podium-env')).toHaveLength(6);
   view.destroy(); expect(model.destroy).toHaveBeenCalledTimes(1);
 });

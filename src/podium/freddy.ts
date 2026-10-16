@@ -1,24 +1,33 @@
-// Loaded only after the first correct window tap. Uses the room's depth, HDR, bloom and reflections.
-const shader = /* wgsl */ `
-struct Object { model: mat4x4f, params: vec4f };
-struct Pass { vp: mat4x4f, pos: vec4f, right: vec4f, up: vec4f, fwd: vec4f, misc: vec4f };
-@group(0) @binding(0) var<uniform> O: Object;
-@group(1) @binding(0) var<uniform> P: Pass;
-@group(2) @binding(0) var color: texture_2d<f32>;
-@group(2) @binding(1) var normalMap: texture_2d<f32>;
-@group(2) @binding(2) var smp: sampler;
-@group(2) @binding(3) var<uniform> material: vec4f;
-struct Out { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f };
-@vertex fn vs(@location(0) pos: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f,
-              @location(3) dp: vec3f, @location(4) dn: vec3f) -> Out {
-  var o: Out;
-  let wp = (O.model * vec4f(pos + dp * O.params.x, 1.0)).xyz;
-  o.wp = wp; o.n = (O.model * vec4f(normalize(n + dn * O.params.x), 0.0)).xyz; o.uv = uv;
-  let cp = select(wp, vec3f(wp.x, -wp.y, wp.z), P.misc.y == 1.0);
-  o.pos = P.vp * vec4f(cp, 1.0); return o;
-}
-@vertex fn shadow(@location(0) pos: vec3f, @location(3) dp: vec3f) -> @builtin(position) vec4f {
-  return P.vp * O.model * vec4f(pos + dp * O.params.x, 1.0);
+// Loaded only after the first correct window tap. The same lighting shader and GPU resources as the room.
+import { modelLightingShader, type PodiumQuality } from './shaders';
+import { writeFreddyPose } from './freddyPose';
+const objectStruct = `struct Object { model: mat4x4f, head: mat4x4f, params: vec4f, pivot: vec4f };`;
+const deformation = /* wgsl */ `
+struct Input { @location(0) p: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f,
+  @location(3) dp: vec3f, @location(4) dn: vec3f, @location(5) headWeight: f32 };
+struct Deformed { p: vec3f, n: vec3f };
+fn deform(i: Input) -> Deformed {
+  let p = i.p + i.dp * O.params.x; let n = normalize(i.n + i.dn * O.params.x);
+  let hp = (O.head * vec4f(p - O.pivot.xyz, 1.0)).xyz + O.pivot.xyz;
+  let hn = (O.head * vec4f(n, 0.0)).xyz;
+  return Deformed((O.model * vec4f(mix(p, hp, i.headWeight), 1.0)).xyz,
+    normalize((O.model * vec4f(mix(n, hn, i.headWeight), 0.0)).xyz));
+}`;
+const shader = (q: PodiumQuality) => /* wgsl */ `${modelLightingShader(q)}${objectStruct}
+@group(2) @binding(0) var<uniform> O: Object;
+@group(3) @binding(0) var color: texture_2d<f32>;
+@group(3) @binding(1) var normalMap: texture_2d<f32>;
+@group(3) @binding(2) var smp: sampler;
+@group(3) @binding(3) var<uniform> material: vec4f;
+${deformation}
+struct Out { @builtin(position) pos: vec4f,
+ @location(0) @interpolate(perspective, centroid) wp: vec3f,
+ @location(1) @interpolate(perspective, centroid) n: vec3f,
+ @location(2) @interpolate(perspective, centroid) uv: vec2f };
+@vertex fn vs(i: Input) -> Out {
+  let a = deform(i); var o: Out; o.wp = a.p; o.n = a.n; o.uv = i.uv;
+  o.pos = P.vp * vec4f(select(a.p, vec3f(a.p.x, -a.p.y, a.p.z), P.misc.y == 1.0), 1.0);
+  return o;
 }
 @fragment fn fs(i: Out) -> @location(0) vec4f {
   let base = textureSample(color, smp, i.uv).rgb;
@@ -30,21 +39,25 @@ struct Out { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1)
   let inv = inverseSqrt(max(max(dot(t,t),dot(bt,bt)), 1e-12));
   // Exported UVs flip V for image upload; invert the tangent-space green axis with them.
   let n = normalize(t * inv * nm.x - bt * inv * nm.y + n0 * nm.z);
-  let moon = max(dot(n, normalize(vec3f(0.15,0.45,-1.0))),0.0);
-  // A faint cold fill reveals the face in the unlit aisle; the room's exposure and bloom finish the image.
-  let fill = max(dot(n, normalize(vec3f(0.4,0.5,1.0))),0.0);
-  let rim = pow(1.0 - abs(dot(n, normalize(P.pos.xyz - i.wp))),3.0);
-  var light = base * (vec3f(0.012,0.018,0.028) + moon * vec3f(0.06,0.12,0.21) + fill * vec3f(0.16,0.18,0.22));
-  light += rim * vec3f(0.008,0.017,0.03);
-  if (material.x == 2.0) { light += base * 0.1; }
-  return vec4f(light * O.params.y, 1.0);
+  var surface: Surf;
+  surface.alb = base; surface.n = n; surface.rough = material.y; surface.metal = material.z;
+  surface.ao = 1.0; surface.kind = 2u; surface.sheen = material.w;
+  let nx = dpdx(n); let ny = dpdy(n); let kr = min(0.3 * (dot(nx, nx) + dot(ny, ny)), 0.2);
+  var eye = P.pos.xyz; if (P.misc.y == 1.0) { eye.y = -eye.y; }
+  return vec4f(finite3(shadeSurface(surface, 0u, i.wp, n0, eye, i.pos.xy, kr)), 1.0);
 }`;
+const shadowShader = `${objectStruct}
+@group(0) @binding(0) var<uniform> O: Object;
+@group(1) @binding(0) var<uniform> light: mat4x4f;
+${deformation}
+@vertex fn shadow(i: Input) -> @builtin(position) vec4f { return light * vec4f(deform(i).p, 1.0); }`;
 
-type Meta = { version: number; vertexCount: number; indexCount: number; stride: number; ranges: { first: number; count: number }[]; materials: string[] };
-const vertexLayout: GPUVertexBufferLayout = { arrayStride: 56, attributes: [
+type Meta = { version: number; vertexCount: number; indexCount: number; stride: number; headPivot: number[]; ranges: { first: number; count: number }[]; materials: string[] };
+const vertexLayout: GPUVertexBufferLayout = { arrayStride: 60, attributes: [
   { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' },
   { shaderLocation: 2, offset: 24, format: 'float32x2' }, { shaderLocation: 3, offset: 32, format: 'float32x3' },
   { shaderLocation: 4, offset: 44, format: 'float32x3' },
+  { shaderLocation: 5, offset: 56, format: 'float32' },
 ] };
 
 export class Freddy {
@@ -58,16 +71,16 @@ export class Freddy {
   private passes: GPUBindGroup[] = [];
   private pipes!: { main: GPURenderPipeline; flat: GPURenderPipeline; shadow: GPURenderPipeline };
   private meta!: Meta;
-  private data = new Float32Array(20);
+  private data = new Float32Array(40);
   private constructor(private device: GPUDevice) {}
 
-  static async load(device: GPUDevice, passBuffers: GPUBuffer[], signal: AbortSignal) {
+  static async load(device: GPUDevice, passBuffers: GPUBuffer[], signal: AbortSignal, q: PodiumQuality, frameLayout: GPUBindGroupLayout, passLayout: GPUBindGroupLayout) {
     const result = new Freddy(device);
-    try { await result.init(passBuffers, signal); return result; }
+    try { await result.init(passBuffers, signal, q, frameLayout, passLayout); return result; }
     catch (e) { result.destroy(); throw e; }
   }
 
-  private async init(passBuffers: GPUBuffer[], signal: AbortSignal) {
+  private async init(passBuffers: GPUBuffer[], signal: AbortSignal, q: PodiumQuality, frameLayout: GPUBindGroupLayout, passLayout: GPUBindGroupLayout) {
     const d = this.device, base = `${process.env.PUBLIC_URL || ''}/freddy/`;
     const fetchFile = async (name: string) => {
       const r = await fetch(base + name, { signal });
@@ -76,33 +89,33 @@ export class Freddy {
     };
     const [meta, mesh] = await Promise.all([fetchFile('freddy.json').then(r => r.json()), fetchFile('freddy.bin').then(r => r.arrayBuffer())]);
     this.meta = meta;
-    if (meta.version !== 1 || meta.stride !== 56 || mesh.byteLength !== meta.vertexCount * 56 + meta.indexCount * 4) throw new Error('Freddy: modello incompleto');
+    if (meta.version !== 2 || meta.stride !== 60 || !meta.headPivot || mesh.byteLength !== meta.vertexCount * 60 + meta.indexCount * 4) throw new Error('Freddy: modello incompleto');
     const buffer = (data: ArrayBuffer | Float32Array, usage: number) => {
       const b = d.createBuffer({ size: data.byteLength, usage: usage | GPUBufferUsage.COPY_DST });
       this.buffers.push(b); d.queue.writeBuffer(b, 0, data); return b;
     };
-    this.vertex = buffer(mesh.slice(0, meta.vertexCount * 56), GPUBufferUsage.VERTEX);
-    this.index = buffer(mesh.slice(meta.vertexCount * 56), GPUBufferUsage.INDEX);
+    this.vertex = buffer(mesh.slice(0, meta.vertexCount * 60), GPUBufferUsage.VERTEX);
+    this.index = buffer(mesh.slice(meta.vertexCount * 60), GPUBufferUsage.INDEX);
     this.uniform = buffer(this.data, GPUBufferUsage.UNIFORM);
     const uni = d.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }] });
     const tex = d.createBindGroupLayout({ entries: [
       { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: {} }, { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} },
       { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: {} }, { binding: 3, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
     ] });
-    const layout = d.createPipelineLayout({ bindGroupLayouts: [uni, uni, tex] });
-    const module = d.createShaderModule({ label: 'freddy', code: shader });
+    const layout = d.createPipelineLayout({ bindGroupLayouts: [frameLayout, passLayout, uni, tex] });
+    const module = d.createShaderModule({ label: 'freddy', code: shader(q) });
     const pipeline = (main: boolean) => d.createRenderPipelineAsync({ label: `freddy-${main ? 'main' : 'reflection'}`, layout,
       vertex: { module, entryPoint: 'vs', buffers: [vertexLayout] }, fragment: { module, entryPoint: 'fs', targets: [{ format: 'rgba16float' }] },
       primitive: { topology: 'triangle-list', cullMode: 'none' }, multisample: { count: main ? 4 : 1 },
       depthStencil: { format: main ? 'depth32float' : 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
     });
     const [main, flat, shadow] = await Promise.all([pipeline(true), pipeline(false), d.createRenderPipelineAsync({ label: 'freddy-shadow',
-      layout: d.createPipelineLayout({ bindGroupLayouts: [uni, uni] }), vertex: { module, entryPoint: 'shadow', buffers: [vertexLayout] },
+      layout: d.createPipelineLayout({ bindGroupLayouts: [uni, uni] }), vertex: { module: d.createShaderModule({ label: 'freddy-shadow', code: shadowShader }), entryPoint: 'shadow', buffers: [vertexLayout] },
       primitive: { topology: 'triangle-list', cullMode: 'none' }, depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' },
     })]);
     this.pipes = { main, flat, shadow };
     this.own = d.createBindGroup({ layout: uni, entries: [{ binding: 0, resource: { buffer: this.uniform } }] });
-    this.passes = passBuffers.map(b => d.createBindGroup({ layout: uni, entries: [{ binding: 0, resource: { buffer: b } }] }));
+    this.passes = passBuffers.map((b, i) => d.createBindGroup({ layout: i === 8 ? uni : passLayout, entries: [{ binding: 0, resource: { buffer: b } }] }));
     const sampler = d.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', maxAnisotropy: 4 });
     const texture = async (name: string, srgb: boolean) => {
       const bytes = await (await fetchFile(name)).arrayBuffer(), sizes: { offset: number; length: number }[] = [];
@@ -136,7 +149,9 @@ export class Freddy {
       if (bad) throw bad.reason;
       const [color, normal] = maps.map(r => (r as PromiseFulfilledResult<GPUTextureView>).value);
       return d.createBindGroup({ layout: tex, entries: [{ binding: 0, resource: color }, { binding: 1, resource: normal },
-        { binding: 2, resource: sampler }, { binding: 3, resource: { buffer: buffer(new Float32Array([i, 0, 0, 0]), GPUBufferUsage.UNIFORM) } }] });
+        { binding: 2, resource: sampler }, { binding: 3, resource: { buffer: buffer(new Float32Array([
+          [0, 0.85, 0, 0.25], [1, 0.32, 0.85, 0], [2, 0.12, 0, 0], [3, 0.45, 0.6, 0],
+        ][i]), GPUBufferUsage.UNIFORM) } }] });
     }));
     const bad = uploads.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
     if (bad) throw bad.reason;
@@ -144,20 +159,18 @@ export class Freddy {
     this.materials = uploads.map(r => (r as PromiseFulfilledResult<GPUBindGroup>).value);
   }
 
-  update(seconds: number, reducedMotion: boolean) {
-    const emerge = Math.min(1, seconds / (reducedMotion ? 0.4 : 0.9));
-    const e = 1 - (1 - emerge) ** 3, lean = 0.1 * e, c = Math.cos(lean) * 1.6, s = Math.sin(lean) * 1.6;
-    this.data.set([c, -s, 0, 0, s, c, 0, 0, 0, 0, 1.6, 0, -7.2 + 0.8 * e, 0.03, -5.7, 1,
-      reducedMotion ? 0.5 : (0.5 + 0.5 * Math.sin(Math.max(0, seconds - 0.8) * 2.8)) * e, 0.15 + 0.85 * e, 0, 0]);
+  update(seconds: number, reducedMotion: boolean, eye: number[]) {
+    writeFreddyPose(this.data, seconds, reducedMotion, eye, this.meta.headPivot);
     this.device.queue.writeBuffer(this.uniform, 0, this.data);
   }
 
-  draw(p: GPURenderPassEncoder, pass: number) {
+  draw(p: GPURenderPassEncoder, pass: number, lighting?: GPUBindGroup) {
     p.setPipeline(pass === 0 ? this.pipes.main : pass === 8 ? this.pipes.shadow : this.pipes.flat);
-    p.setBindGroup(0, this.own); p.setBindGroup(1, this.passes[pass]);
+    p.setBindGroup(0, pass === 8 ? this.own : lighting!); p.setBindGroup(1, this.passes[pass]);
     p.setVertexBuffer(0, this.vertex); p.setIndexBuffer(this.index, 'uint32');
     if (pass === 8) { p.drawIndexed(this.meta.indexCount); return; }
-    this.meta.ranges.forEach((range, i) => { p.setBindGroup(2, this.materials[i]); p.drawIndexed(range.count, 1, range.first); });
+    p.setBindGroup(2, this.own);
+    this.meta.ranges.forEach((range, i) => { p.setBindGroup(3, this.materials[i]); p.drawIndexed(range.count, 1, range.first); });
   }
 
   destroy() { this.buffers.splice(0).forEach(b => b.destroy()); this.textures.splice(0).forEach(t => t.destroy()); }
