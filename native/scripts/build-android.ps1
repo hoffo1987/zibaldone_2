@@ -3,6 +3,9 @@ $ErrorActionPreference = 'Stop'
 Push-Location (Split-Path $PSScriptRoot -Parent)
 try {
   if (-not $env:ANDROID_HOME) { $env:ANDROID_HOME = Join-Path $env:LOCALAPPDATA 'Android/Sdk' }
+  if (-not (Test-Path -LiteralPath (Join-Path $env:ANDROID_HOME 'cmake/3.31.6/bin/cmake.exe'))) {
+    throw 'Install CMake 3.31.6 with Android Studio SDK Manager (SDK Tools) before building. Its Ninja supports long Windows paths.'
+  }
   if (-not $env:JAVA_HOME) {
     $taskJdk = Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.jdks') -Directory | Where-Object Name -Like '*21*' | Select-Object -First 1
     if ($taskJdk) { $env:JAVA_HOME = $taskJdk.FullName }

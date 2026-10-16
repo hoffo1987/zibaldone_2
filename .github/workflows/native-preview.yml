@@ -25,6 +25,8 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools cmake;3.31.6'
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck && npm run lint && npm test
       - run: npx expo prebuild --platform android --no-install

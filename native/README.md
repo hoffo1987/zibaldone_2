@@ -15,6 +15,8 @@ non costituisce ancora una replica visiva completa di tutti gli effetti del sito
 
 Richiede Node compatibile con Expo SDK 58, JDK 21, Android SDK/NDK (installati automaticamente
 da Gradle se le licenze Android sono accettate), oppure Xcode su macOS per iOS.
+Su Windows installare anche **CMake 3.31.6** da Android Studio → SDK Manager → SDK Tools:
+la versione 3.22.1 contiene un Ninja che non gestisce i lunghi percorsi del codice generato.
 
 ```powershell
 cd native
