@@ -2705,7 +2705,7 @@ export default function App() {
                 {panelOpen && <PannelloAdmin db={db} id={sel.id} notify={notify} />}
               </>}
                 {(diary || anon) && <ReadingNotice item={sel} />}
-                {anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`paper ${diary ? "diary-paper" : "mm"} relative`} data-sheet-paper="" style={{ aspectRatio: `${w}/${h}` }}>
+                {anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`paper ${diary ? "diary-paper" : "mm"} relative`} data-sheet-paper="" style={{ aspectRatio: `${w}/${h}`, minHeight: "min-content", overflow: diary ? "visible" : undefined }}>
                   {sel.strokes?.length > 0 && <Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" />}
                   <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: clean(sel.content) }} />
                 </div>}
