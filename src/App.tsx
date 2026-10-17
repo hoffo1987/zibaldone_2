@@ -24,6 +24,7 @@ import { Navigation, SectionLocation, NAV_ORDER } from "./Navigation";
 import { Text3D, Terminal3D } from "./d3";
 import { renderLoop, holdLoops } from "./renderLoop";
 import { useMediaQuery } from "./useMediaQuery";
+import { useKeyboardOpen } from "./useKeyboardOpen";
 import { useMusic } from "./useMusic";
 import { SettingsDialog } from "./Dialog";
 import * as sound from "./sound";
@@ -1053,6 +1054,7 @@ export default function App() {
   const [statoF, setStatoF] = useState("all");
   const [visible, setVisible] = useState(18);
   const [kb, setKb] = useState(false);
+  const kbOpen = useKeyboardOpen(kb); // tastiera davvero visibile: solo allora la barra mobile si ritira
   const [profiles, setProfiles] = useState<any>({});
   const [editProf, setEditProf] = useState(false);
   const [pf, setPf] = useState<any>({});
@@ -2419,7 +2421,7 @@ export default function App() {
       <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
       {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} onFail={() => setPodiumFail(true)} />}
       <Navigation tab={tab} admin={isAdmin} editing={!!editingId} railKey={railKey}
-        hidden={kb || (tab === "write" && drawing)} onNavigate={go}
+        hidden={kbOpen || (tab === "write" && drawing)} onNavigate={go}
         brand={<div className="flex items-center gap-2.5 cursor-pointer select-none" title="Il Circuito">
           <Wordmark stack size={52} fs={22} />
           <div className="ml-auto self-start">{bell(false)}</div>

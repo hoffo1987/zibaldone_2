@@ -70,7 +70,7 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
     {mobileHeader}
     <nav ref={horizontal} aria-label="Navigazione principale" data-tone={active?.tone}
       className={`shell-dock pn hdr md:hidden fixed z-30 ${admin ? "shell-dock-admin" : ""}`}
-      style={{ display: hidden ? "none" : undefined }}>
+      data-hidden={hidden ? "1" : undefined} aria-hidden={hidden || undefined} {...(hidden ? { inert: "" } : {})}>
       <span className="nind" aria-hidden="true" />
       {primary.map(item => button(item, true))}
       <button type="button" data-act={secondaryActive ? "1" : undefined} data-tour={`nav-${secondaryActive?.id || "more"}`} data-snd="nav"
