@@ -19,7 +19,8 @@ import { snapshotReader } from "./snapshot";
 import NotificationPanel from "./NotificationPanel";
 import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt } from "./WritingSections";
-import { M, Words, Sheets, useFlip, useRail, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
+import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
+import { Navigation, SectionLocation, NAV_ORDER } from "./Navigation";
 import { Text3D, Terminal3D } from "./d3";
 import { renderLoop, holdLoops } from "./renderLoop";
 import { useMediaQuery } from "./useMediaQuery";
@@ -804,7 +805,6 @@ const resolveG = (o: any): any => {
 let GSPD = 1;  // velocità globale delle animazioni (serve anche ai timer fuori da React)
 // prima apertura della sessione: l'ingresso nel Circuito si vede per intero una volta sola, poi le pagine entrano in modo asciutto
 const FIRST = (() => { try { const s = sessionStorage.getItem("circuito:ingresso"); sessionStorage.setItem("circuito:ingresso", "1"); return !s; } catch { return true; } })();
-const NAV_ORDER = ["home", "write", "my_pages", "altri", "read", "diario", "podio", "authors", "profile"];
 
 const Scramble = ({ text, on }: any) => {
   const [t, setT] = useState(text);
@@ -1918,9 +1918,7 @@ export default function App() {
   const gridRef = useRef<HTMLDivElement>(null);
   useFlip(gridRef, `${tab}:${shown.slice(0, visible).map((t) => t.id).join("|")}`);
   // menu: la pista che segue la voce attiva
-  const railV = useRef<HTMLDivElement>(null), railH = useRef<HTMLElement>(null);
   const railKey = `${tab}:${user?.uid || ""}:${adminChecked}:${isAdmin}:${!!editingId}`;
-  useRail(railV, "v", railKey); useRail(railH, "h", railKey);
   // lettore: il foglio resta montato durante l'uscita, per poter tornare nella sua scheda
   const [vs, setVs] = useState<any>(null);
   const view = sel || vs;
@@ -2137,19 +2135,6 @@ export default function App() {
     </>);
   }
 
-  const nav: any[] = ([
-    { id: "home", label: "Panoramica", s: "Home", icon: LayoutDashboard },
-    { id: "write", label: editingId ? "Modifica" : "Nuovo scritto", s: editingId ? "Modifica" : "Nuovo", icon: Pen },
-    { id: "my_pages", label: "I miei scritti", s: "Miei", icon: Bookmark },
-    ...(isAdmin ? [
-      { id: "read", label: "Scritti completi", s: "Scritti", icon: Activity },
-      { id: "podio", label: "Podio del mese", s: "Podio", icon: Trophy }, { id: "authors", label: "Autori", icon: Users },
-    ] : [
-      // per chi non è admin: gli scritti degli altri, solo da leggere e senza nomi
-      { id: "altri", label: "Scritti completi", s: "Scritti", icon: BookOpen },
-    ]),
-    { id: "diario", label: "Diario", s: "Diario", icon: BookOpen },
-  ]);
   const myName = profiles[user.uid]?.displayName || user.displayName || "Operatore";
   const first = myName.split(" ")[0];
   const dn = (uid: string, fb: string) => profiles[uid]?.displayName || fb;
@@ -2433,38 +2418,28 @@ export default function App() {
     <>
       <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
       {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} onFail={() => setPodiumFail(true)} />}
-      {/* sidebar desktop */}
-      <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col p-5 gap-1 pn !rounded-none !border-y-0 !border-l-0 z-20">
-        <div className="flex items-center gap-2.5 mb-8 cursor-pointer select-none" title="Il Circuito">
+      <Navigation tab={tab} admin={isAdmin} editing={!!editingId} railKey={railKey}
+        hidden={kb || (tab === "write" && drawing)} onNavigate={go}
+        brand={<div className="flex items-center gap-2.5 cursor-pointer select-none" title="Il Circuito">
           <Wordmark stack size={52} fs={22} />
           <div className="ml-auto self-start">{bell(false)}</div>
-        </div>
-        <div ref={railV} className="relative flex flex-col gap-1">
-          <span className="nind" aria-hidden="true" />
-          {nav.map((n) => <button key={n.id} data-act={tab === n.id ? "1" : undefined} data-tour={"nav-" + n.id} data-snd="nav" aria-current={tab === n.id ? "page" : undefined} onClick={() => go(n.id)} className={`bt nb !justify-start w-full ${tab === n.id ? "act" : ""}`}><n.icon size={16} />{n.label}</button>)}
-        </div>
-        <div className="mt-auto space-y-2">
+        </div>}
+        footer={<div className="space-y-2">
           <ApkDownload compact />
           <div className="flex items-center gap-2">
             <button onClick={() => go("profile")} data-snd="nav" className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{user.email}</span></span></button>
             <button className="bt !p-2" onClick={() => setOptOpen(true)} title="Opzioni" aria-label="Opzioni" data-tour="options"><Settings size={18} /></button>
             <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
           </div>
-        </div>
-      </aside>
-
-      {/* barra mobile */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
+        </div>}
+        mobileHeader={<header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
         <div className="flex items-center gap-2"><Wordmark size={40} fs={19} tag={false} /></div>
         <div className="flex items-center gap-2">{bell(true)}<button className="bt !p-2" onClick={() => setOptOpen(true)} aria-label="Opzioni" data-tour="options"><Settings size={18} /></button><button onClick={() => go("profile")} data-snd="nav" aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
-      </header>
-      <nav ref={railH} className="md:hidden fixed bottom-0 inset-x-0 z-30 pn hdr !rounded-none !border-x-0 !border-b-0 flex gap-1 px-2 pt-2" style={{ paddingBottom: "calc(.5rem + env(safe-area-inset-bottom))", display: kb || (tab === "write" && drawing) ? "none" : undefined }}>
-        <span className="nind" aria-hidden="true" />
-        {nav.map((n) => <button key={n.id} data-act={tab === n.id ? "1" : undefined} data-tour={"nav-" + n.id} data-snd="nav" aria-current={tab === n.id ? "page" : undefined} onClick={() => go(n.id)} aria-label={n.label} className={`bt nb flex-col flex-1 min-w-0 !gap-1 !px-0 !py-2 !text-[10px] ${tab === n.id ? "act" : ""}`}><n.icon size={18} /><span className="truncate max-w-full">{n.s || n.label}</span></button>)}
-      </nav>
+      </header>} />
 
-      <div className="md:ml-60 pb-28 md:pb-12 relative">
+      <div className={`shell-main md:pb-12 relative ${isAdmin ? "shell-main-admin" : ""}`}>
         <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12" style={{ ["--pdx" as any]: `${pdx.current}px` }}>
+          <SectionLocation tab={tab} admin={isAdmin} editing={!!editingId} />
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
             <div><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>{isList && !loading && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "scritto" : "scritti"}</p>}{tab === "altri" && !(pubLoading || loading) && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={pubShown.length} className="tick-n">{pubShown.length}</span> {pubShown.length === 1 ? "scritto da leggere" : "scritti da leggere"} · senza nomi né date</p>}</div>
             {["altri", "diario"].includes(tab) && <div className="sr-only" aria-live="polite">{tab === "diario" ? diaryShown.length : pubShown.length} pagine</div>}
