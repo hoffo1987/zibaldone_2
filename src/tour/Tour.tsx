@@ -14,19 +14,19 @@ type Step = { tab: string; target: string; title: string; body: string };
 const STUDENT: Step[] = [
   { tab: "home", target: "nav-home", title: "Panoramica", body: "I tuoi numeri e gli ultimi progetti, sempre aggiornati. Da qui parte tutto." },
   { tab: "write", target: "editor-mode", title: "Scrivi o disegna", body: "Scrivi come su un quaderno, aggiungi foto, oppure passa a Disegno: penna, forme, colori e gomma." },
-  { tab: "write", target: "save", title: "Invia lo scritto", body: "Mentre scrivi la bozza si salva da sola. Scegli tra scritto completo e diario. Il primo partecipa al podio; il pensiero si legge per intero, anonimo e senza voti." },
+  { tab: "write", target: "save", title: "Invia lo scritto", body: "Mentre scrivi la bozza si salva da sola. Scegli tra scritto completo e diario. Il primo partecipa al podio; il pensiero si legge per intero, senza voti, e puoi firmarlo o lasciarlo anonimo." },
   { tab: "my_pages", target: "nav-my_pages", title: "I miei scritti", body: "Ritrovi tutto qui: cerca, filtra per mese, riapri e modifica. Dopo la lettura vedrai anche il voto." },
-  { tab: "diario", target: "nav-diario", title: "Diario", body: "Pensieri anonimi e integrali. Gli scritti completi, nella loro sezione, mostrano agli altri solo un estratto." },
+  { tab: "diario", target: "nav-diario", title: "Scritti", body: "Una sola sezione per leggere: il Diario, con pensieri integrali anonimi o firmati, e gli Scritti completi, di cui gli altri vedono solo un estratto." },
   { tab: "home", target: "bell", title: "Notifiche", body: "Quando un tuo scritto riceve un voto, la campanella te lo dice." },
   { tab: "home", target: "options", title: "Opzioni", body: "Tema chiaro o scuro, effetti, musica e suoni. Da qui puoi anche rivedere questa presentazione." },
   { tab: "home", target: "cta", title: "Tocca a te", body: "Il Circuito è acceso. Il primo scritto ti aspetta." },
 ];
 const ADMIN: Step[] = [
   { tab: "home", target: "nav-home", title: "Panoramica", body: "Scritti arrivati, autori e quanti ne restano da valutare questo mese." },
-  { tab: "read", target: "nav-read", title: "Scritti completi", body: "Gli autori restano nascosti: leggi, dai da una a cinque stelle e solo dopo svela chi ha scritto." },
+  { tab: "read", target: "nav-read", title: "Scritti", body: "Diario e Scritti completi stanno nella stessa sezione. Negli scritti completi gli autori restano nascosti: leggi, dai da una a cinque stelle e solo dopo svela chi ha scritto." },
   { tab: "read", target: "filters", title: "Filtri e segnalibri", body: "Cerca, ordina per voto o per data, mostra solo i segnalati o quelli ancora da valutare." },
   { tab: "podio", target: "nav-podio", title: "Podio del mese", body: "Solo gli scritti completi salgono qui, mese per mese. I pensieri del diario non partecipano." },
-  { tab: "diario", target: "nav-diario", title: "Diario", body: "Leggi i pensieri senza voti o categorie. Qui, come amministratore, puoi vedere il nome di chi li ha scritti." },
+  { tab: "diario", target: "nav-diario", title: "Diario", body: "Dalla sezione Scritti passi al Diario: pensieri senza voti o categorie. Come amministratore vedi sempre chi li ha scritti, anche quelli anonimi." },
   { tab: "authors", target: "nav-authors", title: "Autori", body: "Chi scrive, quanto scrive e con che media." },
   { tab: "home", target: "options", title: "Opzioni", body: "Tema chiaro o scuro, effetti, musica e suoni. Da qui puoi anche rivedere questa presentazione." },
   { tab: "home", target: "hero-actions", title: "Si comincia", body: "Gli scritti del mese ti aspettano. Buona lettura." },

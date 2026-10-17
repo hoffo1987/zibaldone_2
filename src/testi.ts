@@ -13,11 +13,21 @@ export const excerptOf = (html: string) => {
   let bytes = 0;
   return selected.filter(c => { const n = c.codePointAt(0)!; bytes += n < 128 ? 1 : n < 2048 ? 2 : n < 65536 ? 3 : 4; return bytes <= 480; }).join("").trimEnd();
 };
-export const PUB_KEYS = ["version", "kind", "title", "excerpt", "content", "strokes", "w", "h"];
+export const PUB_KEYS = ["version", "kind", "title", "excerpt", "content", "strokes", "w", "h", "firma", "autoreId"];
+// Un pensiero del diario è anonimo, a meno che l'autore non abbia scelto di firmarlo.
+export const signatureOf = (t: any): { name: string; uid: string } | null => {
+  if (!isDiary(t)) return null;
+  if (t.firmato === true && typeof t.author === "string" && typeof t.userId === "string") return { name: t.author, uid: t.userId };
+  if (t.firmato === undefined && typeof t.firma === "string" && typeof t.autoreId === "string") return { name: t.firma, uid: t.autoreId };
+  return null;
+};
 export const pubOf = (t: any) => {
   const o: any = { version: PUBLIC_VERSION, kind: writingKind(t), title: t?.title || "Senza titolo" };
   if (isDiary(t)) {
     o.content = t.content || ""; o.strokes = t.strokes || []; o.w = t.w || 900; o.h = t.h || 600;
+    // firma facoltativa: dall'originale firmato (author/userId) o da una copia pubblica che già la porta
+    const sign = signatureOf(t);
+    if (sign) { o.firma = sign.name; o.autoreId = sign.uid; }
   } else o.excerpt = typeof t?.excerpt === "string" ? t.excerpt : excerptOf(t?.content || "");
   return o;
 };

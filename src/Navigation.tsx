@@ -6,17 +6,42 @@ import "./navigation.css";
 
 // The same order drives both menus and the existing directional page transitions.
 export const NAV_ORDER = ["home", "my_pages", "write", "diario", "altri", "read", "podio", "authors", "profile"];
-export const navigationItems = (admin: boolean, editing: boolean) => [
-  { id: "home", label: "Panoramica", short: "Home", detail: "Il Circuito, a colpo d’occhio", group: "", tone: "teal" },
-  { id: "my_pages", label: "I miei scritti", short: "Miei", detail: "La tua raccolta personale", group: "Il tuo spazio", tone: "blue" },
-  { id: "write", label: editing ? "Modifica scritto" : "Nuovo scritto", short: editing ? "Modifica" : "Scrivi", detail: editing ? "Riprendi la tua pagina" : "Dai forma a un’idea", group: "Il tuo spazio", tone: "teal" },
-  { id: "diario", label: "Diario", short: "Diario", detail: "Pensieri e voci anonime", group: "Da leggere", tone: "rose" },
-  { id: admin ? "read" : "altri", label: "Scritti completi", short: "Scritti", detail: admin ? "Lettura e valutazione" : "Esplora gli estratti", group: "Da leggere", tone: "violet" },
+
+// "Scritti" is one section with two rooms: the Diary and the complete writings.
+// Admins read complete writings in "read" (with evaluation), everyone else in "altri".
+export const HUB = ["diario", "altri", "read"];
+export const inHub = (tab: string) => HUB.includes(tab);
+const completeTab = (admin: boolean) => admin ? "read" : "altri";
+export const hubRooms = (admin: boolean) => [
+  { id: "diario", mark: "diario", label: "Diario", detail: "Pensieri da leggere per intero", tone: "rose" },
+  { id: completeTab(admin), mark: "complete", label: "Scritti completi", detail: admin ? "Lettura e valutazione" : "Estratti degli scritti del mese", tone: "violet" },
+];
+// The section reopens on the room visited last, also after a reload.
+let lastRoom: string | null = null;
+const rememberRoom = (tab: string) => {
+  if (!inHub(tab) || lastRoom === tab) return;
+  lastRoom = tab;
+  try { localStorage.setItem("circuito:scritti", tab === "diario" ? "diario" : "complete"); } catch {}
+};
+export const hubEntry = (admin: boolean) => {
+  let room = lastRoom ? (lastRoom === "diario" ? "diario" : "complete") : null;
+  if (!room) try { room = localStorage.getItem("circuito:scritti"); } catch {}
+  return room === "diario" ? "diario" : room === "complete" ? completeTab(admin) : admin ? "read" : "diario";
+};
+
+type Item = { id: string; label: string; short: string; detail: string; group: string; tone: string; mark: string; rooms?: ReturnType<typeof hubRooms> };
+export const navigationItems = (admin: boolean, editing: boolean): Item[] => [
+  { id: "home", label: "Panoramica", short: "Home", detail: "Il Circuito, a colpo d’occhio", group: "", tone: "teal", mark: "home" },
+  { id: "my_pages", label: "I miei scritti", short: "Miei", detail: "La tua raccolta personale", group: "Il tuo spazio", tone: "blue", mark: "my_pages" },
+  { id: "write", label: editing ? "Modifica scritto" : "Nuovo scritto", short: editing ? "Modifica" : "Scrivi", detail: editing ? "Riprendi la tua pagina" : "Dai forma a un’idea", group: "Il tuo spazio", tone: "teal", mark: "write" },
+  { id: "scritti", label: "Scritti", short: "Scritti", detail: "Diario e scritti completi", group: "Da leggere", tone: "violet", mark: "scritti", rooms: hubRooms(admin) },
   ...(admin ? [
-    { id: "podio", label: "Podio del mese", short: "Podio", detail: "Gli scritti in primo piano", group: "La community", tone: "amber" },
-    { id: "authors", label: "Autori", short: "Autori", detail: "Le persone del Circuito", group: "La community", tone: "cyan" },
+    { id: "podio", label: "Podio del mese", short: "Podio", detail: "Gli scritti in primo piano", group: "La community", tone: "amber", mark: "podio" },
+    { id: "authors", label: "Autori", short: "Autori", detail: "Le persone del Circuito", group: "La community", tone: "cyan", mark: "authors" },
   ] : []),
 ];
+// the navigation entry that owns a tab
+const ownerOf = (tab: string) => inHub(tab) ? "scritti" : tab;
 
 type Props = {
   tab: string;
@@ -33,50 +58,67 @@ type Props = {
 export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, brand, footer, mobileHeader }: Props) {
   const vertical = useRef<HTMLDivElement>(null), horizontal = useRef<HTMLElement>(null);
   const [more, setMore] = useState(false);
-  useRail(vertical, "v", railKey);
-  useRail(horizontal, "h", railKey);
+  rememberRoom(tab);
+  const owner = ownerOf(tab);
+  // the rail follows the section, not the room: moving between Diario and Scritti completi keeps it still
+  useRail(vertical, "v", `${owner}:${railKey.slice(railKey.indexOf(":"))}`);
+  useRail(horizontal, "h", `${owner}:${railKey.slice(railKey.indexOf(":"))}`);
   const items = navigationItems(admin, editing);
-  const active = items.find(item => item.id === tab);
+  const room = items.find(item => item.id === "scritti")!.rooms!.find(r => r.id === tab);
+  const active = items.find(item => item.id === owner);
+  const tone = (item: Item) => item.id === owner && room ? room.tone : item.tone;
   const secondary = items.filter(item => ["my_pages", "podio", "authors"].includes(item.id));
   const primary = items.filter(item => !secondary.includes(item));
   const secondaryActive = secondary.find(item => item.id === tab);
-  const navigate = (id: string) => { setMore(false); onNavigate(id); };
-  const button = (item: typeof items[number], mobile = false) => (
-    <button key={item.id} type="button" data-act={tab === item.id ? "1" : undefined}
-      data-tour={`nav-${item.id}`} data-snd="nav" data-tone={item.tone}
-      aria-current={tab === item.id ? "page" : undefined} aria-label={item.label}
-      onClick={() => navigate(item.id)} className={`bt nb shell-link ${tab === item.id ? "act" : ""}`}>
-      <span className="shell-icon" aria-hidden="true"><span className="shell-icon-orbit" /><SectionMark key={`${item.id}:${tab === item.id}`} section={item.id} /></span>
+  const navigate = (id: string) => { setMore(false); onNavigate(id === "scritti" ? hubEntry(admin) : id); };
+  const button = (item: Item, mobile = false) => {
+    const on = owner === item.id;
+    // the tour looks for the room it is showing (nav-diario / nav-read): the section answers for it
+    const tour = item.id === "scritti" ? `nav-${on ? tab : "scritti"}` : `nav-${item.id}`;
+    return <button key={item.id} type="button" data-act={on ? "1" : undefined}
+      data-tour={mobile || item.id !== "scritti" ? tour : "nav-scritti"} data-snd="nav" data-tone={tone(item)}
+      aria-current={on && (mobile || !item.rooms) ? "page" : undefined} aria-label={item.label}
+      onClick={() => navigate(item.id)} className={`bt nb shell-link ${on ? "act" : ""}`}>
+      <span className="shell-icon" aria-hidden="true"><span className="shell-icon-orbit" /><SectionMark key={`${item.id}:${on}`} section={item.mark} /></span>
       <span className="shell-link-copy"><span className="shell-link-title">{mobile ? item.short : item.label}</span>
-        {!mobile && <span className="shell-link-detail">{item.detail}</span>}
+        {!mobile && <span className="shell-link-detail">{on && room ? room.label : item.detail}</span>}
       </span>
       {!mobile && <ChevronRight className="shell-link-arrow" size={14} aria-hidden="true" />}
-    </button>
-  );
+    </button>;
+  };
+  // desktop: the two rooms hang from the section on a short circuit trace, always reachable in one click
+  const rooms = (item: Item) => <div key={`${item.id}-rooms`} className={`shell-rooms ${owner === item.id ? "open" : ""}`} data-tone={tone(item)}>
+    {item.rooms!.map(r => <button key={r.id} type="button" data-tour={`nav-${r.id}`} data-snd="nav" data-tone={r.tone}
+      aria-current={tab === r.id ? "page" : undefined} aria-label={r.label} onClick={() => navigate(r.id)}
+      className={`shell-room ${tab === r.id ? "act" : ""}`}>
+      <span className="shell-room-node" aria-hidden="true" /><span className="shell-room-label">{r.label}</span>
+    </button>)}
+  </div>;
   return <>
     <aside className="shell-sidebar pn hidden md:flex fixed inset-y-0 left-0 flex-col z-20">
       <div className="shell-brand">{brand}</div>
       <nav aria-label="Navigazione principale" className="shell-navigation">
-        <div ref={vertical} className="shell-rail" data-tone={active?.tone}>
+        <div ref={vertical} className="shell-rail" data-tone={active && tone(active)}>
           <span className="nind" aria-hidden="true" />
           {items.map((item, index) => <React.Fragment key={item.id}>
             {item.group && item.group !== items[index - 1]?.group && <div className="shell-group"><span>{item.group}</span><span className="shell-group-line" aria-hidden="true" /></div>}
             {button(item)}
+            {item.rooms && rooms(item)}
           </React.Fragment>)}
         </div>
       </nav>
       <div className="shell-footer">{footer}</div>
     </aside>
     {mobileHeader}
-    <nav ref={horizontal} aria-label="Navigazione principale" data-tone={active?.tone}
-      className={`shell-dock pn hdr md:hidden fixed z-30 ${admin ? "shell-dock-admin" : ""}`}
+    <nav ref={horizontal} aria-label="Navigazione principale" data-tone={active && tone(active)}
+      className={`shell-dock pn hdr md:hidden fixed z-[38] ${admin ? "shell-dock-admin" : ""}`}
       data-hidden={hidden ? "1" : undefined} aria-hidden={hidden || undefined} {...(hidden ? { inert: "" } : {})}>
       <span className="nind" aria-hidden="true" />
       {primary.map(item => button(item, true))}
       <button type="button" data-act={secondaryActive ? "1" : undefined} data-tour={`nav-${secondaryActive?.id || "more"}`} data-snd="nav"
         data-tone={secondaryActive?.tone || "cyan"} aria-label="Altre sezioni" aria-haspopup="dialog" aria-expanded={more} aria-current={secondaryActive ? "page" : undefined}
         onClick={() => setMore(true)} className={`bt nb shell-link ${secondaryActive ? "act" : ""}`}>
-        <span className="shell-icon" aria-hidden="true">{secondaryActive ? <SectionMark section={secondaryActive.id} /> : <MoreHorizontal size={22} />}</span>
+        <span className="shell-icon" aria-hidden="true">{secondaryActive ? <SectionMark section={secondaryActive.mark} /> : <MoreHorizontal size={22} />}</span>
         <span className="shell-link-title">Altro</span>
       </button>
     </nav>
@@ -103,12 +145,36 @@ function MobileSections({ children, onClose }: { children: React.ReactNode; onCl
   </dialog>;
 }
 
+// Inside the Scritti section: the two rooms side by side. The highlight slides from the room you came from.
+let switchFrom = -1;
+export function ScrittiSwitch({ tab, admin, onNavigate }: { tab: string; admin: boolean; onNavigate: (tab: string) => void }) {
+  const rooms = hubRooms(admin), index = Math.max(0, rooms.findIndex(r => r.id === tab));
+  const box = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const el = box.current; if (!el) return;
+    const from = switchFrom; switchFrom = index;
+    if (from < 0 || from === index) return;
+    el.style.setProperty("--switch-i", String(from)); el.classList.add("still");
+    void el.offsetWidth;
+    el.classList.remove("still"); el.style.setProperty("--switch-i", String(index));
+  }, [index]);
+  return <nav ref={box} aria-label="Scritti" className="scritti-switch pn" data-tone={rooms[index].tone} style={{ "--switch-i": index } as React.CSSProperties}>
+    <span className="scritti-switch-ind" aria-hidden="true" />
+    {rooms.map(r => <button key={r.id} type="button" data-snd="nav" data-tone={r.tone} aria-current={tab === r.id ? "page" : undefined}
+      onClick={() => { if (tab !== r.id) onNavigate(r.id); }} className={`scritti-room ${tab === r.id ? "act" : ""}`}>
+      <span className="shell-icon" aria-hidden="true"><SectionMark section={r.mark} size={24} motion={false} /></span>
+      <span className="scritti-room-copy"><span className="scritti-room-title">{r.label}</span><span className="scritti-room-detail">{r.detail}</span></span>
+    </button>)}
+  </nav>;
+}
+
 export function SectionLocation({ tab, admin, editing }: Pick<Props, "tab" | "admin" | "editing">) {
-  const item = navigationItems(admin, editing).find(entry => entry.id === tab);
+  const item = navigationItems(admin, editing).find(entry => entry.id === ownerOf(tab));
   if (!item) return null;
-  return <div className="shell-location" data-tone={item.tone}>
-    <span className="shell-location-icon" aria-hidden="true"><SectionMark section={item.id} size={20} motion={false} /></span>
+  const room = item.rooms?.find(r => r.id === tab);
+  return <div className="shell-location" data-tone={room?.tone || item.tone}>
+    <span className="shell-location-icon" aria-hidden="true"><SectionMark section={room?.mark || item.mark} size={20} motion={false} /></span>
     <span>Il Circuito</span><ChevronRight size={12} aria-hidden="true" />
-    <span>{item.group || "Panoramica"}</span>
+    <span>{room ? item.label : item.group || "Panoramica"}</span>
   </div>;
 }

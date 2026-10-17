@@ -1,10 +1,11 @@
 import React from "react";
-import { BookOpen, FileText, ArrowUpRight, EyeOff, LockKeyhole, Pen } from "lucide-react";
+import { BookOpen, FileText, ArrowUpRight, EyeOff, LockKeyhole, Pen, Signature } from "lucide-react";
 import { plain } from "./sanitize";
-import { isDiary, type WritingKind } from "./testi";
+import { isDiary, signatureOf, type WritingKind } from "./testi";
 import "./writing.css";
 
-export function KindPicker({ value, onChange, locked = false }: { value: WritingKind; onChange: (v: WritingKind) => void; locked?: boolean }) {
+type Sign = { on: boolean; set: (v: boolean) => void; name: string };
+export function KindPicker({ value, onChange, locked = false, sign }: { value: WritingKind; onChange: (v: WritingKind) => void; locked?: boolean; sign?: Sign }) {
   return <fieldset className="writing-picker pn p-4 md:p-5">
     <legend className="hd font-bold px-2">Che cosa stai scrivendo?</legend>
     <div className="grid sm:grid-cols-2 gap-3">
@@ -15,10 +16,30 @@ export function KindPicker({ value, onChange, locked = false }: { value: Writing
           <x.icon size={23} aria-hidden="true" /><span><b className="hd block text-base">{x.title}</b><span className="mu text-sm block mt-1">{x.text}</span></span>
         </label>)}
     </div>
+    {value === "diary" && sign && <DiarySignature {...sign} />}
     <p className="mu text-xs mt-3">{locked ? "Il tipo resta quello scelto alla pubblicazione. Puoi modificare titolo e contenuto." : value === "diary"
-      ? "Tutti gli utenti potranno leggere il pensiero per intero. Il tuo nome sarà visibile solo a te e all’amministratore. Evita firme o dettagli che ti identifichino."
+      ? sign?.on ? "Tutti gli utenti potranno leggere il pensiero per intero, con il tuo nome. Puoi cambiare idea modificandolo in seguito."
+        : "Tutti gli utenti potranno leggere il pensiero per intero. Il tuo nome sarà visibile solo a te e all’amministratore. Evita dettagli che ti identifichino."
       : "Gli altri utenti vedranno soltanto un breve estratto. Il testo integrale, le immagini e i disegni saranno accessibili a te e all’amministratore."}</p>
   </fieldset>;
+}
+
+// Anonimo o firmato: due scelte affiancate, l'anonimato resta la scelta di partenza.
+function DiarySignature({ on, set, name }: Sign) {
+  const options = [
+    { id: false, title: "Anonimo", text: "Nessuno vedrà chi l’ha scritto", icon: EyeOff },
+    { id: true, title: "Con il tuo nome", text: `Firmato «${name}»`, icon: Signature },
+  ];
+  return <div className="diary-sign" role="radiogroup" aria-label="Come firmi il pensiero?">
+    <p className="diary-sign-q">Come firmi il pensiero?</p>
+    <div className="diary-sign-row" style={{ "--sign-i": on ? 1 : 0 } as React.CSSProperties}>
+      <span className="diary-sign-ind" aria-hidden="true" />
+      {options.map(o => <label key={String(o.id)} className={`diary-sign-opt ${on === o.id ? "selected" : ""}`}>
+        <input type="radio" name="diary-sign" className="sr-only" checked={on === o.id} onChange={() => set(o.id)} />
+        <o.icon size={18} aria-hidden="true" /><span className="min-w-0"><b className="block text-sm">{o.title}</b><span className="mu text-xs block truncate">{o.text}</span></span>
+      </label>)}
+    </div>
+  </div>;
 }
 
 export function WritingIntro({ diary, onWrite }: { diary: boolean; onWrite: () => void }) {
@@ -26,9 +47,9 @@ export function WritingIntro({ diary, onWrite }: { diary: boolean; onWrite: () =
     <div className="writing-symbol" aria-hidden="true">{diary ? <BookOpen size={36} /> : <FileText size={36} />}</div>
     <div className="relative"><p className="writing-eyebrow">{diary ? "Il quaderno del Circuito" : "La biblioteca del Circuito"}</p>
       <h2 className="hd text-2xl md:text-3xl font-bold mt-2">{diary ? "Una pausa, una pagina." : "Scritti che prendono forma."}</h2>
-      <p className="mu mt-3 max-w-2xl">{diary ? "Le cose che passano per la testa, senza dover diventare un tema. Qui ogni pensiero ha spazio: lo leggiamo per intero, senza nomi, voti o classifiche."
+      <p className="mu mt-3 max-w-2xl">{diary ? "Le cose che passano per la testa, senza dover diventare un tema. Qui ogni pensiero ha spazio: lo leggiamo per intero, senza voti o classifiche. Chi scrive sceglie se firmarlo o restare anonimo."
         : "Temi, racconti e riflessioni a cui dedicare tempo. Qui trovi gli estratti; l’amministratore legge i testi integrali e seleziona gli scritti per il podio del mese."}</p>
-      <div className="writing-promises"><span><EyeOff size={14} />{diary ? "Anonimo agli altri utenti" : "Lettura anonima"}</span><span>{diary ? <BookOpen size={14} /> : <LockKeyhole size={14} />}{diary ? "Lettura integrale" : "Solo un estratto pubblico"}</span></div>
+      <div className="writing-promises"><span><EyeOff size={14} />{diary ? "Anonimo o firmato, scegli tu" : "Lettura anonima"}</span><span>{diary ? <BookOpen size={14} /> : <LockKeyhole size={14} />}{diary ? "Lettura integrale" : "Solo un estratto pubblico"}</span></div>
       <button className="bt mt-5" onClick={onWrite}><Pen size={15} />{diary ? "Affida un pensiero al diario" : "Scrivi uno scritto completo"}<ArrowUpRight size={15} /></button>
     </div>
   </section>;
@@ -37,7 +58,7 @@ export function WritingIntro({ diary, onWrite }: { diary: boolean; onWrite: () =
 export function DiaryCards({ items, onOpen, author, drawing }: { items: any[]; onOpen: (t: any, e: any) => void; author: (t: any) => string; drawing: (t: any) => React.ReactNode }) {
   return <div className="diary-grid grid sm:grid-cols-2 gap-5">
     {items.map(t => <article key={t.id} data-doc={t.id} className="diary-card pn" role="button" tabIndex={0} aria-label={`Leggi il pensiero ${t.title}`} onClick={e => onOpen(t, e)} onKeyDown={e => { if (["Enter", " "].includes(e.key)) { e.preventDefault(); onOpen(t, e); } }}>
-      <div className="diary-card-top"><BookOpen size={17} /><span>{author(t)}</span><ArrowUpRight size={17} className="ml-auto" /></div>
+      <div className={`diary-card-top ${signatureOf(t) ? "signed" : ""}`}>{signatureOf(t) ? <Signature size={17} /> : <BookOpen size={17} />}<span className="truncate">{author(t)}</span><ArrowUpRight size={17} className="ml-auto" /></div>
       <div className="paper diary-paper"><h3 className="hd font-bold text-xl">{t.title}</h3><p className="whitespace-pre-line mt-4 line-clamp-6">{plain(t.content).trim() || "Un pensiero disegnato, oltre le parole."}</p>{drawing(t)}</div>
       <p className="mu text-xs mt-4">Un pensiero da leggere, senza giudizi.</p>
     </article>)}
@@ -46,7 +67,8 @@ export function DiaryCards({ items, onOpen, author, drawing }: { items: any[]; o
 
 export function ReadingNotice({ item }: { item: any }) {
   return <div className={`reading-notice ${isDiary(item) ? "diary-notice" : ""}`} role="note">
-    {isDiary(item) ? <><EyeOff size={19} /><div><b>Pensiero del diario · lettura integrale</b><p>Il nome dell’autore è visibile solo all’amministratore e all’autore stesso. Questo pensiero non riceve voti, categorie o posizioni in classifica.</p></div></>
+    {isDiary(item) ? signatureOf(item) ? <><Signature size={19} /><div><b>Pensiero del diario · firmato</b><p>L’autore ha scelto di firmare questo pensiero. Non riceve voti, categorie o posizioni in classifica.</p></div></>
+      : <><EyeOff size={19} /><div><b>Pensiero del diario · lettura integrale</b><p>Il nome dell’autore è visibile solo all’amministratore e all’autore stesso. Questo pensiero non riceve voti, categorie o posizioni in classifica.</p></div></>
       : <><LockKeyhole size={19} /><div><b>Stai leggendo soltanto un estratto</b><p>Per tutelare lo scritto, il testo integrale, le immagini e i disegni sono riservati all’autore e all’amministratore.</p></div></>}
   </div>;
 }

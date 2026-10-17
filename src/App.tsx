@@ -14,13 +14,13 @@ import {
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
-import { pubOf, pubSig, readPublic, isDiary, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, type WritingKind } from "./testi";
+import { pubOf, pubSig, readPublic, isDiary, signatureOf, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, type WritingKind } from "./testi";
 import { snapshotReader } from "./snapshot";
 import NotificationPanel from "./NotificationPanel";
 import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt } from "./WritingSections";
 import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
-import { Navigation, SectionLocation, NAV_ORDER } from "./Navigation";
+import { Navigation, SectionLocation, ScrittiSwitch, NAV_ORDER, inHub } from "./Navigation";
 import { Text3D, Terminal3D } from "./d3";
 import { renderLoop, holdLoops } from "./renderLoop";
 import { useMediaQuery } from "./useMediaQuery";
@@ -1184,6 +1184,7 @@ export default function App() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [kind, setKind] = useState<WritingKind>("complete");
+  const [signed, setSigned] = useState(false); // pensiero del diario firmato col proprio nome (di base anonimo)
   const [strokes, setStrokes] = useState<any[]>([]);
   const [hist, setHist] = useState<any[][]>([]);
   const [fut, setFut] = useState<any[][]>([]);
@@ -1359,18 +1360,18 @@ export default function App() {
   // bozza: ripristino + salvataggio automatico
   useEffect(() => {
     // a ogni cambio di account riparto da un foglio vuoto: altrimenti il testo di chi è uscito finirebbe nella bozza di chi entra
-    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
     if (!draftKey) return;
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) || "null");
-      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setKind(writingKind(d)); setStrokes(d.strokes || []); setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
+      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setKind(writingKind(d)); setSigned(d.firmato === true); setStrokes(d.strokes || []); setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
     } catch {}
   }, [draftKey]);
   useEffect(() => {
     if (!draftKey || editingId || (!title && !plain(content).trim() && !strokes.length)) return;
-    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, kind, strokes, height })); } catch {} }, 800);
+    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, kind, firmato: signed, strokes, height })); } catch {} }, 800);
     return () => clearTimeout(t);
-  }, [title, content, kind, strokes, height, editingId, draftKey]);
+  }, [title, content, kind, signed, strokes, height, editingId, draftKey]);
   useEffect(() => { if (tab === "write" && editorRef.current) editorRef.current.innerHTML = clean(content); }, [tab, loadTick]);
 
   // scorciatoie disegno
@@ -1740,12 +1741,12 @@ export default function App() {
   };
 
   const resetForm = () => {
-    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setStrokes([]); setHist([]); setFut([]); setHeight(600);
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setStrokes([]); setHist([]); setFut([]); setHeight(600);
     setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
     try { localStorage.removeItem(draftKey); } catch {}
   };
   const startEdit = (t: any) => {
-    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setStrokes(t.strokes || []);
+    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setSigned(t.firmato === true); setStrokes(t.strokes || []);
     setHist([]); setFut([]); setHeight(t.h || 600); setSel(null); setDrawing(false); setTab("write"); setLoadTick((n) => n + 1);
   };
 
@@ -1754,7 +1755,11 @@ export default function App() {
     const html = clean(editorRef.current?.innerHTML || "");
     if (!user || !(plain(html).trim() || /<img/.test(html) || strokes.length)) return;
     const st = strokes.map((s) => ({ ...s, points: s.points.map((p: any) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 })) }));
-    const data = { title: title.trim() || "Senza titolo", kind, excerpt: kind === "complete" ? excerptOf(html) : "", content: html, strokes: st, w: Math.round(canvasRef.current?.clientWidth || 900), h: Math.round(height) };
+    const orig = editingId ? rawItems.find((x) => x.id === editingId) : null;
+    const data: any = { title: title.trim() || "Senza titolo", kind, excerpt: kind === "complete" ? excerptOf(html) : "", content: html, strokes: st, w: Math.round(canvasRef.current?.clientWidth || 900), h: Math.round(height) };
+    // la firma si scrive solo se serve: i pensieri anonimi restano identici a prima
+    if (kind === "diary" && (signed || orig?.firmato !== undefined)) data.firmato = signed;
+    const author = orig ? orig.author : profiles[user.uid]?.displayName || user.displayName || "Operatore", owner = orig ? orig.userId : user.uid;
     // il limite di Firestore è di ~1 MB in byte (non in caratteri: accenti ed emoji ne pesano di più)
     if (new Blob([JSON.stringify(data)]).size > 950000) return notify("Progetto troppo pesante: riduci le immagini o il disegno.");
     setSaving(true);
@@ -1762,10 +1767,11 @@ export default function App() {
       const ref = editingId ? doc(db, "pensieri", editingId) : doc(collection(db, "pensieri"));
       const b = writeBatch(db);
       if (editingId) b.update(ref, { ...data, updatedAt: Date.now() });
-      else b.set(ref, { ...data, author: profiles[user.uid]?.displayName || user.displayName || "Operatore", timestamp: Date.now(), userId: user.uid, isStarred: false });
-      b.set(doc(db, "testi", ref.id), pubOf(data));
+      else b.set(ref, { ...data, author, timestamp: Date.now(), userId: owner, isStarred: false });
+      const full = { ...data, author, userId: owner };
+      b.set(doc(db, "testi", ref.id), pubOf(full));
       await b.commit();
-      pubDone.current.set(ref.id, pubSig(data));
+      pubDone.current.set(ref.id, pubSig(full));
       setDone(editingId ? "edit" : "new");
     } catch { notify("Salvataggio non riuscito. Riprova."); }
     setSaving(false);
@@ -1900,7 +1906,7 @@ export default function App() {
     const own = new Map(rawItems.map(t => [t.id, t]));
     const feed = isAdmin ? prepared.filter(isDiary) : pubItems.filter(isDiary).map(t => own.get(t.id) || t);
     const q = deferredSearch.trim().toLowerCase();
-    return feed.filter(t => !q || `${t.title} ${plain(t.content)} ${isAdmin ? t.author || "" : ""}`.toLowerCase().includes(q)).sort((a, b) => a.id.localeCompare(b.id));
+    return feed.filter(t => !q || `${t.title} ${plain(t.content)} ${isAdmin ? t.author || "" : signatureOf(t)?.name || ""}`.toLowerCase().includes(q)).sort((a, b) => a.id.localeCompare(b.id));
   }, [rawItems, prepared, pubItems, isAdmin, deferredSearch]);
   const words = useMemo(() => plain(content).trim().split(/\s+/).filter(Boolean).length, [content]);
   const monthNow = mKey(Date.now());
@@ -2147,6 +2153,13 @@ export default function App() {
     ? <span className="rounded-full shrink-0 inline-flex items-center justify-center" style={{ width: size, height: size, background: "var(--sf)", border: "1px dashed var(--mu)" }}><EyeOff size={size * 0.5} className="mu" /></span>
     : <Avatar p={profiles[t.userId]} name={t.author} size={size} />;
   const wn = (t: any) => hid(t) ? "Autore nascosto" : dn(t.userId, t.author);
+  // chi ha scritto un pensiero del diario: l'admin lo vede sempre, gli altri solo se l'autore l'ha firmato
+  const diaryAuthor = (t: any) => {
+    const s = signatureOf(t), mine = t.userId === user.uid || s?.uid === user.uid;
+    if (isAdmin) return `Autore: ${dn(t.userId || s?.uid, t.author || s?.name)}${s ? " · firmato" : ""}`;
+    if (mine) return s ? "Il tuo pensiero · firmato" : "Il tuo pensiero · anonimo agli altri";
+    return s ? dn(s.uid, s.name) : "Una voce del Circuito";
+  };
   const unread = allNotifs.filter((n) => !n.letta).length;
   const bell = (r: boolean) => (
     <Pop label="Notifiche" right={r} cls="bt !p-2 relative" tour="bell" trigger={<><Bell size={18} />{unread > 0 && <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center" style={{ background: "var(--am)", color: "#3b2a00" }}>{unread}</span>}</>}>
@@ -2312,7 +2325,7 @@ export default function App() {
       </div></Reveal>
       <div className="grid md:grid-cols-2 gap-4">
         <button className="pn card p-6 text-left" onClick={() => go(isAdmin ? "read" : "altri")}><span className="kind-badge">Scritti completi</span><h3 className="hd text-xl font-bold mt-3">Dai forma alle tue idee</h3><p className="mu text-sm mt-2">Temi e racconti, estratti da leggere e selezione del mese.</p></button>
-        <button className="pn card p-6 text-left diary-intro" onClick={() => go("diario")}><span className="kind-badge diary">Diario</span><h3 className="hd text-xl font-bold mt-3">Lascia un pensiero</h3><p className="mu text-sm mt-2">Pagine anonime da leggere per intero, senza voti o categorie.</p></button>
+        <button className="pn card p-6 text-left diary-intro" onClick={() => go("diario")}><span className="kind-badge diary">Diario</span><h3 className="hd text-xl font-bold mt-3">Lascia un pensiero</h3><p className="mu text-sm mt-2">Pagine da leggere per intero, anonime o firmate, senza voti o categorie.</p></button>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((x, i) => <Reveal key={x.l} delay={(boot ? 620 : 0) + i * 70} className="h-full"><button type="button" onClick={x.a} data-snd="nav" className="pn card stat p-5 h-full w-full"><ArrowUpRight size={18} className="go" aria-hidden="true" /><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3 tabular-nums"><CountUp v={x.v} on={G.reveal} delay={(boot ? 620 : 0) + i * 70 + 150} /></div><div className="mu text-sm">{x.l}</div></button></Reveal>)}
@@ -2442,6 +2455,7 @@ export default function App() {
       <div className={`shell-main md:pb-12 relative ${isAdmin ? "shell-main-admin" : ""}`}>
         <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12" style={{ ["--pdx" as any]: `${pdx.current}px` }}>
           <SectionLocation tab={tab} admin={isAdmin} editing={!!editingId} />
+          {inHub(tab) && <ScrittiSwitch tab={tab} admin={isAdmin} onNavigate={go} />}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
             <div><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>{isList && !loading && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "scritto" : "scritti"}</p>}{tab === "altri" && !(pubLoading || loading) && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={pubShown.length} className="tick-n">{pubShown.length}</span> {pubShown.length === 1 ? "scritto da leggere" : "scritti da leggere"} · senza nomi né date</p>}</div>
             {["altri", "diario"].includes(tab) && <div className="sr-only" aria-live="polite">{tab === "diario" ? diaryShown.length : pubShown.length} pagine</div>}
@@ -2468,7 +2482,7 @@ export default function App() {
           {["altri", "read", "diario"].includes(tab) && <WritingIntro diary={tab === "diario"} onWrite={() => newWriting(tab === "diario" ? "diary" : "complete")} />}
           {tab === "diario" && (pubLoading || loading ? <Sheets /> : diaryShown.length === 0
             ? <div className="pn p-10 text-center"><BookOpen size={34} className="mx-auto mu mb-4" /><h3 className="hd text-xl font-bold">{search ? "Nessun pensiero trovato" : "Il diario aspetta la prima pagina"}</h3><p className="mu text-sm mt-2">{search ? "Prova un’altra parola." : "Non serve avere tutto chiaro per cominciare a scrivere."}</p></div>
-            : <><DiaryCards items={diaryShown.slice(0, visible)} onOpen={openView} author={t => isAdmin ? `Autore: ${dn(t.userId, t.author)}` : t.userId === user.uid ? "Il tuo pensiero · anonimo agli altri" : "Una voce del Circuito"} drawing={t => t.strokes?.length ? <Drawing strokes={t.strokes} {...dims(t)} className="w-full mt-3" /> : null} />{diaryShown.length > visible && <button className="bt mt-6" onClick={() => setVisible(v => v + 18)}>Altri pensieri</button>}</>)}
+            : <><DiaryCards items={diaryShown.slice(0, visible)} onOpen={openView} author={diaryAuthor} drawing={t => t.strokes?.length ? <Drawing strokes={t.strokes} {...dims(t)} className="w-full mt-3" /> : null} />{diaryShown.length > visible && <button className="bt mt-6" onClick={() => setVisible(v => v + 18)}>Altri pensieri</button>}</>)}
           {/* SCRITTI DEGLI ALTRI (non admin): solo titolo, testo e disegno, da leggere */}
           {tab === "altri" && (pubLoading || loading ? (
             <Sheets />
@@ -2546,7 +2560,7 @@ export default function App() {
           {/* EDITOR */}
           {tab === "write" && (
             <form onSubmit={submit} className="space-y-4 fadein">
-              <KindPicker value={kind} onChange={setKind} locked={!!editingId} />
+              <KindPicker value={kind} onChange={setKind} locked={!!editingId} sign={!editingId || rawItems.find((x) => x.id === editingId)?.userId === user.uid ? { on: signed, set: setSigned, name: myName } : undefined} />
               <input maxLength={200} aria-label="Titolo dello scritto" className="inp !text-xl !py-3 hd font-bold" placeholder={kind === "diary" ? "Dai un titolo al tuo pensiero" : "Titolo dello scritto"} value={title} onChange={(e) => setTitle(e.target.value)} required />
               <div className="pn">
                 <div className="p-2 rounded-t-[17px]" style={{ background: "var(--sf)" }}>
@@ -2649,15 +2663,16 @@ export default function App() {
         // (altrimenti il raggruppamento tradirebbe chi ha scritto un testo ancora anonimo)
         const mates = anon || hidS || diary ? [] : prepared.filter((x) => !isDiary(x) && x.userId === sel.userId && !hid(x)).sort((a, b) => a.timestamp - b.timestamp);
         const mi = mates.findIndex((x) => x.id === sel.id), m0 = Math.max(0, Math.min(mi - 3, mates.length - 7)), near = mates.slice(m0, m0 + 7);
-        const own = !anon && sel.userId === user.uid;
+        const own = !anon && sel.userId === user.uid, sign = anon ? signatureOf(sel) : null;
         return (
           <div className={`doc-ov fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm ${closing ? "out" : ""}`} onClick={closeView}>
             <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={sel.title} className="reader-panel pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
               <div className="doc-hd relative overflow-hidden shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
                 {fresh && <span className="rvl-sweep" />}
                 {anon ? <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
-                  <span className="rounded-full shrink-0 inline-flex items-center justify-center" style={{ width: 44, height: 44, background: "var(--sf)", border: "1px solid var(--ln)" }}><BookOpen size={20} className="mu" /></span>
-                  <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title || "Senza titolo"}</h2><div className="mu text-xs truncate">{diary ? "Pensiero anonimo · lettura integrale" : "Scritto anonimo · estratto"}</div></div>
+                  {sign ? <button type="button" onClick={() => setViewProf(sign.uid)} className="shrink-0" aria-label="Apri profilo"><Avatar p={profiles[sign.uid]} name={sign.name} size={44} /></button>
+                    : <span className="rounded-full shrink-0 inline-flex items-center justify-center" style={{ width: 44, height: 44, background: "var(--sf)", border: "1px solid var(--ln)" }}><BookOpen size={20} className="mu" /></span>}
+                  <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title || "Senza titolo"}</h2><div className="mu text-xs truncate">{sign ? `${dn(sign.uid, sign.name)} · pensiero firmato` : diary ? "Pensiero anonimo · lettura integrale" : "Scritto anonimo · estratto"}</div></div>
                 </div> : <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
                   {hidS ? who(sel, 44) : <button type="button" onClick={() => setViewProf(sel.userId)} className="shrink-0" aria-label="Apri profilo">{fresh ? <span className="rvl-av"><i className="rg" /><i className="rg" /><span className="pf-av"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></span></span> : <Avatar p={profiles[sel.userId]} name={sel.author} size={44} />}</button>}
                   <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>

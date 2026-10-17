@@ -39,6 +39,13 @@ export function SectionMark({ section, size = 30, motion = true }: { section: st
         <Piece index={2} y={-4}><path className="mark-accent mark-ribbon" d="M20 3v5l2-1 2 1V3" /></Piece>
       </>;
       break;
+    case "complete":
+      parts = <>
+        <Piece x={-3} y={3} turn={-8}><path className="mark-soft" d="M9 8H6v20h15v-3" /></Piece>
+        <Piece index={1} x={3} y={-4} turn={6}><g className="mark-page"><path className="mark-surface" d="M10 3h11l5 5v17H10Z" /><path d="M21 3v5h5" /><path className="mark-trace" pathLength={1} d="M14 12h8m-8 4h8m-8 4h5" /></g></Piece>
+        <Piece index={2} y={4}><circle className="mark-accent mark-node mark-fill" cx="24" cy="26" r="2.4" /></Piece>
+      </>;
+      break;
     case "podio":
       parts = <>
         <Piece y={5}><path className="mark-trace" pathLength={1} d="M5 27v-7h7m8 0h7v7M12 27V16h8v11M3 28h26" /></Piece>

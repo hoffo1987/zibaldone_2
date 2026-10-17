@@ -16,12 +16,13 @@ service cloud.firestore {
     }
 
     // pensieri: originali privati, tipo immutabile; i documenti senza kind sono scritti completi.
-    // testi v2: diario integrale anonimo oppure solo estratto, senza identità, date, voti o allegati dei completi.
+    // testi v2: diario integrale (anonimo, oppure firmato se l'autore lo sceglie) oppure solo estratto,
+    // senza identità, date, voti o allegati dei completi.
     function pensiero(id) { return /databases/$(database)/documents/pensieri/$(id); }
     function tipo(d) { return d.get('kind', 'complete'); }
     function completo(id) { return exists(pensiero(id)) && tipo(get(pensiero(id)).data) == 'complete'; }
     function validoOriginale(d) {
-      return d.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred', 'kind', 'excerpt', 'updatedAt', 'rating', 'svelato'])
+      return d.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred', 'kind', 'excerpt', 'updatedAt', 'rating', 'svelato', 'firmato'])
         && d.keys().hasAll(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred'])
         && d.title is string && d.title.size() > 0 && d.title.size() <= 200
         && d.content is string && d.content.size() <= 950000
@@ -34,17 +35,27 @@ service cloud.firestore {
         && tipo(d) in ['complete', 'diary']
         && d.get('excerpt', '') is string && d.get('excerpt', '').size() <= 480
         && d.get('svelato', false) is bool
+        && d.get('firmato', false) is bool
+        // solo un pensiero del diario può portare il nome dell'autore
+        && (tipo(d) == 'diary' || d.get('firmato', false) == false)
         && (!('rating' in d) || (d.rating is int && d.rating >= 1 && d.rating <= 5))
         && (tipo(d) == 'complete' || (!('rating' in d) && d.isStarred == false && d.get('svelato', false) == false && d.get('excerpt', '') == ''));
+    }
+    // copia pubblica del diario: nome e id dell'autore ci sono solo se l'originale è firmato, e sono quelli veri
+    function firmaFedele(pub, original) {
+      return (original.get('firmato', false) == true
+          && pub.get('firma', null) == original.author && pub.get('autoreId', null) == original.userId)
+        || (original.get('firmato', false) == false && !('firma' in pub) && !('autoreId' in pub));
     }
     function copiaFedele(id) {
       let d = request.resource.data;
       let original = getAfter(pensiero(id)).data;
       return d.get('version', 0) == 2 && d.kind == tipo(original) && d.title == original.title
         && ((d.kind == 'diary'
-          && d.keys().hasOnly(['version', 'kind', 'title', 'content', 'strokes', 'w', 'h'])
+          && d.keys().hasOnly(['version', 'kind', 'title', 'content', 'strokes', 'w', 'h', 'firma', 'autoreId'])
           && d.keys().hasAll(['version', 'kind', 'title', 'content', 'strokes', 'w', 'h'])
-          && d.content == original.content && d.strokes == original.strokes && d.w == original.w && d.h == original.h)
+          && d.content == original.content && d.strokes == original.strokes && d.w == original.w && d.h == original.h
+          && firmaFedele(d, original))
         || (d.kind == 'complete'
           && d.keys().hasOnly(['version', 'kind', 'title', 'excerpt'])
           && d.keys().hasAll(['version', 'kind', 'title', 'excerpt'])
@@ -56,7 +67,7 @@ service cloud.firestore {
       let d = request.resource.data;
       let pub = getAfter(/databases/$(database)/documents/testi/$(id)).data;
       return pub.version == 2 && pub.kind == tipo(d) && pub.title == d.title
-        && ((tipo(d) == 'diary' && pub.content == d.content && pub.strokes == d.strokes && pub.w == d.w && pub.h == d.h)
+        && ((tipo(d) == 'diary' && pub.content == d.content && pub.strokes == d.strokes && pub.w == d.w && pub.h == d.h && firmaFedele(pub, d))
           || (tipo(d) == 'complete' && pub.excerpt == d.get('excerpt', '')));
     }
     match /pensieri/{id} {
@@ -69,9 +80,9 @@ service cloud.firestore {
         && (!('kind' in request.resource.data) || pubblicazioneAllineata(id));
       allow update: if signedIn() && validoOriginale(request.resource.data)
         && tipo(request.resource.data) == tipo(resource.data)
-        && (!('kind' in request.resource.data) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind']) || pubblicazioneAllineata(id))
+        && (!('kind' in request.resource.data) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'firmato']) || pubblicazioneAllineata(id))
         && ((resource.data.userId == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'updatedAt']))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'updatedAt', 'firmato']))
         || (isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'updatedAt', 'rating', 'isStarred', 'svelato'])
           && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isStarred']) || request.resource.data.isStarred == false)

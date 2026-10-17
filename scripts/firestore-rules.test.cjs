@@ -114,3 +114,21 @@ test('le ricevute di lettura sono private e modificabili soltanto dal proprietar
   await assertFails(updateDoc(receipt,{letta:false}));
   await assertFails(setDoc(doc(owner,'letture_aggiornamenti','owner','annunci','d'.repeat(40)),{letta:true,timestamp:1}));
 });
+test('diario firmato: il nome pubblico è quello vero e solo se l’autore lo sceglie', async () => {
+  const signed = { ...original('diary'), firmato: true };
+  const copy = d => ({ ...projection(d), firma: d.author, autoreId: d.userId });
+  const pair = (db, id, d, pub) => { const b = writeBatch(db); b.set(doc(db, 'pensieri', id), d); b.set(doc(db, 'testi', id), pub); return b.commit(); };
+  await assertSucceeds(pair(owner, 'signed-diary', signed, copy(signed)));
+  const pub = (await getDoc(doc(other, 'testi', 'signed-diary'))).data(); assert.equal(pub.firma, 'Autore privato'); assert.equal(pub.autoreId, 'owner');
+  await assertFails(pair(owner, 'forged-name', signed, { ...copy(signed), firma: 'Qualcun altro' }));
+  await assertFails(pair(owner, 'forged-id', signed, { ...copy(signed), autoreId: 'other' }));
+  await assertFails(pair(owner, 'leaked-name', original('diary'), copy(original('diary'))));
+  await assertFails(pair(owner, 'unsigned-copy', signed, projection(signed)));
+  await assertFails(pair(owner, 'signed-complete', { ...original(), firmato: true }, projection(original())));
+  // togliere la firma: originale e copia insieme, mai l'originale da solo
+  await assertFails(updateDoc(doc(owner, 'pensieri', 'signed-diary'), { firmato: false }));
+  const unsigned = { ...signed, firmato: false };
+  await assertSucceeds(pair(owner, 'signed-diary', unsigned, projection(unsigned)));
+  const after = (await getDoc(doc(other, 'testi', 'signed-diary'))).data(); assert.equal(after.firma, undefined); assert.equal(after.autoreId, undefined);
+  await assertFails(updateDoc(doc(admin, 'pensieri', 'signed-diary'), { firmato: true }));
+});

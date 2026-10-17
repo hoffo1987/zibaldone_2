@@ -19,13 +19,13 @@ function Preview({ admin = true }) {
     brand={null} footer={null} mobileHeader={null} />;
 }
 
-test('the admin can reach every secondary section from a five-button mobile dock', () => {
+test('the admin can reach every section from a four-button mobile dock', () => {
   act(() => root.render(<Preview />));
   const dock = host.querySelector('.shell-dock');
-  expect(dock.querySelectorAll('button')).toHaveLength(5);
-  expect(host.querySelectorAll('.shell-rail button')).toHaveLength(7);
   expect(Array.from(dock.querySelectorAll('button')).map(button => button.getAttribute('aria-label')))
-    .toEqual(['Panoramica', 'Nuovo scritto', 'Diario', 'Scritti completi', 'Altre sezioni']);
+    .toEqual(['Panoramica', 'Nuovo scritto', 'Scritti', 'Altre sezioni']);
+  // desktop: six sections plus the two rooms of Scritti
+  expect(Array.from(host.querySelectorAll('.shell-rail .shell-room')).map(b => b.getAttribute('aria-label'))).toEqual(['Diario', 'Scritti completi']);
   for (const label of ['I miei scritti', 'Podio del mese', 'Autori']) {
     const more = dock.querySelector('[aria-label="Altre sezioni"]');
     act(() => more.click());
@@ -50,14 +50,26 @@ test('cancel closes the secondary menu and restores keyboard focus to its trigge
   expect(document.activeElement).toBe(more);
 });
 
-test('members have adjacent Diary and Writings buttons and find their collection under More', () => {
+test('Scritti is one section: it opens a room and remembers the last one visited', () => {
+  localStorage.clear();
+  act(() => root.render(<Preview admin={false} />));
+  const dock = host.querySelector('.shell-dock'), scritti = dock.querySelector('[aria-label="Scritti"]');
+  act(() => scritti.click());
+  expect(host.querySelector('.shell-room[aria-current="page"]').getAttribute('aria-label')).toBe('Diario');
+  expect(scritti.getAttribute('aria-current')).toBe('page');
+  act(() => host.querySelector('.shell-room[aria-label="Scritti completi"]').click());
+  expect(scritti.getAttribute('data-act')).toBe('1');
+  act(() => dock.querySelector('[aria-label="Panoramica"]').click());
+  expect(scritti.getAttribute('data-act')).toBeNull();
+  act(() => scritti.click());
+  expect(host.querySelector('.shell-room[aria-current="page"]').getAttribute('aria-label')).toBe('Scritti completi');
+});
+
+test('members find their collection under More', () => {
   act(() => root.render(<Preview admin={false} />));
   const dock = host.querySelector('.shell-dock');
-  expect(dock.querySelectorAll('button')).toHaveLength(5);
   expect(Array.from(dock.querySelectorAll('button')).map(button => button.getAttribute('aria-label')))
-    .toEqual(['Panoramica', 'Nuovo scritto', 'Diario', 'Scritti completi', 'Altre sezioni']);
-  act(() => dock.querySelector('[aria-label="Diario"]').click());
-  expect(dock.querySelector('[aria-current="page"]').getAttribute('aria-label')).toBe('Diario');
+    .toEqual(['Panoramica', 'Nuovo scritto', 'Scritti', 'Altre sezioni']);
   act(() => dock.querySelector('[aria-label="Altre sezioni"]').click());
   act(() => host.querySelector('dialog [aria-label="I miei scritti"]').click());
   expect(host.querySelector('dialog')).toBeNull();

@@ -40,3 +40,15 @@ test("la firma ignora l'ordine delle chiavi e i campi privati", () => {
   expect(pubSig({ ...scritto, author: "Altro", rating: 1 })).toBe(pubSig(scritto));
   expect(pubSig({ ...scritto, content: "<div>diverso</div>" })).not.toBe(pubSig(scritto));
 });
+
+test("un pensiero firmato porta il nome solo se l'autore l'ha scelto, e mai un completo", () => {
+  const diary = { ...scritto, kind: "diary" };
+  expect(pubOf(diary).firma).toBeUndefined();
+  expect(pubOf({ ...diary, firmato: false })).not.toHaveProperty("autoreId");
+  const signed = pubOf({ ...diary, firmato: true });
+  expect(signed).toMatchObject({ firma: "Mario Rossi", autoreId: "uid-1" });
+  // la copia pubblica riletta conserva la firma: nessuna riscrittura a ogni caricamento
+  expect(pubSig(signed)).toBe(pubSig({ ...diary, firmato: true }));
+  expect(pubOf({ ...scritto, firmato: true })).toEqual({ version: 2, kind: "complete", title: "Titolo", excerpt: "c" });
+  expect(pubOf({ ...diary, firmato: true, author: undefined })).not.toHaveProperty("firma");
+});
