@@ -12,37 +12,41 @@
 .dark [data-tone="violet"] { --nav-color: #c0a5fa; }
 .dark [data-tone="amber"] { --nav-color: #f4cd71; }
 .dark [data-tone="cyan"] { --nav-color: #79d2e5; }
-.shell-sidebar.pn { width: var(--shell-width); padding: 28px 16px 16px; border-radius: 0; border-width: 0 1px 0 0; background: var(--pn); }
-.shell-brand { padding: 0 10px 25px; border-bottom: 1px solid var(--ln); }
+.shell-sidebar.pn { width: var(--shell-width); padding: 28px 16px 16px; border-radius: 0; border-width: 0 1px 0 0; background: linear-gradient(160deg, color-mix(in srgb, var(--ac) 3%, var(--pn)), var(--pn) 38%); box-shadow: 8px 0 40px -32px var(--ink); }
+.shell-brand { padding: 0 10px 25px; border-bottom: 1px solid var(--ln); position: relative; }
+.shell-brand:after { content: ""; position: absolute; left: 10px; bottom: -2px; width: 26px; height: 3px; border-radius: 2px; background: var(--ac); }
 .shell-navigation { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 0; }
 .shell-rail { position: relative; display: flex; flex-direction: column; gap: 5px; }
-.shell-group { margin: 15px 12px 4px; color: var(--mu); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
-.shell-link.bt { width: 100%; min-height: 62px; justify-content: flex-start; padding: 10px; gap: 12px; text-align: left; border-radius: 15px; }
-.shell-icon { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; flex-shrink: 0; color: var(--nav-color); background: color-mix(in srgb, var(--nav-color) 10%, var(--pn)); border: 1px solid color-mix(in srgb, var(--nav-color) 16%, transparent); border-radius: 12px; }
-.shell-link[data-tone="rose"] .shell-icon { border-radius: 8px 14px 14px 8px; }
-.shell-link[data-tone="amber"] .shell-icon { border-radius: 50%; }
+.shell-group { display: flex; align-items: center; gap: 14px; margin: 19px 12px 7px; color: var(--mu); font-size: 9px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; }
+.shell-group-line { height: 1px; flex: 1; background: linear-gradient(90deg, var(--ln), transparent); }
+.shell-link.bt { width: 100%; min-height: 68px; justify-content: flex-start; padding: 10px; gap: 13px; text-align: left; border-radius: 16px; }
+.shell-icon { --mark-paper: var(--pn); position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; color: var(--nav-color); background: linear-gradient(145deg, var(--pn), color-mix(in srgb, var(--nav-color) 9%, var(--pn))); border: 1px solid color-mix(in srgb, var(--nav-color) 18%, var(--ln)); border-radius: 14px; box-shadow: inset 0 1px 0 color-mix(in srgb, white 65%, transparent), 0 3px 6px -5px var(--nav-color); transition: background .25s, border-color .25s, box-shadow .25s; }
+.dark .shell-icon { box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 3px 8px -5px #000; }
+.shell-link[data-tone="rose"] .shell-icon { border-radius: 9px 15px 15px 9px; }
+.shell-link[data-tone="amber"] .shell-icon { border-radius: 16px 16px 20px 20px; }
 .shell-link-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.shell-link-title { font-size: 13px; line-height: 1.2; font-weight: 650; }
-.shell-link-detail { font-size: 10px; line-height: 1.3; font-weight: 400; color: var(--mu); }
-.shell-link-arrow { margin-left: auto; flex-shrink: 0; opacity: 0; }
+.shell-link-title { font-size: 13px; line-height: 1.25; font-weight: 650; letter-spacing: -.01em; }
+.shell-link-detail { font-size: 10px; line-height: 1.4; font-weight: 400; color: var(--mu); }
+.shell-link-arrow { margin-left: auto; flex-shrink: 0; opacity: 0; width: 12px; }
 .shell-link.act .shell-link-arrow { opacity: 1; }
-.shell-rail > .nind, .shell-dock > .nind { border-radius: 15px; background: color-mix(in srgb, var(--nav-color, var(--ac)) 11%, var(--pn)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nav-color, var(--ac)) 24%, transparent); }
+.shell-rail > .nind, .shell-dock > .nind { border-radius: 16px; background: linear-gradient(110deg, color-mix(in srgb, var(--nav-color, var(--ac)) 10%, var(--pn)), color-mix(in srgb, var(--nav-color, var(--ac)) 3%, var(--pn))); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nav-color, var(--ac)) 20%, transparent), 0 4px 12px -10px var(--nav-color, var(--ac)); }
+.shell-rail > .nind:before { content: ""; position: absolute; left: 0; top: 24%; bottom: 24%; width: 3px; border-radius: 5px; background: var(--nav-color, var(--ac)); }
 .root .shell-link.act { color: var(--ink); }
-.shell-link.act .shell-icon { background: var(--nav-color); border-color: transparent; color: var(--pn); }
+.shell-link.act .shell-icon { --mark-paper: color-mix(in srgb, var(--nav-color) 12%, var(--pn)); background: linear-gradient(145deg, var(--pn), color-mix(in srgb, var(--nav-color) 19%, var(--pn))); border-color: color-mix(in srgb, var(--nav-color) 40%, var(--ln)); box-shadow: inset 0 1px 0 color-mix(in srgb, white 30%, transparent), 0 4px 12px -8px var(--nav-color); }
 .shell-link.act .shell-link-title, .shell-link.act .shell-link-arrow { color: var(--nav-color); }
 .shell-link:focus-visible { outline: 2px solid var(--nav-color); outline-offset: -2px; }
 .shell-footer { border-top: 1px solid var(--ln); padding-top: 14px; }
-.shell-location { display: flex; align-items: center; gap: 9px; margin-bottom: 14px; font-size: 11px; font-weight: 500; color: var(--mu); }
-.shell-location-icon { display: flex; padding: 6px; border: 1px solid color-mix(in srgb, var(--nav-color) 20%, transparent); background: color-mix(in srgb, var(--nav-color) 8%, var(--pn)); color: var(--nav-color); border-radius: 8px; }
+.shell-location { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-size: 11px; font-weight: 500; color: var(--mu); letter-spacing: .02em; }
+.shell-location-icon { --mark-paper: var(--pn); display: flex; padding: 7px; border: 1px solid color-mix(in srgb, var(--nav-color) 20%, var(--ln)); background: var(--pn); color: var(--nav-color); border-radius: 11px; box-shadow: 0 2px 6px -4px var(--nav-color); }
 .shell-location > span:last-child { color: var(--nav-color); }
 @media (min-width: 768px) {
   .shell-main { margin-left: var(--shell-width); }
 }
 @media (max-width: 767px) {
-  .shell-dock { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; left: 8px; right: 8px; bottom: 0; padding: 7px 5px calc(7px + env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; box-shadow: 0 -8px 32px -16px rgba(0,0,0,.25); }
+  .shell-dock { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; left: 8px; right: 8px; bottom: 0; padding: 10px 5px calc(7px + env(safe-area-inset-bottom)); border-radius: 24px 24px 0 0; box-shadow: 0 -10px 40px -24px rgba(0,0,0,.3), inset 0 1px 0 color-mix(in srgb, var(--pn) 80%, transparent); }
   .shell-dock .shell-link { min-width: 0; min-height: 66px; padding: 5px 1px; gap: 5px; flex-direction: column; justify-content: center; text-align: center; }
-  .shell-dock .shell-icon { width: 30px; height: 30px; border-radius: 10px; }
-  .shell-dock .shell-icon svg { width: 18px; height: 18px; }
+  .shell-dock .shell-icon { width: 34px; height: 34px; border-radius: 11px; }
+  .shell-dock .shell-icon svg { width: 24px; height: 24px; }
   .shell-dock .shell-link-title { font-size: 10px; line-height: 1.25; }
   .shell-dock-admin { grid-template-columns: repeat(12, minmax(0, 1fr)); }
   .shell-dock-admin .shell-link { grid-column: span 3; min-height: 58px; }
@@ -56,4 +60,55 @@
   .shell-navigation { padding: 10px 0; }
   .shell-group { margin-top: 9px; }
   .shell-link.bt { min-height: 54px; padding-top: 6px; padding-bottom: 6px; }
+}
+
+/* A finite two-beat sequence: assemble the pieces, then draw the detail.
+   Only the selected / hovered / keyboard-focused mark moves; no idle loops. */
+.section-mark { overflow: visible; flex-shrink: 0; }
+.shell-link.bt .section-mark { animation: none; transform: none; transition: none; }
+.section-mark .mark-surface { fill: var(--mark-paper, var(--pn)); }
+.section-mark .mark-tint { fill: color-mix(in srgb, currentColor 13%, var(--mark-paper, var(--pn))); }
+.section-mark .mark-soft { opacity: .5; }
+.section-mark .mark-fill { fill: currentColor; stroke: none; }
+.section-mark .mark-accent { color: var(--am); }
+.section-mark .mark-piece, .section-mark .mark-node, .section-mark .mark-page,
+.section-mark .mark-pen, .section-mark .mark-book, .section-mark .mark-crown,
+.section-mark .mark-person, .section-mark .mark-spark { transform-box: fill-box; transform-origin: center; }
+.section-mark .mark-leaf { transform-origin: 13px 16px; }
+.section-mark .mark-trace { stroke-dasharray: 1; stroke-dashoffset: 0; }
+.shell-icon-orbit { position: absolute; inset: -4px; border: 1px solid var(--nav-color); border-right-color: transparent; border-bottom-color: transparent; border-radius: inherit; opacity: 0; pointer-events: none; }
+.shell-link:is(.act, :focus-visible) .section-mark-motion .mark-piece { animation: markAssemble var(--mark-duration, 620ms) var(--out) var(--piece-delay) both; }
+.shell-link:is(.act, :focus-visible) .section-mark-motion .mark-trace { animation: markDraw 800ms var(--ez) calc(var(--piece-delay) + 160ms) both; }
+.shell-link:is(.act, :focus-visible) .section-mark-motion .mark-node { animation: markNode 900ms var(--ez) calc(var(--piece-delay) + 200ms) both; }
+.shell-link:is(.act, :focus-visible) .section-mark-motion .mark-page { animation: markPage 1s var(--ez) 220ms both; }
+.shell-link:is(.act, :focus-visible) .section-mark-motion .mark-pen { animation: markPen 1s var(--ez) 160ms both; }
+.shell-link:is(.act, :focus-visible) .section-mark-motion .mark-leaf { animation: markLeaf 1s var(--ez) 180ms both; }
+.shell-link:is(.act, :focus-visible) .section-mark-motion .mark-book { animation: markBook 1s var(--ez) 150ms both; }
+.shell-link:is(.act, :focus-visible) .section-mark-motion .mark-crown { animation: markCrown 900ms var(--ez) 160ms both; }
+.shell-link:is(.act, :focus-visible) .section-mark-motion .mark-spark { animation: markSpark 1s var(--ez) 200ms both; }
+.shell-link:is(.act, :focus-visible) .section-mark-motion .mark-person { animation: markNode 1s var(--ez) var(--piece-delay) both; }
+.shell-link:is(.act, :focus-visible) .shell-icon-orbit { animation: markOrbit 1.1s var(--ez) both; }
+@media (hover: hover) {
+  .shell-link:hover .section-mark-motion .mark-piece { animation: markAssemble var(--mark-duration, 620ms) var(--out) var(--piece-delay) both; }
+  .shell-link:hover .section-mark-motion .mark-trace { animation: markDraw 800ms var(--ez) calc(var(--piece-delay) + 160ms) both; }
+  .shell-link:hover .shell-icon-orbit { animation: markOrbit 1.1s var(--ez) both; }
+  .shell-link:hover .shell-icon { border-color: color-mix(in srgb, var(--nav-color) 45%, var(--ln)); }
+}
+@keyframes markAssemble {
+  from { opacity: .15; transform: translate(var(--piece-x), var(--piece-y)) rotate(var(--piece-turn)) scale(.84); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes markDraw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes markNode { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.18); } }
+@keyframes markPage { 0%, 100% { transform: none; } 40% { transform: translate(1px, -2px) rotate(7deg); } }
+@keyframes markPen { 0%, 100% { transform: none; } 35% { transform: translate(-2px, 2px) rotate(-7deg); } 65% { transform: translate(1px, -1px) rotate(3deg); } }
+@keyframes markLeaf { 0%, 100% { transform: none; } 45% { transform: skewY(-5deg) scaleX(.82); } }
+@keyframes markBook { 0%, 100% { transform: none; } 45% { transform: rotate(-9deg) translateY(-1px); } }
+@keyframes markCrown { 0%, 100% { transform: none; } 40% { transform: translateY(-2px); } }
+@keyframes markSpark { 0%, 100% { transform: scale(1); opacity: .8; } 45% { transform: scale(1.3) rotate(90deg); opacity: 1; } }
+@keyframes markOrbit { 0% { opacity: 0; transform: rotate(-110deg) scale(.9); } 35% { opacity: .4; } 100% { opacity: 0; transform: rotate(35deg) scale(1.12); } }
+.root:is(.nologo, .nomotion, .lite) .section-mark *,
+.root:is(.nologo, .nomotion, .lite) .shell-icon-orbit { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .section-mark *, .shell-icon-orbit { animation: none !important; }
 }

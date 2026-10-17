@@ -1,19 +1,20 @@
 import React, { useRef } from "react";
-import { LayoutDashboard, Files, Feather, NotebookPen, LibraryBig, Trophy, Users, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useRail } from "./motion";
+import { SectionMark } from "./SectionMark";
 import "./navigation.css";
 
 // The same order drives both menus and the existing directional page transitions.
 export const NAV_ORDER = ["home", "my_pages", "write", "diario", "altri", "read", "podio", "authors", "profile"];
 export const navigationItems = (admin: boolean, editing: boolean) => [
-  { id: "home", label: "Panoramica", short: "Home", detail: "Il Circuito, a colpo d’occhio", group: "", tone: "teal", icon: LayoutDashboard },
-  { id: "my_pages", label: "I miei scritti", short: "I miei scritti", detail: "La tua raccolta personale", group: "Il tuo spazio", tone: "blue", icon: Files },
-  { id: "write", label: editing ? "Modifica scritto" : "Nuovo scritto", short: editing ? "Modifica" : "Scrivi", detail: editing ? "Riprendi la tua pagina" : "Dai forma a un’idea", group: "Il tuo spazio", tone: "teal", icon: Feather },
-  { id: "diario", label: "Diario", short: "Diario", detail: "Pensieri e voci anonime", group: "Da leggere", tone: "rose", icon: NotebookPen },
-  { id: admin ? "read" : "altri", label: "Scritti completi", short: "Scritti", detail: admin ? "Lettura e valutazione" : "Esplora gli estratti", group: "Da leggere", tone: "violet", icon: LibraryBig },
+  { id: "home", label: "Panoramica", short: "Home", detail: "Il Circuito, a colpo d’occhio", group: "", tone: "teal" },
+  { id: "my_pages", label: "I miei scritti", short: "I miei scritti", detail: "La tua raccolta personale", group: "Il tuo spazio", tone: "blue" },
+  { id: "write", label: editing ? "Modifica scritto" : "Nuovo scritto", short: editing ? "Modifica" : "Scrivi", detail: editing ? "Riprendi la tua pagina" : "Dai forma a un’idea", group: "Il tuo spazio", tone: "teal" },
+  { id: "diario", label: "Diario", short: "Diario", detail: "Pensieri e voci anonime", group: "Da leggere", tone: "rose" },
+  { id: admin ? "read" : "altri", label: "Scritti completi", short: "Scritti", detail: admin ? "Lettura e valutazione" : "Esplora gli estratti", group: "Da leggere", tone: "violet" },
   ...(admin ? [
-    { id: "podio", label: "Podio del mese", short: "Podio", detail: "Gli scritti in primo piano", group: "La community", tone: "amber", icon: Trophy },
-    { id: "authors", label: "Autori", short: "Autori", detail: "Le persone del Circuito", group: "La community", tone: "cyan", icon: Users },
+    { id: "podio", label: "Podio del mese", short: "Podio", detail: "Gli scritti in primo piano", group: "La community", tone: "amber" },
+    { id: "authors", label: "Autori", short: "Autori", detail: "Le persone del Circuito", group: "La community", tone: "cyan" },
   ] : []),
 ];
 
@@ -40,7 +41,7 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
       data-tour={`nav-${item.id}`} data-snd="nav" data-tone={item.tone}
       aria-current={tab === item.id ? "page" : undefined} aria-label={item.label}
       onClick={() => onNavigate(item.id)} className={`bt nb shell-link ${tab === item.id ? "act" : ""}`}>
-      <span className="shell-icon" aria-hidden="true"><item.icon size={20} strokeWidth={1.8} /></span>
+      <span className="shell-icon" aria-hidden="true"><span className="shell-icon-orbit" /><SectionMark key={`${item.id}:${tab === item.id}`} section={item.id} /></span>
       <span className="shell-link-copy"><span className="shell-link-title">{mobile ? item.short : item.label}</span>
         {!mobile && <span className="shell-link-detail">{item.detail}</span>}
       </span>
@@ -54,7 +55,7 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
         <div ref={vertical} className="shell-rail" data-tone={active?.tone}>
           <span className="nind" aria-hidden="true" />
           {items.map((item, index) => <React.Fragment key={item.id}>
-            {item.group && item.group !== items[index - 1]?.group && <div className="shell-group">{item.group}</div>}
+            {item.group && item.group !== items[index - 1]?.group && <div className="shell-group"><span>{item.group}</span><span className="shell-group-line" aria-hidden="true" /></div>}
             {button(item)}
           </React.Fragment>)}
         </div>
@@ -75,7 +76,7 @@ export function SectionLocation({ tab, admin, editing }: Pick<Props, "tab" | "ad
   const item = navigationItems(admin, editing).find(entry => entry.id === tab);
   if (!item) return null;
   return <div className="shell-location" data-tone={item.tone}>
-    <span className="shell-location-icon" aria-hidden="true"><item.icon size={15} /></span>
+    <span className="shell-location-icon" aria-hidden="true"><SectionMark section={item.id} size={20} motion={false} /></span>
     <span>Il Circuito</span><ChevronRight size={12} aria-hidden="true" />
     <span>{item.group || "Panoramica"}</span>
   </div>;
