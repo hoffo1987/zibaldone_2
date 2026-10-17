@@ -1,5 +1,5 @@
-import React, { useRef } from "react";
-import { ChevronRight } from "lucide-react";
+import React, { useLayoutEffect, useRef, useState } from "react";
+import { ChevronRight, MoreHorizontal, X } from "lucide-react";
 import { useRail } from "./motion";
 import { SectionMark } from "./SectionMark";
 import "./navigation.css";
@@ -8,7 +8,7 @@ import "./navigation.css";
 export const NAV_ORDER = ["home", "my_pages", "write", "diario", "altri", "read", "podio", "authors", "profile"];
 export const navigationItems = (admin: boolean, editing: boolean) => [
   { id: "home", label: "Panoramica", short: "Home", detail: "Il Circuito, a colpo d’occhio", group: "", tone: "teal" },
-  { id: "my_pages", label: "I miei scritti", short: "I miei scritti", detail: "La tua raccolta personale", group: "Il tuo spazio", tone: "blue" },
+  { id: "my_pages", label: "I miei scritti", short: "Miei", detail: "La tua raccolta personale", group: "Il tuo spazio", tone: "blue" },
   { id: "write", label: editing ? "Modifica scritto" : "Nuovo scritto", short: editing ? "Modifica" : "Scrivi", detail: editing ? "Riprendi la tua pagina" : "Dai forma a un’idea", group: "Il tuo spazio", tone: "teal" },
   { id: "diario", label: "Diario", short: "Diario", detail: "Pensieri e voci anonime", group: "Da leggere", tone: "rose" },
   { id: admin ? "read" : "altri", label: "Scritti completi", short: "Scritti", detail: admin ? "Lettura e valutazione" : "Esplora gli estratti", group: "Da leggere", tone: "violet" },
@@ -32,15 +32,20 @@ type Props = {
 
 export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, brand, footer, mobileHeader }: Props) {
   const vertical = useRef<HTMLDivElement>(null), horizontal = useRef<HTMLElement>(null);
+  const [more, setMore] = useState(false);
   useRail(vertical, "v", railKey);
   useRail(horizontal, "h", railKey);
   const items = navigationItems(admin, editing);
   const active = items.find(item => item.id === tab);
+  const secondary = admin ? items.filter(item => ["diario", "podio", "authors"].includes(item.id)) : [];
+  const primary = admin ? items.filter(item => !secondary.includes(item)) : items;
+  const secondaryActive = secondary.find(item => item.id === tab);
+  const navigate = (id: string) => { setMore(false); onNavigate(id); };
   const button = (item: typeof items[number], mobile = false) => (
     <button key={item.id} type="button" data-act={tab === item.id ? "1" : undefined}
       data-tour={`nav-${item.id}`} data-snd="nav" data-tone={item.tone}
       aria-current={tab === item.id ? "page" : undefined} aria-label={item.label}
-      onClick={() => onNavigate(item.id)} className={`bt nb shell-link ${tab === item.id ? "act" : ""}`}>
+      onClick={() => navigate(item.id)} className={`bt nb shell-link ${tab === item.id ? "act" : ""}`}>
       <span className="shell-icon" aria-hidden="true"><span className="shell-icon-orbit" /><SectionMark key={`${item.id}:${tab === item.id}`} section={item.id} /></span>
       <span className="shell-link-copy"><span className="shell-link-title">{mobile ? item.short : item.label}</span>
         {!mobile && <span className="shell-link-detail">{item.detail}</span>}
@@ -67,9 +72,35 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
       className={`shell-dock pn hdr md:hidden fixed z-30 ${admin ? "shell-dock-admin" : ""}`}
       style={{ display: hidden ? "none" : undefined }}>
       <span className="nind" aria-hidden="true" />
-      {items.map(item => button(item, true))}
+      {primary.map(item => button(item, true))}
+      {admin && <button type="button" data-act={secondaryActive ? "1" : undefined} data-tour={`nav-${secondaryActive?.id || "more"}`} data-snd="nav"
+        data-tone={secondaryActive?.tone || "cyan"} aria-label="Altre sezioni" aria-haspopup="dialog" aria-expanded={more} aria-current={secondaryActive ? "page" : undefined}
+        onClick={() => setMore(true)} className={`bt nb shell-link ${secondaryActive ? "act" : ""}`}>
+        <span className="shell-icon" aria-hidden="true">{secondaryActive ? <SectionMark section={secondaryActive.id} /> : <MoreHorizontal size={22} />}</span>
+        <span className="shell-link-title">{secondaryActive?.short || "Altro"}</span>
+      </button>}
     </nav>
+    {more && !hidden && <MobileSections onClose={() => setMore(false)}>{secondary.map(item => button(item))}</MobileSections>}
   </>;
+}
+
+function MobileSections({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const close = useRef(onClose); close.current = onClose;
+  useLayoutEffect(() => {
+    const panel = dialog.current, previous = document.activeElement as HTMLElement | null;
+    panel?.showModal();
+    panel?.querySelector<HTMLButtonElement>("button")?.focus();
+    const media = window.matchMedia("(min-width:768px)");
+    const resize = () => { if (media.matches) close.current(); };
+    media.addEventListener("change", resize);
+    return () => { media.removeEventListener("change", resize); panel?.close(); previous?.focus(); };
+  }, []);
+  return <dialog ref={dialog} className="shell-more pn" aria-labelledby="shell-more-title" onCancel={event => { event.preventDefault(); onClose(); }}
+    onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="shell-more-heading"><h2 id="shell-more-title" className="hd text-xl font-bold">Altre sezioni</h2><button type="button" className="bt !p-2" onClick={onClose} aria-label="Chiudi menu sezioni"><X size={18} /></button></div>
+    <nav aria-label="Altre sezioni">{children}</nav>
+  </dialog>;
 }
 
 export function SectionLocation({ tab, admin, editing }: Pick<Props, "tab" | "admin" | "editing">) {

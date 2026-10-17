@@ -2432,7 +2432,7 @@ export default function App() {
             <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
           </div>
         </div>}
-        mobileHeader={<header className="md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
+        mobileHeader={<header className="shell-header md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
         <div className="flex items-center gap-2"><Wordmark size={40} fs={19} tag={false} /></div>
         <div className="flex items-center gap-2">{bell(true)}<button className="bt !p-2" onClick={() => setOptOpen(true)} aria-label="Opzioni" data-tour="options"><Settings size={18} /></button><button onClick={() => go("profile")} data-snd="nav" aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
       </header>} />
@@ -2627,7 +2627,7 @@ export default function App() {
 
       {/* barra selezione multipla */}
       {selMode && (
-        <div className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-40 pn shadow-xl flex items-center gap-2 p-2 popx">
+        <div className="selection-bar fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-40 pn shadow-xl flex items-center gap-2 p-2 popx">
           <span className="text-sm px-2">{ids.length} selezionati</span>
           <button className="bt" onClick={() => setIds(ids.length === shown.length ? [] : shown.map((t) => t.id))}>Tutti</button>
           {isAdmin && items.some(t => ids.includes(t.id) && canEvaluate(t)) && <button className="bt" disabled={!ids.length} onClick={bulkMark}><Bookmark size={15} />Segnalibro</button>}
@@ -2650,7 +2650,7 @@ export default function App() {
         const own = !anon && sel.userId === user.uid;
         return (
           <div className={`doc-ov fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm ${closing ? "out" : ""}`} onClick={closeView}>
-            <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={sel.title} className="pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={sel.title} className="reader-panel pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
               <div className="doc-hd relative overflow-hidden shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
                 {fresh && <span className="rvl-sweep" />}
                 {anon ? <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
@@ -2666,7 +2666,7 @@ export default function App() {
                   {!anon && canEdit(sel) && <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={() => startEdit(sel)} title="Modifica" aria-label="Modifica"><Pencil size={15} /></button>}
                   {!anon && canEdit(sel) && <button className="bt dng flex-1 md:flex-none justify-center !p-2" onClick={() => setToDelete([sel.id])} title="Elimina" aria-label="Elimina"><Trash2 size={15} /></button>}
                   {si >= 0 && list.length > 1 && <><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si <= 0} onClick={() => stepTo(list[si - 1], -1)} aria-label="Scritto precedente"><ChevronLeft size={15} /></button><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si >= list.length - 1} onClick={() => stepTo(list[si + 1], 1)} aria-label="Scritto successivo"><ChevronRight size={15} /></button></>}
-                  <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={closeView} title="Chiudi" aria-label="Chiudi"><X size={15} /></button>
+                  <button className="reader-close bt flex-1 md:flex-none justify-center !p-2" onClick={closeView} title="Chiudi" aria-label="Chiudi"><X size={15} /></button>
                 </div>
               </div>
               <div className="relative flex-1 min-h-0 flex flex-col">
@@ -2687,8 +2687,8 @@ export default function App() {
                 {panelOpen && <PannelloAdmin db={db} id={sel.id} notify={notify} />}
               </>}
                 {(diary || anon) && <ReadingNotice item={sel} />}
-                {anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`paper ${diary ? "diary-paper" : "mm"} relative`} data-sheet-paper="" style={{ aspectRatio: `${w}/${h}`, minHeight: "min-content", overflow: diary ? "visible" : undefined }}>
-                  {sel.strokes?.length > 0 && <Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" />}
+                {anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`reader-paper paper ${diary ? "diary-paper" : "mm"} relative`} data-sheet-paper="">
+                  {sel.strokes?.length > 0 && <div className="reader-drawing" style={{ aspectRatio: `${w}/${h}` }}><Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" /></div>}
                   <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: clean(sel.content) }} />
                 </div>}
                 {near.length > 1 && (
