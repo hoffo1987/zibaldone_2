@@ -37,8 +37,8 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
   useRail(horizontal, "h", railKey);
   const items = navigationItems(admin, editing);
   const active = items.find(item => item.id === tab);
-  const secondary = admin ? items.filter(item => ["diario", "podio", "authors"].includes(item.id)) : [];
-  const primary = admin ? items.filter(item => !secondary.includes(item)) : items;
+  const secondary = items.filter(item => ["my_pages", "podio", "authors"].includes(item.id));
+  const primary = items.filter(item => !secondary.includes(item));
   const secondaryActive = secondary.find(item => item.id === tab);
   const navigate = (id: string) => { setMore(false); onNavigate(id); };
   const button = (item: typeof items[number], mobile = false) => (
@@ -73,12 +73,12 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
       style={{ display: hidden ? "none" : undefined }}>
       <span className="nind" aria-hidden="true" />
       {primary.map(item => button(item, true))}
-      {admin && <button type="button" data-act={secondaryActive ? "1" : undefined} data-tour={`nav-${secondaryActive?.id || "more"}`} data-snd="nav"
+      <button type="button" data-act={secondaryActive ? "1" : undefined} data-tour={`nav-${secondaryActive?.id || "more"}`} data-snd="nav"
         data-tone={secondaryActive?.tone || "cyan"} aria-label="Altre sezioni" aria-haspopup="dialog" aria-expanded={more} aria-current={secondaryActive ? "page" : undefined}
         onClick={() => setMore(true)} className={`bt nb shell-link ${secondaryActive ? "act" : ""}`}>
         <span className="shell-icon" aria-hidden="true">{secondaryActive ? <SectionMark section={secondaryActive.id} /> : <MoreHorizontal size={22} />}</span>
-        <span className="shell-link-title">{secondaryActive?.short || "Altro"}</span>
-      </button>}
+        <span className="shell-link-title">Altro</span>
+      </button>
     </nav>
     {more && !hidden && <MobileSections onClose={() => setMore(false)}>{secondary.map(item => button(item))}</MobileSections>}
   </>;

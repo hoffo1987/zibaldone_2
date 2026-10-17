@@ -30,7 +30,12 @@ con `npx firebase-tools deploy --only firestore:rules`. I backup dei dati sono l
 Gli aggiornamenti riusciti di `main` generano automaticamente un annuncio nel pannello Notifiche, per tutti gli
 utenti. La pipeline pubblica dopo controlli, build Android/iOS e conferma del deployment di produzione Vercel;
 ignora revisioni superate e modifiche alla sola documentazione. Un nuovo tentativo dello stesso commit non duplica
-l’annuncio. `release-notes.json` può personalizzare titolo e messaggio della versione; altrimenti usa un testo generico.
+l’annuncio. **Ogni modifica dell'app deve aggiornare `release-notes.json` nello stesso commit**, con un titolo e
+un breve riepilogo in italiano delle modifiche effettive. Il file contiene direttamente `titolo` e `messaggio`
+dell'aggiornamento corrente, indipendentemente dalla versione Android. Non esiste un messaggio generico di riserva.
+`npm run check:release-notes` controlla le modifiche locali prima del commit; in CI controlla il commit pubblicato
+e rifiuta riepiloghi mancanti, generici o uguali al precedente. Le istruzioni permanenti per tutte le AI e chat
+sono in [AGENTS.md](AGENTS.md).
 
 Gli annunci sono immutabili in `aggiornamenti/{commit}`. Le letture sono private per account, in
 `letture_aggiornamenti/{uid}/annunci/{commit}`, e si sincronizzano tra dispositivi. La CI accede con un utente tecnico

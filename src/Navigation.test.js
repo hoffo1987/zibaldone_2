@@ -24,7 +24,9 @@ test('the admin can reach every secondary section from a five-button mobile dock
   const dock = host.querySelector('.shell-dock');
   expect(dock.querySelectorAll('button')).toHaveLength(5);
   expect(host.querySelectorAll('.shell-rail button')).toHaveLength(7);
-  for (const label of ['Diario', 'Podio del mese', 'Autori']) {
+  expect(Array.from(dock.querySelectorAll('button')).map(button => button.getAttribute('aria-label')))
+    .toEqual(['Panoramica', 'Nuovo scritto', 'Diario', 'Scritti completi', 'Altre sezioni']);
+  for (const label of ['I miei scritti', 'Podio del mese', 'Autori']) {
     const more = dock.querySelector('[aria-label="Altre sezioni"]');
     act(() => more.click());
     expect(more.getAttribute('aria-expanded')).toBe('true');
@@ -48,11 +50,17 @@ test('cancel closes the secondary menu and restores keyboard focus to its trigge
   expect(document.activeElement).toBe(more);
 });
 
-test('regular members retain direct access to all five sections', () => {
+test('members have adjacent Diary and Writings buttons and find their collection under More', () => {
   act(() => root.render(<Preview admin={false} />));
   const dock = host.querySelector('.shell-dock');
   expect(dock.querySelectorAll('button')).toHaveLength(5);
-  expect(dock.querySelector('[aria-label="Altre sezioni"]')).toBeNull();
+  expect(Array.from(dock.querySelectorAll('button')).map(button => button.getAttribute('aria-label')))
+    .toEqual(['Panoramica', 'Nuovo scritto', 'Diario', 'Scritti completi', 'Altre sezioni']);
   act(() => dock.querySelector('[aria-label="Diario"]').click());
   expect(dock.querySelector('[aria-current="page"]').getAttribute('aria-label')).toBe('Diario');
+  act(() => dock.querySelector('[aria-label="Altre sezioni"]').click());
+  act(() => host.querySelector('dialog [aria-label="I miei scritti"]').click());
+  expect(host.querySelector('dialog')).toBeNull();
+  expect(dock.querySelector('[aria-label="Altre sezioni"] .shell-link-title').textContent).toBe('Altro');
+  expect(host.querySelector('.shell-rail [aria-current="page"]').getAttribute('aria-label')).toBe('I miei scritti');
 });
