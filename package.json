@@ -47,6 +47,8 @@
     "typecheck:egg": "tsc --project scripts/tsconfig.egg.json",
     "typecheck": "tsc --noEmit",
     "start": "react-scripts start",
+    "start:emu": "node -e \"process.env.REACT_APP_EMULATORS='1';require('react-scripts/scripts/start')\"",
+    "seed:emu": "node scripts/seed-emulators.cjs",
     "build": "node scripts/build.cjs",
     "cap:sync": "cap sync",
     "apk:sync": "npm run build && cap sync android",

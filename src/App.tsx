@@ -2,10 +2,10 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } f
 import { initializeApp } from "firebase/app";
 import {
   initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset
+  signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset, connectAuthEmulator
 } from "firebase/auth";
 import {
-  getFirestore, collection, onSnapshot, doc, writeBatch, query, where, orderBy, limit, setDoc, getDoc, getDocs, deleteField
+  getFirestore, collection, onSnapshot, doc, writeBatch, query, where, orderBy, limit, setDoc, getDoc, getDocs, deleteField, connectFirestoreEmulator
 } from "firebase/firestore";
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
@@ -71,8 +71,15 @@ const firebaseConfig = {
   appId: "1:578635223914:web:74e1adc0de09af1a03cb13",
   measurementId: "G-S3KW241D85",
 };
+// in locale con REACT_APP_EMULATORS=1 (npm run start:emu) l'app parla con gli emulatori di Auth e Firestore di firebase.json,
+// su un progetto "demo-" che non tocca mai quello vero; nella build di produzione la variabile non c'è e il ramo sparisce
+const EMULATORS = process.env.REACT_APP_EMULATORS === "1";
 let auth: any, db: any;
-try { const app = initializeApp(firebaseConfig); auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence] }); db = getFirestore(app); } catch (e) { console.error(e); }
+try {
+  const app = initializeApp(EMULATORS ? { ...firebaseConfig, projectId: "demo-circuito" } : firebaseConfig);
+  auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence] }); db = getFirestore(app);
+  if (EMULATORS) { connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true }); connectFirestoreEmulator(db, "127.0.0.1", 8180); }
+} catch (e) { console.error(e); }
 
 const INK_COLORS = [
   { id: "#10211F", name: "Inchiostro" }, { id: "#334155", name: "Ardesia" }, { id: "#64748B", name: "Grigio tecnico" },
@@ -132,9 +139,20 @@ const Logo = ({ size = 32 }: { size?: number }) => {
   const gid = "lg" + useId().replace(/[^a-zA-Z0-9]/g, "");
   return (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-label="Il Circuito" className="lgf">
-    <defs><linearGradient id={gid} x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse"><stop stopColor="#17C3AE" /><stop offset="1" stopColor="#0A4F49" /></linearGradient></defs>
+    <defs>
+      <linearGradient id={gid} x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse"><stop stopColor="#22CDB7" /><stop offset=".55" stopColor="#0B7466" /><stop offset="1" stopColor="#063B36" /></linearGradient>
+      <radialGradient id={`${gid}g`} cx="14" cy="4" r="44" gradientUnits="userSpaceOnUse"><stop stopColor="#fff" stopOpacity=".34" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
+      <linearGradient id={`${gid}r`} x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse"><stop stopColor="#fff" stopOpacity=".6" /><stop offset=".45" stopColor="#fff" stopOpacity=".08" /><stop offset="1" stopColor="#021C19" stopOpacity=".45" /></linearGradient>
+    </defs>
     <rect width="64" height="64" rx="17" fill={`url(#${gid})`} />
-    <rect x=".75" y=".75" width="62.5" height="62.5" rx="16.25" stroke="#fff" strokeOpacity=".22" strokeWidth="1.5" />
+    {/* le piste della scheda, appena visibili sul fondo */}
+    <path d="M0 47H9L15 53V64M64 15H55L49 9V0M6 0V5L10 9" stroke="#fff" strokeOpacity=".12" strokeWidth="1.3" />
+    <circle cx="9" cy="47" r="1.7" fill="#fff" fillOpacity=".18" /><circle cx="55" cy="15" r="1.7" fill="#fff" fillOpacity=".18" />
+    <rect width="64" height="64" rx="17" fill={`url(#${gid}g)`} />
+    <rect x=".75" y=".75" width="62.5" height="62.5" rx="16.25" stroke={`url(#${gid}r)`} strokeWidth="1.5" />
+    {/* ombre corte sotto la C e i nodi: il disegno sta un poco sopra la piastra */}
+    <path className="lg-arc" pathLength={100} d="M43.5 22.4A15 15 0 1 0 43.5 41.6" stroke="#021F1B" strokeOpacity=".35" strokeWidth="5" strokeLinecap="round" transform="translate(0 1.6)" />
+    <circle cx="43.5" cy="41.6" r="7.5" fill="#FBBF24" fillOpacity=".22" className="lg-amber" />
     <path className="lg-arc" pathLength={100} d="M43.5 22.4A15 15 0 1 0 43.5 41.6" stroke="#fff" strokeWidth="5" strokeLinecap="round" />
     <path className="lg-line" pathLength={100} d="M31 32H47" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
     <path className="lg-flow" d="M31 32H47" stroke="#FBBF24" strokeWidth="1.4" strokeLinecap="round" strokeDasharray="2 5" />
@@ -2260,7 +2278,7 @@ export default function App() {
             <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-sm mu">
               {ts ? <span className="inline-flex items-center gap-1.5"><CalendarDays size={15} />Membro da {mLabel(mKey(ts))}</span> : null}
             </div>
-            {showStats && <div className="grid grid-cols-3 gap-3 mt-6">{[["Scritti", mine.length], ["Parole", words], ["Questo mese", mine.filter((t) => mKey(t.timestamp) === monthNow).length]].map(([l, v]) => <div key={String(l)} className="rounded-xl p-3 text-center" style={{ background: "var(--sf)", border: "1px solid var(--ln)" }}><div className="hd text-2xl font-bold">{v}</div><div className="mu text-xs">{l}</div></div>)}</div>}
+            {showStats && <div className="grid grid-cols-3 gap-3 mt-6">{[["Scritti", mine.length], ["Parole", words], ["Questo mese", mine.filter((t) => mKey(t.timestamp) === monthNow).length]].map(([l, v]) => <div key={String(l)} className="pf-stat rounded-xl p-3 text-center"><div className="hd text-2xl font-bold">{v}</div><div className="mu text-xs">{l}</div></div>)}</div>}
             {showStats && badges.length > 0 && <div className="flex flex-wrap gap-2 mt-4">{badges.map((b) => <span key={b} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: "color-mix(in srgb,var(--am) 20%,transparent)" }}><Award size={13} />{b}</span>)}</div>}
           </>)}
         </div>
@@ -2462,11 +2480,11 @@ export default function App() {
           <SectionLocation tab={tab} admin={isAdmin} editing={!!editingId} />
           {inHub(tab) && <ScrittiSwitch tab={tab} admin={isAdmin} onNavigate={go} />}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>{isList && !loading && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "scritto" : "scritti"}</p>}{tab === "altri" && !(pubLoading || loading) && <p className="mu text-sm mt-1.5" aria-live="polite"><span key={pubShown.length} className="tick-n">{pubShown.length}</span> {pubShown.length === 1 ? "scritto da leggere" : "scritti da leggere"} · senza nomi né date</p>}</div>
+            <div><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>{isList && !loading && <p className="page-count mt-2" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "scritto" : "scritti"}</p>}{tab === "altri" && !(pubLoading || loading) && <p className="page-count mt-2" aria-live="polite"><span key={pubShown.length} className="tick-n">{pubShown.length}</span> {pubShown.length === 1 ? "scritto da leggere" : "scritti da leggere"} · senza nomi né date</p>}</div>
             {["altri", "diario"].includes(tab) && <div className="sr-only" aria-live="polite">{tab === "diario" ? diaryShown.length : pubShown.length} pagine</div>}
             {["altri", "diario"].includes(tab) && <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>}
             {isList && (
-              <div className="flex flex-wrap gap-2 items-center" data-tour="filters">
+              <div className="filters flex flex-wrap gap-2 items-center" data-tour="filters">
                 <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>
                 {tab === "my_pages" && <select className="inp !w-auto" aria-label="Tipo di scritto" value={kindFilter} onChange={e => setKindFilter(e.target.value)}><option value="all">Tutti i tipi</option><option value="complete">Scritti completi</option><option value="diary">Pensieri del diario</option></select>}
                 <select className="inp !w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>{Object.keys(SORTS).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}</select>
@@ -2538,19 +2556,19 @@ export default function App() {
                 const j = i % 18, wave = (j % 3) * 65 + (j < 6 ? Math.floor(j / 3) * 65 : 0);
                 return (
                   <Reveal key={t.id} flip={t.id} delay={wave} fx="sheet" className="h-full"><article data-doc={t.id} onClick={(e) => selMode ? setIds((p) => p.includes(t.id) ? p.filter((x) => x !== t.id) : [...p, t.id]) : openView(t, e)}
-                    className={`pn card h-full overflow-hidden cursor-pointer ${gone.includes(t.id) ? "gone" : ""} ${picked ? "!border-[var(--ac)] ring-2 ring-[var(--ac)]" : ""}`}>
+                    className={`pn card h-full overflow-hidden cursor-pointer ${isDiary(t) ? "is-diary" : ""} ${gone.includes(t.id) ? "gone" : ""} ${picked ? "!border-[var(--ac)] ring-2 ring-[var(--ac)]" : ""}`}>
                     <div className="paper mm sm relative h-40 overflow-hidden">
                       <div className="thumb absolute inset-0">
                         {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
                         <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{t._tx.slice(0, 260) || (t._img ? "Contenuto con immagini" : "")}</p>
                       </div>
-                      {isAdmin && canEvaluate(t) && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span className="absolute top-2 left-2 text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: vals[t.id].stato === "scelto" ? "var(--am)" : "rgba(255,255,255,.92)", color: vals[t.id].stato === "scelto" ? "#3b2a00" : "#0E1F1D", boxShadow: "var(--sh1)" }}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}
+                      {isAdmin && canEvaluate(t) && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span className={`stato-pill ${vals[t.id].stato === "scelto" ? "scelto" : ""}`}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}
                       {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
                       {isAdmin && canEvaluate(t) && !selMode && <button type="button" aria-label="Segnalibro" title={t.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={(e) => { e.stopPropagation(); star(t); }} className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110" style={{ background: "rgba(255,255,255,.92)", boxShadow: "var(--sh1)" }}><Bookmark size={16} style={t.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : { color: "#64748b" }} /></button>}
                     </div>
                     <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
                       <span className={`kind-badge mb-2 ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span><h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
-                      <div className="mt-2 flex items-center gap-2 mu text-xs">{who(t, 22)}<span className="truncate flex-1">{wn(t)}</span><span className="shrink-0">{fmtDate(t.timestamp)}</span></div>
+                      <div className="mt-2 flex items-center gap-2 mu text-xs">{who(t, 22)}<span className="truncate flex-1">{wn(t)}</span><span className="shrink-0 meta-date">{fmtDate(t.timestamp)}</span></div>
                       {isAdmin && canEvaluate(t) && <div className="mt-3"><Stars v={t.rating || 0} onSet={t.svelato ? undefined : (n: number) => rate(t, n)} size={15} /></div>}
                       {!isAdmin && !isDiary(t) && t.svelato && t.rating > 0 && <div className="mt-3 flex items-center gap-2"><Stars v={t.rating} size={15} /><span className="mu text-xs">voto ricevuto</span></div>}
                     </div>

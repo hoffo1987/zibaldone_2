@@ -6,6 +6,7 @@ import { allowSoftwareAdapter } from "../logo3d/engine";
 import "../styles.css";
 import "../ui.css";
 import "../d3.css";
+import "../theme.css";
 
 // Anteprima locale della sala del podio, senza accesso né Firebase: la stessa impaginazione della pagina (barra laterale,
 // titolo, barra del mese, spazio del podio) con tre vincitori finti. ?dark per la notte; ?podiohud e ?podiotier come

@@ -1,0 +1,137 @@
+/* ===== Il Circuito, la base: carta e rame =====
+   Caricato dopo gli altri fogli. Disegna le parti di tutti i giorni (riquadri, pulsanti, campi, etichette, schede degli
+   scritti, numeri) come un quaderno tecnico: carta calda, inchiostro verde-nero, filetti sottili, una traccia di luce sul
+   bordo alto dei riquadri e piccoli LED sulle etichette. Solo sfumature e ombre statiche: nessun filtro, nessuna
+   sfocatura in più, niente che costi a ogni fotogramma. */
+
+/* ---------- riquadri ---------- */
+/* un velo di luce che scende dall'alto, il bordo superiore appena più chiaro (la luce prende lo spigolo) e un'ombra in
+   due tempi: vicina e netta, lontana e morbida */
+.pn{border-radius:20px;background-color:var(--pn);background-image:linear-gradient(180deg,color-mix(in srgb,#fff 55%,transparent),transparent 120px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9),var(--sh1)}
+.root.dark .pn{background-image:linear-gradient(180deg,rgba(255,255,255,.035),transparent 140px);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--sh1)}
+
+/* ---------- pulsanti: tasti ---------- */
+/* il tasto ha un dorso: luce sul filo alto, un'ombra corta sotto. Il primario è verderame pieno, l'altro inchiostro */
+.bt{border-radius:13px;border-color:var(--ln2);background-image:linear-gradient(180deg,color-mix(in srgb,#fff 70%,transparent),transparent);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 1px 1px rgba(12,29,26,.06),0 2px 6px -3px rgba(12,29,26,.12)}
+.root.dark .bt:not(.on):not(.pri){border-color:var(--ln2);background-image:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.01));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 1px 2px rgba(0,0,0,.4)}
+.bt.on{border-color:color-mix(in srgb,var(--ac) 80%,#000);background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 82%,#fff),var(--ac) 45%,color-mix(in srgb,var(--ac) 84%,#000));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.18),0 8px 18px -10px color-mix(in srgb,var(--ac) 90%,transparent);text-shadow:0 1px 0 rgba(0,0,0,.18)}
+.root.dark .bt.on{border-color:color-mix(in srgb,var(--ac) 70%,#fff);text-shadow:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(0,0,0,.2),0 8px 22px -10px color-mix(in srgb,var(--ac) 80%,transparent)}
+.bt.pri{background:linear-gradient(180deg,#24403B,#0C1D1A 60%);border-color:#0C1D1A;color:#F3F6EF;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 10px 20px -12px rgba(12,29,26,.7)}
+.root.dark .bt.pri{background:linear-gradient(180deg,#FFFFFC,#DCE5DF);border-color:#fff;color:#0C1D1A;box-shadow:inset 0 -1px 0 rgba(0,0,0,.12),0 10px 24px -12px rgba(0,0,0,.8)}
+/* i pulsanti trasparenti (dentro i selettori, le icone) restano senza dorso */
+.bt.\!bg-transparent,.seg .bt,.hero .bt,.tb.bt:not(.on){background-image:none}
+.bt.\!bg-transparent,.seg .bt{box-shadow:none}
+@media (hover:hover){.bt:hover{border-color:color-mix(in srgb,var(--ac) 70%,var(--ln2))}}
+
+/* ---------- campi ---------- */
+.inp{border-radius:14px;border-color:var(--ln2);background-color:var(--pn);box-shadow:inset 0 1px 2px rgba(12,29,26,.06)}
+.root.dark .inp{background-color:var(--sf);box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
+.inp::placeholder{color:color-mix(in srgb,var(--mu) 80%,transparent)}
+/* sui computer il testo dei campi torna alla misura del resto (sui telefoni resta a 16 px: niente zoom di iOS) */
+@media (pointer:fine){.inp{font-size:.9rem}}
+/* menu a tendina disegnati: stessa altezza dei campi, freccia sottile, testo in grassetto leggero */
+select.inp{-webkit-appearance:none;appearance:none;cursor:pointer;font-weight:600;padding-right:2.4rem;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2356675F' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right .95rem center;background-size:12px}
+.root.dark select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%238DA59E' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E")}
+select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
+
+/* ---------- la barra dei filtri: un solo pannello di comandi ---------- */
+.filters{padding:6px;border-radius:19px;background:color-mix(in srgb,var(--pn) 88%,transparent);border:1px solid var(--ln);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),var(--sh1)}
+.root.dark .filters{background:color-mix(in srgb,var(--pn) 92%,transparent);box-shadow:inset 0 1px 0 rgba(255,255,255,.04),var(--sh1)}
+.filters .inp{height:40px;padding-top:0;padding-bottom:0;border-color:transparent;background-color:var(--sf);box-shadow:none}
+.filters select.inp{background-color:var(--sf)}
+.filters .inp:hover{border-color:var(--ln2)}
+.filters .bt{min-height:40px;border-color:transparent;background-color:var(--sf);background-image:none;box-shadow:none}
+.filters .bt.on{border-color:color-mix(in srgb,var(--ac) 80%,#000);background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 82%,#fff),var(--ac) 45%,color-mix(in srgb,var(--ac) 84%,#000))}
+
+/* ---------- etichette: piccoli LED ---------- */
+.kind-badge{align-items:center;gap:.45rem;font:650 .6rem/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;padding:.42rem .62rem .4rem .55rem;border-radius:999px;
+  background:color-mix(in srgb,var(--ac) 8%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 24%,transparent)}
+.kind-badge::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 0 2px color-mix(in srgb,currentColor 16%,transparent),0 0 7px color-mix(in srgb,currentColor 70%,transparent)}
+.kind-badge.diary{color:var(--cu);background:color-mix(in srgb,var(--cu) 9%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cu) 26%,transparent)}
+.root.dark .kind-badge.diary{color:#E8B27F;background:color-mix(in srgb,var(--cu) 12%,var(--pn))}
+
+/* ---------- schede degli scritti: un foglio con la sua matrice ---------- */
+/* in alto il foglio (carta calda, quadretti leggeri, il testo che sfuma in fondo), sotto la matrice separata da una
+   perforazione; il titolo in evidenza, autore e data in caratteri tecnici */
+.pn.card{border-color:var(--ln)}
+.card .paper{background-color:#FFFEF8;box-shadow:inset 0 -1px 0 var(--ln)}
+.card .paper.mm{background-image:linear-gradient(rgba(11,127,112,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(11,127,112,.08) 1px,transparent 1px);background-size:22px 22px;background-position:-1px -1px}
+.card .paper .thumb{-webkit-mask-image:linear-gradient(#000 62%,transparent 98%);mask-image:linear-gradient(#000 62%,transparent 98%)}
+.card .meta{position:relative;border-top:1px dashed var(--ln2)!important}
+.card .meta h2{letter-spacing:-.02em}
+.card .meta-date{font:500 .68rem/1 var(--mono);letter-spacing:.04em;color:var(--mu);padding:.32rem .45rem;border-radius:7px;background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln)}
+@media (hover:hover){.pn.card:hover{border-color:color-mix(in srgb,var(--ac) 45%,var(--ln))}}
+.card:after{border-radius:0 0 20px 20px}
+
+/* ---------- riquadri con titolo (home, numeri) ---------- */
+/* la traccia di luce sul bordo alto: verderame che sfuma nell'ambra */
+.pn.card:not(:has(> .paper)):not(.diary-intro),.pn.trace{background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 55%,transparent) 28%,color-mix(in srgb,var(--am) 55%,transparent) 72%,transparent 94%),linear-gradient(180deg,color-mix(in srgb,#fff 55%,transparent),transparent 120px);
+  background-size:100% 1px,auto;background-repeat:no-repeat;background-position:0 0,0 0}
+.root.dark .pn.card:not(:has(> .paper)):not(.diary-intro),.root.dark .pn.trace{background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 60%,transparent) 28%,color-mix(in srgb,var(--am) 50%,transparent) 72%,transparent 94%),linear-gradient(180deg,rgba(255,255,255,.035),transparent 140px)}
+/* numeri: la cifra grande e allineata, l'icona dentro una piazzola, l'etichetta in caratteri tecnici */
+.stat>svg:not(.go){box-sizing:content-box;padding:9px;border-radius:12px;color:var(--ac);background:color-mix(in srgb,var(--ac) 9%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 22%,transparent)}
+.stat .hd{font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+.stat .hd+.mu{font:600 .66rem/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-top:.35rem}
+
+/* ---------- intestazioni delle pagine ---------- */
+/* il titolo in rilievo: fronte d'inchiostro, spessore verderame, ombra corta e netta (niente alone grigio) */
+.t3-ink{--t3s:rgba(12,29,26,.13);--t3sb:1.5px;--sx:3px;--sy:5px;--sz:-14px}
+.root.dark .t3-ink{--t3s:rgba(0,0,0,.55);--t3sb:2px}
+.page-count{font:600 .7rem/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mu)}
+.page-count .tick-n{color:var(--ac);font-size:.8rem}
+
+/* ---------- scrollbar e selezione ---------- */
+*{scrollbar-color:var(--ln2) transparent}
+::selection{background:color-mix(in srgb,var(--am) 32%,transparent)}
+
+/* ---------- la grana della carta ----------
+   Sullo strato di fondo che c'è già (nessun livello in più): un rumore fine, disegnato una volta e ripetuto */
+.bd:after{background-image:linear-gradient(to bottom,transparent 25%,color-mix(in srgb,var(--bg) 88%,transparent) 100%),
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .05 0 0 0 0 .11 0 0 0 0 .1 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:auto,160px 160px}
+.root.dark .bd:after{background-image:linear-gradient(to bottom,transparent 25%,color-mix(in srgb,var(--bg) 88%,transparent) 100%),
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ---------- schede degli scritti: l'etichetta a cavallo della perforazione, il filetto del tipo sul foglio ---------- */
+.card .meta{padding-top:1.6rem}
+.card .meta>.kind-badge{position:absolute;top:0;left:1.15rem;transform:translateY(-50%);margin:0}
+.card{--rule:var(--ac)}
+.card.is-diary{--rule:var(--cu)}
+.card .paper{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--rule) 70%,transparent),inset 0 -1px 0 var(--ln)}
+/* di notte il foglio è avorio: si legge senza abbagliare */
+.root.dark .card .paper{background-color:#E9E5D8}
+.root.dark .card .paper.mm{background-image:linear-gradient(rgba(11,90,80,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(11,90,80,.1) 1px,transparent 1px)}
+
+/* ---------- i pannelli che aprono le sezioni (Diario, Scritti completi) ---------- */
+/* la pista colorata in cima al posto del bordo spesso, una griglia di punti che sfuma dall'angolo, il simbolo più grande */
+.writing-intro.pn{border-top:1px solid var(--ln);--intro:var(--ac);
+  background-image:linear-gradient(90deg,var(--intro),color-mix(in srgb,var(--intro) 40%,var(--am)) 55%,transparent 92%),linear-gradient(120deg,color-mix(in srgb,var(--intro) 9%,var(--pn)),var(--pn) 70%);
+  background-size:100% 3px,auto;background-repeat:no-repeat}
+.writing-intro.diary-intro.pn{--intro:var(--cu);border-color:color-mix(in srgb,var(--cu) 30%,var(--ln));
+  background-image:linear-gradient(90deg,var(--intro),color-mix(in srgb,var(--intro) 50%,var(--am)) 55%,transparent 92%),linear-gradient(125deg,color-mix(in srgb,var(--cu) 10%,var(--pn)),var(--pn) 72%)}
+.writing-intro::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle,color-mix(in srgb,var(--intro) 30%,transparent) 1px,transparent 1.6px) 0 0/16px 16px;
+  -webkit-mask-image:radial-gradient(ellipse 55% 90% at 100% 0,#000,transparent 75%);mask-image:radial-gradient(ellipse 55% 90% at 100% 0,#000,transparent 75%)}
+.writing-intro>*{position:relative}
+.writing-intro>.writing-symbol{position:absolute;opacity:.16}
+.writing-eyebrow{font-family:var(--mono);font-weight:700;letter-spacing:.18em}
+.diary-intro .writing-eyebrow,.diary-intro .writing-symbol{color:var(--cu)}
+.root.dark .diary-intro .writing-eyebrow,.root.dark .diary-intro .writing-symbol{color:#E8B27F}
+/* lo stato della lettura (amministratore): un timbro in fondo al foglio, dove il testo sfuma */
+.stato-pill{position:absolute;right:.7rem;bottom:.7rem;display:inline-flex;align-items:center;gap:.4rem;font:650 .58rem/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;padding:.42rem .6rem;border-radius:999px;
+  color:#0C1D1A;background:rgba(255,255,253,.94);box-shadow:inset 0 0 0 1px rgba(12,29,26,.14),0 4px 10px -6px rgba(12,29,26,.4)}
+.stato-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ac)}
+.stato-pill.scelto{color:#3B2A00;background:linear-gradient(180deg,#FFD66B,#F2B21C);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 6px 14px -8px rgba(160,100,0,.8)}
+.stato-pill.scelto::before{background:#3B2A00}
+/* con il segnalibro in alto a destra, il testo del foglio gli lascia spazio */
+.card .paper:has(> button) .thumb p{padding-right:2.6rem}
+
+/* ---------- diario e profilo ---------- */
+.diary-card-top{font:650 .6rem/1.3 var(--mono);letter-spacing:.09em;text-transform:uppercase}
+.pf-stat{background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 0 rgba(255,255,255,.7)}
+.root.dark .pf-stat{box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 0 rgba(255,255,255,.03)}
+.pf-stat .hd{font-variant-numeric:tabular-nums;letter-spacing:-.04em;color:var(--ac)}
+.pf-stat .mu{font:600 .6rem/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-top:.25rem}

@@ -45,7 +45,7 @@ export function drawLoader(g: CanvasRenderingContext2D, W: number, H: number, ra
     g.lineWidth = 2.4 - s * 0.08; g.strokeStyle = `rgba(167,255,240,${(0.85 * al).toFixed(3)})`;
     path(EDGE, 6, Math.floor(a), Math.ceil(b)); g.stroke();
   }
-  const hp = EDGE[Math.floor(head) % n], h = P(hp[0], hp[1], 6), hr = 7 * (h[2] / 2.4);
+  const hp = EDGE[((Math.floor(head) % n) + n) % n], h = P(hp[0], hp[1], 6), hr = 7 * (h[2] / 2.4);
   const hg = g.createRadialGradient(h[0], h[1], 0, h[0], h[1], hr); hg.addColorStop(0, "rgba(255,255,255,0.95)"); hg.addColorStop(0.3, "rgba(94,234,212,0.5)"); hg.addColorStop(1, "rgba(94,234,212,0)");
   g.fillStyle = hg; g.fillRect(h[0] - hr, h[1] - hr, hr * 2, hr * 2);
   // la C si carica, poi la pista; a carica completa la sfera ambra lampeggia e tutto ricomincia sfumando
@@ -90,7 +90,8 @@ export default function LogoLoader({ className = "", hide = false }: { className
     fit();
     const ro = "ResizeObserver" in window ? new ResizeObserver(fit) : null; ro?.observe(el);
     const t0 = performance.now();
-    const stop = renderLoop((now) => { if (W && H) drawLoader(g!, W, H, ratio, (now - t0) / 1000); }, () => 30, el);
+    // il primo fotogramma può avere un orario di poco precedente a t0: il tempo non va mai sotto zero
+    const stop = renderLoop((now) => { if (W && H) drawLoader(g!, W, H, ratio, Math.max(0, (now - t0) / 1000)); }, () => 30, el);
     return () => { stop(); ro?.disconnect(); cv.remove(); };
   }, []);
   // entra dopo 150 ms e solo allora diventa visibile; esce in dissolvenza quando arriva il logo

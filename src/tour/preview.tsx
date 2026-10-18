@@ -7,6 +7,7 @@ import "../styles.css";
 import "../ui.css";
 import "../motion.css";
 import "../d3.css";
+import "../theme.css";
 
 const q = new URLSearchParams(window.location.search);
 const mode: TourMode = q.get("mode") === "auto" ? "auto" : q.get("mode") === "guide" ? "guide" : "film";

@@ -5,6 +5,7 @@ import "./styles.css";
 import "./ui.css";
 import "./motion.css";
 import "./d3.css";
+import "./theme.css";
 
 const rootElement = document.getElementById("root")!;
 const root = ReactDOM.createRoot(rootElement);
