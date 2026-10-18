@@ -1,7 +1,7 @@
 import React from "react";
 import { BookOpen, FileText, ArrowUpRight, EyeOff, LockKeyhole, Pen, Signature } from "lucide-react";
 import { plain } from "./sanitize";
-import { isDiary, signatureOf, type WritingKind } from "./testi";
+import { isDiary, signatureOf, cartaOf, paperClass, type WritingKind } from "./testi";
 import "./writing.css";
 
 type Sign = { on: boolean; set: (v: boolean) => void; name: string };
@@ -63,7 +63,7 @@ export function DiaryCards({ items, onOpen, author, drawing }: { items: any[]; o
     {items.map(t => <article key={t.id} data-doc={t.id} className="diary-card pn" role="button" tabIndex={0} aria-label={`Leggi il pensiero ${t.title}`} onClick={e => onOpen(t, e)} onKeyDown={e => { if (["Enter", " "].includes(e.key)) { e.preventDefault(); onOpen(t, e); } }}>
       {/* in alto il titolo e sotto la firma (o la voce anonima); sul foglio soltanto il pensiero */}
       <div className={`diary-card-top ${signatureOf(t) ? "signed" : ""}`}>{signatureOf(t) ? <Signature size={18} /> : <BookOpen size={18} />}<div className="min-w-0 flex-1"><h3 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title}</h3><span className="diary-card-by block truncate">{author(t)}</span></div><ArrowUpRight size={17} className="shrink-0 mt-1" /></div>
-      <div className="paper diary-paper"><p className="whitespace-pre-line line-clamp-6">{preview(t.content) || "Un pensiero disegnato, oltre le parole."}</p>{drawing(t)}</div>
+      <div className={`paper diary-paper ${paperClass(cartaOf(t))}`}><p className="whitespace-pre-line line-clamp-6">{preview(t.content) || "Un pensiero disegnato, oltre le parole."}</p>{drawing(t)}</div>
       <p className="mu text-xs mt-4">Un pensiero da leggere, senza giudizi.</p>
     </article>)}
   </div>;

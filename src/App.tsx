@@ -10,11 +10,11 @@ import {
 import {
   Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal, Clapperboard, Compass, BookOpen
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Rows3, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal, Clapperboard, Compass, BookOpen
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import { clean, plain } from "./sanitize";
-import { pubOf, pubSig, readPublic, isDiary, signatureOf, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, type WritingKind } from "./testi";
+import { pubOf, pubSig, readPublic, isDiary, signatureOf, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, cartaOf, paperClass, isCarta, CARTE, type WritingKind, type Carta } from "./testi";
 import { snapshotReader } from "./snapshot";
 import NotificationPanel from "./NotificationPanel";
 import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
@@ -1255,7 +1255,8 @@ export default function App() {
   const [opacity, setOpacity] = useState(100);
   const [eraser, setEraser] = useState(24);
   const [filled, setFilled] = useState(false);
-  const [grid, setGrid] = useState(true);
+  // il foglio scelto per questo scritto (null: quello del suo tipo)
+  const [carta, setCarta] = useState<Carta | null>(null);
   const [height, setHeight] = useState(600);
   const [fmt, setFmt] = useState({ b: false, i: false, u: false, size: "n", color: "" });
   const [panel, setPanel] = useState<null | "size" | "color">(null);
@@ -1431,18 +1432,18 @@ export default function App() {
   // bozza: ripristino + salvataggio automatico
   useEffect(() => {
     // a ogni cambio di account riparto da un foglio vuoto: altrimenti il testo di chi è uscito finirebbe nella bozza di chi entra
-    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
     if (!draftKey) return;
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) || "null");
-      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setKind(writingKind(d)); setSigned(d.firmato === true); setStrokes(d.strokes || []); setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
+      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setKind(writingKind(d)); setSigned(d.firmato === true); setCarta(isCarta(d.carta) ? d.carta : null); setStrokes(d.strokes || []); setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
     } catch {}
   }, [draftKey]);
   useEffect(() => {
     if (!draftKey || editingId || (!title && !plain(content).trim() && !strokes.length)) return;
-    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, kind, firmato: signed, strokes, height })); } catch {} }, 800);
+    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, kind, firmato: signed, carta, strokes, height })); } catch {} }, 800);
     return () => clearTimeout(t);
-  }, [title, content, kind, signed, strokes, height, editingId, draftKey]);
+  }, [title, content, kind, signed, carta, strokes, height, editingId, draftKey]);
   useEffect(() => { if (tab === "write" && editorRef.current) editorRef.current.innerHTML = clean(content); }, [tab, loadTick]);
 
   // scorciatoie disegno
@@ -1812,12 +1813,12 @@ export default function App() {
   };
 
   const resetForm = () => {
-    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setStrokes([]); setHist([]); setFut([]); setHeight(600);
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600);
     setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
     try { localStorage.removeItem(draftKey); } catch {}
   };
   const startEdit = (t: any) => {
-    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setSigned(t.firmato === true); setStrokes(t.strokes || []);
+    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setSigned(t.firmato === true); setCarta(isCarta(t.carta) ? t.carta : null); setStrokes(t.strokes || []);
     setHist([]); setFut([]); setHeight(t.h || 600); setSel(null); setDrawing(false); setTab("write"); setLoadTick((n) => n + 1);
   };
 
@@ -1830,19 +1831,29 @@ export default function App() {
     const data: any = { title: title.trim() || "Senza titolo", kind, excerpt: kind === "complete" ? excerptOf(html) : "", content: html, strokes: st, w: Math.round(canvasRef.current?.clientWidth || 900), h: Math.round(height) };
     // la firma si scrive solo se serve: i pensieri anonimi restano identici a prima
     if (kind === "diary" && (signed || orig?.firmato !== undefined)) data.firmato = signed;
+    // il foglio si scrive solo se è stato scelto (o se lo scritto ne aveva già uno)
+    if (carta || isCarta(orig?.carta)) data.carta = carta || cartaOf({ kind });
     const author = orig ? orig.author : profiles[user.uid]?.displayName || user.displayName || "Operatore", owner = orig ? orig.userId : user.uid;
     // il limite di Firestore è di ~1 MB in byte (non in caratteri: accenti ed emoji ne pesano di più)
     if (new Blob([JSON.stringify(data)]).size > 950000) return notify("Progetto troppo pesante: riduci le immagini o il disegno.");
     setSaving(true);
-    try {
-      const ref = editingId ? doc(db, "pensieri", editingId) : doc(collection(db, "pensieri"));
+    const ref = editingId ? doc(db, "pensieri", editingId) : doc(collection(db, "pensieri"));
+    const write = async (d: any) => {
       const b = writeBatch(db);
-      if (editingId) b.update(ref, { ...data, updatedAt: Date.now() });
-      else b.set(ref, { ...data, author, timestamp: Date.now(), userId: owner, isStarred: false });
-      const full = { ...data, author, userId: owner };
+      if (editingId) b.update(ref, { ...d, updatedAt: Date.now() });
+      else b.set(ref, { ...d, author, timestamp: Date.now(), userId: owner, isStarred: false });
+      const full = { ...d, author, userId: owner };
       b.set(doc(db, "testi", ref.id), pubOf(full));
       await b.commit();
       pubDone.current.set(ref.id, pubSig(full));
+    };
+    try {
+      try { await write(data); }
+      catch (err: any) {
+        // regole di Firestore non ancora aggiornate al campo del foglio: lo scritto si salva comunque, senza la scelta
+        if (err?.code !== "permission-denied" || !("carta" in data)) throw err;
+        const { carta: _skip, ...rest } = data; await write(rest);
+      }
       setDone(editingId ? "edit" : "new"); haptic("success");
     } catch { notify("Salvataggio non riuscito. Riprova."); }
     setSaving(false);
@@ -2601,7 +2612,7 @@ export default function App() {
                 return (
                   <Reveal key={t.id} flip={t.id} delay={wave} fx="sheet" className="h-full"><article data-doc={t.id} role="button" tabIndex={0} aria-label={`Leggi ${t.title || "lo scritto"}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }}
                     className="pn card h-full overflow-hidden cursor-pointer">
-                    <div className="paper mm sm relative h-40 overflow-hidden">
+                    <div className={`paper ${paperClass(cartaOf(t))} sm relative h-40 overflow-hidden`}>
                       <div className="thumb absolute inset-0">
                         {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
                         <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{snippet(t._tx) || (t._img ? "Contenuto con immagini" : "")}</p>
@@ -2636,7 +2647,7 @@ export default function App() {
                 return (
                   <Reveal key={t.id} flip={t.id} delay={wave} fx="sheet" className="h-full"><article data-doc={t.id} onClick={(e) => selMode ? setIds((p) => p.includes(t.id) ? p.filter((x) => x !== t.id) : [...p, t.id]) : openView(t, e)}
                     className={`pn card h-full overflow-hidden cursor-pointer ${isDiary(t) ? "is-diary" : ""} ${gone.includes(t.id) ? "gone" : ""} ${picked ? "!border-[var(--ac)] ring-2 ring-[var(--ac)]" : ""}`}>
-                    <div className="paper mm sm relative h-40 overflow-hidden">
+                    <div className={`paper ${paperClass(cartaOf(t))} sm relative h-40 overflow-hidden`}>
                       <div className="thumb absolute inset-0">
                         {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
                         <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{snippet(t._tx) || (t._img ? "Contenuto con immagini" : "")}</p>
@@ -2716,7 +2727,7 @@ export default function App() {
                   </>)}
                 </div>
 
-                <div ref={canvasRef} className={`paper relative ${grid ? "mm" : ""}`} style={{ minHeight: height }}>
+                <div ref={canvasRef} className={`paper relative ${paperClass(carta || cartaOf({ kind }))} ${kind === "diary" ? "diary-tint" : ""}`} style={{ minHeight: height }}>
                   <svg className="absolute inset-0 w-full h-full pointer-events-none">
                     {strokes.map((s, i) => <Shape key={i} s={s} />)}
                     {cur && <Shape s={cur} />}
@@ -2729,7 +2740,7 @@ export default function App() {
                 </div>
                 <div className="flex justify-between items-center px-4 py-2 text-xs mu border-t" style={{ borderColor: "var(--ln)" }}>
                   <span className="truncate">{drawing ? `${strokes.length} tratti` : `${words} parole`}{!editingId && " · bozza automatica"}</span>
-                  <div className="flex gap-1.5 shrink-0"><button type="button" className={`bt !p-2 ${grid ? "on" : ""}`} onClick={() => setGrid(!grid)} aria-label="Griglia"><Grid3x3 size={16} /></button><button type="button" className="bt !text-xs" onClick={() => setHeight((h) => h + 300)}><Plus size={14} />Spazio</button></div>
+                  <div className="flex gap-1.5 shrink-0"><div className="paper-pick" role="radiogroup" aria-label="Foglio">{CARTE.map((c) => { const on = (carta || cartaOf({ kind })) === c, Ic = c === "quadretti" ? Grid3x3 : c === "righe" ? Rows3 : File, l = c === "quadretti" ? "A quadretti" : c === "righe" ? "A righe" : "Bianco"; return <button key={c} type="button" role="radio" aria-checked={on} title={`Foglio ${l.toLowerCase()}`} aria-label={`Foglio ${l.toLowerCase()}`} className={`bt !p-2 ${on ? "on" : ""}`} onClick={() => setCarta(c)}><Ic size={16} /><span className="paper-pick-l">{l}</span></button>; })}</div><button type="button" className="bt !text-xs" onClick={() => setHeight((h) => h + 300)}><Plus size={14} />Spazio</button></div>
                 </div>
               </div>
               <div className="flex gap-2 justify-end">
@@ -2805,7 +2816,7 @@ export default function App() {
                 {panelOpen && <PannelloAdmin db={db} id={sel.id} notify={notify} />}
               </>}
                 {(diary || anon) && <ReadingNotice item={sel} />}
-                {anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`reader-paper paper ${diary ? "diary-paper" : "mm"} relative`} data-sheet-paper="">
+                {anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`reader-paper paper ${diary ? "diary-paper" : ""} ${paperClass(cartaOf(sel))} relative`} data-sheet-paper="">
                   {sel.strokes?.length > 0 && <div className="reader-drawing" style={{ aspectRatio: `${w}/${h}` }}><Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" /></div>}
                   <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: clean(sel.content) }} />
                 </div>}

@@ -60,7 +60,7 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 /* in alto il foglio (carta calda, quadretti leggeri, il testo che sfuma in fondo), sotto la matrice separata da una
    perforazione; il titolo in evidenza, autore e data in caratteri tecnici */
 .pn.card{border-color:var(--ln)}
-.card .paper{background-color:#FFFEF8;box-shadow:inset 0 -1px 0 var(--ln)}
+.card .paper{box-shadow:inset 0 -1px 0 var(--ln)}
 .card .paper.mm{background-image:linear-gradient(rgba(11,127,112,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(11,127,112,.08) 1px,transparent 1px);background-size:22px 22px;background-position:-1px -1px}
 .card .meta{position:relative;border-top:1px dashed var(--ln2)!important}
 .card .meta h2{letter-spacing:-.02em}
@@ -102,9 +102,27 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 .card{--rule:var(--complete)}
 .card.is-diary{--rule:var(--diary)}
 .card .paper{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--rule) 70%,transparent),inset 0 -1px 0 var(--ln)}
-/* di notte il foglio è avorio: si legge senza abbagliare */
-.root.dark .card .paper{background-color:#E9E5D8}
-.root.dark .card .paper.mm{background-image:linear-gradient(rgba(11,90,80,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(11,90,80,.1) 1px,transparent 1px)}
+/* l'anteprima è lo stesso foglio bianco che si apre: niente carta ingiallita solo nella scheda */
+/* la testina che stampa l'anteprima e l'angolo piegato restano sotto etichetta, timbro e segnalibro */
+.card .meta{z-index:4}
+.card .paper>button{z-index:4}
+/* col timbro della lettura a destra l'angolo non si piega: finirebbe sotto il timbro */
+.card:has(.stato-pill) .paper:after{display:none}
+
+/* ---------- il foglio scelto scrivendo: a quadretti (.mm), a righe (.ruled) o bianco (.plain) ---------- */
+/* le righe cadono sotto ogni riga di testo: passo = interlinea, partenza = margine del testo */
+.paper.ruled{--lh:32px;--pad:24px;--line:rgba(15,139,122,.16);background-image:linear-gradient(transparent calc(var(--lh) - 1px),var(--line) calc(var(--lh) - 1px));background-size:100% var(--lh);background-position:0 var(--pad)}
+.paper.ruled.sm{--lh:22px;--pad:12px}
+.paper.plain{background-image:none}
+@media (max-width:767px){.reader-panel .reader-paper.ruled{--pad:20px}}
+/* il diario è carta color crema, con righe e quadretti color seppia: nella scheda, scrivendo e aperto */
+.card.is-diary .paper,.paper.diary-tint{background-color:#fbf6eb;--line:rgba(120,95,65,.16)}
+.card.is-diary .paper.mm,.paper.diary-tint.mm{background-image:linear-gradient(rgba(120,95,65,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(120,95,65,.1) 1px,transparent 1px)}
+.paper.diary-paper.ruled{--lh:28px;--pad:1.3rem;--line:rgba(120,95,65,.14);background-image:linear-gradient(transparent calc(var(--lh) - 1px),var(--line) calc(var(--lh) - 1px));background-size:100% var(--lh);background-position:0 var(--pad)}
+.reader-paper.diary-paper.ruled{--lh:32px;--pad:calc(1.3rem + 24px)}
+@media (max-width:767px){.reader-panel .reader-paper.diary-paper.ruled{--pad:calc(1.3rem + 20px)}}
+.paper.diary-paper.mm{background-image:linear-gradient(rgba(120,95,65,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(120,95,65,.1) 1px,transparent 1px);background-size:20px 20px;background-position:-1px -1px}
+.paper.diary-paper.plain{background-image:none}
 
 /* ---------- i pannelli che aprono le sezioni (Diario, Scritti completi) ---------- */
 /* la pista colorata in cima al posto del bordo spesso, una griglia di punti che sfuma dall'angolo, il simbolo più grande */

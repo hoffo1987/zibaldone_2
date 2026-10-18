@@ -114,6 +114,24 @@ test('le ricevute di lettura sono private e modificabili soltanto dal proprietar
   await assertFails(updateDoc(receipt,{letta:false}));
   await assertFails(setDoc(doc(owner,'letture_aggiornamenti','owner','annunci','d'.repeat(40)),{letta:true,timestamp:1}));
 });
+test('il foglio scelto viaggia con la copia pubblica, uguale all’originale e solo tra quelli previsti', async () => {
+  const withPaper = (d, carta) => ({ ...d, carta });
+  const pair = (db, id, d, pub) => { const b = writeBatch(db); b.set(doc(db, 'pensieri', id), d); b.set(doc(db, 'testi', id), pub); return b.commit(); };
+  for (const kind of ['complete', 'diary']) {
+    const d = withPaper(original(kind), 'bianco');
+    await assertSucceeds(pair(owner, `paper-${kind}`, d, { ...projection(d), carta: 'bianco' }));
+    assert.equal((await getDoc(doc(other, 'testi', `paper-${kind}`))).data().carta, 'bianco');
+    // copia senza foglio, o con un foglio diverso dall'originale
+    await assertFails(pair(owner, `paper-miss-${kind}`, d, projection(d)));
+    await assertFails(pair(owner, `paper-diff-${kind}`, d, { ...projection(d), carta: 'righe' }));
+  }
+  const odd = withPaper(original(), 'pergamena');
+  await assertFails(pair(owner, 'paper-odd', odd, { ...projection(odd), carta: 'pergamena' }));
+  // cambiare foglio dopo: l'originale e la copia insieme, mai l'originale da solo
+  await assertFails(updateDoc(doc(owner, 'pensieri', 'paper-complete'), { carta: 'righe' }));
+  const b = writeBatch(owner); b.update(doc(owner, 'pensieri', 'paper-complete'), { carta: 'righe', updatedAt: 3 }); b.update(doc(owner, 'testi', 'paper-complete'), { carta: 'righe' });
+  await assertSucceeds(b.commit());
+});
 test('diario firmato: il nome pubblico è quello vero e solo se l’autore lo sceglie', async () => {
   const signed = { ...original('diary'), firmato: true };
   const copy = d => ({ ...projection(d), firma: d.author, autoreId: d.userId });

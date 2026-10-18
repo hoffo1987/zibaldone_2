@@ -13,7 +13,15 @@ export const excerptOf = (html: string) => {
   let bytes = 0;
   return selected.filter(c => { const n = c.codePointAt(0)!; bytes += n < 128 ? 1 : n < 2048 ? 2 : n < 65536 ? 3 : 4; return bytes <= 480; }).join("").trimEnd();
 };
-export const PUB_KEYS = ["version", "kind", "title", "excerpt", "content", "strokes", "w", "h", "firma", "autoreId"];
+export const PUB_KEYS = ["version", "kind", "title", "excerpt", "content", "strokes", "w", "h", "firma", "autoreId", "carta"];
+// il foglio su cui si scrive: a quadretti, a righe o bianco. Chi scrive lo sceglie; se non l'ha scelto, quello del suo
+// tipo (gli scritti completi a quadretti, i pensieri del diario a righe). Vale nell'editor, nelle anteprime e in lettura
+export type Carta = "quadretti" | "righe" | "bianco";
+export const CARTE: Carta[] = ["quadretti", "righe", "bianco"];
+export const isCarta = (v: any): v is Carta => CARTE.includes(v);
+export const cartaOf = (t: any): Carta => (isCarta(t?.carta) ? t.carta : isDiary(t) ? "righe" : "quadretti");
+// la classe del foglio: .mm (quadretti), .ruled (righe), .plain (bianco)
+export const paperClass = (c: Carta) => (c === "quadretti" ? "mm" : c === "righe" ? "ruled" : "plain");
 // Un pensiero del diario è anonimo, a meno che l'autore non abbia scelto di firmarlo.
 export const signatureOf = (t: any): { name: string; uid: string } | null => {
   if (!isDiary(t)) return null;
@@ -29,6 +37,7 @@ export const pubOf = (t: any) => {
     const sign = signatureOf(t);
     if (sign) { o.firma = sign.name; o.autoreId = sign.uid; }
   } else o.excerpt = typeof t?.excerpt === "string" ? t.excerpt : excerptOf(t?.content || "");
+  if (isCarta(t?.carta)) o.carta = t.carta;
   return o;
 };
 export const readPublic = (t: any, id: string) => ({ ...pubOf(t), id, _anon: true });

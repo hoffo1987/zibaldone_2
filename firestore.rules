@@ -22,7 +22,7 @@ service cloud.firestore {
     function tipo(d) { return d.get('kind', 'complete'); }
     function completo(id) { return exists(pensiero(id)) && tipo(get(pensiero(id)).data) == 'complete'; }
     function validoOriginale(d) {
-      return d.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred', 'kind', 'excerpt', 'updatedAt', 'rating', 'svelato', 'firmato'])
+      return d.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred', 'kind', 'excerpt', 'updatedAt', 'rating', 'svelato', 'firmato', 'carta'])
         && d.keys().hasAll(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred'])
         && d.title is string && d.title.size() > 0 && d.title.size() <= 200
         && d.content is string && d.content.size() <= 950000
@@ -36,6 +36,8 @@ service cloud.firestore {
         && d.get('excerpt', '') is string && d.get('excerpt', '').size() <= 480
         && d.get('svelato', false) is bool
         && d.get('firmato', false) is bool
+        // il foglio scelto scrivendo (assente: quello del tipo)
+        && d.get('carta', 'quadretti') in ['quadretti', 'righe', 'bianco']
         // solo un pensiero del diario può portare il nome dell'autore
         && (tipo(d) == 'diary' || d.get('firmato', false) == false)
         && (!('rating' in d) || (d.rating is int && d.rating >= 1 && d.rating <= 5))
@@ -51,13 +53,14 @@ service cloud.firestore {
       let d = request.resource.data;
       let original = getAfter(pensiero(id)).data;
       return d.get('version', 0) == 2 && d.kind == tipo(original) && d.title == original.title
+        && d.get('carta', null) == original.get('carta', null)
         && ((d.kind == 'diary'
-          && d.keys().hasOnly(['version', 'kind', 'title', 'content', 'strokes', 'w', 'h', 'firma', 'autoreId'])
+          && d.keys().hasOnly(['version', 'kind', 'title', 'content', 'strokes', 'w', 'h', 'firma', 'autoreId', 'carta'])
           && d.keys().hasAll(['version', 'kind', 'title', 'content', 'strokes', 'w', 'h'])
           && d.content == original.content && d.strokes == original.strokes && d.w == original.w && d.h == original.h
           && firmaFedele(d, original))
         || (d.kind == 'complete'
-          && d.keys().hasOnly(['version', 'kind', 'title', 'excerpt'])
+          && d.keys().hasOnly(['version', 'kind', 'title', 'excerpt', 'carta'])
           && d.keys().hasAll(['version', 'kind', 'title', 'excerpt'])
           && d.excerpt is string && d.excerpt.size() <= 480
           && d.excerpt.size() <= original.content.size() * 0.3
@@ -67,6 +70,7 @@ service cloud.firestore {
       let d = request.resource.data;
       let pub = getAfter(/databases/$(database)/documents/testi/$(id)).data;
       return pub.version == 2 && pub.kind == tipo(d) && pub.title == d.title
+        && pub.get('carta', null) == d.get('carta', null)
         && ((tipo(d) == 'diary' && pub.content == d.content && pub.strokes == d.strokes && pub.w == d.w && pub.h == d.h && firmaFedele(pub, d))
           || (tipo(d) == 'complete' && pub.excerpt == d.get('excerpt', '')));
     }
@@ -80,11 +84,11 @@ service cloud.firestore {
         && (!('kind' in request.resource.data) || pubblicazioneAllineata(id));
       allow update: if signedIn() && validoOriginale(request.resource.data)
         && tipo(request.resource.data) == tipo(resource.data)
-        && (!('kind' in request.resource.data) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'firmato']) || pubblicazioneAllineata(id))
+        && (!('kind' in request.resource.data) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'firmato', 'carta']) || pubblicazioneAllineata(id))
         && ((resource.data.userId == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'updatedAt', 'firmato']))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'updatedAt', 'firmato', 'carta']))
         || (isAdmin()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'updatedAt', 'rating', 'isStarred', 'svelato'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'excerpt', 'kind', 'updatedAt', 'rating', 'isStarred', 'svelato', 'carta'])
           && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isStarred']) || request.resource.data.isStarred == false)
           && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['rating'])
             || (tipo(resource.data) == 'complete' && resource.data.get('svelato', false) != true
