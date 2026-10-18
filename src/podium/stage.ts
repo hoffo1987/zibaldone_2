@@ -89,6 +89,38 @@ export function viewProj(c: Cam, near = 0.1, far = 90) {
   return m;
 }
 
+// spostamento sub-pixel dell'antialiasing temporale: sequenza di Halton (2, 3), otto posizioni nel pixel, con la media
+// esattamente al centro (l'immagine accumulata non si sposta)
+export const JITTER: [number, number][] = (() => {
+  const h = (n: number, b: number) => { let f = 1, r = 0; for (let k = n; k > 0; k = Math.floor(k / b)) { f /= b; r += f * (k % b); } return r; };
+  const raw = Array.from({ length: 8 }, (_, i) => [h(i + 1, 2), h(i + 1, 3)]);
+  const mx = raw.reduce((s, p) => s + p[0], 0) / 8, my = raw.reduce((s, p) => s + p[1], 0) / 8;
+  return raw.map(([x, y]) => [x - mx, y - my] as [number, number]);
+})();
+// la stessa matrice con l'immagine spostata di (jx, jy) pixel (y verso il basso) su un bersaglio w × h
+export function jittered(vp: Float32Array, jx: number, jy: number, w: number, h: number) {
+  const m = new Float32Array(vp), dx = (2 * jx) / w, dy = (-2 * jy) / h;
+  for (let col = 0; col < 4; col++) { m[col * 4] += m[col * 4 + 3] * dx; m[col * 4 + 1] += m[col * 4 + 3] * dy; }
+  return m;
+}
+// inversa di una matrice 4×4 per colonne (dalla profondità di un pixel alla posizione nel mondo)
+export function invert4(m: ArrayLike<number>) {
+  const a = Array.from(m), o = new Float32Array(16);
+  const [a00, a01, a02, a03, a10, a11, a12, a13, a20, a21, a22, a23, a30, a31, a32, a33] = a;
+  const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11;
+  const b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12, b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30;
+  const b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+  const det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+  const k = Math.abs(det) > 1e-20 ? 1 / det : 0;
+  o.set([
+    a11 * b11 - a12 * b10 + a13 * b09, a02 * b10 - a01 * b11 - a03 * b09, a31 * b05 - a32 * b04 + a33 * b03, a22 * b04 - a21 * b05 - a23 * b03,
+    a12 * b08 - a10 * b11 - a13 * b07, a00 * b11 - a02 * b08 + a03 * b07, a32 * b02 - a30 * b05 - a33 * b01, a20 * b05 - a22 * b02 + a23 * b01,
+    a10 * b10 - a11 * b08 + a13 * b06, a01 * b08 - a00 * b10 - a03 * b06, a30 * b04 - a31 * b02 + a33 * b00, a21 * b02 - a20 * b04 - a23 * b00,
+    a11 * b07 - a10 * b09 - a12 * b06, a00 * b09 - a01 * b07 + a02 * b06, a31 * b01 - a30 * b03 - a32 * b00, a20 * b03 - a21 * b01 + a22 * b00,
+  ].map((x) => x * k));
+  return o;
+}
+
 // ---------- il sole (giorno) e la luna (notte) ----------
 // si muovono di continuo dietro il finestrone; la direzione è quella verso l'astro (z negativa: oltre la parete)
 export function celestial(t: number, night: boolean) {

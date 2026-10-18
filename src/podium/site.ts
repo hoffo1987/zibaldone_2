@@ -25,7 +25,9 @@ export const ROLL = { z: CARPET.z0 + 2.3, r: 0.17 };
 // due facce (sopra e sotto, a mezzo spessore dal piano simulato) e l'orlo che le chiude; normali dalla griglia,
 // occlusione d'ambiente dalla curvatura (il fondo delle pieghe è in ombra) e lungo l'orlo ripiegato; uv in metri di stoffa
 const CLOTH_HALF = 0.004, HEM = 0.045;
-export function clothMesh(B: MeshBuilder, d: Drape, m: number) {
+// stride: di quanti punti della griglia si guarda attorno per la curvatura (la griglia raffinata guarda più lontano: le
+// pieghe restano scure come quelle della simulazione)
+export function clothMesh(B: MeshBuilder, d: Drape, m: number, stride = 1) {
   const { nx, nz, pos } = d, at = (i: number, j: number): V3 => {
     const k = (Math.max(0, Math.min(nz - 1, j)) * nx + Math.max(0, Math.min(nx - 1, i))) * 3;
     return [pos[k], pos[k + 1], pos[k + 2]];
@@ -35,8 +37,8 @@ export function clothMesh(B: MeshBuilder, d: Drape, m: number) {
     const n = norm(cross(sub(at(i, j + 1), at(i, j - 1)), sub(at(i + 1, j), at(i - 1, j))));
     nrm.push(n);
     // concavità: la media dei vicini sopra il punto (lungo la normale) vuol dire fondo di una piega
-    const p = at(i, j), c = [0, 1, 2].map((k) => (at(i + 1, j)[k] + at(i - 1, j)[k] + at(i, j + 1)[k] + at(i, j - 1)[k]) / 4 - p[k]);
-    const cav = (c[0] * n[0] + c[1] * n[1] + c[2] * n[2]) / d.spacing;
+    const S = stride, p = at(i, j), c = [0, 1, 2].map((k) => (at(i + S, j)[k] + at(i - S, j)[k] + at(i, j + S)[k] + at(i, j - S)[k]) / 4 - p[k]);
+    const cav = (c[0] * n[0] + c[1] * n[1] + c[2] * n[2]) / (d.spacing * S);
     const edge = Math.min(i, j, nx - 1 - i, nz - 1 - j) * d.spacing;
     ao.push(Math.max(0.35, Math.min(1, 1 - cav * 1.6)) * (edge < HEM ? 0.86 : 1));
   }
@@ -106,23 +108,23 @@ function disc(B: MeshBuilder, c: V3, n: V3, radius: number, m: number, seg = 32)
 }
 
 // ---------- gli oggetti, ognuno nel suo sistema (origine a terra, al centro) ----------
-function scaffold(B: MeshBuilder) {
+function scaffold(B: MeshBuilder, nr: number) {
   // trabattello a due piani: montanti, correnti, traversi, diagonali, piedini, impalcati di tavole (con le fessure: i
   // fasci di luce passano a strisce), fermapiede e parapetto
   const x0 = -1, x1 = 1, z0 = -0.6, z1 = 0.6, R = 0.0242, top = 5.2, decks = [2.0, 4.0];
   for (const x of [x0, x1]) for (const z of [z0, z1]) {
-    rod(B, [x, 0.06, z], [x, top, z], R, Mat.steel);
+    rod(B, [x, 0.06, z], [x, top, z], R, Mat.steel, nr);
     B.box([x, 0.006, z], [0.075, 0.006, 0.075], 0.002, Mat.steel, 1);
     rod(B, [x, 0.012, z], [x, 0.08, z], 0.016, Mat.steel, 8);
   }
   for (const y of [0.2, ...decks, decks[1] + 0.5, decks[1] + 1.0, decks[0] + 0.55]) {
-    for (const z of [z0, z1]) rod(B, [x0 - 0.05, y, z], [x1 + 0.05, y, z], R, Mat.steel);
-    if (y !== decks[0] + 0.55) for (const x of [x0, x1]) rod(B, [x, y + 0.05, z0 - 0.05], [x, y + 0.05, z1 + 0.05], R, Mat.steel);
+    for (const z of [z0, z1]) rod(B, [x0 - 0.05, y, z], [x1 + 0.05, y, z], R, Mat.steel, nr);
+    if (y !== decks[0] + 0.55) for (const x of [x0, x1]) rod(B, [x, y + 0.05, z0 - 0.05], [x, y + 0.05, z1 + 0.05], R, Mat.steel, nr);
   }
   // diagonali sul fronte e sui fianchi, alternate di piano in piano
-  rod(B, [x0, 0.2, z1], [x1, decks[0], z1], R * 0.9, Mat.steel); rod(B, [x1, decks[0], z1], [x0, decks[1], z1], R * 0.9, Mat.steel);
-  rod(B, [x1, 0.2, z0], [x0, decks[0], z0], R * 0.9, Mat.steel); rod(B, [x0, decks[0], z0], [x1, decks[1], z0], R * 0.9, Mat.steel);
-  for (const x of [x0, x1]) rod(B, [x, 0.25, z0], [x, decks[0] - 0.1, z1], R * 0.9, Mat.steel);
+  rod(B, [x0, 0.2, z1], [x1, decks[0], z1], R * 0.9, Mat.steel, nr); rod(B, [x1, decks[0], z1], [x0, decks[1], z1], R * 0.9, Mat.steel, nr);
+  rod(B, [x1, 0.2, z0], [x0, decks[0], z0], R * 0.9, Mat.steel, nr); rod(B, [x0, decks[0], z0], [x1, decks[1], z0], R * 0.9, Mat.steel, nr);
+  for (const x of [x0, x1]) rod(B, [x, 0.25, z0], [x, decks[0] - 0.1, z1], R * 0.9, Mat.steel, nr);
   // giunti ai nodi
   for (const x of [x0, x1]) for (const z of [z0, z1]) for (const y of [0.2, ...decks, decks[1] + 1.0]) B.box([x, y + 0.025, z], [0.045, 0.06, 0.045], 0.01, Mat.steel, 1);
   decks.forEach((y, k) => {
@@ -162,7 +164,7 @@ function leaningLadder(B: MeshBuilder, base: V3, top: V3) {
   for (const s of [-1, 1]) beam(B, [base[0] + s * side[0], base[1], base[2]], [top[0] + s * side[0], top[1], top[2]], 0.03, 0.08, Mat.wood);
   for (let k = 1; k * 0.3 < len - 0.15; k++) {
     const p = lerp(base, top, (k * 0.3) / len);
-    rod(B, [p[0] - side[0], p[1], p[2]], [p[0] + side[0], p[1], p[2]], 0.016, Mat.wood, 8);
+    rod(B, [p[0] - side[0], p[1], p[2]], [p[0] + side[0], p[1], p[2]], 0.016, Mat.wood, 12);
   }
 }
 
@@ -302,7 +304,7 @@ export function buildSite(B: MeshBuilder, mobile: boolean, cloth: Drape) {
   placed(B, rot(0), [2.75, on(2.75, 0.3), 0.3], () => coffee(B));
   // dietro il podio, davanti alla metà destra del finestrone: il ponteggio con un telo sotto e i secchi alla base
   placed(B, rot(-0.04), [3.05, 0.004, -5.65], () => dropSheet(B, 3.4, 2.4, 0.1));
-  placed(B, rot(0.02), [3.0, 0, -5.75], () => scaffold(B));
+  placed(B, rot(0.02), [3.0, 0, -5.75], () => scaffold(B, mobile ? 10 : 18));
   bucket(B, [2.2, 0.03, -4.55], PAINT.white, true, SEG);
   bucket(B, [1.82, 0.03, -4.85], PAINT.teal, false, SEG);
   paintCan(B, [2.55, 0.03, -4.3], PAINT.ochre, false);

@@ -11,12 +11,16 @@ import "./tour.css";
 // collega ogni spiegazione all'elemento di cui parla, sezione dopo sezione.
 
 type Step = { tab: string; target: string; title: string; body: string };
+// Il tour segue l'ordine delle sezioni (sul telefono: Home, Scrivi, Scritti, Altro). Le voci che sul telefono stanno nel
+// menu Altro lo dicono: lì il foro si apre sul pulsante Altro, che prende il nome della sezione aperta.
 const STUDENT: Step[] = [
   { tab: "home", target: "nav-home", title: "Panoramica", body: "I tuoi numeri e gli ultimi progetti, sempre aggiornati. Da qui parte tutto." },
   { tab: "write", target: "editor-mode", title: "Scrivi o disegna", body: "Scrivi come su un quaderno, aggiungi foto, oppure passa a Disegno: penna, forme, colori e gomma." },
   { tab: "write", target: "save", title: "Invia lo scritto", body: "Mentre scrivi la bozza si salva da sola. Scegli tra scritto completo e diario. Il primo partecipa al podio; il pensiero si legge per intero, senza voti, e puoi firmarlo o lasciarlo anonimo." },
-  { tab: "my_pages", target: "nav-my_pages", title: "I miei scritti", body: "Ritrovi tutto qui: cerca, filtra per mese, riapri e modifica. Dopo la lettura vedrai anche il voto." },
-  { tab: "diario", target: "nav-diario", title: "Scritti", body: "Una sola sezione per leggere: il Diario, con pensieri integrali anonimi o firmati, e gli Scritti completi, di cui gli altri vedono solo un estratto." },
+  { tab: "diario", target: "nav-diario", title: "Scritti", body: "Una sola sezione per leggere quello che scrivono gli altri: il Diario e gli Scritti completi." },
+  { tab: "diario", target: "scritti-switch", title: "Diario e Scritti completi", body: "Da qui passi dall'uno all'altro. Nel Diario i pensieri si leggono per intero, anonimi o firmati; degli Scritti completi gli altri vedono solo un estratto." },
+  { tab: "my_pages", target: "nav-my_pages", title: "I miei scritti", body: "Ritrovi tutto qui: cerca, filtra per mese, riapri e modifica. Dopo la lettura vedrai anche il voto. Sul telefono è nel menu Altro." },
+  { tab: "podio", target: "nav-podio", title: "Podio del mese", body: "Qui salgono i migliori scritti completi del mese. Fino alla presentazione il podio resta coperto da un telo: le scritte nella sala dicono quando si scopre. Sul telefono è nel menu Altro." },
   { tab: "home", target: "bell", title: "Notifiche", body: "Quando un tuo scritto riceve un voto, la campanella te lo dice." },
   { tab: "home", target: "options", title: "Opzioni", body: "Tema chiaro o scuro, effetti, musica e suoni. Da qui puoi anche rivedere questa presentazione." },
   { tab: "home", target: "cta", title: "Tocca a te", body: "Il Circuito è acceso. Il primo scritto ti aspetta." },
@@ -24,10 +28,10 @@ const STUDENT: Step[] = [
 const ADMIN: Step[] = [
   { tab: "home", target: "nav-home", title: "Panoramica", body: "Scritti arrivati, autori e quanti ne restano da valutare questo mese." },
   { tab: "read", target: "nav-read", title: "Scritti", body: "Diario e Scritti completi stanno nella stessa sezione. Negli scritti completi gli autori restano nascosti: leggi, dai da una a cinque stelle e solo dopo svela chi ha scritto." },
+  { tab: "read", target: "scritti-switch", title: "Diario e Scritti completi", body: "Da qui passi al Diario senza uscire dalla sezione: pensieri senza voti né categorie. Come amministratore vedi sempre chi li ha scritti, anche quelli anonimi." },
   { tab: "read", target: "filters", title: "Filtri e segnalibri", body: "Cerca, ordina per voto o per data, mostra solo i segnalati o quelli ancora da valutare." },
-  { tab: "podio", target: "nav-podio", title: "Podio del mese", body: "Solo gli scritti completi salgono qui, mese per mese. I pensieri del diario non partecipano." },
-  { tab: "diario", target: "nav-diario", title: "Diario", body: "Dalla sezione Scritti passi al Diario: pensieri senza voti o categorie. Come amministratore vedi sempre chi li ha scritti, anche quelli anonimi." },
-  { tab: "authors", target: "nav-authors", title: "Autori", body: "Chi scrive, quanto scrive e con che media." },
+  { tab: "podio", target: "nav-podio", title: "Podio del mese", body: "Solo gli scritti completi salgono qui, mese per mese. Gli altri vedono il podio coperto da un telo fino ai giorni della presentazione, dal 3 al 5. Sul telefono è nel menu Altro." },
+  { tab: "authors", target: "nav-authors", title: "Autori", body: "Chi scrive, quanto scrive e con che media. Sul telefono è nel menu Altro." },
   { tab: "home", target: "options", title: "Opzioni", body: "Tema chiaro o scuro, effetti, musica e suoni. Da qui puoi anche rivedere questa presentazione." },
   { tab: "home", target: "hero-actions", title: "Si comincia", body: "Gli scritti del mese ti aspettano. Buona lettura." },
 ];

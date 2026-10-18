@@ -202,3 +202,30 @@ test("the cloth covers the whole podium without passing through it, and the bake
   expect(Array.from(a.pos)).toEqual(Array.from(b.pos));
   expect(Math.max(...Array.from(a.pos).filter((_, k) => k % 3 === 1))).toBeLessThan(STEP_TOP[0] + 0.2);
 });
+
+test("temporal antialiasing: the jitter stays inside the pixel and moves the image by exactly that much", () => {
+  const { JITTER, jittered, invert4 } = require("./stage");
+  expect(JITTER).toHaveLength(8);
+  for (const [x, y] of JITTER) { expect(Math.abs(x)).toBeLessThan(0.5); expect(Math.abs(y)).toBeLessThan(0.5); }
+  expect(JITTER.reduce((s, [x]) => s + x, 0) / 8).toBeCloseTo(0, 6); expect(JITTER.reduce((s, [, y]) => s + y, 0) / 8).toBeCloseTo(0, 6);
+  const c = camera(1200, 800, 200, 100), vp = viewProj(c), vpj = jittered(vp, 0.25, -0.4, 1200, 800);
+  const clip = (m, p) => [0, 1, 2, 3].map((r) => m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r]);
+  const px = (m, p) => { const k = clip(m, p); return [(k[0] / k[3] * 0.5 + 0.5) * 1200, (0.5 - k[1] / k[3] * 0.5) * 800]; };
+  const a = px(vp, [0.3, 2.1, -1]), b = px(vpj, [0.3, 2.1, -1]);
+  expect(b[0] - a[0]).toBeCloseTo(0.25, 3); expect(b[1] - a[1]).toBeCloseTo(-0.4, 3);
+  // the inverse brings a pixel's depth back to the world point
+  const k = clip(vpj, [1.5, 3.0, -2.0]), inv = invert4(vpj), ndc = [k[0] / k[3], k[1] / k[3], k[2] / k[3], 1];
+  const w = clip(inv, ndc);
+  expect(w[0] / w[3]).toBeCloseTo(1.5, 3); expect(w[1] / w[3]).toBeCloseTo(3.0, 3); expect(w[2] / w[3]).toBeCloseTo(-2.0, 3);
+});
+
+test("the refined cloth passes through every simulated point and keeps its size", () => {
+  const { refineDrape } = require("./cloth");
+  const nx = 6, nz = 5, pos = new Float32Array(nx * nz * 3);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) pos.set([i * 0.1, Math.sin(i) * 0.05 + j * 0.02, j * 0.1], (j * nx + i) * 3);
+  const d = refineDrape({ nx, nz, spacing: 0.1, pos }, 2);
+  expect([d.nx, d.nz, d.spacing]).toEqual([11, 9, 0.05]);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) for (let c = 0; c < 3; c++) expect(d.pos[(j * 2 * d.nx + i * 2) * 3 + c]).toBeCloseTo(pos[(j * nx + i) * 3 + c], 5);
+  // in between: on the curve, not on the chord (Catmull-Rom), and still inside the cloth
+  expect(d.pos[(0 * d.nx + 3) * 3]).toBeCloseTo(0.15, 5);
+});

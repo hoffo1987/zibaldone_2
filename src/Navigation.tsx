@@ -159,7 +159,7 @@ export function ScrittiSwitch({ tab, admin, onNavigate }: { tab: string; admin: 
     void el.offsetWidth;
     el.classList.remove("still"); el.style.setProperty("--switch-i", String(index));
   }, [index]);
-  return <nav ref={box} aria-label="Scritti" className="scritti-switch pn" data-tone={rooms[index].tone} style={{ "--switch-i": index } as React.CSSProperties}>
+  return <nav ref={box} aria-label="Scritti" data-tour="scritti-switch" className="scritti-switch pn" data-tone={rooms[index].tone} style={{ "--switch-i": index } as React.CSSProperties}>
     <span className="scritti-switch-ind" aria-hidden="true" />
     {rooms.map(r => <button key={r.id} type="button" data-snd="nav" data-tone={r.tone} aria-current={tab === r.id ? "page" : undefined}
       onClick={() => { if (tab !== r.id) onNavigate(r.id); }} className={`scritti-room ${tab === r.id ? "act" : ""}`}>

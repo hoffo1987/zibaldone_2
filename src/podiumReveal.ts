@@ -18,3 +18,15 @@ export function revealCopy(r: Reveal) {
     ? { title: "Il podio si svela alla presentazione", body: `Visibile dal ${from} al ${to}, per la presentazione mensile degli scritti al prof del ${talk}.` }
     : { title: `Il podio sarà visibile il ${from}`, body: `Resterà scoperto fino al ${to}, in vista della presentazione mensile degli scritti al prof del ${talk}.` };
 }
+
+// le scritte sospese nella sala 3D: lo stesso messaggio in poche righe brevi (si leggono anche sul telefono); label è il
+// testo intero per i lettori di schermo
+export function revealLines(r: Reveal) {
+  const from = dayMonth.format(r.from), to = dayMonth.format(r.to), talk = dayMonth.format(r.talk), copy = revealCopy(r);
+  return {
+    kicker: "Lavori in corso",
+    title: r.open ? ["Il podio si svela", "alla presentazione"] : ["Il podio sarà visibile", `il ${from}`],
+    note: r.open ? [`Visibile dal ${from} al ${to},`, `presentazione degli scritti il ${talk}`] : [`Resterà scoperto fino al ${to},`, `presentazione degli scritti il ${talk}`],
+    label: `Lavori in corso. ${copy.title}. ${copy.body}`,
+  };
+}

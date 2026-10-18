@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PodiumCover, PodiumScene, PodiumSign, PodiumSlot } from "../PodiumStage";
-import { nextReveal, revealCopy } from "../podiumReveal";
+import { nextReveal, revealCopy, revealLines } from "../podiumReveal";
 import { allowSoftwareAdapter } from "../logo3d/engine";
 import "../styles.css";
 import "../ui.css";
@@ -23,7 +23,8 @@ const stars = (n: number) => "★".repeat(n) + "☆".repeat(5 - n);
 // ?coperto: il podio non ancora visibile, sotto il telo e in mezzo al cantiere, con il cartello (?oggi=AAAA-MM-GG per
 // provare le date)
 const covered = q.has("coperto");
-const sign = <PodiumSign {...revealCopy(nextReveal(q.get("oggi") ? new Date(`${q.get("oggi")}T12:00`) : new Date()))} />;
+const reveal = nextReveal(q.get("oggi") ? new Date(`${q.get("oggi")}T12:00`) : new Date());
+const sign = <PodiumSign {...revealCopy(reveal)} />, letters = revealLines(reveal);
 
 function Preview() {
   const [dark, setDark] = useState(q.has("dark"));
@@ -58,7 +59,7 @@ function Preview() {
           {failed ? (covered ? <PodiumCover sign={sign} /> : <p className="mu">WebGPU non è partito: nell'app qui c'è il podio semplice.</p>) : <PodiumSlot list={covered ? undefined : list} />}
         </div>
       </main>
-      {!failed && <PodiumScene dark={dark} plates={covered ? [] : plates} covered={covered} sign={covered ? sign : undefined} onFail={() => setFailed(true)} />}
+      {!failed && <PodiumScene dark={dark} plates={covered ? [] : plates} covered={covered} sign={covered ? letters : undefined} onFail={() => setFailed(true)} />}
     </div>
   );
 }

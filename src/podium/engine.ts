@@ -8,14 +8,17 @@
 //  5. render:  la sala capovolta per il riflesso del pavimento, a risoluzione ridotta + mip
 //  6. render:  la sala con MSAA 4×: superfici, cielo, pulviscolo nei raggi
 //  7. render:  fasci di luce a risoluzione ridotta, accumulati con il fotogramma precedente
-//  8. render:  composizione (sui computer i campioni dell'MSAA pesati sulla luminanza), bloom, ACES, sRGB
-//  9. render:  dalla risoluzione della scena (adattiva) ai pixel dello schermo, Catmull-Rom, sul canvas
+//  8. render:  composizione (sui computer i campioni dell'MSAA pesati sulla luminanza)
+//  9. render:  antialiasing temporale (camera spostata di una frazione di pixel a ogni fotogramma, storia riproiettata)
+// 10. render:  bloom, ACES, sRGB
+// 11. render:  dalla risoluzione della scena (adattiva) ai pixel dello schermo, Catmull-Rom, sul canvas
 // Il canvas ha sempre i pixel dello schermo: cambiare la risoluzione della scena non lo ridimensiona (niente lampi) e
 // l'immagine non passa dal filtro bilineare del browser. Al massimo tre fotogrammi in coda sulla GPU.
 import { buildScene, VERTEX_FLOATS, type Site } from "./meshes";
-import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, combineMSShader, GI_PROBES, FRAME_FLOATS, PASS_FLOATS, type PodiumQuality } from "./shaders";
-import { camera, viewProj, celestial, moodAt, lightMatrix, LIGHT_RECT, STILL, type Cam, type CamMotion } from "./stage";
+import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, combineMSShader, taaShader, GI_PROBES, FRAME_FLOATS, PASS_FLOATS, type PodiumQuality } from "./shaders";
+import { camera, viewProj, celestial, moodAt, lightMatrix, jittered, invert4, JITTER, LIGHT_RECT, STILL, type Cam, type CamMotion } from "./stage";
 import type { Freddy } from './freddy';
+import { Letters, type SignText } from './letters';
 
 export { podiumQuality, type PodiumQuality } from "./shaders";
 
@@ -108,10 +111,10 @@ type Sized = {
   pw: number; ph: number; cw: number; ch: number; vw: number; vh: number; rw: number; rh: number;
   textures: GPUTexture[];
   color: GPUTextureView; depth: GPUTextureView; scene: GPUTextureView | null; comb: GPUTextureView; ldr: GPUTextureView;
-  vol: GPUTextureView[]; planar: GPUTextureView; planarDepth: GPUTextureView; bloom: GPUTextureView[];
+  vol: GPUTextureView[]; planar: GPUTextureView; planarDepth: GPUTextureView; bloom: GPUTextureView[]; taa: GPUTextureView[];
   bundle: GPURenderBundle;
   frameMain: GPUBindGroup; volGroups: GPUBindGroup[]; planarMips: GPUBindGroup[];
-  combine: GPUBindGroup[]; down: GPUBindGroup[]; up: GPUBindGroup[]; tone: GPUBindGroup; final: GPUBindGroup;
+  combine: GPUBindGroup[]; taaGroups: GPUBindGroup[]; down0: GPUBindGroup[]; down: GPUBindGroup[]; up: GPUBindGroup[]; tone: GPUBindGroup[]; final: GPUBindGroup;
 };
 
 export class PodiumView {
@@ -120,6 +123,10 @@ export class PodiumView {
   private readonly frameBuf: GPUBuffer;
   private readonly passBuf: { main: GPUBuffer; planar: GPUBuffer; env: GPUBuffer[] };
   private readonly postBuf: [GPUBuffer, GPUBuffer, GPUBuffer]; // primo livello del bloom / gli altri passaggi / il passaggio finale
+  // antialiasing temporale: inversa della camera di adesso (con lo spostamento), camera di prima (senza), esposizione
+  private readonly taaBuf: GPUBuffer;
+  private readonly taaData = new Float32Array(36);
+  private prevVP: Float32Array | null = null;
   private readonly gi: GPUBuffer;
   private readonly vbuf: GPUBuffer;
   private readonly ibuf: GPUBuffer;
@@ -137,7 +144,7 @@ export class PodiumView {
   private readonly dummy2d: GPUTexture;
   private readonly dummyCube: GPUTexture;
   private readonly samplers: { cmp: GPUSampler; lin: GPUSampler; aniso: GPUSampler };
-  private readonly layouts: { frameRW: GPUBindGroupLayout; frame: GPUBindGroupLayout; pass: GPUBindGroupLayout; volx: GPUBindGroupLayout; post: GPUBindGroupLayout; postMS: GPUBindGroupLayout };
+  private readonly layouts: { frameRW: GPUBindGroupLayout; frame: GPUBindGroupLayout; pass: GPUBindGroupLayout; volx: GPUBindGroupLayout; post: GPUBindGroupLayout; postMS: GPUBindGroupLayout; taa: GPUBindGroupLayout };
   private readonly frameData = new Float32Array(FRAME_FLOATS);
   private readonly passData = new Float32Array(PASS_FLOATS);
   private readonly postData = new Float32Array(4);
@@ -156,7 +163,7 @@ export class PodiumView {
   gpuFixedMs = 0;
   // sui computer l'MSAA si risolve a mano, pesato sulla luminanza; sui telefoni lo risolve l'hardware (memoria)
   private readonly weighted: boolean;
-  private frameNo = 0; private vflip = 0; private fresh = true; private warm = false; private envAll = true;
+  private frameNo = 0; private vflip = 0; private hflip = 0; private fresh = true; private warm = false; private envAll = true;
   private inflight = 0;
   private dead = false;
   private freddy: Freddy | null = null;
@@ -164,6 +171,9 @@ export class PodiumView {
   private freddyAbort = new AbortController();
   private freddyVisible = false;
   private secretLight = 0;
+  // le scritte sospese sopra il podio coperto (letters.ts), quando ci sono
+  private letters: Letters | null = null;
+  private lettersPending = 0;
   onError: ((e: Error) => void) | null = null;
 
   // site: the covered podium (cloth and works around it) instead of the trophies
@@ -179,6 +189,7 @@ export class PodiumView {
     this.frameBuf = buf("podium-frame", FRAME_FLOATS * 4, UNI);
     this.passBuf = { main: buf("podium-pass", PASS_FLOATS * 4, UNI), planar: buf("podium-pass-planar", PASS_FLOATS * 4, UNI), env: FACES.map((_, i) => buf(`podium-pass-env${i}`, PASS_FLOATS * 4, UNI)) };
     this.postBuf = [buf("podium-post0", 16, UNI), buf("podium-post1", 16, UNI), buf("podium-post2", 16, UNI)];
+    this.taaBuf = buf("podium-taa", 36 * 4, UNI);
     this.weighted = !q.mobile;
     this.gi = buf("podium-gi", GI_PROBES * 6 * 16, GPUBufferUsage.STORAGE);
     if (timestamps) this.ts = {
@@ -231,6 +242,7 @@ export class PodiumView {
       volx: d.createBindGroupLayout({ label: "podium-volx", entries: [{ binding: 0, visibility: Fr, texture: { sampleType: "depth", multisampled: true } }, { binding: 1, visibility: Fr, texture: { sampleType: "unfilterable-float" } }] }),
       post: d.createBindGroupLayout({ label: "podium-post", entries: [{ binding: 0, visibility: Fr, texture: { sampleType: "float" } }, { binding: 1, visibility: Fr, sampler: { type: "filtering" } }, { binding: 2, visibility: Fr, texture: { sampleType: "float" } }, { binding: 3, visibility: Fr, buffer: { type: "uniform" } }] }),
       postMS: d.createBindGroupLayout({ label: "podium-post-ms", entries: [{ binding: 0, visibility: Fr, texture: { sampleType: "unfilterable-float", multisampled: true } }, { binding: 1, visibility: Fr, sampler: { type: "filtering" } }, { binding: 2, visibility: Fr, texture: { sampleType: "float" } }, { binding: 3, visibility: Fr, buffer: { type: "uniform" } }] }),
+      taa: d.createBindGroupLayout({ label: "podium-taa", entries: [{ binding: 0, visibility: Fr, texture: { sampleType: "float" } }, { binding: 1, visibility: Fr, sampler: { type: "filtering" } }, { binding: 2, visibility: Fr, texture: { sampleType: "float" } }, { binding: 3, visibility: Fr, texture: { sampleType: "depth", multisampled: true } }, { binding: 4, visibility: Fr, buffer: { type: "uniform" } }] }),
     };
 
     // le sei camere della cubemap non cambiano mai
@@ -296,7 +308,7 @@ export class PodiumView {
       primitive: { topology: "triangle-list" },
     });
     const postLayout = pl(L.post);
-    const [texgen, mip8, mip16, mipCube, clouds, gi, shadow, main, sky, dust, flat, flatSky, volP, combine, down, up, tone, final] = await Promise.all([
+    const [texgen, mip8, mip16, mipCube, clouds, gi, shadow, main, sky, dust, flat, flatSky, volP, combine, taa, down, up, tone, final] = await Promise.all([
       compute(texgenShader, "podium-texgen", "texgen"),
       compute(mipShader("rgba8unorm", false), "podium-mip8", "mip"),
       compute(mipShader("rgba16float", false), "podium-mip16", "mip"),
@@ -317,12 +329,13 @@ export class PodiumView {
       render({ vs: "vsSky", fs: "fsSky", msaa: false, depth: "sky", depthFormat: "depth24plus" }),
       full(vol, "fsVol", pl(L.frame, L.pass, L.volx), HDR),
       this.weighted ? full(mod(combineMSShader, "podium-combine-ms"), "fsCombineMS", pl(L.postMS), HDR) : full(post, "fsCombine", postLayout, HDR),
+      full(mod(taaShader, "podium-taa"), "fsTaa", pl(L.taa), HDR),
       full(post, "fsDown", postLayout, HDR),
       full(post, "fsUp", postLayout, HDR, true),
       full(post, "fsTone", postLayout, HDR),
       full(post, "fsFinal", postLayout, this.format),
     ]);
-    return { texgen, mip8, mip16, mipCube, clouds, gi, shadow, main, sky, dust, flat, flatSky, vol: volP, combine, down, up, tone, final };
+    return { texgen, mip8, mip16, mipCube, clouds, gi, shadow, main, sky, dust, flat, flatSky, vol: volP, combine, taa, down, up, tone, final };
   }
 
   async ready() {
@@ -401,6 +414,7 @@ export class PodiumView {
     const scene = this.weighted ? null : tex("podium-scene", pw, ph, HDR, RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING);
     const comb = tex("podium-comb", pw, ph, HDR, RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING);
     const ldr = tex("podium-ldr", pw, ph, HDR, RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING);
+    const taa = [0, 1].map((i) => tex(`podium-taa${i}`, pw, ph, HDR, RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING));
     const vol = [0, 1].map((i) => tex(`podium-vol${i}`, vw, vh, HDR, RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING));
     const planarMips = Math.min(PLANAR_MIPS, mipCount(rw, rh));
     const planar = tex("podium-planar", rw, rh, HDR, RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING | RT.STORAGE_BINDING, { mips: planarMips });
@@ -414,22 +428,35 @@ export class PodiumView {
     this.sized = {
       pw, ph, cw, ch, vw, vh, rw, rh, textures,
       color: colorView, depth: depthView, scene: sceneView, comb: comb.createView(), ldr: ldr.createView(),
-      vol: vol.map((v) => v.createView()), planar: planar.createView({ baseMipLevel: 0, mipLevelCount: 1 }), planarDepth: planarDepth.createView(), bloom: bloom.map((b) => b.createView()),
+      vol: vol.map((v) => v.createView()), planar: planar.createView({ baseMipLevel: 0, mipLevelCount: 1 }), planarDepth: planarDepth.createView(), bloom: bloom.map((b) => b.createView()), taa: taa.map((t) => t.createView()),
       bundle: this.sceneBundle(true, frameMain, this.groups.passMain, []),
       frameMain,
       // vol[v] si scrive leggendo vol[1-v]
       volGroups: [0, 1].map((v) => d.createBindGroup({ layout: L.volx, entries: [{ binding: 0, resource: depthView }, { binding: 1, resource: vol[1 - v].createView() }] })),
       planarMips: this.mipGroups(P.mip16, planar, planarMips),
       combine: [0, 1].map((v) => (sceneView ? postGroup(sceneView, vol[v].createView(), 1) : postGroup(colorView, vol[v].createView(), 1, L.postMS))),
-      down: bloom.map((b, k) => postGroup(k === 0 ? comb.createView() : bloom[k - 1].createView(), dummy, k === 0 ? 0 : 1)),
+      // taa[h] si scrive leggendo taa[1-h]; il bloom e il tonemapping leggono quello appena scritto
+      taaGroups: [0, 1].map((h) => d.createBindGroup({ layout: L.taa, entries: [{ binding: 0, resource: comb.createView() }, { binding: 1, resource: lin }, { binding: 2, resource: taa[1 - h].createView() }, { binding: 3, resource: depthView }, { binding: 4, resource: { buffer: this.taaBuf } }] })),
+      down0: [0, 1].map((h) => postGroup(taa[h].createView(), dummy, 0)),
+      down: bloom.slice(1).map((b, k) => postGroup(bloom[k].createView(), dummy, 1)),
       up: bloom.slice(1).map((b) => postGroup(b.createView(), dummy, 1)),
-      tone: postGroup(comb.createView(), bloom[0].createView(), 1),
+      tone: [0, 1].map((h) => postGroup(taa[h].createView(), bloom[0].createView(), 1)),
       final: postGroup(ldr.createView(), dummy, 2),
     };
     this.fresh = true;
   }
 
   get camera() { return this.cam; }
+
+  // le scritte del podio coperto: si preparano a parte (carattere, atlante, pipeline) e compaiono appena pronte
+  setSign(text: SignText | null) {
+    const turn = ++this.lettersPending;
+    this.letters?.destroy(); this.letters = null;
+    if (!text || this.dead) return Promise.resolve(false);
+    return Letters.create(this.device, text, this.q, this.layouts.frame, this.layouts.pass, [this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, this.frameBuf])
+      .then((l) => { if (this.dead || turn !== this.lettersPending) { l.destroy(); return false; } this.letters = l; return true; })
+      .catch((err) => { if (!this.dead) console.warn("Podio 3D: scritte non disponibili.", err); return false; });
+  }
 
   prepareSecret(): Promise<boolean> {
     if (this.dead) return Promise.resolve(false);
@@ -453,7 +480,14 @@ export class PodiumView {
     const s = this.sized!, m = moodAt(night), q = this.q;
     // nel cantiere l'aria del giorno è più polverosa: i fasci del finestrone si vedono di più (di notte la nebbia è già
     // fitta, di più spegnerebbe la sala)
-    if (this.site) { m.fog *= 1 + 0.35 * (1 - night); m.dust *= 1 + 0.15 * (1 - night); }
+    // Il cantiere è una sala in pausa e deve dare calma: di giorno il sole entra velato e caldo, meno forte, e la luce
+    // che rimbalza conta di più (fasci morbidi, poco contrasto tra luce e penombra); l'esposizione recupera in parte
+    if (this.site) {
+      const day = 1 - night;
+      m.sunI *= 1 - 0.45 * day; m.exposure *= 1 + 0.16 * day;
+      m.sun = m.sun.map((c, i) => c + ([1.0, 0.8, 0.6][i] - c) * 0.25 * day);
+      m.fog *= 1 + 0.12 * day; m.dust *= 1 + 0.1 * day;
+    }
     const a = celestial(t, false), b = celestial(t, true);
     const l = a.map((x, i) => x + (b[i] - x) * night), n = Math.hypot(l[0], l[1], l[2]), L = l.map((x) => x / n);
     const u = this.frameData;
@@ -487,6 +521,7 @@ export class PodiumView {
     sp.setVertexBuffer(0, this.vbuf); sp.setIndexBuffer(this.ibuf, "uint32");
     sp.drawIndexed(this.ibuf.size / 4);
     if (this.freddyVisible) this.freddy?.draw(sp, 8);
+    this.letters?.draw(sp, 8);
     sp.end();
   }
 
@@ -522,6 +557,7 @@ export class PodiumView {
     this.freddyVisible = visible;
     this.secretLight = visible ? Math.min(1, secretSeconds / 1.1) : 0;
     if (this.freddyVisible) this.freddy!.update(secretSeconds, reducedMotion, c.pos);
+    this.letters?.update(t, night, c, reducedMotion);
     if (first) d.pushErrorScope("validation");
 
     // all'avvio le sonde si riempiono subito (due giri completi: anche il secondo rimbalzo), poi un turno per fotogramma
@@ -536,10 +572,16 @@ export class PodiumView {
       this.warm = true;
     }
     const m = this.writeFrame(t, night, this.frameNo % q.giPeriod);
-    const vp = viewProj(c);
-    d.queue.writeBuffer(this.passBuf.main, 0, this.packPass(c, vp, 0, s.pw, s.ph));
+    // la sala si disegna spostata di una frazione di pixel, diversa a ogni fotogramma: l'antialiasing temporale ne
+    // raccoglie i campioni. Il riflesso del pavimento resta fermo (è già sfocato)
+    const vp = viewProj(c), [jx, jy] = JITTER[this.frameNo % JITTER.length], vpj = jittered(vp, jx, jy, s.pw, s.ph);
+    d.queue.writeBuffer(this.passBuf.main, 0, this.packPass(c, vpj, 0, s.pw, s.ph));
     const kx = s.rw / s.pw, ky = s.rh / s.ph;
     d.queue.writeBuffer(this.passBuf.planar, 0, this.packPass(c, vp, 1, s.rw, s.rh, kx, ky));
+    const ta = this.taaData;
+    ta.set(invert4(vpj), 0); ta.set(this.prevVP ?? vp, 16); ta.set([m.exposure, this.fresh || !this.prevVP ? 1 : 0, 0, 0], 32);
+    d.queue.writeBuffer(this.taaBuf, 0, ta);
+    this.prevVP = vp;
     const post = this.postData;
     post.set([m.exposure, 0.075 / q.bloom, this.frameNo % 4096, 1]); d.queue.writeBuffer(this.postBuf[0], 0, post);
     post[3] = 0; d.queue.writeBuffer(this.postBuf[1], 0, post);
@@ -565,6 +607,7 @@ export class PodiumView {
       const p = enc.beginRenderPass({ label: "podium-planar", colorAttachments: [{ view: s.planar, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }], depthStencilAttachment: { view: s.planarDepth, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" } });
       p.executeBundles([G.planarBundle]);
       if (this.freddyVisible) this.freddy?.draw(p, 1, G.frameOff);
+      this.letters?.draw(p, 1, G.frameOff);
       p.end();
     }
     {
@@ -580,6 +623,7 @@ export class PodiumView {
       const p = enc.beginRenderPass({ label: "podium-main", colorAttachments: [color], depthStencilAttachment: { view: s.depth, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" } });
       p.executeBundles([s.bundle]);
       if (this.freddyVisible) this.freddy?.draw(p, 0, s.frameMain);
+      this.letters?.draw(p, 0, s.frameMain);
       p.end();
     }
     const v = this.vflip;
@@ -589,9 +633,11 @@ export class PodiumView {
     };
     full(s.vol[v], P.vol, [s.frameMain, G.passMain, s.volGroups[v]]);
     full(s.comb, P.combine, [s.combine[v]]);
-    s.bloom.forEach((b, k) => full(b, P.down, [s.down[k]]));
+    const h = this.hflip;
+    full(s.taa[h], P.taa, [s.taaGroups[h]]);
+    s.bloom.forEach((b, k) => full(b, P.down, [k === 0 ? s.down0[h] : s.down[k - 1]]));
     for (let k = s.bloom.length - 1; k >= 1; k--) full(s.bloom[k - 1], P.up, [s.up[k - 1]], true);
-    full(s.ldr, P.tone, [s.tone]);
+    full(s.ldr, P.tone, [s.tone[h]]);
     full(this.ctx.getCurrentTexture().createView(), P.final, [s.final], false, true);
     const ts = this.ts, slot = ts ? ts.busy.indexOf(false) : -1;
     if (ts && slot >= 0) { enc.resolveQuerySet(ts.set, 0, 3, ts.resolve, 0); enc.copyBufferToBuffer(ts.resolve, 0, ts.read[slot], 0, 24); ts.busy[slot] = true; }
@@ -609,7 +655,7 @@ export class PodiumView {
     }
     if (first) d.popErrorScope().then((e) => { if (e && !this.dead) { this.dead = true; this.onError?.(new Error(e.message)); } }, () => {});
 
-    this.vflip = 1 - v; this.frameNo++; this.fresh = false;
+    this.vflip = 1 - v; this.hflip = 1 - h; this.frameNo++; this.fresh = false;
     this.inflight++;
     d.queue.onSubmittedWorkDone().then(() => { this.inflight--; }, () => { this.inflight = 0; });
     return true;
@@ -619,10 +665,11 @@ export class PodiumView {
     if (this.dead && !this.sized && !this.ownTextures.length) return;
     this.dead = true;
     this.freddyAbort.abort(); this.freddy?.destroy(); this.freddy = null;
+    this.lettersPending++; this.letters?.destroy(); this.letters = null;
     this.sized?.textures.forEach((t) => t.destroy()); this.sized = null;
     this.ownTextures.splice(0).forEach((t) => t.destroy());
     this.ts?.set.destroy();
-    [...(this.ts ? [this.ts.resolve, ...this.ts.read] : []), this.frameBuf, this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, ...this.postBuf, this.gi].forEach((b) => b.destroy());
+    [...(this.ts ? [this.ts.resolve, ...this.ts.read] : []), this.frameBuf, this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, ...this.postBuf, this.taaBuf, this.gi].forEach((b) => b.destroy());
     try { this.ctx.unconfigure(); } catch {}
   }
 }

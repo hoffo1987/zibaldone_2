@@ -2,7 +2,7 @@
 // stendardi), scatole con gli spigoli arrotondati, la parete di fondo con il vano ad arco, telaio, montanti, modanature,
 // cassettoni. Ogni vertice: posizione, normale, uv, materiale, occlusione d'ambiente (cavità di scanalature e modanature).
 import { ROOM, WINDOW, STEP_X, STEP_H, STEP_D, DAIS, TROPHY_K, COL_X, COL_Z, COL_TOP, CARPET, BANNERS, Mat } from "./stage";
-import type { Drape } from "./cloth";
+import { refineDrape, type Drape } from "./cloth";
 import { buildSite, clothMesh, ROLL } from "./site";
 
 export const VERTEX_FLOATS = 10; // pos 3, nrm 3, uv 2, materiale, occlusione
@@ -293,7 +293,8 @@ export function buildScene(mobile: boolean, site: Site | null = null): SceneMesh
   });
 
   if (site) {
-    mark("cloth", () => clothMesh(B, site.cloth, Mat.cloth));
+    // sui computer il telo raffinato due volte: pieghe e orlo tondi anche da vicino
+    mark("cloth", () => (mobile ? clothMesh(B, site.cloth, Mat.cloth) : clothMesh(B, refineDrape(site.cloth, 2), Mat.cloth, 2)));
     mark("site", () => buildSite(B, mobile, site.cloth));
   } else mark("trophies", () => {
     // coppe tornite: piede, stelo con il nodo, calice con il labbro e l'interno; due anse

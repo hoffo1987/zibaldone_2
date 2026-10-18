@@ -217,6 +217,23 @@ export function decodeDrape(buf: ArrayBuffer): Drape {
   return { nx, nz, spacing, pos };
 }
 
+// la griglia del telo raffinata k volte con Catmull-Rom (passa per i punti simulati): pieghe tonde e contorni lisci
+// invece degli spigoli dei 7,5 cm della simulazione
+export function refineDrape(d: Drape, k: number): Drape {
+  if (k <= 1) return d;
+  const nx = (d.nx - 1) * k + 1, nz = (d.nz - 1) * k + 1, pos = new Float32Array(nx * nz * 3);
+  const W = Array.from({ length: k }, (_, r) => { const t = r / k, t2 = t * t, t3 = t2 * t; return [(-t + 2 * t2 - t3) / 2, (2 - 5 * t2 + 3 * t3) / 2, (t + 4 * t2 - 3 * t3) / 2, (-t2 + t3) / 2]; });
+  const src = (i: number, j: number) => (Math.max(0, Math.min(d.nz - 1, j)) * d.nx + Math.max(0, Math.min(d.nx - 1, i))) * 3;
+  for (let J = 0; J < nz; J++) for (let I = 0; I < nx; I++) {
+    const i0 = Math.floor(I / k), j0 = Math.floor(J / k), wx = W[I % k], wz = W[J % k], o = (J * nx + I) * 3;
+    for (let b = 0; b < 4; b++) for (let a = 0; a < 4; a++) {
+      const w = wx[a] * wz[b], s = src(i0 - 1 + a, j0 - 1 + b);
+      pos[o] += w * d.pos[s]; pos[o + 1] += w * d.pos[s + 1]; pos[o + 2] += w * d.pos[s + 2];
+    }
+  }
+  return { nx, nz, spacing: d.spacing / k, pos };
+}
+
 // il telo cotto, scaricato una volta per pagina (serve solo a chi vede il podio coperto)
 let loading: Promise<Drape> | null = null;
 export function loadDrape(): Promise<Drape> {

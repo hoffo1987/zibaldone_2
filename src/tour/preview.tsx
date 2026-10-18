@@ -10,7 +10,7 @@ import "../d3.css";
 
 const q = new URLSearchParams(window.location.search);
 const mode: TourMode = q.get("mode") === "auto" ? "auto" : q.get("mode") === "guide" ? "guide" : "film";
-const targets = ["nav-home", "editor-mode", "save", "nav-my_pages", "bell", "options", "cta", "nav-read", "filters", "nav-podio", "nav-authors", "hero-actions"];
+const targets = ["nav-home", "editor-mode", "save", "nav-diario", "scritti-switch", "nav-my_pages", "nav-podio", "bell", "options", "cta", "nav-read", "filters", "nav-authors", "hero-actions"];
 
 // Storyboard (?board=passo in secondi): il film reso fotogramma per fotogramma a 60 fps, senza audio, con le miniature
 // e il grafico della velocità della camera (scorrimento rispetto a ciò che guarda e rotazione). Serve a controllare che la

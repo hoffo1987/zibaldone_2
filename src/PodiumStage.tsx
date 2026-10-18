@@ -1,5 +1,6 @@
 import React from "react";
 import { Hourglass } from "lucide-react";
+import type { SignText } from "./podium/letters";
 
 // Il podio del mese in 3D (WebGPU) a tutto schermo; il modulo si scarica solo quando serve.
 const Podium3D = React.lazy(() => import("./podium/Podium3D"));
@@ -11,8 +12,8 @@ class Boundary extends React.Component<{ onError: () => void; children: React.Re
   render() { return this.state.failed ? null : this.props.children; }
 }
 // la scena (sta nella radice dell'app, fuori dal contenitore della pagina): se WebGPU non parte chiama onFail.
-// covered: il podio non ancora visibile, sotto il telo e in mezzo al cantiere, con il cartello sospeso (sign) nella sala
-export function PodiumScene({ dark, plates, onFail, covered, sign }: { dark: boolean; plates: (React.ReactNode | null)[]; onFail: () => void; covered?: boolean; sign?: React.ReactNode }) {
+// covered: il podio non ancora visibile, sotto il telo e in mezzo al cantiere, con le scritte delle date sospese nella sala
+export function PodiumScene({ dark, plates, onFail, covered, sign }: { dark: boolean; plates: (React.ReactNode | null)[]; onFail: () => void; covered?: boolean; sign?: SignText }) {
   return <Boundary onError={onFail}><React.Suspense fallback={null}><Podium3D dark={dark} plates={plates} onFail={onFail} covered={covered} sign={sign} /></React.Suspense></Boundary>;
 }
 // lo spazio lasciato libero nella pagina, dove la camera inquadra il podio (sui telefoni è il palco che contiene la scena);
@@ -24,8 +25,8 @@ export const PodiumSlot = ({ list }: { list?: React.ReactNode }) => (
   </>
 );
 
-// il cartello del podio coperto: lavori in corso, con la data in cui il podio si scopre. La clessidra si gira con calma,
-// i puntini aspettano, il nastro a strisce scorre piano
+// il cartello del podio coperto, quando la sala 3D non c'è (podio semplice): lavori in corso, con la data in cui il podio
+// si scopre. La clessidra si gira con calma, i puntini aspettano, il nastro a strisce scorre piano
 export function PodiumSign({ title, body }: { title: string; body: string }) {
   return (
     <div className="podium-sign-card">

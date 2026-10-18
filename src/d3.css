@@ -167,7 +167,6 @@
    aspettano, il nastro a strisce scorre; con le animazioni ridotte resta fermo */
 .podium-sign{position:absolute;left:0;top:0;z-index:3;pointer-events:none;will-change:transform;opacity:0;transition:opacity 1.2s ease .3s}
 .podium-sign.on,.podium-sign-flat{opacity:1}
-.podium-sign-turn{perspective:900px;transform:rotateY(var(--yaw,0deg))}
 .podium-sign-swing{position:relative;transform-origin:50% -240px;animation:podium-sign-swing 9.5s cubic-bezier(.45,0,.55,1) infinite alternate}
 .podium-sign-string{position:absolute;bottom:calc(100% - 12px);left:30px;width:1.5px;height:240px;border-radius:1px;background:linear-gradient(transparent,color-mix(in srgb,var(--ink) 50%,transparent) 55%);pointer-events:none}
 .podium-sign-string.r{left:auto;right:30px}

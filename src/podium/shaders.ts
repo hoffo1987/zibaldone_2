@@ -125,7 +125,8 @@ fn sky(d: vec3f, sun: bool, fp: f32) -> vec3f {
   let rs = clamp(fp * 0.7, 0.06, 0.15);
   let st = step(0.975, hash2(g)) * (1.0 - smoothstep(0.0, rs, length(fract(sq) - sp))) * (0.0036 / (rs * rs)) * (0.6 + 0.4 * sin(F.tileA.w * 2.0 + hash2(g + 7.0) * 40.0));
   c += vec3f(0.85, 0.9, 1.0) * st * night * (1.0 - saturate(cl)) * 1.2;
-  return c;
+  // nel cantiere, di giorno, il cielo oltre il finestrone è velato: la sala non abbaglia
+  return c * (1.0 - 0.3 * F.frameC.w * (1.0 - night));
 }
 `;
 
@@ -243,6 +244,10 @@ const LRECT = vec2f(${f(LIGHT_RECT.x1 - LIGHT_RECT.x0)}, ${f(LIGHT_RECT.y1 - LIG
 const SDIM = vec2f(${f(q.shadow[0])}, ${f(q.shadow[1])});
 const CLOUD_TEXEL = ${f((LIGHT_RECT.x1 - LIGHT_RECT.x0) / 512)};
 var<private> POISSON: array<vec2f, 12> = array<vec2f, 12>(vec2f(-0.326, -0.406), vec2f(-0.840, -0.074), vec2f(-0.696, 0.457), vec2f(-0.203, 0.621), vec2f(0.962, -0.195), vec2f(0.473, -0.480), vec2f(0.519, 0.767), vec2f(0.185, -0.893), vec2f(0.507, 0.064), vec2f(0.896, 0.412), vec2f(-0.322, -0.933), vec2f(-0.792, -0.598));
+// rotazione dei campioni della penombra, diversa per pixel e per fotogramma (la imposta fsScene): l'antialiasing
+// temporale ne fa la media, così la penombra larga del cantiere è liscia invece che a gradini
+var<private> SPIN: vec2f = vec2f(1.0, 0.0);
+fn spun(v: vec2f) -> vec2f { return vec2f(v.x * SPIN.x - v.y * SPIN.y, v.x * SPIN.y + v.y * SPIN.x); }
 fn shadowCoord(p: vec3f) -> vec3f { let c = F.light * vec4f(p, 1.0); return vec3f(c.x * 0.5 + 0.5, 0.5 - c.y * 0.5, c.z); }
 fn cloudAt(uv: vec2f, blurWorld: f32) -> f32 {
   return textureSampleLevel(cloudTex, linSamp, uv, clamp(log2(max(blurWorld, 1e-4) / CLOUD_TEXEL), 0.0, 8.0)).r;
@@ -255,19 +260,21 @@ fn sunLight(p: vec3f, soft: bool) -> f32 {
   let s = sc.z * LIGHT_DEPTH;
   let bias = (0.015 + s * 0.0012) / LIGHT_DEPTH;
   if (!soft) { return textureSampleCompareLevel(shadowTex, cmpSamp, sc.xy, sc.z - bias) * cloudAt(sc.xy, s * 0.006 + 0.05); }
-  // ricerca degli ostacoli e loro distanza media: la penombra cresce con la distanza dall'ostacolo (astro di mezzo grado)
-  let search = (0.012 * s + 0.02) / LRECT;
+  // ricerca degli ostacoli e loro distanza media: la penombra cresce con la distanza dall'ostacolo (astro di mezzo grado;
+  // nel cantiere il sole è velato dalla polvere e l'astro sembra più grande: ombre più morbide)
+  let veil = 1.0 + 0.9 * F.frameC.w;
+  let search = (0.012 * s + 0.02) * veil / LRECT;
   var blk = 0.0; var nb = 0.0;
   for (var i = 0; i < 12; i++) {
-    let uv = clamp(sc.xy + POISSON[i] * search, vec2f(0.0), vec2f(0.9999));
+    let uv = clamp(sc.xy + spun(POISSON[i]) * search, vec2f(0.0), vec2f(0.9999));
     let d = textureLoad(shadowTex, vec2i(uv * SDIM), 0);
     if (d < sc.z - bias) { blk += d; nb += 1.0; }
   }
   var vis = 1.0;
   if (nb > 0.0) {
-    let pen = clamp((s - blk / nb * LIGHT_DEPTH) * 0.0095 + 0.004, 0.004, 0.3) / LRECT;
+    let pen = clamp(((s - blk / nb * LIGHT_DEPTH) * 0.0095 + 0.004) * veil, 0.004, 0.45) / LRECT;
     vis = 0.0;
-    for (var i = 0; i < 12; i++) { vis += textureSampleCompareLevel(shadowTex, cmpSamp, sc.xy + POISSON[i] * pen, sc.z - bias); }
+    for (var i = 0; i < 12; i++) { vis += textureSampleCompareLevel(shadowTex, cmpSamp, sc.xy + spun(POISSON[i]) * pen, sc.z - bias); }
     vis /= 12.0;
   }
   return vis * cloudAt(sc.xy, s * 0.0047 + 0.01);
@@ -796,6 +803,7 @@ struct VOut { @builtin(position) pos: vec4f, @location(0) @interpolate(perspecti
 @fragment fn fsScene(i: VOut) -> @location(0) vec4f {
   // derivate calcolate qui, nel flusso uniforme: i materiali le usano per filtrare le texture
   var g: Grads; g.px = dpdx(i.wp); g.py = dpdy(i.wp); g.ux = dpdx(i.uv); g.uy = dpdy(i.uv);
+  let spin = 6.2831853 * fract(ign(i.pos.xy) + F.tileB.w * 0.618034); SPIN = vec2f(cos(spin), sin(spin));
   let n = normalize(i.n);
   // antialiasing speculare (Kaplanyan, Tokuyoshi): la varianza della normale nel pixel allarga il lobo, così i riflessi
   // di coppe, scanalature e modanature non sfarfallano
@@ -955,6 +963,71 @@ fn ign(p: vec2f) -> f32 { return fract(52.9829189 * fract(dot(p, vec2f(0.0671105
   c += (textureSampleLevel(srcTex, samp, vec2f(a.x, b.y), 0.0).rgb * w0.x + textureSampleLevel(srcTex, samp, vec2f(b.x, b.y), 0.0).rgb * w12.x + textureSampleLevel(srcTex, samp, vec2f(d.x, b.y), 0.0).rgb * w3.x) * w12.y;
   c += (textureSampleLevel(srcTex, samp, vec2f(a.x, d.y), 0.0).rgb * w0.x + textureSampleLevel(srcTex, samp, vec2f(b.x, d.y), 0.0).rgb * w12.x + textureSampleLevel(srcTex, samp, vec2f(d.x, d.y), 0.0).rgb * w3.x) * w3.y;
   return vec4f(saturate(c) + (ign(fc.xy + post.z * 7.0) - 0.5) / 255.0, 1.0);
+}
+`;
+// antialiasing temporale: ogni fotogramma la camera si sposta di una frazione di pixel (sequenza di Halton) e il risultato
+// si fonde con la storia riproiettata (profondità più vicina nell'intorno, posizione del mondo, camera del fotogramma
+// prima). La storia si stringe nella nuvola dei colori attorno al pixel (YCoCg, media e deviazione), così niente scie;
+// la fusione lavora su valori compressi (Karis), come la risoluzione dell'MSAA: i riflessi forti non si allargano.
+// Sopra i quattro campioni dell'MSAA, l'accumulo dà a bordi sottili, tubi, scritte e riflessi decine di campioni
+export const taaShader = /* wgsl */ `${finite}
+@group(0) @binding(0) var curTex: texture_2d<f32>;
+@group(0) @binding(1) var samp: sampler;
+@group(0) @binding(2) var histTex: texture_2d<f32>;
+@group(0) @binding(3) var depthTex: texture_depth_multisampled_2d;
+struct Taa { invVP: mat4x4f, prevVP: mat4x4f, misc: vec4f }; // misc: esposizione, ricomincia (1), -, -
+@group(0) @binding(4) var<uniform> U: Taa;
+@vertex fn vsFull(@builtin(vertex_index) k: u32) -> @builtin(position) vec4f {
+  let p = vec2f(f32((k << 1u) & 2u), f32(k & 2u));
+  return vec4f(p * 2.0 - 1.0, 0.0, 1.0);
+}
+fn squash(c: vec3f) -> vec3f { return c / (1.0 + max(max(c.r, c.g), c.b) * U.misc.x); }
+fn unsquash(c: vec3f) -> vec3f { return c / max(1.0 - max(max(c.r, c.g), c.b) * U.misc.x, 1e-3); }
+fn ycocg(c: vec3f) -> vec3f { return vec3f(dot(c, vec3f(0.25, 0.5, 0.25)), dot(c, vec3f(0.5, 0.0, -0.5)), dot(c, vec3f(-0.25, 0.5, -0.25))); }
+fn rgbOf(c: vec3f) -> vec3f { return vec3f(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z); }
+// la storia letta con Catmull-Rom (nove letture bilineari): la riproiezione non ammorbidisce l'immagine fotogramma dopo
+// fotogramma come farebbe il bilineare
+fn history(uv: vec2f) -> vec3f {
+  let src = vec2f(textureDimensions(histTex));
+  let sp = uv * src; let t1 = floor(sp - 0.5) + 0.5; let f = sp - t1;
+  let w0 = f * (-0.5 + f * (1.0 - 0.5 * f)); let w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  let w2 = f * (0.5 + f * (2.0 - 1.5 * f)); let w3 = f * f * (-0.5 + 0.5 * f);
+  let w12 = w1 + w2;
+  let a = (t1 - 1.0) / src; let b = (t1 + w2 / w12) / src; let d = (t1 + 2.0) / src;
+  var c = (textureSampleLevel(histTex, samp, vec2f(a.x, a.y), 0.0).rgb * w0.x + textureSampleLevel(histTex, samp, vec2f(b.x, a.y), 0.0).rgb * w12.x + textureSampleLevel(histTex, samp, vec2f(d.x, a.y), 0.0).rgb * w3.x) * w0.y;
+  c += (textureSampleLevel(histTex, samp, vec2f(a.x, b.y), 0.0).rgb * w0.x + textureSampleLevel(histTex, samp, vec2f(b.x, b.y), 0.0).rgb * w12.x + textureSampleLevel(histTex, samp, vec2f(d.x, b.y), 0.0).rgb * w3.x) * w12.y;
+  c += (textureSampleLevel(histTex, samp, vec2f(a.x, d.y), 0.0).rgb * w0.x + textureSampleLevel(histTex, samp, vec2f(b.x, d.y), 0.0).rgb * w12.x + textureSampleLevel(histTex, samp, vec2f(d.x, d.y), 0.0).rgb * w3.x) * w3.y;
+  return max(c, vec3f(0.0));
+}
+@fragment fn fsTaa(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  let size = vec2i(textureDimensions(curTex)); let p = vec2i(fc.xy); let fs = vec2f(size);
+  let cur = squash(finite3(textureLoad(curTex, p, 0).rgb));
+  // intorno 3×3: media e varianza dei colori, e la superficie più vicina (i bordi seguono chi sta davanti)
+  var m1 = vec3f(0.0); var m2 = vec3f(0.0); var dz = 1.0; var best = p;
+  for (var k = 0; k < 9; k++) {
+    let q = clamp(p + vec2i(k % 3 - 1, k / 3 - 1), vec2i(0), size - 1);
+    let c = ycocg(squash(finite3(textureLoad(curTex, q, 0).rgb)));
+    m1 += c; m2 += c * c;
+    let d = textureLoad(depthTex, q, 0);
+    if (d < dz) { dz = d; best = q; }
+  }
+  if (U.misc.y > 0.5) { return vec4f(unsquash(cur), 1.0); }
+  let ub = (vec2f(best) + 0.5) / fs;
+  let w = U.invVP * vec4f(ub.x * 2.0 - 1.0, 1.0 - ub.y * 2.0, dz, 1.0);
+  let pc = U.prevVP * vec4f(w.xyz / w.w, 1.0);
+  if (pc.w <= 1e-4) { return vec4f(unsquash(cur), 1.0); }
+  let prev = vec2f(pc.x / pc.w * 0.5 + 0.5, 0.5 - pc.y / pc.w * 0.5);
+  let uv = fc.xy / fs + (prev - ub);
+  if (any(uv <= vec2f(0.0)) || any(uv >= vec2f(1.0))) { return vec4f(unsquash(cur), 1.0); }
+  let mean = m1 / 9.0; let sd = sqrt(max(m2 / 9.0 - mean * mean, vec3f(0.0)));
+  var h = ycocg(squash(history(uv)));
+  // la storia che esce dalla nuvola dei vicini si riporta sul suo bordo, lungo la retta verso la media
+  let off = h - mean; let r = abs(off) / (sd * 1.25 + vec3f(1e-4)); let mx = max(r.x, max(r.y, r.z));
+  if (mx > 1.0) { h = mean + off / mx; }
+  // ferma: un decimo di nuovo a ogni fotogramma; quando la camera si sposta in fretta (trascinamento) di più
+  let speed = length((prev - ub) * fs);
+  let a = mix(0.09, 0.3, saturate(speed / 8.0));
+  return vec4f(finite3(unsquash(max(rgbOf(mix(h, ycocg(cur), a)), vec3f(0.0)))), 1.0);
 }
 `;
 // risoluzione dell'MSAA pesata sulla luminanza (Karis), al posto della media dell'hardware: dove un bordo scuro passa

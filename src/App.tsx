@@ -32,7 +32,7 @@ import * as sound from "./sound";
 import Logo3D from "./LogoView";
 // il podio del mese in 3D (WebGPU, con illuminazione globale) si scarica solo quando serve
 import { PodiumCover, PodiumScene, PodiumSign, PodiumSlot, hasWebGPU } from "./PodiumStage";
-import { nextReveal, revealCopy } from "./podiumReveal";
+import { nextReveal, revealCopy, revealLines } from "./podiumReveal";
 // easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login → caricamento → gioco
 import EggPortal from "./EggPortal";
 // presentazione del primo accesso (film + tour guidato): si scarica solo per chi deve vederla
@@ -2346,6 +2346,7 @@ export default function App() {
   const scene3d = !G.nomotion && !lite && !podiumFail && hasWebGPU();
   const podium3d = scene3d && (isAdmin ? !loading && ranked.length > 0 : true);
   const podiumSign = tab === "podio" && !isAdmin ? <PodiumSign {...revealCopy(nextReveal())} /> : null;
+  const podiumLetters = tab === "podio" && !isAdmin ? revealLines(nextReveal()) : undefined;
   const podiumPlates = (tab === "podio" ? [0, 1, 2] : []).map((k) => { const t = top[k]; if (!t) return null;
             return (
               <div data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className="pdm-card">
@@ -2436,7 +2437,7 @@ export default function App() {
   return shell(
     <>
       <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
-      {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} covered={!isAdmin} sign={podiumSign} onFail={() => setPodiumFail(true)} />}
+      {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} covered={!isAdmin} sign={podiumLetters} onFail={() => setPodiumFail(true)} />}
       <Navigation tab={tab} admin={isAdmin} editing={!!editingId} railKey={railKey}
         hidden={kbOpen || (tab === "write" && drawing)} onNavigate={go}
         brand={<div className="flex items-center gap-2.5 cursor-pointer select-none" title="Il Circuito">
