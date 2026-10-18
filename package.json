@@ -44,6 +44,7 @@
     "preview:podium": "node scripts/preview-podium.cjs",
     "podium:cloth": "node scripts/bake-podium-cloth.cjs",
     "audio:build": "node scripts/build-audio.cjs",
+    "audio:ambience": "node scripts/build-ambience.cjs",
     "typecheck:egg": "tsc --project scripts/tsconfig.egg.json",
     "typecheck": "tsc --noEmit",
     "start": "react-scripts start",

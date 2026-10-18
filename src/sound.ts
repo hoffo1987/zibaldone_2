@@ -60,6 +60,10 @@ export function unlock() {
   try { const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0); } catch {}
 }
 export const running = () => !!ctx && ctx.state === "running";
+// per chi ha una catena sua (l'ambiente del podio): il contesto e l'ingresso del limitatore, a valle del volume degli
+// effetti (l'ambiente ha un volume suo e non si spegne con gli effetti sonori)
+export function mixer(): { c: AudioContext; dest: AudioNode } | null { const c = context(true); return c && lim ? { c, dest: lim } : null; }
+export const decodeBytes = (c: AudioContext, data: ArrayBuffer) => decode(c, data);
 export const now = () => (ctx ? ctx.currentTime : 0);
 
 // scarica subito i byte (anche prima che esista il contesto); la decodifica avviene appena il contesto c'è

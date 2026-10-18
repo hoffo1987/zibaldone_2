@@ -171,3 +171,27 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 .adv-chev{color:var(--mu);transition:transform .3s var(--ez)}
 .adv-toggle[aria-expanded="true"] .adv-chev{transform:rotate(180deg)}
 .adv-panel{margin-top:.5rem;padding:.4rem .85rem .5rem;border-radius:14px;border:1px dashed var(--ln2)}
+
+/* ---------- la pressione dei pulsanti: una corrente lungo il bordo ----------
+   Al tocco una scia di luce parte dal punto premuto (angolo --pa visto dal centro) e corre lungo il bordo in tutte e due
+   le direzioni fino a richiudersi dall'altra parte; insieme, un alone morbido si allarga fuori dal pulsante e svanisce.
+   Prende il colore del testo del pulsante (bianco sui pulsanti pieni). Al posto della vecchia goccia che si allargava */
+@property --sweep{syntax:'<angle>';inherits:false;initial-value:0deg}
+.bt.rip:after{left:0;top:0;width:auto;height:auto;margin:0;inset:0;border-radius:inherit;padding:1.5px;background:conic-gradient(from calc(var(--pa,0deg) - var(--sweep)),var(--trace-c,var(--ac)) 0 calc(var(--sweep) * 2),transparent 0);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+  animation:btTrace .6s cubic-bezier(.3,.7,.2,1) forwards}
+.bt.on,.hero .bt.ghost{--trace-c:#fff}.bt.dng{--trace-c:#dc2626}.hero .bt.cta{--trace-c:#0B7F70}
+@keyframes btTrace{0%{--sweep:0deg;opacity:1}65%{--sweep:180deg;opacity:1}100%{--sweep:180deg;opacity:0}}
+/* l'alone è un contorno che si allarga (non un'ombra: l'ombra del tasto resta dov'è) */
+.bt.rip{animation:btHalo .55s cubic-bezier(.2,.7,.2,1)}
+@keyframes btHalo{0%{outline:2px solid color-mix(in srgb,var(--ac) 55%,transparent);outline-offset:0}100%{outline:2px solid transparent;outline-offset:9px}}
+
+/* ---------- interruttori: la levetta scatta con una molla e si allunga mentre la tieni ---------- */
+.sw-track{position:relative;width:3rem;height:1.75rem;border-radius:999px;flex-shrink:0;background:var(--ln2);box-shadow:inset 0 1px 2px rgba(0,0,0,.18);transition:background .3s var(--ez),box-shadow .3s}
+.sw-track.on{background:var(--ac);box-shadow:inset 0 1px 2px rgba(0,0,0,.2),0 0 0 3px color-mix(in srgb,var(--ac) 18%,transparent)}
+.sw-knob{position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:999px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25),0 3px 8px -2px rgba(0,0,0,.25);
+  transition:left .42s cubic-bezier(.34,1.56,.64,1),width .2s var(--ez)}
+.sw-track.on .sw-knob{left:24px}
+button:active>.sw-track .sw-knob{width:25px}
+button:active>.sw-track.on .sw-knob{left:19px}
+.root.noripple .bt.rip,.root.noripple .bt.rip:after{animation:none}

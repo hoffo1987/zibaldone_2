@@ -28,6 +28,8 @@ import { useKeyboardOpen } from "./useKeyboardOpen";
 import { useMusic } from "./useMusic";
 import { SettingsDialog } from "./Dialog";
 import * as sound from "./sound";
+import { haptic, bindUiHaptics, configureHaptics } from "./haptics";
+import { startAmbience, stopAmbience, setAmbienceNight, setAmbienceMuffle, setAmbienceVolume, preloadAmbience } from "./ambience";
 // il logo 3D (WebGPU) si carica a parte, solo quando serve e solo se il browser supporta WebGPU: il resto del sito non lo scarica
 import Logo3D from "./LogoView";
 // il podio del mese in 3D (WebGPU, con illuminazione globale) si scarica solo quando serve
@@ -854,10 +856,22 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
     fit(); window.addEventListener("resize", fit);
     const pulses: any[] = [], sparks: any[] = [];
     const spawn = (x = Math.random() * W, y = Math.random() * H, once = false) => { const h = Math.random() < 0.5, s = Math.random() < 0.5 ? 1 : -1; pulses.push({ x: Math.round(x / G) * G, y: Math.round(y / G) * G, dx: h ? s : 0, dy: h ? 0 : s, t: [], n: 0, max: 160 + Math.random() * 240, am: Math.random() < 0.25, once }); };
+    // al tocco: un'onda di luce (due anelli sottili che rallentano allargandosi) e qualche elettrone che parte lungo le
+    // direzioni della griglia, fa una curva a 90° come su una scheda e si spegne lasciando la scia. Mai mentre si scrive,
+    // si disegna o si trascina un cursore
+    // sui pulsanti parla già la corrente lungo il bordo: l'onda resta per il resto della pagina
+    const QUIET = "input,textarea,select,[contenteditable],canvas,.inp,.rng,[data-fx=off],button,.bt,a[href],[role=switch],[role=button]:not(.card)";
+    const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1], [0.7071, 0.7071], [-0.7071, 0.7071], [-0.7071, -0.7071], [0.7071, -0.7071]];
     const down = (e: PointerEvent) => {
+      if ((e.target as Element)?.closest?.(QUIET)) return;
       if (gr.current.sparks) {
-        for (let i = 0; i < 16; i++) { const an = (i / 16) * Math.PI * 2, v = 2 + Math.random() * 3.5; sparks.push({ x: e.clientX, y: e.clientY, vx: Math.cos(an) * v, vy: Math.sin(an) * v, l: 1 }); }
-        sparks.push({ x: e.clientX, y: e.clientY, r: 4, l: 1, ring: true });
+        const now = performance.now();
+        sparks.push({ ring: true, x: e.clientX, y: e.clientY, t0: now, life: 620, R: 46 }, { ring: true, x: e.clientX, y: e.clientY, t0: now + 90, life: 700, R: 74, faint: true });
+        const n = W < 600 ? 4 : 6, start = Math.floor(Math.random() * 8);
+        for (let i = 0; i < n; i++) {
+          const d = DIRS[(start + Math.round((i * 8) / n)) % 8], turn = Math.random() < 0.5 ? 1 : -1;
+          sparks.push({ x: e.clientX, y: e.clientY, dx: d[0], dy: d[1], v: 3.4 + Math.random() * 1.6, bend: 10 + Math.random() * 18, turn, tr: [] as number[][], t0: now, life: 520 + Math.random() * 160, am: i % 3 === 0 });
+        }
       }
       if (gr.current.pulses) spawn(e.clientX, e.clientY, true); // l'impulso nato dal tocco si spegne da solo
     };
@@ -885,13 +899,31 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
         ca.fillStyle = `rgba(${col},.9)`; ca.beginPath(); ca.arc(p.x, p.y, 2.6, 0, 7); ca.fill();
         if (p.n > p.max || p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50) { pulses.splice(i, 1); if (!p.once) spawn(); }
       }
+      const now = performance.now(), easeOut = (k: number) => 1 - Math.pow(1 - k, 3);
+      if (sparks.length && dark) cb.globalCompositeOperation = "lighter";
       for (let i = sparks.length - 1; i >= 0; i--) {
-        const s = sparks[i]; s.l -= s.ring ? 0.05 : 0.04;
-        if (s.l <= 0) { sparks.splice(i, 1); continue; }
-        cb.lineWidth = 2;
-        if (s.ring) { s.r += 5; cb.strokeStyle = `rgba(${c},${s.l * 0.7})`; cb.beginPath(); cb.arc(s.x, s.y, s.r, 0, 7); cb.stroke(); }
-        else { s.x += s.vx; s.y += s.vy; s.vx *= 0.94; s.vy *= 0.94; cb.strokeStyle = `rgba(251,191,36,${s.l})`; cb.beginPath(); cb.moveTo(s.x, s.y); cb.lineTo(s.x - s.vx * 2.5, s.y - s.vy * 2.5); cb.stroke(); }
+        const s = sparks[i], k = (now - s.t0) / s.life;
+        if (k >= 1) { sparks.splice(i, 1); continue; }
+        if (k < 0) continue;
+        if (s.ring) {
+          // l'onda: sottile, rallenta allargandosi, si spegne prima di fermarsi
+          const r = 6 + s.R * easeOut(k), a = (1 - k) * (1 - k) * (s.faint ? 0.35 : 0.75);
+          cb.lineWidth = (s.faint ? 1 : 1.8) * (1 - k * 0.6); cb.strokeStyle = `rgba(${c},${a.toFixed(3)})`;
+          cb.beginPath(); cb.arc(s.x, s.y, r, 0, 7); cb.stroke();
+          continue;
+        }
+        // l'elettrone: dritto, poi una curva a 90° e via; frena piano
+        const step = s.v * (1 - k * 0.55);
+        s.x += s.dx * step; s.y += s.dy * step;
+        if (s.bend > 0 && (s.bend -= step) <= 0) { const dx = s.dx; s.dx = -s.dy * s.turn; s.dy = dx * s.turn; }
+        s.tr.push([s.x, s.y]); if (s.tr.length > 9) s.tr.shift();
+        const col = s.am ? "251,191,36" : c, fade = 1 - k;
+        cb.lineWidth = 1.6; cb.lineCap = "round";
+        for (let j = 1; j < s.tr.length; j++) { cb.strokeStyle = `rgba(${col},${((j / s.tr.length) * fade * 0.8).toFixed(3)})`; cb.beginPath(); cb.moveTo(s.tr[j - 1][0], s.tr[j - 1][1]); cb.lineTo(s.tr[j][0], s.tr[j][1]); cb.stroke(); }
+        cb.fillStyle = `rgba(${col},${(fade * 0.22).toFixed(3)})`; cb.beginPath(); cb.arc(s.x, s.y, 5, 0, 7); cb.fill();
+        cb.fillStyle = `rgba(${col},${fade.toFixed(3)})`; cb.beginPath(); cb.arc(s.x, s.y, 1.8, 0, 7); cb.fill();
       }
+      cb.globalCompositeOperation = "source-over";
     };
     const stop = renderLoop(frame, () => gr.current.fps || 30);
     return () => { stop(); window.removeEventListener("resize", fit); window.removeEventListener("pointerdown", down); };
@@ -905,7 +937,7 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
 const Sw = ({ on, set, label, hint, off }: any) => (
   <button type="button" role="switch" aria-checked={!!on && !off} disabled={off} onClick={() => set(!on)} className="w-full flex items-center justify-between gap-4 py-3 text-left disabled:opacity-40">
     <span><span className="block text-sm font-semibold">{label}</span>{hint && <span className="block text-xs mu">{hint}</span>}</span>
-    <span className="relative w-12 h-7 rounded-full shrink-0" style={{ background: on && !off ? "var(--ac)" : "var(--ln)", transition: "background .25s" }}><span className="absolute top-1 w-5 h-5 rounded-full bg-white" style={{ left: on && !off ? 24 : 4, transition: "left .25s var(--ez)" }} /></span>
+    <span className={`sw-track ${on && !off ? "on" : ""}`}><span className="sw-knob" /></span>
   </button>
 );
 // selettore con pillola che scorre (con rimbalzo) sotto l'opzione attiva
@@ -1066,7 +1098,9 @@ export default function App() {
   // passando a "Personalizzato" la prima volta si parte da ciò che si vede adesso; le volte dopo si ritrova la propria scelta
   const setLevel = (v: string) => setOpts((o: any) => { if (v === "custom" && !o.c) { const g: any = resolveG(o), c: any = {}; Object.keys(CDEF).forEach((k) => { c[k] = g[k]; }); return { ...o, level: v, c }; } return { ...o, level: v }; });
   const baseOn = (p: string) => setOpts((o: any) => ({ ...o, level: "custom", c: { ...CBASE[p] } }));
-  const buzz = (p: number | number[]) => { if (!opts.vibrate) return; const k = opts.vib || 1; navigator.vibrate?.(Array.isArray(p) ? p.map((x, i) => (i % 2 ? x : Math.round(x * k))) : Math.round(p * k)); };
+  // tatto: le vibrazioni dei gesti arrivano da bindUiHaptics (haptics.ts); qui solo i momenti che contano
+  useEffect(() => { configureHaptics(!!opts.vibrate, opts.vib || 1); }, [opts.vibrate, opts.vib]);
+  useEffect(() => (opts.vibrate ? bindUiHaptics() : undefined), [opts.vibrate]);
   const [tab, setTab] = useState("home");
   // presentazione del primo accesso (film + tour guidato): una volta per account su questo dispositivo;
   // dalle Opzioni si rivedono il solo filmato ("film") o il solo tour ("guide")
@@ -1294,7 +1328,12 @@ export default function App() {
       const t = e.target?.closest?.(".card,.bt"); if (!t) return;
       const r = t.getBoundingClientRect();
       if (G.glow) { t.style.setProperty("--mx", `${e.clientX - r.left}px`); t.style.setProperty("--my", `${e.clientY - r.top}px`); }
-      if (G.ripple && t.classList.contains("bt")) { t.style.setProperty("--px", `${e.clientX - r.left}px`); t.style.setProperty("--py", `${e.clientY - r.top}px`); t.classList.remove("rip"); void t.offsetWidth; t.classList.add("rip"); }
+      // la corrente parte dal punto toccato e corre lungo il bordo del pulsante: serve l'angolo del tocco visto dal centro
+      if (G.ripple && t.classList.contains("bt")) {
+        const ang = (Math.atan2(e.clientX - r.left - r.width / 2, r.top + r.height / 2 - e.clientY) * 180) / Math.PI;
+        t.style.setProperty("--px", `${e.clientX - r.left}px`); t.style.setProperty("--py", `${e.clientY - r.top}px`); t.style.setProperty("--pa", `${ang.toFixed(1)}deg`);
+        t.classList.remove("rip"); void t.offsetWidth; t.classList.add("rip");
+      }
     };
     document.addEventListener("pointermove", mv, { passive: true }); document.addEventListener("pointerout", out, { passive: true }); document.addEventListener("pointerdown", dn, { passive: true });
     return () => {
@@ -1307,6 +1346,13 @@ export default function App() {
     document.body.style.overflow = lock ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [sel, toDelete, done, viewProf, optOpen]);
+  // l'ambiente della sala del podio coperto (chi non amministra): giorno in chiaro, notte in scuro
+  const ambienceDark = useRef(dark); ambienceDark.current = dark;
+  const ambienceOn = !!user && !isAdmin && tab === "podio" && opts.ambience !== false;
+  useEffect(() => { if (!ambienceOn) return; preloadAmbience(); startAmbience(ambienceDark.current ? 1 : 0); return () => stopAmbience(); }, [ambienceOn]);
+  useEffect(() => { setAmbienceNight(dark ? 1 : 0); }, [dark]);
+  useEffect(() => { setAmbienceVolume(opts.ambVol ?? 0.7); }, [opts.ambVol]);
+  useEffect(() => { setAmbienceMuffle(!!optOpen || !!sel); }, [optOpen, sel]);
 
   // le vecchie sessioni anonime dell'accesso professore (rimosso) non restano aperte
   useEffect(() => {
@@ -1797,7 +1843,7 @@ export default function App() {
       b.set(doc(db, "testi", ref.id), pubOf(full));
       await b.commit();
       pubDone.current.set(ref.id, pubSig(full));
-      setDone(editingId ? "edit" : "new");
+      setDone(editingId ? "edit" : "new"); haptic("success");
     } catch { notify("Salvataggio non riuscito. Riprova."); }
     setSaving(false);
   };
@@ -1828,19 +1874,19 @@ export default function App() {
       b.update(doc(db, "pensieri", t.id), { svelato: true, rating: t.rating });
       b.set(doc(collection(db, "notifiche")), { userId: t.userId, pensieroId: t.id, titolo: t.title, voto: t.rating, timestamp: Date.now(), letta: false });
       await b.commit();
-      buzz([20, 40, 30]);
+      haptic("success");
       setRvl(t.id); setSel({ ...sel, svelato: true });
     } catch { notify("Svelamento non riuscito: pubblica le nuove regole di Firestore."); }
     setConfirmRvl(false);
   };
   const rate = async (t: any, n: number) => {
     if (!isAdmin || !canEvaluate(t) || t.svelato) return;
-    buzz(12);
+    haptic("success");
     try { await setDoc(doc(db, "valutazioni", t.id), { voto: n, updatedAt: Date.now() }, { merge: true }); }
     catch { return notify("Voto non salvato: pubblica le nuove regole di Firestore."); }
     if (sel?.id === t.id) setSel({ ...sel, rating: n });
   };
-  const star = async (t: any) => { if (isAdmin && canEvaluate(t)) { buzz(12); try { await setDoc(doc(db, "valutazioni", t.id), { segnalibro: !t.isStarred, updatedAt: Date.now() }, { merge: true }); } catch { return notify("Segnalibro non salvato: pubblica le nuove regole di Firestore."); } if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
+  const star = async (t: any) => { if (isAdmin && canEvaluate(t)) { haptic("impact"); try { await setDoc(doc(db, "valutazioni", t.id), { segnalibro: !t.isStarred, updatedAt: Date.now() }, { merge: true }); } catch { return notify("Segnalibro non salvato: pubblica le nuove regole di Firestore."); } if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
   const confirmDelete = async () => {
     const list = toDelete!; setToDelete(null); setSel(null); setGone(list);
     setTimeout(async () => {
@@ -2100,8 +2146,10 @@ export default function App() {
             {opts.music && music.status === "error" && <p className="text-xs mu" role="status">Impossibile riprodurre la musica. <button type="button" className="lk" onClick={music.retry}>Riprova</button></p>}
             <Sw on={sfxOn} set={(v: boolean) => { setOpt("sfx", v); if (v) { sound.unlock(); sound.configure(true, opts.sfxVol ?? 1); sound.play("enter"); } }} label="Effetti sonori" hint="Tick al passaggio, suono tra le sezioni, caricamento del gioco segreto e jingle di benvenuto" />
             {sfxOn && <Rng label="Volume degli effetti" hint="La musica di sottofondo si abbassa da sola quando parla un effetto lungo" v={opts.sfxVol ?? 1} set={(v: number) => { setOpt("sfxVol", v); sound.configure(true, v); sound.play("klick"); }} min={0.05} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
-            <Sw on={opts.vibrate} set={(v: boolean) => setOpt("vibrate", v)} label="Vibrazione" hint="Feedback tattile su segnalibro e voti" />
-            {opts.vibrate && <div className="py-2"><span className="block text-xs font-semibold mb-1.5">Forza della vibrazione</span><Seg v={opts.vib ?? 1} set={(v: number) => setOpt("vib", v)} items={[[0.6, "Leggera"], [1, "Normale"], [1.6, "Forte"]]} /></div>}
+            <Sw on={opts.ambience !== false} set={(v: boolean) => setOpt("ambience", v)} label="Ambiente del podio" hint="Nella sala del podio coperto: il cortile di giorno, i grilli di notte" />
+            {opts.ambience !== false && <Rng label="Volume dell'ambiente" v={opts.ambVol ?? 0.7} set={(v: number) => setOpt("ambVol", v)} min={0} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+            <Sw on={opts.vibrate} set={(v: boolean) => setOpt("vibrate", v)} label="Vibrazione" hint="Un colpo secco a ogni tocco, un doppio clic su interruttori e scelte, più pieno su voti e conferme" />
+            {opts.vibrate && <div className="py-2"><span className="block text-xs font-semibold mb-1.5">Forza della vibrazione</span><Seg v={opts.vib ?? 1} set={(v: number) => { setOpt("vib", v); configureHaptics(true, v); haptic("success"); }} items={[[0.6, "Leggera"], [1, "Normale"], [1.6, "Forte"]]} /></div>}
             {user && <div className="grid grid-cols-2 gap-2 mt-3">
               <button type="button" className="bt" onClick={() => { setOptOpen(false); setTour("film"); }}><Clapperboard size={15} />Rivedi il filmato</button>
               <button type="button" className="bt" onClick={() => { setOptOpen(false); setTour("guide"); }}><Compass size={15} />Rivedi il tour</button>

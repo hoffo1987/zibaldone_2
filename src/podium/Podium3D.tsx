@@ -6,6 +6,7 @@ import { PodiumView, podiumQuality } from "./engine";
 import { STEP_X, STEP_D, STEP_TOP, DAIS, TROPHY_TOP, TROPHY_K, TROPHY_Z, camera, project, type Cam, type CamMotion } from "./stage";
 import { pickSecretPane, WindowSecret } from './secret';
 import { loadDrape } from "./cloth";
+import { setAmbiencePan } from "../ambience";
 import type { SignText } from "./letters";
 
 export type PodiumProps = {
@@ -312,6 +313,8 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
         motion.y = (0.14 * Math.sin(t * 0.09 + 1) - 0.3 * sm.y) * amp;
         motion.z = -0.7 * (0.5 + 0.5 * Math.sin(t * 0.06 - 1.2)) * amp;
         motion.yaw = 0.035 * Math.sin(t * 0.05) * amp + sm.yaw;
+        // l'ambiente del podio coperto segue la stanza che gira: il cortile si sposta appena tra i due lati
+        if (covered) setAmbiencePan(-motion.yaw * 1.4);
         // The left aisle lies outside a portrait crop. Ease it into view only after the secret is revealed.
         const pan = secretSeconds >= 0 ? (narrow ? 1.8 : W - left < 900 ? 1 : 0) : 0;
         sm.secretPan += (pan - sm.secretPan) * (reduced.matches ? 1 : 1 - Math.exp(-Math.min(0.05, (now - drawn) / 1000) * 3));
