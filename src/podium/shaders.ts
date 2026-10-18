@@ -52,7 +52,8 @@ struct Frame {
 };
 // w: sun.w intensità; sunCol.w notte; skyTop.w esposizione; skyHor.w luce minima; wall.w nebbia; wainscot.w pulviscolo;
 //    ceiling.w nuvole; tileA.w tempo; tileB.w fotogramma; stone.w passi della nebbia; darkStone.w fusione temporale;
-//    carpet.w turno delle sonde; res: immagine piena e nebbia
+//    carpet.w turno delle sonde; banner.w luce della sorpresa; frameC.w cantiere (podio coperto); res: immagine piena e
+//    nebbia
 struct Pass { vp: mat4x4f, pos: vec4f, right: vec4f, up: vec4f, fwd: vec4f, misc: vec4f };
 // pos.w tan(fov/2); right.w, up.w centro ottico (px); fwd.w altezza di riferimento (px); misc: -, modo (0 scena,
 // 1 riflesso del pavimento, 2 cubemap), larghezza e altezza del bersaglio (px)
@@ -463,6 +464,29 @@ fn triMarble(p: vec3f, n: vec3f, sc: f32, bump: f32, g: Grads, nOut: ptr<functio
   *nOut = normalize(ax.zyx * w.x + ay.xzy * w.y + az.xyz * w.z);
   return vec2f(tx.r * w.x + ty.r * w.y + tz.r * w.z, tx.a * w.x + ty.a * w.y + tz.a * w.z);
 }
+// i colori dei materiali del cantiere seguono le due atmosfere come il marmo e le pareti (di notte scuri e freddi)
+fn moody(c: vec3f) -> vec3f { return c * mix(vec3f(1.0), vec3f(0.2, 0.25, 0.27), F.sunCol.w); }
+// la tavolozza delle vernici (site.ts, PAINT): bianco caldo, terracotta, verde petrolio, ocra, rosso, giallo, blu, nero
+var<private> PAINTS: array<vec3f, 8> = array<vec3f, 8>(vec3f(0.82, 0.8, 0.74), vec3f(0.46, 0.11, 0.05), vec3f(0.02, 0.2, 0.19), vec3f(0.62, 0.38, 0.07),
+  vec3f(0.5, 0.025, 0.02), vec3f(0.78, 0.5, 0.02), vec3f(0.04, 0.1, 0.32), vec3f(0.02, 0.02, 0.022));
+// direzione della venatura nel mondo (la u della tavola), dalle derivate
+fn woodGrain(g: Grads, n0: vec3f) -> vec3f {
+  let ta = cross(g.py, n0); let tb = cross(n0, g.px); let tu = ta * g.ux.x + tb * g.uy.x;
+  return tu * inverseSqrt(max(dot(tu, tu), 1e-12));
+}
+// impronte di scarpe impolverate da A a B, un passo ogni 36 cm, sinistro e destro alternati; svaniscono camminando
+fn footprints(q: vec2f, A: vec2f, B: vec2f, k0: f32) -> f32 {
+  let L = length(B - A); let D = (B - A) / L; let r = q - A;
+  let along = dot(r, D); let side = dot(r, vec2f(-D.y, D.x));
+  let k = floor(along / 0.36); let lr = select(-1.0, 1.0, (i32(k + k0) & 1) == 0);
+  let fp = vec2f(along - (k + 0.5) * 0.36, side - lr * 0.09 + 0.02 * sin((k + k0) * 1.7));
+  let sole = length((fp - vec2f(0.045, 0.0)) / vec2f(0.075, 0.045)); let heel = length((fp + vec2f(0.1, 0.0)) / vec2f(0.04, 0.038));
+  return (1.0 - smoothstep(0.85, 1.0, min(sole, heel))) * step(0.0, along) * step(along, L) * (1.0 - (along + k0 * 0.36) / 14.0);
+}
+// grinze della tela (altezza, in metri di stoffa): due ottave di rumore allungate in direzioni diverse
+fn crinkle(uv: vec2f) -> f32 {
+  return snoise3(vec3f(uv.x * 2.1 + uv.y * 0.8, uv.y * 3.4 - uv.x * 0.6, 1.0)) * 0.7 + snoise3(vec3f(uv * vec2f(6.3, 4.1), 7.0)) * 0.3;
+}
 fn surfaceAt(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, g: Grads) -> Surf {
   var s: Surf; s.rough = 0.85; s.metal = 0.0; s.n = n0; s.ao = vao; s.kind = 0u; s.sheen = 0.0;
   var nn = n0;
@@ -481,6 +505,18 @@ fn surfaceAt(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, g: Grads) -> Surf
       s.alb = mix(s.alb, tint * 0.35, grout);
       s.n = normalize(vec3f((t.g - 0.5) * 0.03, 1.0, (t.b - 0.5) * 0.03));
       s.rough = mix(0.06, 0.6, grout); s.kind = 1u;
+      if (F.frameC.w > 0.5) {
+        // cantiere: polvere di gesso a chiazze, più fitta sotto il ponteggio e attorno ai cavalletti, e le impronte di
+        // chi è andato avanti e indietro; dove c'è polvere il marmo non luccica
+        let a = p.xz - vec2f(3.0, -5.3); let b = p.xz - vec2f(-4.2, -5.6);
+        let zone = snoise3(vec3f(p.xz * 0.45, 5.0)) * 0.6 + 1.1 * exp(-dot(a, a) / 4.0) + 0.9 * exp(-dot(b, b) / 3.0) - 0.15;
+        var dust = smoothstep(0.0, 0.7, zone) * (0.55 + 0.45 * snoise3(vec3f(p.xz * 7.0, 1.0)));
+        // impronte: dal ponteggio, lungo il corridoio tra la pedana e le colonne, verso il davanti della sala
+        let print = max(footprints(p.xz, vec2f(2.4, -4.4), vec2f(4.95, -2.2), 0.0), footprints(p.xz, vec2f(4.95, -2.2), vec2f(5.0, 5.0), 7.0));
+        dust = max(dust, print * 0.5 * (0.6 + 0.4 * snoise3(vec3f(p.xz * 25.0, 4.0))));
+        s.alb = mix(s.alb, moody(vec3f(0.8, 0.78, 0.74)), saturate(dust));
+        s.rough = mix(s.rough, 0.8, saturate(dust * 1.4));
+      }
     }
     case ${Mat.carpet}u: {
       // velluto con il gallone d'oro
@@ -495,6 +531,20 @@ fn surfaceAt(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, g: Grads) -> Surf
     case ${Mat.wall}u: {
       let t = triMarble(p * 0.55, n0, 0.35, 0.15, g, &nn);
       s.alb = F.wall.rgb * (0.93 + 0.07 * t.y); s.n = nn; s.rough = 0.9;
+      if (F.frameC.w > 0.5) {
+        // rappezzi di stucco ancora da carteggiare: rettangoli più chiari e opachi (uno ogni tanto, nella sua cella di
+        // muro), con i bordi sfumati dalla spatola
+        let wq = vec2f(select(p.x, p.z, abs(n0.x) > 0.5), p.y);
+        let wc = floor(wq / vec2f(1.7, 1.3)); let wf = fract(wq / vec2f(1.7, 1.3)) * vec2f(1.7, 1.3);
+        let wh = vec2f(hash2(wc + 2.0), hash2(wc + 6.0));
+        let half = vec2f(0.25, 0.18) + wh * vec2f(0.4, 0.3); let mid = vec2f(0.85, 0.65) + (vec2f(hash2(wc + 9.0), hash2(wc + 4.0)) - 0.5) * 0.4;
+        let edge = max(abs(wf.x - mid.x) - half.x, abs(wf.y - mid.y) - half.y) + 0.03 * snoise3(vec3f(wq * 6.0, 3.0));
+        let on = step(0.72, hash2(wc + 13.0)) * (1.0 - smoothstep(5.5, 6.5, p.y));
+        let spack = on * (1.0 - smoothstep(-0.04, 0.0, edge));
+        let halo = on * (1.0 - smoothstep(0.0, 0.12, edge)) * (1.0 - spack) * 0.5;
+        s.alb = mix(s.alb, moody(vec3f(0.88, 0.86, 0.82)), spack * 0.85 + halo * 0.35);
+        s.n = normalize(mix(s.n, n0, spack));
+      }
     }
     case ${Mat.coffer}u: { s.alb = F.ceiling.rgb * 0.6; }
     case ${Mat.ceiling}u: { s.alb = F.ceiling.rgb; s.rough = 0.7; }
@@ -548,6 +598,96 @@ fn surfaceAt(m: u32, p: vec3f, n0: vec3f, uv: vec2f, vao: f32, g: Grads) -> Surf
       s.alb = mix(s.alb, METALS[0] * (0.75 + 0.25 * t.r), gold); s.metal = gold * 0.85; s.rough = mix(s.rough, 0.45, gold);
       s.n = normalize(n0 + vec3f((t.g - 0.5), 0.0, (t.b - 0.5)) * 0.4);
     }
+    case ${Mat.cloth}u: {
+      // tela di cotone grezzo: trama fitta, grinze fini (rumore fissato alla stoffa, in metri), qualche macchia di
+      // vernice ormai asciutta e la polvere posata sulle parti in piano
+      let sc = vec2f(24.0);
+      let t = textureSampleGrad(fabricTex, anisoSamp, uv * sc, g.ux * sc, g.uy * sc);
+      let e = vec2f(0.012, 0.0);
+      let c0 = crinkle(uv); let cu = crinkle(uv + e.xy); let cv = crinkle(uv + e.yx);
+      // la base tangente dalle derivate (come per i modelli importati): u e v della stoffa nello spazio del mondo
+      let ta = cross(g.py, n0); let tb = cross(n0, g.px);
+      let tu = ta * g.ux.x + tb * g.uy.x; let tv = ta * g.ux.y + tb * g.uy.y;
+      let inv = inverseSqrt(max(max(dot(tu, tu), dot(tv, tv)), 1e-12));
+      let bump = vec2f(cu - c0, cv - c0) / e.x * 0.01 + (t.gb - 0.5) * 0.3;
+      s.n = normalize(n0 - (tu * bump.x + tv * bump.y) * inv);
+      let fw = max(length(g.ux) + length(g.uy), 1e-5);
+      var alb = vec3f(0.74, 0.68, 0.56) * (0.86 + 0.14 * t.r) * (0.95 + 0.05 * c0);
+      // macchie: chiazze irregolari e schizzi a gocce, nei colori di cantiere
+      let blot = snoise3(vec3f(uv * 0.5, 17.0)) + 0.4 * snoise3(vec3f(uv * 2.6, 4.0));
+      let stain = smoothstep(0.82, 0.84 + fw * 2.0, blot);
+      // gli schizzi cadono a gruppi (dove si è lavorato con il pennello), ogni gruppo del suo colore
+      let zone = snoise3(vec3f(uv * 0.3, 23.0));
+      let cell = floor(uv * 11.0); let r = hash2(cell);
+      let rad = 0.003 + 0.01 * hash2(cell + 3.0); let off = vec2f(hash2(cell + 5.0), hash2(cell + 8.0)) * 0.6 + 0.2;
+      let drop = step(0.9 - 0.25 * smoothstep(0.3, 0.7, zone), r) * step(0.3, zone) * (1.0 - smoothstep(rad - fw, rad + fw, length(fract(uv * 11.0) - off) / 11.0));
+      let pc = PAINTS[u32(floor(snoise3(vec3f(uv * 0.12, 31.0)) * 2.0 + 2.0)) % 4u];
+      alb = mix(alb, pc, saturate(stain * 0.7 + drop * 0.9));
+      alb = mix(alb, vec3f(0.8, 0.78, 0.74), 0.16 * saturate(n0.y) * (0.5 + 0.5 * snoise3(vec3f(uv * 1.7, 2.0))));
+      // di notte la tela chiara resta un po' più leggibile del marmo
+      s.alb = alb * mix(vec3f(1.0), vec3f(0.3, 0.36, 0.4), F.sunCol.w); s.rough = mix(0.93, 0.5, saturate(stain + drop)); s.sheen = 0.35 * (1.0 - stain);
+    }
+    case ${Mat.wood}u: {
+      // abete grezzo: venatura lungo la tavola (u), anelli spostati dal rumore, nodi radi, schizzi di vernice
+      let w = uv.y * 11.0 + 0.9 * snoise3(vec3f(uv.x * 0.35, uv.y * 2.0, 1.0)) + 0.25 * snoise3(vec3f(uv.x * 3.0, uv.y * 9.0, 5.0));
+      let fwv = max(length(vec2f(g.ux.y, g.uy.y)) * 11.0, 1e-4);
+      let ring = smoothstep(0.35 - fwv, 0.65 + fwv, abs(fract(w) * 2.0 - 1.0));
+      let streak = 0.5 + 0.5 * snoise3(vec3f(uv.x * 0.8, uv.y * 40.0, 3.0));
+      var alb = mix(vec3f(0.5, 0.33, 0.17), vec3f(0.34, 0.2, 0.09), ring * 0.55 + streak * 0.2);
+      alb *= 0.85 + 0.15 * snoise3(vec3f(uv * vec2f(0.6, 3.0), 9.0));
+      let cell = floor(uv * vec2f(5.0, 14.0)); let r = hash2(cell + 2.0);
+      let dd = length((fract(uv * vec2f(5.0, 14.0)) - 0.5) / vec2f(5.0, 14.0));
+      let fw = max(length(g.ux) + length(g.uy), 1e-5);
+      let spl = step(0.86, r) * (1.0 - smoothstep(0.006 - fw, 0.006 + 0.01 * hash2(cell) + fw, dd));
+      alb = mix(alb, PAINTS[u32(r * 13.0) % 4u], spl);
+      s.alb = moody(alb); s.rough = mix(0.78, 0.45, spl);
+      s.n = normalize(n0 + cross(n0, woodGrain(g, n0)) * (streak - 0.5) * 0.12);
+    }
+    case ${Mat.steel}u: {
+      // acciaio zincato: grigio a chiazze, opaco, un po' sporco di calce in basso
+      let mot = snoise3(p * 6.0) * 0.5 + snoise3(p * 23.0) * 0.25;
+      var alb = vec3f(0.56, 0.57, 0.58) * (0.85 + 0.15 * mot);
+      alb = mix(alb, vec3f(0.78, 0.76, 0.72), 0.35 * saturate(1.0 - p.y * 1.5) * saturate(mot + 0.6));
+      s.alb = moody(alb); s.metal = 0.85; s.rough = 0.38 + 0.12 * mot; s.kind = 2u;
+    }
+    case ${Mat.bucket}u: {
+      // secchio di plastica bianca: etichetta a fascia e colature del colore che contiene (indice nella parte intera di v)
+      let k = u32(floor(uv.y)); let v = fract(uv.y);
+      var alb = vec3f(0.78, 0.78, 0.75);
+      let fw = max(length(vec2f(g.ux.y, g.uy.y)), 1e-4);
+      let label = smoothstep(0.32 - fw, 0.32 + fw, v) * (1.0 - smoothstep(0.7 - fw, 0.7 + fw, v));
+      alb = mix(alb, mix(vec3f(0.05, 0.14, 0.32), PAINTS[k % 8u], 0.35), label * 0.9);
+      let col = floor(uv.x * 30.0); let h = hash2(vec2f(col, f32(k)));
+      let drip = step(0.45, h) * smoothstep(1.0 - (0.12 + 0.55 * hash2(vec2f(col, 7.0))) - fw * 2.0, 1.0 - (0.12 + 0.55 * hash2(vec2f(col, 7.0))), v)
+        * (1.0 - smoothstep(0.3, 0.5, abs(fract(uv.x * 30.0) - 0.5) * 2.0 + (1.0 - v) * 0.2));
+      alb = mix(alb, PAINTS[k % 8u], saturate(drip));
+      s.alb = moody(alb); s.rough = mix(0.42, 0.3, drip);
+    }
+    case ${Mat.paint}u: {
+      // vernice (anche lucida e bagnata dentro i secchi) e metallo verniciato: il colore nella parte intera di v
+      s.alb = moody(PAINTS[u32(floor(uv.y)) % 8u]); s.rough = 0.32;
+    }
+    case ${Mat.cardboard}u: {
+      // cartone ondulato: le onde sotto la carta, le macchie di umido e d'unto
+      let mot = snoise3(p * 3.0) * 0.5 + snoise3(p * 11.0) * 0.25;
+      s.alb = moody(vec3f(0.44, 0.29, 0.15) * (0.88 + 0.12 * mot)); s.rough = 0.9;
+    }
+    case ${Mat.cone}u: {
+      // cono stradale arancione con le due fasce bianche rifrangenti
+      let fw = max(length(g.px), length(g.py));
+      let band = (smoothstep(0.34 - fw, 0.34 + fw, p.y) - smoothstep(0.44 - fw, 0.44 + fw, p.y)) + (smoothstep(0.51 - fw, 0.51 + fw, p.y) - smoothstep(0.57 - fw, 0.57 + fw, p.y));
+      let dirt = saturate(1.0 - p.y * 4.0) * 0.4;
+      s.alb = moody(mix(mix(vec3f(0.85, 0.16, 0.015), vec3f(0.88, 0.88, 0.86), band), vec3f(0.25, 0.2, 0.15), dirt)); s.rough = mix(0.45, 0.25, band);
+    }
+    case ${Mat.tape}u: {
+      // nastro bianco e rosso a strisce oblique (u: metri lungo il nastro, v: di traverso)
+      let fw = max(abs(g.ux.x) + abs(g.uy.x), 1e-4) / 0.16;
+      let x = fract((uv.x + uv.y * 0.075) / 0.16);
+      let red = smoothstep(0.5 - fw, 0.5 + fw, x) * (1.0 - smoothstep(1.0 - fw, 1.0, x)) + (1.0 - smoothstep(0.0, fw, x));
+      s.alb = moody(mix(vec3f(0.86, 0.86, 0.84), vec3f(0.62, 0.02, 0.02), saturate(red))); s.rough = 0.4; s.sheen = 0.3;
+    }
+    case ${Mat.masking}u: { s.alb = moody(vec3f(0.74, 0.64, 0.42) * (0.92 + 0.08 * snoise3(p * 30.0))); s.rough = 0.8; }
+    case ${Mat.rubber}u: { s.alb = moody(vec3f(0.03, 0.03, 0.032)); s.rough = 0.62; }
     case ${Mat.cupGold}u, ${Mat.cupSilver}u, ${Mat.cupBronze}u: { s.alb = METALS[m - ${Mat.cupGold}u]; s.metal = 1.0; s.rough = 0.1; s.kind = 2u; }
     case ${Mat.gold}u, ${Mat.silver}u, ${Mat.bronze}u: {
       let k = m - ${Mat.gold}u;
@@ -601,7 +741,8 @@ fn shadeSurface(s: Surf, m: u32, p: vec3f, n0: vec3f, eye: vec3f, px: vec2f, kr:
   var vis = 0.0;
   if (ndl > 0.0 && dot(n0, L) > -0.05) { vis = sunLight(p + n0 * 0.012, P.misc.y == 0.0); }
   let light = F.sunCol.rgb * F.sun.w * vis * ndl;
-  let ao = s.ao * contactAO(p, n0);
+  // il telo ha la sua occlusione (pieghe e orlo): l'ombra di contatto della pedana lo scurirebbe tutto dove ci si posa
+  let ao = s.ao * select(contactAO(p, n0), 1.0, m == ${Mat.cloth}u);
   // During the reveal, lift existing bounced light around the alcove on every surface,
   // including the column and floor. Its direction and colour still come from the room probes.
   let alcove = p - vec3f(-5.5, 3.0, -2.8);

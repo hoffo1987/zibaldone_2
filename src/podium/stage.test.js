@@ -1,6 +1,7 @@
 import { WINDOW, ROOM, STEP_X, STEP_TOP, STEP_D, TROPHY_TOP, CARPET, LIGHT_PLANE, LIGHT_DEPTH, Mat, camera, project, viewProj, celestial, lightMatrix, moodAt, DAY, NIGHT } from "./stage";
 import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, combineMSShader, podiumQuality, GI_PROBES } from "./shaders";
 import { buildScene, VERTEX_FLOATS } from "./meshes";
+import { decodeDrape, encodeDrape, drape, podiumShapes, TELO } from "./cloth";
 import { tierFor, capTier } from "./device";
 
 // dentro il vano del finestrone (rettangolo con l'arco in cima), lontano dal telaio
@@ -94,10 +95,14 @@ test("the light map follows the light from the window plane, and the camera matr
   }
 });
 
+// the baked cloth over the podium (public/podium/telo.bin)
+const fs = require("fs"), path = require("path");
+const telo = () => { const b = fs.readFileSync(path.join(__dirname, "../../public/podium/telo.bin")); return decodeDrape(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); };
+
 test("the hall is built from clean meshes: finite vertices, valid indices, outward winding, known materials", () => {
   const mats = new Set(Object.values(Mat));
-  for (const mobile of [false, true]) {
-    const { vertices, indices, ranges } = buildScene(mobile);
+  for (const [mobile, site] of [[false, null], [true, null], [false, { cloth: telo() }], [true, { cloth: telo() }]]) {
+    const { vertices, indices, ranges } = buildScene(mobile, site);
     const n = vertices.length / VERTEX_FLOATS;
     expect(Number.isInteger(n)).toBe(true);
     expect(indices.length % 3).toBe(0);
@@ -112,13 +117,15 @@ test("the hall is built from clean meshes: finite vertices, valid indices, outwa
       if (!(vertices[o + 9] > 0 && vertices[o + 9] <= 1)) wrong.ao++;
       if (vertices[o + 1] < -1e-6) wrong.below++; // nulla sotto il pavimento (il riflesso planare lo presuppone)
     }
-    expect(wrong).toEqual({ normal: 0, material: 0, ao: 0, below: 0 });
+    expect([mobile, !!site, wrong]).toEqual([mobile, !!site, { normal: 0, material: 0, ao: 0, below: 0 }]);
     // i gruppi coprono tutti i triangoli, in ordine, e il pavimento è il primo (escluso dal riflesso)
     const list = Object.values(ranges); let next = 0;
     for (const [first, count] of list) { expect(first).toBe(next); next += count; }
     expect(next).toBe(indices.length);
     expect(ranges.floor[0]).toBe(0);
-    for (const k of ["room", "window", "columns", "podium", "trophies", "banners"]) expect(ranges[k][1]).toBeGreaterThan(0);
+    // covered: the cloth and the works take the place of the trophies
+    for (const k of ["room", "window", "columns", "podium", "banners", ...(site ? ["cloth", "site"] : ["trophies"])]) expect(ranges[k][1]).toBeGreaterThan(0);
+    if (site) expect(ranges.trophies).toBeUndefined();
     // avvolgimento antiorario visto dal lato della normale (scarto delle facce posteriori)
     let bad = 0;
     for (let t = 0; t < indices.length; t += 3) {
@@ -130,7 +137,7 @@ test("the hall is built from clean meshes: finite vertices, valid indices, outwa
       if (g[0] * nn[0] + g[1] * nn[1] + g[2] * nn[2] < 0) bad++;
     }
     expect(bad).toBe(0);
-    if (!mobile) expect(n).toBeLessThan(400000);
+    if (!mobile) expect(n).toBeLessThan(site ? 450000 : 400000);
   }
 });
 
@@ -159,4 +166,39 @@ test("while the camera breathes and turns, the podium stays in the free area of 
       }
     });
   }
+});
+
+test("the cloth covers the whole podium without passing through it, and the bake is repeatable", () => {
+  const d = telo();
+  expect(d.nx * d.nz).toBeGreaterThan(10000);
+  expect(d.spacing).toBeCloseTo(TELO.spacing, 6);
+  // every point of the three step tops has cloth above it (towards the highest step the cloth bridges the drop)
+  STEP_X.forEach((x, i) => {
+    for (let u = -0.9; u <= 0.9; u += 0.3) for (let w = -0.75; w <= 0.75; w += 0.25) {
+      let above = -1;
+      for (let p = 0; p < d.nx * d.nz; p++) if (Math.abs(d.pos[p * 3] - x - u) < 0.08 && Math.abs(d.pos[p * 3 + 2] - w) < 0.08) above = Math.max(above, d.pos[p * 3 + 1]);
+      expect(above).toBeGreaterThan(STEP_TOP[i]);
+      // resting on the middle of the highest step and on the outer half of the lower ones
+      const rests = i === 0 ? Math.abs(u) < 0.4 : u * x > 0 && Math.abs(u) >= 0.3;
+      expect(above).toBeLessThan(rests ? STEP_TOP[i] + 0.12 : STEP_TOP[0] + 0.12);
+    }
+  });
+  // no point of the cloth inside the steps, the dais or the floor
+  const shapes = podiumShapes(), hit = { d: 0, gx: 0, gy: 0, gz: 0 };
+  let inside = 0;
+  for (let p = 0; p < d.nx * d.nz; p++) {
+    const [x, y, z] = [d.pos[p * 3], d.pos[p * 3 + 1], d.pos[p * 3 + 2]];
+    if (y < 0.005) inside++;
+    for (const sh of shapes) { sh.dist(x, y, z, hit); if (hit.d < 0.005) { inside++; break; } }
+  }
+  expect(inside).toBe(0);
+  // the file keeps the positions to a tenth of a millimetre or better
+  const again = decodeDrape(encodeDrape(d));
+  let err = 0; for (let k = 0; k < d.pos.length; k++) err = Math.max(err, Math.abs(again.pos[k] - d.pos[k]));
+  expect(err).toBeLessThan(1e-4);
+  // a quick small throw: same input, same cloth (the bake is deterministic), and it comes to rest on the podium
+  const small = { ...TELO, spacing: 0.3, seconds: 1.5 };
+  const a = drape(small), b = drape(small);
+  expect(Array.from(a.pos)).toEqual(Array.from(b.pos));
+  expect(Math.max(...Array.from(a.pos).filter((_, k) => k % 3 === 1))).toBeLessThan(STEP_TOP[0] + 0.2);
 });

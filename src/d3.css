@@ -161,3 +161,44 @@
 .podium3d-plate.r1 .pdm-card{border-color:color-mix(in srgb,var(--am) 70%,transparent);box-shadow:0 18px 44px -20px color-mix(in srgb,var(--am) 45%,rgba(0,0,0,.5))}
 .pdm-rank{font-weight:800;font-size:13px;letter-spacing:.04em;color:var(--mu)}.podium3d-plate.r1 .pdm-rank{color:var(--am)}
 .lite .pdm-card{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--pn)}
+
+/* podio coperto: il cartello "lavori in corso" pende nella sala da due fili. Ondeggia piano come un pendolo (periodi
+   diversi tra oscillazione e respiro: il moto non si ripete mai uguale), la clessidra si gira con calma, i puntini
+   aspettano, il nastro a strisce scorre; con le animazioni ridotte resta fermo */
+.podium-sign{position:absolute;left:0;top:0;z-index:3;pointer-events:none;will-change:transform;opacity:0;transition:opacity 1.2s ease .3s}
+.podium-sign.on,.podium-sign-flat{opacity:1}
+.podium-sign-turn{perspective:900px;transform:rotateY(var(--yaw,0deg))}
+.podium-sign-swing{position:relative;transform-origin:50% -240px;animation:podium-sign-swing 9.5s cubic-bezier(.45,0,.55,1) infinite alternate}
+.podium-sign-string{position:absolute;bottom:calc(100% - 12px);left:30px;width:1.5px;height:240px;border-radius:1px;background:linear-gradient(transparent,color-mix(in srgb,var(--ink) 50%,transparent) 55%);pointer-events:none}
+.podium-sign-string.r{left:auto;right:30px}
+.podium-sign-string::after{content:"";position:absolute;left:50%;bottom:-3px;width:7px;height:7px;border-radius:50%;transform:translateX(-50%);border:1.5px solid color-mix(in srgb,var(--ink) 55%,transparent);background:var(--pn)}
+.podium-sign-card{position:relative;box-sizing:border-box;width:min(370px,calc(100vw - 56px));padding:16px 20px 20px;border-radius:18px;text-align:left;color:var(--ink);background:color-mix(in srgb,var(--pn) 90%,transparent);border:1px solid color-mix(in srgb,var(--am) 40%,var(--ln));-webkit-backdrop-filter:blur(16px) saturate(1.3);backdrop-filter:blur(16px) saturate(1.3);box-shadow:0 34px 70px -30px rgba(0,0,0,.65),0 10px 24px -14px rgba(0,0,0,.35);overflow:hidden;animation:podium-sign-breathe 6.7s ease-in-out infinite}
+.podium-sign-kicker{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--am)}
+.podium-sign-glass{display:inline-flex;animation:podium-sign-glass 7s cubic-bezier(.65,0,.35,1) infinite}
+.podium-sign-dots{display:inline-flex;gap:3px;margin-left:-3px;align-self:flex-end;padding-bottom:4px}
+.podium-sign-dots i{width:3px;height:3px;border-radius:50%;background:currentColor;opacity:.25;animation:podium-sign-dot 2.4s ease-in-out infinite}
+.podium-sign-dots i:nth-child(2){animation-delay:.4s}.podium-sign-dots i:nth-child(3){animation-delay:.8s}
+.podium-sign-title{margin:9px 0 0;font-size:22px;line-height:1.18;font-weight:800;letter-spacing:-.01em;text-wrap:balance}
+.podium-sign-body{margin:7px 0 0;font-size:14px;line-height:1.45;color:var(--mu);text-wrap:pretty}
+.podium-sign-tape{position:absolute;left:0;right:0;bottom:0;height:7px;overflow:hidden}
+.podium-sign-tape::before{content:"";position:absolute;top:0;bottom:0;left:-40px;right:-40px;background:repeating-linear-gradient(-45deg,var(--am) 0 10px,color-mix(in srgb,var(--ink) 88%,transparent) 10px 20px);animation:podium-sign-tape 3.2s linear infinite}
+.lite .podium-sign-card{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--pn)}
+@keyframes podium-sign-swing{0%{transform:rotate(-1.3deg)}55%{transform:rotate(.4deg)}100%{transform:rotate(1.4deg)}}
+@keyframes podium-sign-breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes podium-sign-glass{0%,72%{transform:rotate(0)}88%,100%{transform:rotate(180deg)}}
+@keyframes podium-sign-dot{0%,100%{opacity:.25}35%{opacity:1}}
+@keyframes podium-sign-tape{to{transform:translateX(28.284px)}}
+.nomotion .podium-sign *,.nomotion .podium-sign *::before{animation:none!important}
+@media (prefers-reduced-motion:reduce){.podium-sign *,.podium-sign *::before{animation:none!important}}
+/* senza WebGPU: il cartello appeso sopra il disegno del podio coperto */
+.podium-cover{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;max-width:560px;margin:0 auto;padding:150px 20px 22px;overflow:hidden;--pc-hi:#f1e8d6;--pc-lo:#cdbfa2;--pc-fold:rgba(110,92,60,.28)}
+.root.dark .podium-cover{--pc-hi:#4a4a44;--pc-lo:#2b2c29;--pc-fold:rgba(0,0,0,.35)}
+.podium-cover .podium-sign{position:relative;z-index:1}
+.podium-cover .podium-sign-string{height:150px}
+.podium-cover-art{display:block;width:100%;max-width:440px;height:auto}
+@media (max-width:767px){
+.podium-sign-card{width:min(330px,calc(100vw - 56px));padding:14px 17px 18px}
+.podium-sign-title{font-size:19px}
+.podium-sign-body{font-size:13px}
+.podium-cover{padding-top:120px}.podium-cover .podium-sign-string{height:120px}
+}

@@ -15,5 +15,5 @@ Queste istruzioni valgono per ogni AI, chat e collaboratore che lavora nel repos
 ## Consegna e mobile
 
 - Completare i controlli appropriati e fare sempre push su `main`, come richiesto dal proprietario.
-- Su mobile mantenere l'ordine Home, Scrivi, Scritti, Altro. Scritti è una sezione unica: al suo interno si passa tra Diario e Scritti completi (su PC le due voci sono sotto Scritti nella barra laterale). I miei scritti è dentro Altro; per gli amministratori ci sono anche Podio e Autori.
+- Su mobile mantenere l'ordine Home, Scrivi, Scritti, Altro. Scritti è una sezione unica: al suo interno si passa tra Diario e Scritti completi (su PC le due voci sono sotto Scritti nella barra laterale). I miei scritti e Podio sono dentro Altro (chi non amministra vede il podio coperto dal telo fino ai giorni della presentazione); per gli amministratori c'è anche Autori.
 - Verificare le modifiche di layout nell'app completa, compresi apertura, scorrimento e chiusura degli scritti; la sola anteprima della barra non basta.

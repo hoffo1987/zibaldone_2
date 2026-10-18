@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { PodiumScene, PodiumSlot } from "../PodiumStage";
+import { PodiumCover, PodiumScene, PodiumSign, PodiumSlot } from "../PodiumStage";
+import { nextReveal, revealCopy } from "../podiumReveal";
+import { allowSoftwareAdapter } from "../logo3d/engine";
 import "../styles.css";
 import "../ui.css";
 import "../d3.css";
@@ -9,12 +11,19 @@ import "../d3.css";
 // titolo, barra del mese, spazio del podio) con tre vincitori finti. ?dark per la notte; ?podiohud e ?podiotier come
 // nell'app
 const q = new URLSearchParams(window.location.search);
+// ?software: anche con la GPU emulata sulla CPU (prove automatiche senza scheda video)
+if (q.has("software")) allowSoftwareAdapter(true);
 const WINNERS = [
   { title: "Il Primo mese del quinto anno", who: "Stefano Russotto", stars: 4 },
   { title: "Lettera a chi resta", who: "Giulia Ferri", stars: 4 },
   { title: "Le scale di via Po", who: "Marco Lenti", stars: 3 },
 ];
 const stars = (n: number) => "★".repeat(n) + "☆".repeat(5 - n);
+
+// ?coperto: il podio non ancora visibile, sotto il telo e in mezzo al cantiere, con il cartello (?oggi=AAAA-MM-GG per
+// provare le date)
+const covered = q.has("coperto");
+const sign = <PodiumSign {...revealCopy(nextReveal(q.get("oggi") ? new Date(`${q.get("oggi")}T12:00`) : new Date()))} />;
 
 function Preview() {
   const [dark, setDark] = useState(q.has("dark"));
@@ -42,14 +51,14 @@ function Preview() {
       <main className="md:ml-60 px-4 md:px-10 pt-10 pb-24 relative z-10">
         <div className="max-w-6xl mx-auto">
           <h1 className="hd text-5xl font-bold mb-8">Podio del mese</h1>
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+          {!covered && <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
             <span className="hd text-xl font-bold">Ottobre 2026</span>
             <button className="bt">Valuta ora</button>
-          </div>
-          {failed ? <p className="mu">WebGPU non è partito: nell'app qui c'è il podio semplice.</p> : <PodiumSlot list={list} />}
+          </div>}
+          {failed ? (covered ? <PodiumCover sign={sign} /> : <p className="mu">WebGPU non è partito: nell'app qui c'è il podio semplice.</p>) : <PodiumSlot list={covered ? undefined : list} />}
         </div>
       </main>
-      {!failed && <PodiumScene dark={dark} plates={plates} onFail={() => setFailed(true)} />}
+      {!failed && <PodiumScene dark={dark} plates={covered ? [] : plates} covered={covered} sign={covered ? sign : undefined} onFail={() => setFailed(true)} />}
     </div>
   );
 }

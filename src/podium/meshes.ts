@@ -2,6 +2,8 @@
 // stendardi), scatole con gli spigoli arrotondati, la parete di fondo con il vano ad arco, telaio, montanti, modanature,
 // cassettoni. Ogni vertice: posizione, normale, uv, materiale, occlusione d'ambiente (cavità di scanalature e modanature).
 import { ROOM, WINDOW, STEP_X, STEP_H, STEP_D, DAIS, TROPHY_K, COL_X, COL_Z, COL_TOP, CARPET, BANNERS, Mat } from "./stage";
+import type { Drape } from "./cloth";
+import { buildSite, clothMesh, ROLL } from "./site";
 
 export const VERTEX_FLOATS = 10; // pos 3, nrm 3, uv 2, materiale, occlusione
 type V3 = [number, number, number];
@@ -27,6 +29,29 @@ export class MeshBuilder {
     if (gx * nx + gy * ny + gz * nz < 0) this.idx.push(a, c, b); else this.idx.push(a, b, c);
   }
   quad(a: number, b: number, c: number, d: number) { this.tri(a, b, c); this.tri(a, c, d); }
+  // i vertici da start in poi, girati da R (3×3 per righe) e spostati in t (una rotazione non cambia l'avvolgimento)
+  transform(start: number, R: number[], t: number[]) {
+    const v = this.v;
+    for (let o = start * VERTEX_FLOATS; o < v.length; o += VERTEX_FLOATS) {
+      const px = v[o], py = v[o + 1], pz = v[o + 2], nx = v[o + 3], ny = v[o + 4], nz = v[o + 5];
+      for (let r = 0; r < 3; r++) {
+        v[o + r] = R[r * 3] * px + R[r * 3 + 1] * py + R[r * 3 + 2] * pz + t[r];
+        v[o + 3 + r] = R[r * 3] * nx + R[r * 3 + 1] * ny + R[r * 3 + 2] * nz;
+      }
+    }
+  }
+  // nessun vertice da start in poi sotto il pavimento (le gambe inclinate finiscono tagliate in piano, come appoggiate)
+  clampFloor(start: number) {
+    for (let o = start * VERTEX_FLOATS + 1; o < this.v.length; o += VERTEX_FLOATS) this.v[o] = Math.max(0, this.v[o]);
+  }
+  // nuove uv per i vertici da start in poi, dalla posizione e dalle uv di prima
+  mapUV(start: number, f: (p: V3, uv: [number, number]) => [number, number]) {
+    const v = this.v;
+    for (let o = start * VERTEX_FLOATS; o < v.length; o += VERTEX_FLOATS) {
+      const uv = f([v[o], v[o + 1], v[o + 2]], [v[o + 6], v[o + 7]]);
+      v[o + 6] = uv[0]; v[o + 7] = uv[1];
+    }
+  }
 
   // superficie parametrica f(u, v) con u, v in [0, 1]; normali dalle derivate (verso: side = ±1)
   surface(nu: number, nv: number, f: (u: number, v: number) => V3, m: number, o: { side?: number; ao?: (u: number, v: number) => number; uv?: (u: number, v: number) => [number, number]; wrapU?: boolean } = {}) {
@@ -134,13 +159,15 @@ export class MeshBuilder {
 
 // ---------- la sala ----------
 export type SceneMesh = { vertices: Float32Array; indices: Uint32Array; ranges: Record<string, [number, number]> };
+// il cantiere: il podio coperto dal telo (al posto delle coppe) e la sala in preparazione attorno (site.ts)
+export type Site = { cloth: Drape };
 
 const openHalf = (y: number) => {
   if (y < WINDOW.y0 || y > WINDOW.ya + WINDOW.r) return 0;
   return y <= WINDOW.ya ? WINDOW.r : Math.sqrt(Math.max(0, WINDOW.r ** 2 - (y - WINDOW.ya) ** 2));
 };
 
-export function buildScene(mobile: boolean): SceneMesh {
+export function buildScene(mobile: boolean, site: Site | null = null): SceneMesh {
   const B = new MeshBuilder(), ranges: Record<string, [number, number]> = {};
   const mark = (name: string, fn: () => void) => { const a = B.idx.length; fn(); ranges[name] = [a, B.idx.length - a]; };
   const SEG = mobile ? 40 : 72;
@@ -149,7 +176,9 @@ export function buildScene(mobile: boolean): SceneMesh {
   // pavimento e tappeto (fuori dai riflessi planari: sono il piano che riflette)
   mark("floor", () => {
     B.surface(1, 1, (u, v) => [-RX + 2 * RX * u, 0, RB + (RF - RB) * v], Mat.floor, { side: -1, uv: (u, v) => [u, v] });
-    B.box([0, 0.012, (CARPET.z0 + RF) / 2], [CARPET.hw, 0.012, (RF - CARPET.z0) / 2], 0.008, Mat.carpet, 2);
+    // nel cantiere il primo tratto del tappeto è arrotolato
+    const z0 = site ? ROLL.z + ROLL.r * 0.6 : CARPET.z0;
+    B.box([0, 0.012, (z0 + RF) / 2], [CARPET.hw, 0.012, (RF - z0) / 2], 0.008, Mat.carpet, 2);
   });
 
   mark("room", () => {
@@ -263,7 +292,10 @@ export function buildScene(mobile: boolean): SceneMesh {
     });
   });
 
-  mark("trophies", () => {
+  if (site) {
+    mark("cloth", () => clothMesh(B, site.cloth, Mat.cloth));
+    mark("site", () => buildSite(B, mobile, site.cloth));
+  } else mark("trophies", () => {
     // coppe tornite: piede, stelo con il nodo, calice con il labbro e l'interno; due anse
     STEP_X.forEach((x, i) => {
       const k = TROPHY_K[i], top = DAIS + STEP_H[i], z = -0.15, m = Mat.cupGold + i;
@@ -282,17 +314,31 @@ export function buildScene(mobile: boolean): SceneMesh {
   });
 
   mark("banners", () => {
-    // stendardi: asta con i pomoli e stoffa con le pieghe e la coda a rondine
+    // stendardi: asta con i pomoli e stoffa con le pieghe e la coda a rondine. Nel cantiere quello di destra è
+    // arrotolato fin sotto l'emblema e legato con due fasce: il rotolo ha la v dell'orlo, così ondeggia con la stoffa
     for (const b of BANNERS) {
       const cx = (b.x0 + b.x1) / 2, hw = (b.x1 - b.x0) / 2, zc = RB + 0.32;
+      const full = b.y1 - b.y0, drop = site && b.x0 > 0 ? 3.0 : full, vEnd = drop / full;
       B.tube((t) => [b.x0 - 0.15 + (b.x1 - b.x0 + 0.3) * t, b.y1 + 0.05, zc], 0.03, Mat.bronze, 8, 10);
       for (const s of [-1, 1]) B.lathe(cx + s * (hw + 0.2), zc, [[[0.0, b.y1 - 0.03], [0.05, b.y1 - 0.01], [0.065, b.y1 + 0.05], [0.05, b.y1 + 0.11], [0.0, b.y1 + 0.13]]], Mat.bronze, 20);
-      B.surface(mobile ? 24 : 40, mobile ? 40 : 72, (u, v) => {
-        const x = b.x0 + 2 * hw * u, tail = 0.75 * (1 - Math.abs(u * 2 - 1));
-        const y = b.y1 - (b.y1 - b.y0 - tail * (v > 0.9 ? (v - 0.9) * 10 : 0)) * v;
+      const cloth = (u: number, v: number): V3 => {
+        const x = b.x0 + 2 * hw * u, tail = drop < full ? 0 : 0.75 * (1 - Math.abs(u * 2 - 1));
+        const y = b.y1 - (full - tail * (v > 0.9 ? (v - 0.9) * 10 : 0)) * v;
         const fold = Math.sin(u * TAU * 3.5) * 0.045 * (0.5 + 0.5 * v) + Math.sin(u * TAU * 7 + 1) * 0.012;
-        return [x, Math.max(y, b.y0 + tail * 0.0), zc + 0.03 + fold + 0.06 * Math.sin(v * Math.PI) * 0.4];
-      }, Mat.banner, { side: -1, uv: (u, v) => [u, v] });
+        return [x, Math.max(y, b.y0), zc + 0.03 + fold + 0.06 * Math.sin(v * Math.PI) * 0.4];
+      };
+      B.surface(mobile ? 24 : 40, Math.round((mobile ? 40 : 72) * vEnd), (u, v) => cloth(u, v * vEnd), Mat.banner, { side: -1, uv: (u, v) => [u, v * vEnd] });
+      if (drop < full) {
+        const R = 0.12, yr = b.y1 - drop - R * 0.9, along = (u: number) => [u, vEnd] as [number, number];
+        let start = B.count;
+        B.tube((t) => [b.x0 - 0.01 + (2 * hw + 0.02) * t, yr, cloth(t, vEnd)[2] + R * 0.6], R, Mat.banner, mobile ? 12 : 24, mobile ? 16 : 24);
+        B.mapUV(start, (p) => along((p[0] - b.x0) / (2 * hw)));
+        for (const s of [0.24, 0.76]) {
+          start = B.count;
+          B.tube((t) => [b.x0 + 2 * hw * s, yr + Math.cos(t * TAU) * (R + 0.012), zc + 0.03 + R * 0.6 + Math.sin(t * TAU) * (R + 0.012)], 0.014, Mat.banner, 24, 6);
+          B.mapUV(start, () => along(s));
+        }
+      }
     }
   });
 

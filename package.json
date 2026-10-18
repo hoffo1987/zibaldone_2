@@ -42,6 +42,7 @@
     "preview:egg": "node scripts/preview-egg.cjs",
     "preview:tour": "node scripts/preview-tour.cjs",
     "preview:podium": "node scripts/preview-podium.cjs",
+    "podium:cloth": "node scripts/bake-podium-cloth.cjs",
     "audio:build": "node scripts/build-audio.cjs",
     "typecheck:egg": "tsc --project scripts/tsconfig.egg.json",
     "typecheck": "tsc --noEmit",

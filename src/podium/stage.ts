@@ -3,7 +3,13 @@
 // Unità: metri; y in alto, la camera guarda verso -z.
 
 // codici dei materiali (attributo dei vertici, letto dagli shader)
-export const Mat = { floor: 1, carpet: 2, wall: 3, coffer: 4, ceiling: 5, wainscot: 6, stone: 7, darkStone: 8, step1: 9, step2: 10, step3: 11, frame: 12, pedestal: 13, banner: 14, gold: 20, silver: 21, bronze: 22, cupGold: 23, cupSilver: 24, cupBronze: 25 };
+export const Mat = {
+  floor: 1, carpet: 2, wall: 3, coffer: 4, ceiling: 5, wainscot: 6, stone: 7, darkStone: 8, step1: 9, step2: 10, step3: 11, frame: 12, pedestal: 13, banner: 14,
+  gold: 20, silver: 21, bronze: 22, cupGold: 23, cupSilver: 24, cupBronze: 25,
+  // il cantiere (podio coperto): telo, legno, tubi d'acciaio, secchi di vernice, cartone, coni, nastro bianco e rosso,
+  // metallo verniciato, nastro di carta, gomma
+  cloth: 15, wood: 16, steel: 17, bucket: 18, cardboard: 19, cone: 26, tape: 27, paint: 28, masking: 29, rubber: 30,
+};
 // le coppe hanno codici propri (stesso metallo del posto): girano sul piedistallo e si sollevano al passaggio del puntatore
 
 export const ROOM = { x: 9, y: 12, back: -7, front: 18 };

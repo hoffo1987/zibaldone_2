@@ -76,3 +76,13 @@ test('members find their collection under More', () => {
   expect(dock.querySelector('[aria-label="Altre sezioni"] .shell-link-title').textContent).toBe('Altro');
   expect(host.querySelector('.shell-rail [aria-current="page"]').getAttribute('aria-label')).toBe('I miei scritti');
 });
+
+test('members find the covered podium under More, but not the authors', () => {
+  act(() => root.render(<Preview admin={false} />));
+  const dock = host.querySelector('.shell-dock');
+  act(() => dock.querySelector('[aria-label="Altre sezioni"]').click());
+  expect(Array.from(host.querySelectorAll('dialog nav button')).map(b => b.getAttribute('aria-label'))).toEqual(['I miei scritti', 'Podio del mese']);
+  act(() => host.querySelector('dialog [aria-label="Podio del mese"]').click());
+  expect(host.querySelector('.shell-rail [aria-current="page"]').getAttribute('aria-label')).toBe('Podio del mese');
+  expect(host.querySelector('.shell-rail [aria-label="Autori"]')).toBeNull();
+});

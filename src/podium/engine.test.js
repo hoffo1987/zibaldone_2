@@ -106,3 +106,23 @@ test.each([['low', true], ['high', false]])('keeps the complete %s scene and upd
   expect(second.vbuf).toBe(view.vbuf); expect(second.ibuf).toBe(view.ibuf);
   second.destroy();
 });
+
+test('the covered podium draws the cloth and the works instead of the trophies, with its own geometry and the site flag', async () => {
+  const { device, stats } = gpu(), q = podiumQuality('low', true);
+  const pos = new Float32Array(4 * 4 * 3);
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) pos.set([i * 0.5 - 0.75, 2.0, j * 0.5 - 0.75], (j * 4 + i) * 3);
+  const site = { cloth: { nx: 4, nz: 4, spacing: 0.5, pos } };
+  const covered = new PodiumView(device, document.createElement('canvas'), q, false, site);
+  await covered.ready(); covered.resize(800, 600, 1, 1, 0, 0);
+  expect(Object.keys(covered.ranges)).toEqual(expect.arrayContaining(['cloth', 'site']));
+  expect(covered.ranges.trophies).toBeUndefined();
+  covered.render(20, 0); await device.queue.onSubmittedWorkDone();
+  expect(covered.frameData[16 + 13 * 4 + 3]).toBe(1); // frameC.w: the shaders add dust, plaster patches and haze
+  const main = stats.passes.find(p => p.label === 'podium-main');
+  expect(main.commands.filter(c => c[0] === 'indexed')).toHaveLength(Object.keys(covered.ranges).length);
+  const plain = new PodiumView(device, document.createElement('canvas'), q);
+  await plain.ready(); plain.resize(800, 600, 1, 1, 0, 0); plain.render(20, 0); await device.queue.onSubmittedWorkDone();
+  expect(plain.frameData[16 + 13 * 4 + 3]).toBe(0);
+  expect(plain.vbuf).not.toBe(covered.vbuf); // two cached variants of the room
+  covered.destroy(); plain.destroy();
+});

@@ -5,12 +5,17 @@ import { acquirePodiumDevice, releasePodiumDevice, capTier, type Tier } from "./
 import { PodiumView, podiumQuality } from "./engine";
 import { STEP_X, STEP_D, STEP_TOP, DAIS, TROPHY_TOP, TROPHY_K, TROPHY_Z, camera, project, type Cam, type CamMotion } from "./stage";
 import { pickSecretPane, WindowSecret } from './secret';
+import { loadDrape } from "./cloth";
 
 export type PodiumProps = {
   dark: boolean;
   // targhette dei primi tre (indice 0 = primo posto); null se il posto è vuoto
   plates: (React.ReactNode | null)[];
   onFail: () => void;
+  // podio non ancora visibile: un telo copre gradini e coppe, la sala è un cantiere
+  covered?: boolean;
+  // il cartello appeso nella sala sopra il podio coperto (segue la camera come le targhette)
+  sign?: React.ReactNode;
 };
 
 const RETRIES = 1;
@@ -23,6 +28,8 @@ const START_SCALE: Record<Tier, number> = { low: 0.85, medium: 0.9, high: 1, ult
 // circa 60 fotogrammi al secondo su un multiplo esatto del refresh (a 144 Hz uno sì e uno no: 72 regolari invece di 48 a
 // strappi): in una sala che si muove piano la risoluzione conta più dei fotogrammi in più
 const FPS = 60;
+// dove pende il cartello: sopra il gradone più alto, davanti al finestrone
+const SIGN_AT = [0, 4.3, -0.8];
 
 // La sala del podio.
 //  - Schermi larghi: a tutto schermo. Lo strato della scena sta dietro ai contenuti (sopra lo sfondo) e scorre con la
@@ -32,11 +39,13 @@ const FPS = 60;
 // La sala è viva: la camera respira e segue il puntatore, si trascina per girare attorno al podio, le coppe ruotano sui
 // piedistalli e al passaggio si sollevano e brillano; un clic (o un tocco) su coppa o gradino apre lo scritto.
 // Qualità e risoluzione seguono la potenza misurata della GPU e il tempo reale di ogni fotogramma.
-export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
+export default function Podium3D({ dark, plates, onFail, covered = false, sign }: PodiumProps) {
   const host = useRef<HTMLDivElement>(null);
   const over = useRef<HTMLDivElement>(null);
   const plateEls = useRef<(HTMLDivElement | null)[]>([]);
   const hoverPlate = useRef(-1);
+  const signEl = useRef<HTMLDivElement>(null);
+  const [slotEl, setSlotEl] = useState<HTMLElement | null>(null);
   const [root, setRoot] = useState<Element | null>(null);
   const [shown, setShown] = useState(false);
   const [gen, setGen] = useState(0);
@@ -50,7 +59,7 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
   const resetSecretRef = useRef<(() => void) | null>(null);
   const showHud = useRef(/podiohud/.test(window.location.search)).current;
   useEffect(() => { setRoot(host.current?.closest(".root") || document.querySelector(".root") || document.body); }, []);
-  useEffect(() => { placeRef.current?.(); }, [plates, root]);
+  useEffect(() => { placeRef.current?.(); }, [plates, root, sign, slotEl]);
   useEffect(() => { resetSecretRef.current?.(); }, [dark]);
   useEffect(() => {
     const mq = window.matchMedia(NARROW), on = () => setNarrow(mq.matches);
@@ -62,6 +71,7 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
     const slot = document.getElementById(SLOT);
     const el = narrow ? slot : host.current;
     if (!el || !slot) { const id = window.setTimeout(() => setGen((g) => g + 1), 120); return () => clearTimeout(id); } // la pagina non ha ancora lo spazio
+    setSlotEl(slot);
     const mobile = narrow || window.matchMedia("(pointer:coarse)").matches;
     const cv = document.createElement("canvas");
     cv.className = "podium-canvas";
@@ -97,11 +107,15 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       ratio = base * scale;
     };
     const cam = (): Cam | null => view?.camera || (W && H ? camera(Math.max(1, Math.round(W * ratio)), Math.max(1, Math.round(H * ratio)), left * ratio, top * ratio) : null);
+    let yawNow = 0;
     const place = () => {
       const c = cam();
-      if (narrow || !c) return;
+      if (!c) return;
       // la camera lavora in pixel dell'immagine: si riporta tutto in pixel CSS
-      const k = 1 / ratio;
+      const k = 1 / ratio, sp = signEl.current ? project(c, SIGN_AT) : null;
+      // il cartello pende nella sala: segue la camera e si gira appena quando la sala gira
+      if (sp) { signEl.current!.style.transform = `translate3d(${sp.x * k}px, ${sp.y * k}px, 0) translate(-50%, -50%)`; signEl.current!.style.setProperty("--yaw", `${(-yawNow * 32).toFixed(2)}deg`); }
+      if (narrow) return;
       STEP_X.forEach((x, i) => {
         const tp = project(c, [x, TROPHY_TOP[i] + 0.22, TROPHY_Z]), a = project(c, [x - 1.1, STEP_TOP[i], STEP_D]), b = project(c, [x + 1.1, STEP_TOP[i], STEP_D]);
         const p = plateEls.current[i];
@@ -164,7 +178,7 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
     });
     // il posto (0, 1, 2) sotto il punto: rettangolo proiettato di coppa e gradino
     const pick = (x: number, y: number) => {
-      const c = cam(); if (!c) return -1;
+      const c = cam(); if (!c || covered) return -1;
       const k = 1 / ratio;
       for (let i = 0; i < 3; i++) {
         if (!platesRef.current[i] && !narrow) continue;
@@ -252,7 +266,9 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       const params = new URLSearchParams(window.location.search), forced = params.get("podiotier") as Tier | null;
       const still = params.has("podiot") ? Number(params.get("podiot")) || 0 : null;
       tier = forced && forced in START_SCALE ? forced : capTier(dev.tier, mobile); q = podiumQuality(tier, mobile); scale = Math.min(q.maxScale, START_SCALE[tier]);
-      view = new PodiumView(dev.device, cv, q, dev.timestamps);
+      const site = covered ? { cloth: await loadDrape() } : null;
+      if (!alive) return;
+      view = new PodiumView(dev.device, cv, q, dev.timestamps, site);
       view.onError = (err) => { if (alive) { console.warn("Podio 3D: errore WebGPU, si usa il podio semplice.", err.message); alive = false; fail.current(); } };
       await view.ready();
       if (!alive) return;
@@ -280,7 +296,7 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
         motion.x = (0.45 * Math.sin(t * 0.13) + 0.6 * sm.x) * amp;
         motion.y = (0.14 * Math.sin(t * 0.09 + 1) - 0.3 * sm.y) * amp;
         motion.z = -0.7 * (0.5 + 0.5 * Math.sin(t * 0.06 - 1.2)) * amp;
-        motion.yaw = 0.035 * Math.sin(t * 0.05) * amp + sm.yaw;
+        motion.yaw = 0.035 * Math.sin(t * 0.05) * amp + sm.yaw; yawNow = motion.yaw;
         // The left aisle lies outside a portrait crop. Ease it into view only after the secret is revealed.
         const pan = secretSeconds >= 0 ? (narrow ? 1.8 : W - left < 900 ? 1 : 0) : 0;
         sm.secretPan += (pan - sm.secretPan) * (reduced.matches ? 1 : 1 - Math.exp(-Math.min(0.05, (now - drawn) / 1000) * 3));
@@ -335,10 +351,12 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       view?.destroy();
       releasePodiumDevice();
     };
-  }, [gen, narrow, showHud]);
+  }, [gen, narrow, showHud, covered]);
 
   const hudEl = showHud && hud ? <div className="podium-hud">{hud}</div> : null;
-  if (narrow) return <span ref={host as any} hidden>{hudEl && root ? createPortal(hudEl, root) : null}</span>;
+  // il cartello: sui telefoni dentro il palco (scorre con la scena), sui computer nello strato delle targhette
+  const signNode = sign ? <div ref={signEl} className={`podium-sign ${shown ? "on" : ""}`}><div className="podium-sign-turn"><div className="podium-sign-swing"><i className="podium-sign-string" /><i className="podium-sign-string r" />{sign}</div></div></div> : null;
+  if (narrow) return <span ref={host as any} hidden>{hudEl && root ? createPortal(hudEl, root) : null}{signNode && slotEl ? createPortal(signNode, slotEl) : null}</span>;
   const order = [1, 0, 2];
   return (
     <>
@@ -346,6 +364,7 @@ export default function Podium3D({ dark, plates, onFail }: PodiumProps) {
       {root && createPortal(
         <div ref={over} className={`podium-over ${shown ? "on" : ""}`}>
           {order.map((i) => plates[i] ? <div key={`p${i}`} ref={(p) => { plateEls.current[i] = p; }} className={`podium3d-plate r${i + 1}`} onPointerEnter={() => { hoverPlate.current = i; }} onPointerLeave={() => { hoverPlate.current = -1; }}>{plates[i]}</div> : null)}
+          {signNode}
         </div>, root)}
       {hudEl && root ? createPortal(hudEl, root) : null}
     </>

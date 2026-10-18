@@ -12,7 +12,7 @@
 //  9. render:  dalla risoluzione della scena (adattiva) ai pixel dello schermo, Catmull-Rom, sul canvas
 // Il canvas ha sempre i pixel dello schermo: cambiare la risoluzione della scena non lo ridimensiona (niente lampi) e
 // l'immagine non passa dal filtro bilineare del browser. Al massimo tre fotogrammi in coda sulla GPU.
-import { buildScene, VERTEX_FLOATS } from "./meshes";
+import { buildScene, VERTEX_FLOATS, type Site } from "./meshes";
 import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, combineMSShader, GI_PROBES, FRAME_FLOATS, PASS_FLOATS, type PodiumQuality } from "./shaders";
 import { camera, viewProj, celestial, moodAt, lightMatrix, LIGHT_RECT, STILL, type Cam, type CamMotion } from "./stage";
 import type { Freddy } from './freddy';
@@ -26,10 +26,11 @@ const ENV_POS = [0, 3.0, 0.6]; // centro della cubemap: sopra il primo gradino, 
 const PLANAR_MIPS = 6, ENV_MIPS = 8;
 const RT = GPUTextureUsage;
 const mipCount = (w: number, h: number) => Math.floor(Math.log2(Math.max(w, h))) + 1;
-type Geometry = { vertex: GPUBuffer; index: GPUBuffer; ranges: Record<string, [number, number]> };
+type Geometry = { vertex: GPUBuffer; index: GPUBuffer; ranges: Record<string, [number, number]>; site: Site | null };
 // The podium device is retained for 30 seconds between visits. Keep its immutable mesh buffers as well,
 // so reopening the room does not regenerate and upload 161,539 vertices. Device destruction frees the buffers.
-const geometryCache = new WeakMap<GPUDevice, Map<boolean, Geometry>>();
+// One variant per device class and per room: the podium, or the covered podium among the works (site).
+const geometryCache = new WeakMap<GPUDevice, Map<string, Geometry>>();
 const pipelineCache = new WeakMap<GPUDevice, Map<string, Promise<any>>>();
 type Materials = { marble: GPUTexture; fabric: GPUTexture; decal: GPUTexture; initialized: boolean };
 const materialCache = new WeakMap<GPUDevice, Map<boolean, Materials>>();
@@ -43,15 +44,16 @@ function materials(device: GPUDevice, mobile: boolean): Materials {
   const decal = device.createTexture({ label: "podium-decal", size: [1024, 1024], format: "rgba8unorm", mipLevelCount: mipCount(1024, 1024), usage: usage | RT.COPY_DST | RT.RENDER_ATTACHMENT });
   const result = { marble, fabric, decal, initialized: false }; variants.set(mobile, result); return result;
 }
-function geometry(device: GPUDevice, mobile: boolean): Geometry {
+function geometry(device: GPUDevice, mobile: boolean, site: Site | null): Geometry {
   let variants = geometryCache.get(device);
   if (!variants) { variants = new Map(); geometryCache.set(device, variants); }
-  const saved = variants.get(mobile); if (saved) return saved;
-  const mesh = buildScene(mobile), usage = GPUBufferUsage.COPY_DST;
+  const key = `${mobile}:${site ? "site" : "podium"}`;
+  const saved = variants.get(key); if (saved && saved.site?.cloth === site?.cloth) return saved;
+  const mesh = buildScene(mobile, site), usage = GPUBufferUsage.COPY_DST;
   const vertex = device.createBuffer({ label: "podium-vertices", size: mesh.vertices.byteLength, usage: GPUBufferUsage.VERTEX | usage });
   const index = device.createBuffer({ label: "podium-indices", size: mesh.indices.byteLength, usage: GPUBufferUsage.INDEX | usage });
   device.queue.writeBuffer(vertex, 0, mesh.vertices); device.queue.writeBuffer(index, 0, mesh.indices);
-  const result = { vertex, index, ranges: mesh.ranges }; variants.set(mobile, result); return result;
+  const result = { vertex, index, ranges: mesh.ranges, site }; variants.set(key, result); return result;
 }
 
 // facce della cubemap (convenzione WebGPU: +X, -X, +Y, -Y, +Z, -Z): direzione, destra e alto dell'immagine
@@ -164,7 +166,8 @@ export class PodiumView {
   private secretLight = 0;
   onError: ((e: Error) => void) | null = null;
 
-  constructor(private readonly device: GPUDevice, readonly canvas: HTMLCanvasElement, readonly q: PodiumQuality, timestamps = false) {
+  // site: the covered podium (cloth and works around it) instead of the trophies
+  constructor(private readonly device: GPUDevice, readonly canvas: HTMLCanvasElement, readonly q: PodiumQuality, timestamps = false, private readonly site: Site | null = null) {
     const ctx = canvas.getContext("webgpu");
     if (!ctx) throw new Error("Contesto WebGPU non disponibile");
     this.ctx = ctx;
@@ -185,7 +188,7 @@ export class PodiumView {
       busy: [false, false, false],
     };
 
-    const mesh = geometry(d, q.mobile);
+    const mesh = geometry(d, q.mobile, site);
     this.ranges = mesh.ranges; this.vbuf = mesh.vertex; this.ibuf = mesh.index;
 
     const tex = (desc: GPUTextureDescriptor) => { const t = d.createTexture(desc); this.ownTextures.push(t); return t; };
@@ -448,6 +451,9 @@ export class PodiumView {
 
   private writeFrame(t: number, night: number, turn: number) {
     const s = this.sized!, m = moodAt(night), q = this.q;
+    // nel cantiere l'aria del giorno è più polverosa: i fasci del finestrone si vedono di più (di notte la nebbia è già
+    // fitta, di più spegnerebbe la sala)
+    if (this.site) { m.fog *= 1 + 0.35 * (1 - night); m.dust *= 1 + 0.15 * (1 - night); }
     const a = celestial(t, false), b = celestial(t, true);
     const l = a.map((x, i) => x + (b[i] - x) * night), n = Math.hypot(l[0], l[1], l[2]), L = l.map((x) => x / n);
     const u = this.frameData;
@@ -455,7 +461,7 @@ export class PodiumView {
     u.set([
       L[0], L[1], L[2], m.sunI, ...m.sun, night, ...m.skyTop, m.exposure, ...m.skyHor, m.ambient,
       ...m.wall, m.fog, ...m.wainscot, m.dust, ...m.ceiling, m.cover, ...m.tileA, t, ...m.tileB, this.frameNo % 4096,
-      ...m.stone, q.steps, ...m.darkStone, this.fresh ? 1 : 0.45, ...m.carpet, turn, ...m.banner, this.secretLight, ...m.frame, 0,
+      ...m.stone, q.steps, ...m.darkStone, this.fresh ? 1 : 0.45, ...m.carpet, turn, ...m.banner, this.secretLight, ...m.frame, this.site ? 1 : 0,
       s.pw, s.ph, s.vw, s.vh,
     ], 16);
     u.set(this.cups, 76);

@@ -31,7 +31,8 @@ import * as sound from "./sound";
 // il logo 3D (WebGPU) si carica a parte, solo quando serve e solo se il browser supporta WebGPU: il resto del sito non lo scarica
 import Logo3D from "./LogoView";
 // il podio del mese in 3D (WebGPU, con illuminazione globale) si scarica solo quando serve
-import { PodiumScene, PodiumSlot, hasWebGPU } from "./PodiumStage";
+import { PodiumCover, PodiumScene, PodiumSign, PodiumSlot, hasWebGPU } from "./PodiumStage";
+import { nextReveal, revealCopy } from "./podiumReveal";
 // easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login → caricamento → gioco
 import EggPortal from "./EggPortal";
 // presentazione del primo accesso (film + tour guidato): si scarica solo per chi deve vederla
@@ -2340,8 +2341,11 @@ export default function App() {
   );
 
   const top = ranked.slice(0, 3), rest = ranked.slice(3);
-  // il podio in 3D (WebGPU) a tutto schermo; altrimenti quello semplice
-  const podium3d = !G.nomotion && !lite && !podiumFail && hasWebGPU() && !loading && ranked.length > 0;
+  // il podio in 3D (WebGPU) a tutto schermo; altrimenti quello semplice. Chi non amministra lo trova coperto da un telo,
+  // in mezzo ai lavori, con il cartello delle date in cui si scopre
+  const scene3d = !G.nomotion && !lite && !podiumFail && hasWebGPU();
+  const podium3d = scene3d && (isAdmin ? !loading && ranked.length > 0 : true);
+  const podiumSign = tab === "podio" && !isAdmin ? <PodiumSign {...revealCopy(nextReveal())} /> : null;
   const podiumPlates = (tab === "podio" ? [0, 1, 2] : []).map((k) => { const t = top[k]; if (!t) return null;
             return (
               <div data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className="pdm-card">
@@ -2361,7 +2365,7 @@ export default function App() {
     </div>
   ));
   const shiftM = (d: number) => { const [y, m] = month.split("-").map(Number); setMonth(mKey(new Date(y, m - 1 + d, 1).getTime())); };
-  const podioView = tab === "podio" && (
+  const podioView = tab === "podio" && (!isAdmin ? (podium3d ? <PodiumSlot /> : <Reveal><PodiumCover sign={podiumSign} /></Reveal>) : (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-2">
@@ -2402,7 +2406,7 @@ export default function App() {
           {rest.length > 0 && <Reveal className="mt-8"><div className="pn p-2"><h3 className="hd text-lg font-bold px-4 pt-4 pb-2">In lizza</h3>{rest.map((t, i) => row(t, i, i + 4))}</div></Reveal>}
         </>)}
     </div>
-  );
+  ));
 
   const authors: any[] = Object.values((tab === "authors" ? items : []).filter((t) => !isDiary(t)).filter((t) => t.svelato || t.userId === user.uid).reduce((m: any, t) => { const k = t.userId || t.author; const a = (m[k] = m[k] || { name: dn(t.userId, t.author || "?"), uid: t.userId, n: 0, r: [], last: 0 }); a.n++; if (t.rating) a.r.push(t.rating); a.last = Math.max(a.last, t.timestamp); return m; }, {}))
     .map((a: any) => ({ ...a, avg: a.r.length ? a.r.reduce((x: number, y: number) => x + y, 0) / a.r.length : 0 })).sort((a: any, b: any) => b.n - a.n);
@@ -2432,7 +2436,7 @@ export default function App() {
   return shell(
     <>
       <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
-      {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} onFail={() => setPodiumFail(true)} />}
+      {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} covered={!isAdmin} sign={podiumSign} onFail={() => setPodiumFail(true)} />}
       <Navigation tab={tab} admin={isAdmin} editing={!!editingId} railKey={railKey}
         hidden={kbOpen || (tab === "write" && drawing)} onNavigate={go}
         brand={<div className="flex items-center gap-2.5 cursor-pointer select-none" title="Il Circuito">
