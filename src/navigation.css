@@ -35,16 +35,22 @@
 .shell-link.act .shell-icon { --mark-paper: color-mix(in srgb, var(--nav-color) 12%, var(--pn)); background: linear-gradient(145deg, var(--pn), color-mix(in srgb, var(--nav-color) 19%, var(--pn))); border-color: color-mix(in srgb, var(--nav-color) 40%, var(--ln)); box-shadow: inset 0 1px 0 color-mix(in srgb, white 30%, transparent), 0 4px 12px -8px var(--nav-color); }
 .shell-link.act .shell-link-title, .shell-link.act .shell-link-arrow { color: var(--nav-color); }
 .shell-link:focus-visible { outline: 2px solid var(--nav-color); outline-offset: -2px; }
-/* The Scritti section's two rooms hang from it on a circuit trace: a vertical line with one node per room. */
-.shell-rooms { position: relative; display: grid; gap: 2px; margin: -2px 0 4px 31px; padding-left: 21px; }
-.shell-rooms:before { content: ""; position: absolute; left: 0; top: 2px; bottom: 18px; width: 1px; background: linear-gradient(var(--nav-color), color-mix(in srgb, var(--nav-color) 25%, var(--ln))); opacity: .35; transition: opacity .35s var(--mark-ease); }
-.shell-rooms.open:before { opacity: .8; }
-.shell-room { position: relative; display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 6px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; color: var(--mu); text-align: left; transition: color .25s var(--mark-ease), background .25s var(--mark-ease); }
-.shell-room:before { content: ""; position: absolute; left: -21px; top: 50%; width: 15px; height: 1px; background: color-mix(in srgb, var(--nav-color) 45%, var(--ln)); }
-.shell-room-node { position: absolute; left: -9px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--nav-color) 55%, var(--ln)); background: var(--pn); transition: background .3s var(--mark-ease), border-color .3s var(--mark-ease), transform .3s var(--mark-ease), box-shadow .3s var(--mark-ease); }
+/* The Scritti section's two rooms hang from it on one trace: a trunk drops from under the icon and bends
+   into each room on a rounded elbow. The stretch leading to the open room takes the room's colour. */
+.shell-rooms { --trace: color-mix(in srgb, var(--nav-color) 30%, var(--ln)); --trace-on: var(--nav-color); --trunk-top: -12px;
+  position: relative; display: grid; gap: 2px; margin: -2px 0 4px 32px; padding-left: 20px; }
+.shell-room { position: relative; display: flex; align-items: center; min-height: 36px; padding: 6px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; color: var(--mu); text-align: left; transition: color .25s var(--mark-ease), background .25s var(--mark-ease); }
+/* the elbow: down from the row above, then a curve into the room */
+.shell-room:before { content: ""; position: absolute; left: -20px; top: -2px; width: 14px; height: calc(50% + 2px); border: solid var(--trace); border-width: 0 0 1.5px 1.5px; border-bottom-left-radius: 10px; pointer-events: none; transition: border-color .35s var(--mark-ease); }
+.shell-room:first-child:before { top: var(--trunk-top); height: calc(50% - var(--trunk-top)); }
+/* the trunk carries on to the rooms below, from where the elbow starts to bend */
+.shell-room:not(:last-child):after { content: ""; position: absolute; left: -20px; top: calc(50% - 10px); bottom: -2px; border-left: 1.5px solid var(--trace); pointer-events: none; transition: border-color .35s var(--mark-ease) .08s; }
+.shell-room-node { position: absolute; left: -7px; top: 50%; width: 5px; height: 5px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--trace-on); opacity: 0; transform: scale(.4); transition: opacity .3s var(--mark-ease), transform .3s var(--mark-ease); }
 .shell-room:hover { color: var(--ink); background: color-mix(in srgb, var(--nav-color) 7%, transparent); }
+.shell-room:hover:before { border-color: color-mix(in srgb, var(--nav-color) 40%, var(--ln)); }
 .shell-room.act { color: var(--nav-color); background: color-mix(in srgb, var(--nav-color) 9%, transparent); }
-.shell-room.act .shell-room-node { background: var(--nav-color); border-color: var(--nav-color); transform: scale(1.15); box-shadow: 0 0 0 3px color-mix(in srgb, var(--nav-color) 18%, transparent); }
+.shell-room.act:before, .shell-room:has(~ .shell-room.act):before, .shell-room:has(~ .shell-room.act):after { border-color: var(--trace-on); }
+.shell-room.act .shell-room-node { opacity: 1; transform: none; }
 .shell-room:focus-visible { outline: 2px solid var(--nav-color); outline-offset: -2px; }
 
 /* Inside the section: two rooms side by side, the highlight glides between them. */
@@ -94,6 +100,7 @@ body:has(.shell-more[open]){overflow:hidden}
   .shell-navigation { padding: 10px 0; }
   .shell-group { margin-top: 9px; }
   .shell-link.bt { min-height: 54px; padding-top: 6px; padding-bottom: 6px; }
+  .shell-rooms { --trunk-top: -6px; }
 }
 @media (max-width:380px){
   .shell-header{padding-left:12px;padding-right:12px}
