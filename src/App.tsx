@@ -93,6 +93,9 @@ const TOOLS = [
   { id: "rect", label: "Rettangolo", icon: Square }, { id: "ellipse", label: "Ellisse", icon: Circle },
   { id: "fill", label: "Forma piena", icon: PaintBucket }, { id: "eraser", label: "Gomma", icon: Eraser }, { id: "hand", label: "Scorri", icon: Hand },
 ];
+// anteprima di uno scritto su una riga continua: spazi, a capo e spazi indivisibili (titoli centrati a mano) diventano uno
+// spazio solo, così il testo comincia a sinistra e riempie le righe del foglio
+const snippet = (text: string, n = 260) => (text || "").replace(/[\s\u00A0]+/g, " ").trim().slice(0, n);
 const SORTS: any = { newest: "Più recenti", rated: "Voto più alto", oldest: "Più vecchi", longest: "Più lunghi", shortest: "Più brevi" };
 
 // --- UTIL ---
@@ -2525,7 +2528,7 @@ export default function App() {
                     <div className="paper mm sm relative h-40 overflow-hidden">
                       <div className="thumb absolute inset-0">
                         {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
-                        <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{t._tx.slice(0, 260) || (t._img ? "Contenuto con immagini" : "")}</p>
+                        <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{snippet(t._tx) || (t._img ? "Contenuto con immagini" : "")}</p>
                       </div>
                     </div>
                     <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
@@ -2560,14 +2563,13 @@ export default function App() {
                     <div className="paper mm sm relative h-40 overflow-hidden">
                       <div className="thumb absolute inset-0">
                         {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
-                        <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{t._tx.slice(0, 260) || (t._img ? "Contenuto con immagini" : "")}</p>
+                        <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{snippet(t._tx) || (t._img ? "Contenuto con immagini" : "")}</p>
                       </div>
-                      {isAdmin && canEvaluate(t) && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span className={`stato-pill ${vals[t.id].stato === "scelto" ? "scelto" : ""}`}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}
-                      {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
+                                            {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
                       {isAdmin && canEvaluate(t) && !selMode && <button type="button" aria-label="Segnalibro" title={t.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={(e) => { e.stopPropagation(); star(t); }} className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110" style={{ background: "rgba(255,255,255,.92)", boxShadow: "var(--sh1)" }}><Bookmark size={16} style={t.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : { color: "#64748b" }} /></button>}
                     </div>
                     <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
-                      <span className={`kind-badge mb-2 ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span><h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
+                      <span className={`kind-badge mb-2 ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span>{isAdmin && canEvaluate(t) && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span className={`stato-pill ${vals[t.id].stato === "scelto" ? "scelto" : ""}`}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}<h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
                       <div className="mt-2 flex items-center gap-2 mu text-xs">{who(t, 22)}<span className="truncate flex-1">{wn(t)}</span><span className="shrink-0 meta-date">{fmtDate(t.timestamp)}</span></div>
                       {isAdmin && canEvaluate(t) && <div className="mt-3"><Stars v={t.rating || 0} onSet={t.svelato ? undefined : (n: number) => rate(t, n)} size={15} /></div>}
                       {!isAdmin && !isDiary(t) && t.svelato && t.rating > 0 && <div className="mt-3 flex items-center gap-2"><Stars v={t.rating} size={15} /><span className="mu text-xs">voto ricevuto</span></div>}

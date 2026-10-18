@@ -9,18 +9,20 @@
    due tempi: vicina e netta, lontana e morbida */
 .pn{border-radius:20px;background-color:var(--pn);background-image:linear-gradient(180deg,color-mix(in srgb,#fff 55%,transparent),transparent 120px);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.9),var(--sh1)}
-.root.dark .pn{background-image:linear-gradient(180deg,rgba(255,255,255,.035),transparent 140px);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--sh1)}
+/* le regole del tema scuro con :where() non pesano più di quelle chiare: i componenti con uno sfondo proprio (barra
+   laterale, pannelli, pulsanti del riquadro iniziale) lo tengono */
+:where(.root.dark) .pn{background-image:linear-gradient(180deg,rgba(255,255,255,.035),transparent 140px);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--sh1)}
 
 /* ---------- pulsanti: tasti ---------- */
 /* il tasto ha un dorso: luce sul filo alto, un'ombra corta sotto. Il primario è verderame pieno, l'altro inchiostro */
 .bt{border-radius:13px;border-color:var(--ln2);background-image:linear-gradient(180deg,color-mix(in srgb,#fff 70%,transparent),transparent);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 1px 1px rgba(12,29,26,.06),0 2px 6px -3px rgba(12,29,26,.12)}
-.root.dark .bt:not(.on):not(.pri){border-color:var(--ln2);background-image:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.01));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 1px 2px rgba(0,0,0,.4)}
+:where(.root.dark) .bt:where(:not(.on):not(.pri)){border-color:var(--ln2);background-image:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.01));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 1px 2px rgba(0,0,0,.4)}
 .bt.on{border-color:color-mix(in srgb,var(--ac) 80%,#000);background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 82%,#fff),var(--ac) 45%,color-mix(in srgb,var(--ac) 84%,#000));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(0,0,0,.18),0 8px 18px -10px color-mix(in srgb,var(--ac) 90%,transparent);text-shadow:0 1px 0 rgba(0,0,0,.18)}
-.root.dark .bt.on{border-color:color-mix(in srgb,var(--ac) 70%,#fff);text-shadow:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(0,0,0,.2),0 8px 22px -10px color-mix(in srgb,var(--ac) 80%,transparent)}
+:where(.root.dark) .bt.on{border-color:color-mix(in srgb,var(--ac) 70%,#fff);text-shadow:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(0,0,0,.2),0 8px 22px -10px color-mix(in srgb,var(--ac) 80%,transparent)}
 .bt.pri{background:linear-gradient(180deg,#24403B,#0C1D1A 60%);border-color:#0C1D1A;color:#F3F6EF;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 10px 20px -12px rgba(12,29,26,.7)}
-.root.dark .bt.pri{background:linear-gradient(180deg,#FFFFFC,#DCE5DF);border-color:#fff;color:#0C1D1A;box-shadow:inset 0 -1px 0 rgba(0,0,0,.12),0 10px 24px -12px rgba(0,0,0,.8)}
+:where(.root.dark) .bt.pri{background:linear-gradient(180deg,#FFFFFC,#DCE5DF);border-color:#fff;color:#0C1D1A;box-shadow:inset 0 -1px 0 rgba(0,0,0,.12),0 10px 24px -12px rgba(0,0,0,.8)}
 /* i pulsanti trasparenti (dentro i selettori, le icone) restano senza dorso */
 .bt.\!bg-transparent,.seg .bt,.hero .bt,.tb.bt:not(.on){background-image:none}
 .bt.\!bg-transparent,.seg .bt{box-shadow:none}
@@ -28,7 +30,7 @@
 
 /* ---------- campi ---------- */
 .inp{border-radius:14px;border-color:var(--ln2);background-color:var(--pn);box-shadow:inset 0 1px 2px rgba(12,29,26,.06)}
-.root.dark .inp{background-color:var(--sf);box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
+:where(.root.dark) .inp{background-color:var(--sf);box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
 .inp::placeholder{color:color-mix(in srgb,var(--mu) 80%,transparent)}
 /* sui computer il testo dei campi torna alla misura del resto (sui telefoni resta a 16 px: niente zoom di iOS) */
 @media (pointer:fine){.inp{font-size:.9rem}}
@@ -61,7 +63,6 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 .pn.card{border-color:var(--ln)}
 .card .paper{background-color:#FFFEF8;box-shadow:inset 0 -1px 0 var(--ln)}
 .card .paper.mm{background-image:linear-gradient(rgba(11,127,112,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(11,127,112,.08) 1px,transparent 1px);background-size:22px 22px;background-position:-1px -1px}
-.card .paper .thumb{-webkit-mask-image:linear-gradient(#000 62%,transparent 98%);mask-image:linear-gradient(#000 62%,transparent 98%)}
 .card .meta{position:relative;border-top:1px dashed var(--ln2)!important}
 .card .meta h2{letter-spacing:-.02em}
 .card .meta-date{font:500 .68rem/1 var(--mono);letter-spacing:.04em;color:var(--mu);padding:.32rem .45rem;border-radius:7px;background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln)}
@@ -108,11 +109,13 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 
 /* ---------- i pannelli che aprono le sezioni (Diario, Scritti completi) ---------- */
 /* la pista colorata in cima al posto del bordo spesso, una griglia di punti che sfuma dall'angolo, il simbolo più grande */
-.writing-intro.pn{border-top:1px solid var(--ln);--intro:var(--ac);
+.root .writing-intro.pn{border-top:1px solid var(--ln);--intro:var(--ac);
   background-image:linear-gradient(90deg,var(--intro),color-mix(in srgb,var(--intro) 40%,var(--am)) 55%,transparent 92%),linear-gradient(120deg,color-mix(in srgb,var(--intro) 9%,var(--pn)),var(--pn) 70%);
   background-size:100% 3px,auto;background-repeat:no-repeat}
-.writing-intro.diary-intro.pn{--intro:var(--cu);border-color:color-mix(in srgb,var(--cu) 30%,var(--ln));
-  background-image:linear-gradient(90deg,var(--intro),color-mix(in srgb,var(--intro) 50%,var(--am)) 55%,transparent 92%),linear-gradient(125deg,color-mix(in srgb,var(--cu) 10%,var(--pn)),var(--pn) 72%)}
+.root .writing-intro.diary-intro.pn{--intro:var(--cu);border-color:color-mix(in srgb,var(--cu) 30%,var(--ln));
+  background-image:linear-gradient(90deg,var(--intro),color-mix(in srgb,var(--intro) 50%,var(--am)) 55%,transparent 92%),linear-gradient(125deg,color-mix(in srgb,var(--cu) 10%,var(--pn)),var(--pn) 72%);
+  background-size:100% 3px,auto;background-repeat:no-repeat}
+.root.dark .writing-intro.pn{background-color:var(--pn);background-image:linear-gradient(90deg,var(--intro),color-mix(in srgb,var(--intro) 40%,var(--am)) 55%,transparent 92%),linear-gradient(120deg,color-mix(in srgb,var(--intro) 12%,var(--pn)),var(--pn) 70%);background-size:100% 3px,auto;background-repeat:no-repeat}
 .writing-intro::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle,color-mix(in srgb,var(--intro) 30%,transparent) 1px,transparent 1.6px) 0 0/16px 16px;
   -webkit-mask-image:radial-gradient(ellipse 55% 90% at 100% 0,#000,transparent 75%);mask-image:radial-gradient(ellipse 55% 90% at 100% 0,#000,transparent 75%)}
 .writing-intro>*{position:relative}
@@ -120,8 +123,8 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 .writing-eyebrow{font-family:var(--mono);font-weight:700;letter-spacing:.18em}
 .diary-intro .writing-eyebrow,.diary-intro .writing-symbol{color:var(--cu)}
 .root.dark .diary-intro .writing-eyebrow,.root.dark .diary-intro .writing-symbol{color:#E8B27F}
-/* lo stato della lettura (amministratore): un timbro in fondo al foglio, dove il testo sfuma */
-.stato-pill{position:absolute;right:.7rem;bottom:.7rem;display:inline-flex;align-items:center;gap:.4rem;font:650 .58rem/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;padding:.42rem .6rem;border-radius:999px;
+/* lo stato della lettura (amministratore): un timbro sulla perforazione, a destra, di fronte all'etichetta del tipo */
+.stato-pill{position:absolute;top:0;right:1.15rem;transform:translateY(-50%);display:inline-flex;align-items:center;gap:.4rem;font:650 .58rem/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;padding:.42rem .6rem;border-radius:999px;
   color:#0C1D1A;background:rgba(255,255,253,.94);box-shadow:inset 0 0 0 1px rgba(12,29,26,.14),0 4px 10px -6px rgba(12,29,26,.4)}
 .stato-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ac)}
 .stato-pill.scelto{color:#3B2A00;background:linear-gradient(180deg,#FFD66B,#F2B21C);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 6px 14px -8px rgba(160,100,0,.8)}
@@ -135,3 +138,5 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 .root.dark .pf-stat{box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 0 rgba(255,255,255,.03)}
 .pf-stat .hd{font-variant-numeric:tabular-nums;letter-spacing:-.04em;color:var(--ac)}
 .pf-stat .mu{font:600 .6rem/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-top:.25rem}
+/* l'anteprima si ferma alla quinta riga: senza margine sotto, la sesta non si intravede più sotto i puntini */
+.card .paper .thumb p{padding-bottom:0}

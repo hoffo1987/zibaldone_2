@@ -55,11 +55,14 @@ export function WritingIntro({ diary, onWrite }: { diary: boolean; onWrite: () =
   </section>;
 }
 
+// anteprima del pensiero: gli a capo restano (si legge come è stato scritto) ma senza righe vuote ripetute né spazi
+// indivisibili in fila, che sul foglio a righe lasciavano buchi e righe spostate
+const preview = (html: string) => plain(html || "").replace(/\u00A0/g, " ").replace(/[ \t]+/g, " ").replace(/ *\n\s*/g, "\n").trim();
 export function DiaryCards({ items, onOpen, author, drawing }: { items: any[]; onOpen: (t: any, e: any) => void; author: (t: any) => string; drawing: (t: any) => React.ReactNode }) {
   return <div className="diary-grid grid sm:grid-cols-2 gap-5">
     {items.map(t => <article key={t.id} data-doc={t.id} className="diary-card pn" role="button" tabIndex={0} aria-label={`Leggi il pensiero ${t.title}`} onClick={e => onOpen(t, e)} onKeyDown={e => { if (["Enter", " "].includes(e.key)) { e.preventDefault(); onOpen(t, e); } }}>
       <div className={`diary-card-top ${signatureOf(t) ? "signed" : ""}`}>{signatureOf(t) ? <Signature size={17} /> : <BookOpen size={17} />}<span className="truncate">{author(t)}</span><ArrowUpRight size={17} className="ml-auto" /></div>
-      <div className="paper diary-paper"><h3 className="hd font-bold text-xl">{t.title}</h3><p className="whitespace-pre-line mt-4 line-clamp-6">{plain(t.content).trim() || "Un pensiero disegnato, oltre le parole."}</p>{drawing(t)}</div>
+      <div className="paper diary-paper"><h3 className="hd font-bold text-xl">{t.title}</h3><p className="whitespace-pre-line mt-4 line-clamp-6">{preview(t.content) || "Un pensiero disegnato, oltre le parole."}</p>{drawing(t)}</div>
       <p className="mu text-xs mt-4">Un pensiero da leggere, senza giudizi.</p>
     </article>)}
   </div>;
