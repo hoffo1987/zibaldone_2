@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 
 // Small, reusable vector compositions. Each piece settles into place independently;
 // the inner strokes then tell the section's story. Size and motion are optional.
@@ -9,6 +9,9 @@ function Piece({ children, index = 0, x = 0, y = 0, turn = 0 }: {
 }
 
 export function SectionMark({ section, size = 30, motion = true }: { section: string; size?: number; motion?: boolean }) {
+  // Scritti riunisce Diario e Scritti completi: i suoi libri sfumano dal rosa dell'uno al viola dell'altro
+  const gid = "sm" + useId().replace(/[^a-zA-Z0-9]/g, ""), blend = section === "scritti" || !["home", "my_pages", "write", "diario", "complete", "podio", "authors"].includes(section);
+  const grad = blend ? `url(#${gid})` : undefined;
   let parts: React.ReactNode;
   switch (section) {
     case "home":
@@ -65,10 +68,12 @@ export function SectionMark({ section, size = 30, motion = true }: { section: st
       parts = <>
         <Piece x={-4} turn={-10}><rect className="mark-soft" x="3" y="7" width="6" height="21" rx="1.5" /><path d="M5 11h2" /></Piece>
         <Piece index={1} y={-5}><rect className="mark-surface" x="11" y="4" width="6" height="24" rx="1.5" /><path className="mark-trace" pathLength={1} d="M13 9h2m-2 15h2" /></Piece>
-        <Piece index={2} x={5} turn={14}><g className="mark-book"><path className="mark-tint" d="m19 7 6-1 5 20-6 2Z" /><path className="mark-accent" d="m21 12 5-1" /></g></Piece>
+        <Piece index={2} x={5} turn={14}><g className="mark-book"><path className="mark-tint" style={{ fill: grad, fillOpacity: 0.2 }} d="m19 7 6-1 5 20-6 2Z" /><path className="mark-accent" d="m21 12 5-1" /></g></Piece>
       </>;
   }
   return <svg className={`section-mark ${motion ? "section-mark-motion" : ""}`} width={size} height={size}
-    viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round"
-    aria-hidden="true" focusable="false" data-mark={section}>{parts}</svg>;
+    viewBox="0 0 32 32" fill="none" stroke={grad || "currentColor"} strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true" focusable="false" data-mark={section}>
+    {blend && <defs><linearGradient id={gid} x1="3" y1="6" x2="30" y2="27" gradientUnits="userSpaceOnUse"><stop style={{ stopColor: "var(--diary)" }} /><stop offset="1" style={{ stopColor: "var(--complete)" }} /></linearGradient></defs>}
+    {parts}</svg>;
 }

@@ -2346,7 +2346,7 @@ export default function App() {
         </div>
       </div></Reveal>
       <div className="grid md:grid-cols-2 gap-4">
-        <button className="pn card p-6 text-left" onClick={() => go(isAdmin ? "read" : "altri")}><span className="kind-badge">Scritti completi</span><h3 className="hd text-xl font-bold mt-3">Dai forma alle tue idee</h3><p className="mu text-sm mt-2">Temi e racconti, estratti da leggere e selezione del mese.</p></button>
+        <button className="pn card complete-card p-6 text-left" onClick={() => go(isAdmin ? "read" : "altri")}><span className="kind-badge">Scritti completi</span><h3 className="hd text-xl font-bold mt-3">Dai forma alle tue idee</h3><p className="mu text-sm mt-2">Temi e racconti, estratti da leggere e selezione del mese.</p></button>
         <button className="pn card p-6 text-left diary-intro" onClick={() => go("diario")}><span className="kind-badge diary">Diario</span><h3 className="hd text-xl font-bold mt-3">Lascia un pensiero</h3><p className="mu text-sm mt-2">Pagine da leggere per intero, anonime o firmate, senza voti o categorie.</p></button>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
