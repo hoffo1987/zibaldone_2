@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import Stars from "./Stars";
-import { clean, plain } from "./sanitize";
+import { clean, plain, readingHtml } from "./sanitize";
 import { pubOf, pubSig, readPublic, isDiary, signatureOf, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, cartaOf, paperClass, isCarta, CARTE, type WritingKind, type Carta } from "./testi";
 import { snapshotReader } from "./snapshot";
 import NotificationPanel from "./NotificationPanel";
@@ -2265,12 +2265,11 @@ export default function App() {
   );
   const wc = (t: any) => wordCounts.get(t.id) || 0;
   const row = (t: any, i = 0, rank?: number) => (
-    <button key={t.id} data-doc={t.id} onClick={(e) => openView(t, e)} className="nv idx w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-colors" style={{ ["--i" as any]: i }}>
-      {rank && <span className="hd w-8 text-center font-bold mu">{rank}</span>}
-      {who(t, 36)}
-      <div className="flex-1 min-w-0"><div className="font-semibold truncate">{t.title}</div><div className="mu text-xs">{wn(t)} · {fmtDate(t.timestamp)}</div></div>
-      <span className={`kind-badge ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span>
-      {isAdmin && canEvaluate(t) && <Stars v={t.rating || 0} size={14} />}
+    <button key={t.id} data-doc={t.id} onClick={(e) => openView(t, e)} className="writing-row nv idx w-full px-4 py-3 rounded-xl text-left transition-colors" style={{ ["--i" as any]: i }}>
+      <span className="writing-row-avatar">{rank && <span className="hd w-8 text-center font-bold mu">{rank}</span>}{who(t, 36)}</span>
+      <span className="writing-row-copy"><span className="writing-row-title font-semibold">{t.title}</span><span className="writing-row-byline mu text-xs"><span>{wn(t)}</span><span className="writing-row-date">{fmtDate(t.timestamp)}</span></span></span>
+      <span className="writing-row-details"><span className={`kind-badge ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span>
+      {isAdmin && canEvaluate(t) && <Stars v={t.rating || 0} size={14} />}</span>
     </button>
   );
 
@@ -2806,7 +2805,7 @@ export default function App() {
                 {(diary || anon) && <ReadingNotice item={sel} />}
                 {anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`reader-paper paper ${diary ? "diary-paper" : ""} ${paperClass(cartaOf(sel))} relative`} data-sheet-paper="">
                   {sel.strokes?.length > 0 && <div className="reader-drawing" style={{ aspectRatio: `${w}/${h}` }}><Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" /></div>}
-                  <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: clean(sel.content) }} />
+                  <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: readingHtml(sel.content) }} />
                 </div>}
                 {near.length > 1 && (
                   <Reveal>

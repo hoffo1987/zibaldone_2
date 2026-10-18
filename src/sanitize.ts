@@ -98,6 +98,31 @@ export const clean = memoText((h: string): string => {
   return d.body.innerHTML;
 });
 
+/** Solo lettura: rende responsive i titoli centrati a mano con molti spazi da Word.
+ * Il contenuto originale resta intatto nell'editor e nel database. */
+export const readingHtml = memoText((h: string): string => {
+  const d = new DOMParser().parseFromString(clean(h), "text/html");
+  d.body.querySelectorAll<HTMLElement>("p,div,h1,h2,h3,h4,h5,h6").forEach(block => {
+    if (block.closest("pre,code") || block.querySelector("p,div,pre,code,table,img")) return;
+    const walker = d.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    const leading: { node: Text; count: number }[] = [];
+    let padding = "", node: Node | null;
+    while ((node = walker.nextNode())) {
+      const text = node.textContent || "", prefix = /^[\s\u00a0]*/.exec(text)![0];
+      if (prefix) { padding += prefix; leading.push({ node: node as Text, count: prefix.length }); }
+      if (prefix.length < text.length) break;
+    }
+    if (padding.length < 8 || (padding.match(/\u00a0/g) || []).length < 4) return;
+    const text = block.textContent?.trim() || "";
+    if (!text) return;
+    leading.forEach(({ node, count }) => { node.data = node.data.slice(count); });
+    const bold = block.querySelector("b,strong");
+    const heading = /^H[1-6]$/.test(block.tagName) || (bold?.textContent?.trim() === text && text.length <= 160 && !block.querySelector("br"));
+    if (heading && !block.closest('[style*="text-align"]')) block.style.textAlign = "center";
+  });
+  return d.body.innerHTML;
+});
+
 /** Solo il testo, con uno spazio tra un paragrafo e l'altro (così "ciao" + "mondo" sono 2 parole). */
 export const plain = memoText((h: string): string => {
   const d = new DOMParser().parseFromString(h || "", "text/html");
