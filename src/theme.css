@@ -51,7 +51,7 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 .filters .bt.on{border-color:color-mix(in srgb,var(--ac) 80%,#000);background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 82%,#fff),var(--ac) 45%,color-mix(in srgb,var(--ac) 84%,#000))}
 
 /* ---------- etichette: piccoli LED ---------- */
-.kind-badge{align-items:center;gap:.45rem;font:650 .6rem/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;padding:.42rem .62rem .4rem .55rem;border-radius:999px;
+.kind-badge{align-items:center;gap:.45rem;font:700 .62rem/1 var(--label);letter-spacing:.07em;text-transform:uppercase;padding:.42rem .65rem .4rem .55rem;border-radius:999px;
   background:color-mix(in srgb,var(--ac) 8%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 24%,transparent)}
 .kind-badge::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 0 2px color-mix(in srgb,currentColor 16%,transparent),0 0 7px color-mix(in srgb,currentColor 70%,transparent)}
 .kind-badge.diary{color:var(--cu);background:color-mix(in srgb,var(--cu) 9%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cu) 26%,transparent)}
@@ -65,7 +65,7 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 .card .paper.mm{background-image:linear-gradient(rgba(11,127,112,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(11,127,112,.08) 1px,transparent 1px);background-size:22px 22px;background-position:-1px -1px}
 .card .meta{position:relative;border-top:1px dashed var(--ln2)!important}
 .card .meta h2{letter-spacing:-.02em}
-.card .meta-date{font:500 .68rem/1 var(--mono);letter-spacing:.04em;color:var(--mu);padding:.32rem .45rem;border-radius:7px;background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln)}
+.card .meta-date{font:600 .72rem/1 var(--label);font-variant-numeric:tabular-nums;letter-spacing:0;color:var(--mu);padding:.32rem .45rem;border-radius:7px;background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln)}
 @media (hover:hover){.pn.card:hover{border-color:color-mix(in srgb,var(--ac) 45%,var(--ln))}}
 .card:after{border-radius:0 0 20px 20px}
 
@@ -77,13 +77,13 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 /* numeri: la cifra grande e allineata, l'icona dentro una piazzola, l'etichetta in caratteri tecnici */
 .stat>svg:not(.go){box-sizing:content-box;padding:9px;border-radius:12px;color:var(--ac);background:color-mix(in srgb,var(--ac) 9%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 22%,transparent)}
 .stat .hd{font-variant-numeric:tabular-nums;letter-spacing:-.04em}
-.stat .hd+.mu{font:600 .66rem/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-top:.35rem}
+.stat .hd+.mu{font:600 .66rem/1.3 var(--label);letter-spacing:.1em;text-transform:uppercase;margin-top:.35rem}
 
 /* ---------- intestazioni delle pagine ---------- */
 /* il titolo in rilievo: fronte d'inchiostro, spessore verderame, ombra corta e netta (niente alone grigio) */
 .t3-ink{--t3s:rgba(12,29,26,.13);--t3sb:1.5px;--sx:3px;--sy:5px;--sz:-14px}
 .root.dark .t3-ink{--t3s:rgba(0,0,0,.55);--t3sb:2px}
-.page-count{font:600 .7rem/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mu)}
+.page-count{font:600 .7rem/1 var(--label);letter-spacing:.1em;text-transform:uppercase;color:var(--mu)}
 .page-count .tick-n{color:var(--ac);font-size:.8rem}
 
 /* ---------- scrollbar e selezione ---------- */
@@ -120,11 +120,11 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
   -webkit-mask-image:radial-gradient(ellipse 55% 90% at 100% 0,#000,transparent 75%);mask-image:radial-gradient(ellipse 55% 90% at 100% 0,#000,transparent 75%)}
 .writing-intro>*{position:relative}
 .writing-intro>.writing-symbol{position:absolute;opacity:.16}
-.writing-eyebrow{font-family:var(--mono);font-weight:700;letter-spacing:.18em}
+.writing-eyebrow{font-family:var(--label);font-weight:700;letter-spacing:.18em}
 .diary-intro .writing-eyebrow,.diary-intro .writing-symbol{color:var(--cu)}
 .root.dark .diary-intro .writing-eyebrow,.root.dark .diary-intro .writing-symbol{color:#E8B27F}
 /* lo stato della lettura (amministratore): un timbro sulla perforazione, a destra, di fronte all'etichetta del tipo */
-.stato-pill{position:absolute;top:0;right:1.15rem;transform:translateY(-50%);display:inline-flex;align-items:center;gap:.4rem;font:650 .58rem/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;padding:.42rem .6rem;border-radius:999px;
+.stato-pill{position:absolute;top:0;right:1.15rem;transform:translateY(-50%);display:inline-flex;align-items:center;gap:.4rem;font:650 .58rem/1 var(--label);letter-spacing:.09em;text-transform:uppercase;padding:.42rem .6rem;border-radius:999px;
   color:#0C1D1A;background:rgba(255,255,253,.94);box-shadow:inset 0 0 0 1px rgba(12,29,26,.14),0 4px 10px -6px rgba(12,29,26,.4)}
 .stato-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ac)}
 .stato-pill.scelto{color:#3B2A00;background:linear-gradient(180deg,#FFD66B,#F2B21C);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 6px 14px -8px rgba(160,100,0,.8)}
@@ -133,10 +133,15 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 .card .paper:has(> button) .thumb p{padding-right:2.6rem}
 
 /* ---------- diario e profilo ---------- */
-.diary-card-top{font:650 .6rem/1.3 var(--mono);letter-spacing:.09em;text-transform:uppercase}
+.diary-card-top{align-items:flex-start;gap:.7rem;margin-bottom:.9rem}
+.diary-card-top>svg{margin-top:.2rem;flex-shrink:0}
+.diary-card-top h3{color:var(--ink);letter-spacing:-.015em}
+.diary-card-by{font-size:.74rem;font-weight:600;margin-top:.15rem}
+.diary-paper>p:first-child{margin-top:0}
 .pf-stat{background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 0 rgba(255,255,255,.7)}
 .root.dark .pf-stat{box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 0 rgba(255,255,255,.03)}
 .pf-stat .hd{font-variant-numeric:tabular-nums;letter-spacing:-.04em;color:var(--ac)}
-.pf-stat .mu{font:600 .6rem/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-top:.25rem}
+.pf-stat .mu{font:600 .6rem/1.3 var(--label);letter-spacing:.1em;text-transform:uppercase;margin-top:.25rem}
 /* l'anteprima si ferma alla quinta riga: senza margine sotto, la sesta non si intravede più sotto i puntini */
 .card .paper .thumb p{padding-bottom:0}
+.paper.diary-paper{min-height:150px}

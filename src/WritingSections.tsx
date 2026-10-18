@@ -61,8 +61,9 @@ const preview = (html: string) => plain(html || "").replace(/\u00A0/g, " ").repl
 export function DiaryCards({ items, onOpen, author, drawing }: { items: any[]; onOpen: (t: any, e: any) => void; author: (t: any) => string; drawing: (t: any) => React.ReactNode }) {
   return <div className="diary-grid grid sm:grid-cols-2 gap-5">
     {items.map(t => <article key={t.id} data-doc={t.id} className="diary-card pn" role="button" tabIndex={0} aria-label={`Leggi il pensiero ${t.title}`} onClick={e => onOpen(t, e)} onKeyDown={e => { if (["Enter", " "].includes(e.key)) { e.preventDefault(); onOpen(t, e); } }}>
-      <div className={`diary-card-top ${signatureOf(t) ? "signed" : ""}`}>{signatureOf(t) ? <Signature size={17} /> : <BookOpen size={17} />}<span className="truncate">{author(t)}</span><ArrowUpRight size={17} className="ml-auto" /></div>
-      <div className="paper diary-paper"><h3 className="hd font-bold text-xl">{t.title}</h3><p className="whitespace-pre-line mt-4 line-clamp-6">{preview(t.content) || "Un pensiero disegnato, oltre le parole."}</p>{drawing(t)}</div>
+      {/* in alto il titolo e sotto la firma (o la voce anonima); sul foglio soltanto il pensiero */}
+      <div className={`diary-card-top ${signatureOf(t) ? "signed" : ""}`}>{signatureOf(t) ? <Signature size={18} /> : <BookOpen size={18} />}<div className="min-w-0 flex-1"><h3 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title}</h3><span className="diary-card-by block truncate">{author(t)}</span></div><ArrowUpRight size={17} className="shrink-0 mt-1" /></div>
+      <div className="paper diary-paper"><p className="whitespace-pre-line line-clamp-6">{preview(t.content) || "Un pensiero disegnato, oltre le parole."}</p>{drawing(t)}</div>
       <p className="mu text-xs mt-4">Un pensiero da leggere, senza giudizi.</p>
     </article>)}
   </div>;
