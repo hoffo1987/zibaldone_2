@@ -1,0 +1,11 @@
+.rating-stars{display:inline-flex;align-items:center;gap:2px;vertical-align:middle}
+.rating-star-target{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.rating-star{display:inline-block;position:relative;flex-shrink:0}
+.rating-star svg{display:block;max-width:none}
+.rating-star-fill{position:absolute;inset:0 auto 0 0;overflow:hidden;pointer-events:none}
+.rating-stars.editable{cursor:pointer;touch-action:manipulation;border-radius:8px}
+.rating-stars.editable:focus-visible{outline:2px solid var(--ac);outline-offset:4px}
+.rating-stars.editable .rating-star-target{transition:transform .2s}
+@media(hover:hover){.rating-stars.editable .rating-star-target:hover{transform:scale(1.25)}}
+.rating-value{font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink);margin-left:6px;min-width:34px}
+.rating-value small{font-size:10px;color:var(--mu);margin-left:2px}

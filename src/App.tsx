@@ -13,6 +13,7 @@ import {
   Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Rows3, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal, Clapperboard, Compass, BookOpen
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
+import Stars from "./Stars";
 import { clean, plain } from "./sanitize";
 import { pubOf, pubSig, readPublic, isDiary, signatureOf, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, cartaOf, paperClass, isCarta, CARTE, type WritingKind, type Carta } from "./testi";
 import { snapshotReader } from "./snapshot";
@@ -676,19 +677,6 @@ const ApkDownload = ({ compact, divider, className = "" }: { compact?: boolean; 
 
 const mKey = (ts: number) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
 const mLabel = (k: string) => { const [y, m] = k.split("-"); return new Date(+y, +m - 1, 1).toLocaleDateString("it-IT", { month: "long", year: "numeric" }); };
-
-const Stars = ({ v = 0, onSet, size = 16 }: any) => {
-  const El: any = onSet ? "button" : "span";
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <El key={n} {...(onSet ? { type: "button", title: `${n} su 5`, onClick: (e: any) => { e.stopPropagation(); onSet(v === n ? 0 : n); } } : {})} className="transition-transform hover:scale-125 inline-flex">
-          <Star key={n <= v ? "on" : "off"} size={size} className={n <= v ? "st-on" : ""} style={n <= v ? { fill: "var(--am)", color: "var(--am)", ["--n" as any]: n } : { color: "var(--mu)", opacity: 0.35 }} />
-        </El>
-      ))}
-    </div>
-  );
-};
 
 // mantiene montato un elemento il tempo necessario per la sua animazione d'uscita
 let LITE = false;
@@ -1891,7 +1879,7 @@ export default function App() {
     setConfirmRvl(false);
   };
   const rate = async (t: any, n: number) => {
-    if (!isAdmin || !canEvaluate(t) || t.svelato) return;
+    if (!isAdmin || !canEvaluate(t) || t.svelato || !Number.isFinite(n) || n < 0 || n > 5 || !Number.isInteger(n * 2)) return;
     haptic("success");
     try { await setDoc(doc(db, "valutazioni", t.id), { voto: n, updatedAt: Date.now() }, { merge: true }); }
     catch { return notify("Voto non salvato: pubblica le nuove regole di Firestore."); }
@@ -2491,7 +2479,7 @@ export default function App() {
         : ranked.length === 0 ? (
           <div className="pn p-12 text-center max-w-md mx-auto"><Trophy className="mx-auto mb-4 mu" size={36} />
             <h3 className="hd text-xl font-bold mb-1">Nessun finalista per {mLabel(month)}</h3>
-            <p className="mu text-sm mb-5">Dai un voto da 1 a 5 stelle agli scritti: i più votati salgono qui sul podio.</p>
+            <p className="mu text-sm mb-5">Dai un voto da 0,5 a 5 stelle agli scritti, anche con le mezze stelle: i più votati salgono qui sul podio.</p>
             <button className="bt pri" onClick={() => { setTab("read"); setMonthFilter(month); }}>Apri gli scritti del mese</button></div>
         ) : (<>
           {podium3d ? <PodiumSlot list={podiumList} /> : <>
@@ -2532,7 +2520,7 @@ export default function App() {
             </div>
             <div className="flex justify-between items-end mt-6">
               <div><div className="hd text-3xl font-bold">{a.n}</div><div className="mu text-xs">{a.n === 1 ? "scritto" : "scritti"}</div></div>
-              <div className="text-right"><Stars v={Math.round(a.avg)} size={14} /><div className="mu text-xs mt-1">{a.avg ? `media ${a.avg.toFixed(1)}` : "senza voti"}</div></div>
+              <div className="text-right"><Stars v={Math.round(a.avg * 2) / 2} size={14} /><div className="mu text-xs mt-1">{a.avg ? `media ${a.avg.toLocaleString("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}` : "senza voti"}</div></div>
             </div>
           </div>
         </Reveal>
@@ -2804,7 +2792,7 @@ export default function App() {
               <div key={sel.id} ref={readRef} data-sheet-scroll="" className={`overflow-y-auto flex-1 min-h-0 ${swap ? "doc-swap" : ""}`} style={{ ["--dir" as any]: swap || 1 }}>
               {isAdmin && !anon && !diary && <div className="flex items-center gap-3 px-4 py-2 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
               {hidS && !diary && <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 py-2.5 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
-                <div className="text-sm min-w-0"><b>Autore nascosto.</b> <span className="mu">{sel.rating > 0 ? "Puoi svelarlo: dopo lo svelamento il voto non si cambia più." : "Dai da 1 a 5 stelle per poterlo svelare."}</span></div>
+                <div className="text-sm min-w-0"><b>Autore nascosto.</b> <span className="mu">{sel.rating > 0 ? "Puoi svelarlo: dopo lo svelamento il voto non si cambia più." : "Dai da 0,5 a 5 stelle per poterlo svelare. Tocca la metà sinistra di una stella per il mezzo voto."}</span></div>
                 <button type="button" className={`bt w-full sm:w-auto shrink-0 ${confirmRvl ? "on" : ""}`} disabled={!(sel.rating > 0)} onClick={() => confirmRvl ? reveal(sel) : setConfirmRvl(true)}><Eye size={15} />{confirmRvl ? "Conferma: voto definitivo" : "Svela autore"}</button>
               </div>}
               {!isAdmin && !anon && !diary && sel.svelato && sel.rating > 0 && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Il tuo voto</span><Stars v={sel.rating} size={22} /></div>}

@@ -21,6 +21,11 @@ service cloud.firestore {
     function pensiero(id) { return /databases/$(database)/documents/pensieri/$(id); }
     function tipo(d) { return d.get('kind', 'complete'); }
     function completo(id) { return exists(pensiero(id)) && tipo(get(pensiero(id)).data) == 'complete'; }
+    // Zero indica un voto tolto; i voti assegnati avanzano di mezza stella.
+    function votoValido(v, minimo) {
+      return v is number && v >= minimo && v <= 5
+        && v in [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+    }
     function validoOriginale(d) {
       return d.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred', 'kind', 'excerpt', 'updatedAt', 'rating', 'svelato', 'firmato', 'carta'])
         && d.keys().hasAll(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred'])
@@ -40,7 +45,7 @@ service cloud.firestore {
         && d.get('carta', 'quadretti') in ['quadretti', 'righe', 'bianco']
         // solo un pensiero del diario può portare il nome dell'autore
         && (tipo(d) == 'diary' || d.get('firmato', false) == false)
-        && (!('rating' in d) || (d.rating is int && d.rating >= 1 && d.rating <= 5))
+        && (!('rating' in d) || votoValido(d.rating, 0.5))
         && (tipo(d) == 'complete' || (!('rating' in d) && d.isStarred == false && d.get('svelato', false) == false && d.get('excerpt', '') == ''));
     }
     // copia pubblica del diario: nome e id dell'autore ci sono solo se l'originale è firmato, e sono quelli veri
@@ -153,8 +158,7 @@ service cloud.firestore {
         && request.resource.data.userId is string
         && request.resource.data.pensieroId is string
         && request.resource.data.titolo is string
-        && request.resource.data.voto is int
-        && request.resource.data.voto >= 1 && request.resource.data.voto <= 5
+        && votoValido(request.resource.data.voto, 0.5)
         && request.resource.data.timestamp is number
         && request.resource.data.letta == false;
 
@@ -172,8 +176,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['stato', 'nota', 'voto', 'segnalibro', 'updatedAt'])
         && request.resource.data.get('stato', 'da_leggere') in ['da_leggere', 'letto', 'shortlist', 'scelto']
         && request.resource.data.get('nota', '') is string && request.resource.data.get('nota', '').size() <= 2000
-        && request.resource.data.get('voto', 0) is int
-        && request.resource.data.get('voto', 0) >= 0 && request.resource.data.get('voto', 0) <= 5
+        && votoValido(request.resource.data.get('voto', 0), 0)
         && request.resource.data.get('segnalibro', false) is bool
         && request.resource.data.updatedAt is number;
     }

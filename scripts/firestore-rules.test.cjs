@@ -10,7 +10,7 @@ const projection = d => d.kind === 'diary'
   : { version: 2, kind: 'complete', title: d.title, excerpt: d.excerpt };
 const publish = (db, id, d) => { const b = writeBatch(db); b.set(doc(db, 'pensieri', id), d); b.set(doc(db, 'testi', id), projection(d)); return b.commit(); };
 before(async () => {
-  env = await initializeTestEnvironment({ projectId: 'demo-circuito', firestore: { rules: fs.readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8180 } });
+  env = await initializeTestEnvironment({ projectId: 'demo-circuito', firestore: { rules: fs.readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: Number(process.env.FIRESTORE_EMULATOR_HOST?.split(':').pop() || 8180) } });
   await env.clearFirestore();
   owner = env.authenticatedContext('owner').firestore(); other = env.authenticatedContext('other').firestore(); admin = env.authenticatedContext('admin').firestore(); guest = env.unauthenticatedContext().firestore();
   publisher = env.authenticatedContext('publisher', { releasePublisher:true }).firestore();
@@ -61,6 +61,35 @@ test('valutazioni private dei completi riservate agli admin', async () => {
 test('svelamento e voto definitivo dei completi restano funzionanti', async () => {
   await assertSucceeds(updateDoc(doc(admin, 'pensieri', 'complete'), { rating: 4, svelato: true }));
   await assertFails(updateDoc(doc(admin, 'pensieri', 'complete'), { rating: 5 }));
+});
+test('mezze stelle private, svelamento e notifica funzionano da 0,5 a 5', async () => {
+  for (const voto of [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]) {
+    const id = `half-${voto}`;
+    await assertSucceeds(publish(owner, id, original()));
+    await assertSucceeds(setDoc(doc(admin, 'valutazioni', id), { voto, updatedAt: 3 }));
+    const b = writeBatch(admin);
+    b.update(doc(admin, 'pensieri', id), { rating: voto, svelato: true });
+    b.set(doc(admin, 'notifiche', id), { userId: 'owner', pensieroId: id, titolo: 'Una pagina', voto, timestamp: 3, letta: false });
+    await assertSucceeds(b.commit());
+    assert.equal((await getDoc(doc(owner, 'pensieri', id))).data().rating, voto);
+    assert.equal((await getDoc(doc(owner, 'notifiche', id))).data().voto, voto);
+    await assertFails(updateDoc(doc(admin, 'pensieri', id), { rating: voto === 5 ? 4.5 : 5 }));
+  }
+});
+test('voti fuori scala, frazioni diverse dalla metà e falsi tipi sono rifiutati ovunque', async () => {
+  await assertSucceeds(publish(owner, 'invalid-rating', original()));
+  for (const voto of [-0.5, 0.25, 1.2, 3.75, 5.5, '4.5', null]) {
+    await assertFails(setDoc(doc(admin, 'valutazioni', 'invalid-rating'), { voto, updatedAt: 4 }));
+    await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'valutazioni', 'invalid-rating'), { voto, updatedAt: 4 }));
+    await assertFails(updateDoc(doc(admin, 'pensieri', 'invalid-rating'), { rating: voto, svelato: true }));
+    await assertFails(setDoc(doc(admin, 'notifiche', 'invalid-rating'), { userId: 'owner', pensieroId: 'invalid-rating', titolo: 'Una pagina', voto, timestamp: 4, letta: false }));
+  }
+});
+test('un voto tolto è zero solo nella valutazione privata, mai nello scritto o nella notifica', async () => {
+  await assertSucceeds(setDoc(doc(admin, 'valutazioni', 'invalid-rating'), { voto: 0.5, updatedAt: 5 }));
+  await assertSucceeds(updateDoc(doc(admin, 'valutazioni', 'invalid-rating'), { voto: 0 }));
+  await assertFails(updateDoc(doc(admin, 'pensieri', 'invalid-rating'), { rating: 0, svelato: true }));
+  await assertFails(setDoc(doc(admin, 'notifiche', 'zero-rating'), { userId: 'owner', pensieroId: 'invalid-rating', titolo: 'Una pagina', voto: 0, timestamp: 5, letta: false }));
 });
 test('diario modificabile da autore e admin, mai da estranei', async () => {
   const next = { ...original('diary'), title: 'Titolo aggiornato' };
