@@ -2,18 +2,15 @@
 // GPU basta l'integrata), la sala chiede quella ad alte prestazioni. All'avvio una prova breve misura la potenza di calcolo
 // della scheda (miliardi di operazioni al secondo); la fascia che ne esce sceglie qualità e risoluzione della scena.
 import { softwareAdapterAllowed } from "../logo3d/engine";
+import { SCORE_KEY, tierFor, type Tier } from "./gpuScore";
 
-export type Tier = "low" | "medium" | "high" | "ultra";
+export { tierFor, type Tier };
 export type PodiumDevice = {
   device: GPUDevice; timestamps: boolean; tier: Tier; gflops: number; adapter: { vendor: string; architecture: string };
   lost: boolean; onLost: Set<() => void>;
 };
 
 const KEEP_ALIVE_MS = 30000;
-const SCORE_KEY = "circuito:podium-gpu";
-// soglie sulla potenza misurata (GFLOPS effettivi della prova, non quelli di targa): una scheda integrata recente fa
-// 1000-3000, una dedicata di fascia media 5000-9000, le dedicate recenti di fascia alta ben oltre
-export const tierFor = (gflops: number): Tier => (gflops >= 7000 ? "ultra" : gflops >= 3000 ? "high" : gflops >= 900 ? "medium" : "low");
 
 // prova: ogni filo esegue catene indipendenti di moltiplicazioni-addizioni (FMA)
 const BENCH_ITERS = 256, BENCH_CHAINS = 8, BENCH_WG = 64;

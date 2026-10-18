@@ -17,7 +17,12 @@ export type PodiumProps = {
   covered?: boolean;
   // le scritte sospese nella sala sopra il podio coperto, in 3D (letters.ts)
   sign?: SignText;
+  // Opzioni › Avanzate: qualità forzata, risoluzione fissa (0 = adattiva), fotogrammi al secondo
+  tune?: PodiumTune;
 };
+export type PodiumTune = { tier?: Tier | "auto"; scale?: number; fps?: number };
+// tetto assoluto dei pixel con la risoluzione scelta a mano (oltre, anche la GPU più potente non regge 60 fps)
+const MANUAL_MAX_PIXELS = 16.6e6;
 
 const RETRIES = 1;
 const SLOT = "podium-slot"; // spazio lasciato libero nella pagina: lì la camera inquadra il podio
@@ -38,7 +43,10 @@ const FPS = 60;
 // La sala è viva: la camera respira e segue il puntatore, si trascina per girare attorno al podio, le coppe ruotano sui
 // piedistalli e al passaggio si sollevano e brillano; un clic (o un tocco) su coppa o gradino apre lo scritto.
 // Qualità e risoluzione seguono la potenza misurata della GPU e il tempo reale di ogni fotogramma.
-export default function Podium3D({ dark, plates, onFail, covered = false, sign }: PodiumProps) {
+export default function Podium3D({ dark, plates, onFail, covered = false, sign, tune }: PodiumProps) {
+  const tuneRef = useRef(tune); tuneRef.current = tune;
+  // la qualità e i fotogrammi ricostruiscono la scena; la risoluzione cambia dal vivo (si regola col cursore)
+  const tuneKey = `${tune?.tier || "auto"}:${tune?.fps || FPS}`;
   const host = useRef<HTMLDivElement>(null);
   const over = useRef<HTMLDivElement>(null);
   const plateEls = useRef<(HTMLDivElement | null)[]>([]);
@@ -84,7 +92,11 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign }
     resetSecretRef.current = () => { secret.reset(); secretStart = -1; };
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     // ratio: pixel della scena per pixel CSS; out: pixel del canvas per pixel CSS (quelli dello schermo)
-    let W = 0, H = 0, left = 0, top = 0, ratio = 1, out = 1, scale = START_SCALE[tier], cap = 4, frameMs = 1000 / FPS;
+    // ?podiotier e ?podioscale (prove) hanno la precedenza sulle Opzioni
+    const params = new URLSearchParams(window.location.search);
+    const tune = tuneRef.current, urlScale = Number(params.get("podioscale")) || 0, fps = tune?.fps || FPS;
+    let fixedScale = urlScale || tune?.scale || 0;
+    let W = 0, H = 0, left = 0, top = 0, ratio = 1, out = 1, scale = START_SCALE[tier], cap = 4, frameMs = 1000 / fps;
 
     const measure = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -102,8 +114,8 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign }
       out = Math.min(dpr, 2);
       const base = Math.min(dpr, narrow ? 1.5 : 2);
       // tetto dei pixel della fascia (un 4K con la scheda integrata non si disegna a piena risoluzione)
-      cap = Math.sqrt(q.maxPixels / Math.max(1, W * H * base * base));
-      scale = Math.min(scale, cap);
+      cap = Math.sqrt((fixedScale ? MANUAL_MAX_PIXELS : q.maxPixels) / Math.max(1, W * H * base * base));
+      scale = Math.min(fixedScale || scale, cap);
       ratio = base * scale;
     };
     const cam = (): Cam | null => view?.camera || (W && H ? camera(Math.max(1, Math.round(W * ratio)), Math.max(1, Math.round(H * ratio)), left * ratio, top * ratio) : null);
@@ -260,12 +272,11 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign }
       if (dev.lost) { lost(); return; }
       // ?podiotier=low|medium|high|ultra forza una fascia (prove); ?podiohud mostra fascia, risoluzione e tempi; ?podiot=s
       // ferma la sala all'istante s (confronti fotogramma per fotogramma)
-      const params = new URLSearchParams(window.location.search), forced = params.get("podiotier") as Tier | null;
+      const forced = (params.get("podiotier") || (tune?.tier !== "auto" ? tune?.tier : null)) as Tier | null;
       const still = params.has("podiot") ? Number(params.get("podiot")) || 0 : null;
       tier = forced && forced in START_SCALE ? forced : capTier(dev.tier, mobile); q = podiumQuality(tier, mobile); scale = Math.min(q.maxScale, START_SCALE[tier]);
-      // ?podioscale=x: risoluzione della scena fissa (misure dei tempi a parità di pixel)
-      const fixed = Number(params.get("podioscale")) || 0;
-      if (fixed) scale = fixed;
+      // risoluzione fissa (Opzioni o ?podioscale): niente adattamento
+      if (fixedScale) scale = fixedScale;
       const site = covered ? { cloth: await loadDrape() } : null;
       if (!alive) return;
       view = new PodiumView(dev.device, cv, q, dev.timestamps, site);
@@ -275,14 +286,17 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign }
       if (covered && signRef.current) view.setSign(signRef.current);
       fit();
       console.info(`Podio 3D: GPU ${dev.adapter.vendor || "?"} ${dev.adapter.architecture || ""}, ${Math.round(dev.gflops)} GFLOPS → fascia ${tier}`);
-      const pace = (vsync: number) => { frameMs = vsync ? refreshes(FPS, vsync) * vsync : 1000 / FPS; return steadyFps(FPS, vsync); };
+      const pace = (vsync: number) => { frameMs = vsync ? refreshes(fps, vsync) * vsync : 1000 / fps; return steadyFps(fps, vsync); };
       const t0 = performance.now();
-      let last = t0, first = true, night = darkRef.current ? 1 : 0, frames = 0, slowUntil = 0, avg = 1000 / FPS, drawn = t0, hudAt = 0;
+      let last = t0, first = true, night = darkRef.current ? 1 : 0, frames = 0, slowUntil = 0, avg = 1000 / fps, drawn = t0, hudAt = 0;
       const sm = { x: 0, y: 0, yaw: 0, secretPan: 0 };
       const cups = new Float32Array(12), hot = [0, 0, 0];
       for (let i = 0; i < 3; i++) cups[i * 4] = i * 2.1;
       const motion: CamMotion = { x: 0, y: 0, z: 0, yaw: 0 };
       cleanups.push(renderLoop((now) => {
+        // risoluzione scelta nelle Opzioni mentre la sala è aperta: si applica subito
+        const wantScale = urlScale || tuneRef.current?.scale || 0;
+        if (wantScale !== fixedScale) { fixedScale = wantScale; if (wantScale) scale = wantScale; fit(); }
         const dt = still === null ? Math.min(0.05, (now - last) / 1000) : 0; last = now;
         const t = still ?? (now - t0) / 1000, ease = (rate: number) => 1 - Math.exp(-dt * rate);
         if (!darkRef.current) { secret.reset(); secretStart = -1; }
@@ -321,7 +335,7 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign }
         // cambia con i pixel, quella variabile cresce col quadrato della scala: la scala giusta si calcola, poi si
         // raggiunge a passi (in giù subito, in su con calma)
         avg += (now - drawn - avg) * 0.05; drawn = now;
-        if (++frames % 30 === 0 && !fixed) {
+        if (++frames % 30 === 0 && !fixedScale) {
           const gpu = view!.gpuMs, old = scale, budget = frameMs * 0.75;
           if (gpu > 0) {
             const fixed = Math.min(view!.gpuFixedMs, gpu * 0.9);
@@ -352,7 +366,7 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign }
       view?.destroy();
       releasePodiumDevice();
     };
-  }, [gen, narrow, showHud, covered, signKey]);
+  }, [gen, narrow, showHud, covered, signKey, tuneKey]);
 
   const hudEl = showHud && hud ? <div className="podium-hud">{hud}</div> : null;
   // le scritte sono disegnate nella sala: ai lettori di schermo arriva lo stesso messaggio come testo

@@ -1,6 +1,7 @@
 import React from "react";
 import { Hourglass } from "lucide-react";
 import type { SignText } from "./podium/letters";
+import type { PodiumTune } from "./podium/Podium3D";
 
 // Il podio del mese in 3D (WebGPU) a tutto schermo; il modulo si scarica solo quando serve.
 const Podium3D = React.lazy(() => import("./podium/Podium3D"));
@@ -13,8 +14,8 @@ class Boundary extends React.Component<{ onError: () => void; children: React.Re
 }
 // la scena (sta nella radice dell'app, fuori dal contenitore della pagina): se WebGPU non parte chiama onFail.
 // covered: il podio non ancora visibile, sotto il telo e in mezzo al cantiere, con le scritte delle date sospese nella sala
-export function PodiumScene({ dark, plates, onFail, covered, sign }: { dark: boolean; plates: (React.ReactNode | null)[]; onFail: () => void; covered?: boolean; sign?: SignText }) {
-  return <Boundary onError={onFail}><React.Suspense fallback={null}><Podium3D dark={dark} plates={plates} onFail={onFail} covered={covered} sign={sign} /></React.Suspense></Boundary>;
+export function PodiumScene({ dark, plates, onFail, covered, sign, tune }: { dark: boolean; plates: (React.ReactNode | null)[]; onFail: () => void; covered?: boolean; sign?: SignText; tune?: PodiumTune }) {
+  return <Boundary onError={onFail}><React.Suspense fallback={null}><Podium3D dark={dark} plates={plates} onFail={onFail} covered={covered} sign={sign} tune={tune} /></React.Suspense></Boundary>;
 }
 // lo spazio lasciato libero nella pagina, dove la camera inquadra il podio (sui telefoni è il palco che contiene la scena);
 // list: i vincitori come schede sotto il palco, mostrate solo sugli schermi stretti (sui larghi sono targhette sopra le coppe)

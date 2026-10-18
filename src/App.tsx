@@ -33,6 +33,7 @@ import Logo3D from "./LogoView";
 // il podio del mese in 3D (WebGPU, con illuminazione globale) si scarica solo quando serve
 import { PodiumCover, PodiumScene, PodiumSign, PodiumSlot, hasWebGPU } from "./PodiumStage";
 import { nextReveal, revealCopy, revealLines } from "./podiumReveal";
+import { savedScore, forgetScore, TIER_LABEL } from "./podium/gpuScore";
 // easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login → caricamento → gioco
 import EggPortal from "./EggPortal";
 // presentazione del primo accesso (film + tour guidato): si scarica solo per chi deve vederla
@@ -1045,6 +1046,8 @@ export default function App() {
   const [dark, setDark] = useState(() => { try { return localStorage.getItem("circuito:dark") === "1"; } catch { return false; } });
   const [opts, setOpts] = useState<any>(() => { let o: any = {}; try { o = JSON.parse(localStorage.getItem("circuito:opts") || "{}"); } catch {} const red = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches; const mobile = !!window.matchMedia?.("(max-width:767px), (pointer:coarse)").matches; return { ...DEF, ...(!o.level ? { level: red ? "lite" : mobile ? "mid" : "full" } : {}), ...o }; });
   const [optOpen, setOptOpen] = useState(false);
+  const [advOpen, setAdvOpen] = useState(false); // Opzioni › Avanzate (il podio del mese)
+  const [, setScoreTick] = useState(0);
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const compact = useMediaQuery("(max-width:767px), (pointer:coarse)");
   const resolved = resolveG(opts);
@@ -2065,6 +2068,31 @@ export default function App() {
                 </div>
               </div>
             )}
+            {/* AVANZATE: la sala 3D del podio. In automatico qualità e risoluzione seguono la misura della scheda video
+                (salvata per una settimana) e il tempo di ogni fotogramma; qui si possono fissare a mano */}
+            <button type="button" className="adv-toggle" aria-expanded={advOpen} onClick={() => setAdvOpen(!advOpen)}><SlidersHorizontal size={15} /><span className="flex-1 text-left">Avanzate · Podio del mese</span><ChevronDown size={16} className="adv-chev" /></button>
+            {advOpen && (() => {
+              const score = savedScore(), auto = !opts.podioScale;
+              return <div className="adv-panel">
+                <p className="text-xs mu">Valgono per la sala in 3D. In automatico la qualità dipende dalla misura della scheda video e la risoluzione scende quando un fotogramma tarda; qui puoi fissarle tu.</p>
+                <div className="py-2">
+                  <span className="block text-sm font-semibold">Qualità della scena</span>
+                  <span className="block text-xs mu mb-2">Ombre, riflessi, luce e nebbia: più alta è più bella e più pesante</span>
+                  <Seg cols={3} v={opts.podioTier || "auto"} set={(v: string) => setOpt("podioTier", v)} items={[["auto", "Automatica"], ["low", "Bassa"], ["medium", "Media"], ["high", "Alta"], ["ultra", "Massima"]]} />
+                </div>
+                <Sw on={auto} set={(v: boolean) => setOpt("podioScale", v ? 0 : 1)} label="Risoluzione automatica" hint="Scende da sola se la scheda non sta al passo, poi risale piano" />
+                {!auto && <Rng label="Risoluzione della scena" hint="Rispetto ai pixel dello schermo: sopra il 100% è più nitida (supercampionamento) e più pesante" v={opts.podioScale} set={(v: number) => setOpt("podioScale", v)} min={0.5} max={2} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <div className="py-2">
+                  <span className="block text-sm font-semibold">Fotogrammi al secondo</span>
+                  <span className="block text-xs mu mb-2">A 30 la scheda ha il doppio del tempo per ogni immagine: puoi alzare la risoluzione</span>
+                  <Seg v={opts.podioFps || 60} set={(v: number) => setOpt("podioFps", v)} items={[[30, "30 fps"], [60, "60 fps"]]} />
+                </div>
+                <div className="flex items-center gap-3 py-2">
+                  <span className="text-xs mu flex-1">{score ? `Ultima misura della scheda: ${Math.round(score.gflops).toLocaleString("it-IT")} GFLOPS, qualità ${TIER_LABEL[score.tier]}. Se era occupata (un gioco, altre schede aperte) la misura può essere bassa.` : "La scheda video verrà misurata alla prossima apertura del podio."}</span>
+                  {score && <button type="button" className="bt shrink-0" onClick={() => { forgetScore(); setScoreTick((t) => t + 1); }}><RotateCcw size={15} />Rimisura</button>}
+                </div>
+              </div>;
+            })()}
             <h4 className="text-xs mu mt-4 mb-1">Musica e feedback</h4>
             <Sw on={opts.music} set={setMusic} label="Musica di sottofondo" hint="Mii Channel (Plaza) · riproduzione continua" />
             {opts.music && <Rng label="Volume della musica" v={opts.musicVol ?? 0.35} set={(v: number) => setOpt("musicVol", v)} min={0} max={1} step={0.05} fmt={(v: number) => Math.round(v * 100) + "%"} />}
@@ -2458,7 +2486,7 @@ export default function App() {
   return shell(
     <>
       <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
-      {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} covered={!isAdmin} sign={podiumLetters} onFail={() => setPodiumFail(true)} />}
+      {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} covered={!isAdmin} sign={podiumLetters} tune={{ tier: opts.podioTier || "auto", scale: opts.podioScale || 0, fps: opts.podioFps || 60 }} onFail={() => setPodiumFail(true)} />}
       <Navigation tab={tab} admin={isAdmin} editing={!!editingId} railKey={railKey}
         hidden={kbOpen || (tab === "write" && drawing)} onNavigate={go}
         brand={<div className="flex items-center gap-2.5 cursor-pointer select-none" title="Il Circuito">
