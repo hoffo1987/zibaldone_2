@@ -1875,17 +1875,17 @@ export default function App() {
       await b.commit();
       haptic("success");
       setRvl(t.id); setSel({ ...sel, svelato: true });
-    } catch { notify("Svelamento non riuscito: pubblica le nuove regole di Firestore."); }
+    } catch (error) { console.error("Svelamento autore non riuscito", error); notify("Svelamento non riuscito. Il voto resta salvato: riapri lo scritto e riprova."); }
     setConfirmRvl(false);
   };
   const rate = async (t: any, n: number) => {
     if (!isAdmin || !canEvaluate(t) || t.svelato || !Number.isFinite(n) || n < 0 || n > 5 || !Number.isInteger(n * 2)) return;
     haptic("success");
     try { await setDoc(doc(db, "valutazioni", t.id), { voto: n, updatedAt: Date.now() }, { merge: true }); }
-    catch { return notify("Voto non salvato: pubblica le nuove regole di Firestore."); }
+    catch (error) { console.error("Salvataggio voto non riuscito", error); return notify("Voto non salvato. Controlla la connessione e riprova."); }
     if (sel?.id === t.id) setSel({ ...sel, rating: n });
   };
-  const star = async (t: any) => { if (isAdmin && canEvaluate(t)) { haptic("impact"); try { await setDoc(doc(db, "valutazioni", t.id), { segnalibro: !t.isStarred, updatedAt: Date.now() }, { merge: true }); } catch { return notify("Segnalibro non salvato: pubblica le nuove regole di Firestore."); } if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
+  const star = async (t: any) => { if (isAdmin && canEvaluate(t)) { haptic("impact"); try { await setDoc(doc(db, "valutazioni", t.id), { segnalibro: !t.isStarred, updatedAt: Date.now() }, { merge: true }); } catch (error) { console.error("Salvataggio segnalibro non riuscito", error); return notify("Segnalibro non salvato. Controlla la connessione e riprova."); } if (sel?.id === t.id) setSel({ ...sel, isStarred: !t.isStarred }); } };
   const confirmDelete = async () => {
     const list = toDelete!; setToDelete(null); setSel(null); setGone(list);
     setTimeout(async () => {

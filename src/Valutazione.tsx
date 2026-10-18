@@ -39,7 +39,7 @@ export function PannelloAdmin({ db, id, notify }: { db: any; id: string; notify?
     saved.current = { stato: st, nota: nt.trim() };
     setBusy(true);
     try { await setDoc(doc(db, "valutazioni", id), { stato: st, nota: nt.trim(), updatedAt: Date.now() }, { merge: true }); }
-    catch { notify?.("Nota non salvata: pubblica le nuove regole di Firestore."); }
+    catch (error) { console.error("Salvataggio nota non riuscito", error); notify?.("Nota non salvata. Controlla la connessione e riprova."); }
     setBusy(false);
   };
 

@@ -76,6 +76,32 @@ test('mezze stelle private, svelamento e notifica funzionano da 0,5 a 5', async 
     await assertFails(updateDoc(doc(admin, 'pensieri', id), { rating: voto === 5 ? 4.5 : 5 }));
   }
 });
+test('scritti storici senza campi del foglio: voto, svelamento e notifica in un solo salvataggio', async () => {
+  for (const voto of [0.5, 3.5, 4.5, 5]) {
+    const id = `legacy-text-only-${voto}`;
+    // Forma realmente usata dalle prime versioni: niente kind, excerpt, strokes, w o h.
+    const legacy = { title: 'Uno scritto storico', content: '<p>Solo testo</p>', author: 'Autore privato', userId: 'owner', timestamp: 1, isStarred: false, svelato: false };
+    await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'pensieri', id), legacy));
+    await assertSucceeds(setDoc(doc(admin, 'valutazioni', id), { voto, updatedAt: 3 }));
+    const b = writeBatch(admin);
+    b.update(doc(admin, 'pensieri', id), { rating: voto, svelato: true });
+    b.set(doc(admin, 'notifiche', id), { userId: 'owner', pensieroId: id, titolo: legacy.title, voto, timestamp: 3, letta: false });
+    await assertSucceeds(b.commit());
+    const after = (await getDoc(doc(owner, 'pensieri', id))).data();
+    assert.equal(after.rating, voto); assert.equal(after.svelato, true);
+    assert.equal(after.content, legacy.content); assert.equal(after.author, legacy.author);
+    assert.equal((await getDoc(doc(owner, 'notifiche', id))).data().voto, voto);
+    await assertFails(updateDoc(doc(admin, 'pensieri', id), { rating: voto === 5 ? 4.5 : 5 }));
+    await assertFails(updateDoc(doc(owner, 'pensieri', id), { rating: 1 }));
+  }
+});
+test('campi del foglio obbligatori per gli scritti moderni, valori presenti sempre validati', async () => {
+  const missing = original(); delete missing.strokes; delete missing.w; delete missing.h;
+  await assertFails(publish(owner, 'modern-without-paper', missing));
+  for (const patch of [{ strokes: 'non è un disegno' }, { w: -1 }, { h: 200001 }]) {
+    await assertFails(publish(owner, 'bad-paper', { ...original(), ...patch }));
+  }
+});
 test('voti fuori scala, frazioni diverse dalla metà e falsi tipi sono rifiutati ovunque', async () => {
   await assertSucceeds(publish(owner, 'invalid-rating', original()));
   for (const voto of [-0.5, 0.25, 1.2, 3.75, 5.5, '4.5', null]) {

@@ -28,12 +28,15 @@ service cloud.firestore {
     }
     function validoOriginale(d) {
       return d.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred', 'kind', 'excerpt', 'updatedAt', 'rating', 'svelato', 'firmato', 'carta'])
-        && d.keys().hasAll(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred'])
+        && d.keys().hasAll(['title', 'content', 'author', 'timestamp', 'userId', 'isStarred'])
+        // I primi scritti, senza kind, potevano contenere solo testo: il foglio non era salvato.
+        // Nei documenti moderni resta obbligatorio; nei vecchi ogni valore presente è comunque validato.
+        && (!('kind' in d) || d.keys().hasAll(['strokes', 'w', 'h']))
         && d.title is string && d.title.size() > 0 && d.title.size() <= 200
         && d.content is string && d.content.size() <= 950000
-        && d.strokes is list && d.strokes.size() <= 10000
-        && d.w is number && d.w > 0 && d.w <= 200000
-        && d.h is number && d.h > 0 && d.h <= 200000
+        && d.get('strokes', []) is list && d.get('strokes', []).size() <= 10000
+        && d.get('w', 900) is number && d.get('w', 900) > 0 && d.get('w', 900) <= 200000
+        && d.get('h', 600) is number && d.get('h', 600) > 0 && d.get('h', 600) <= 200000
         && d.author is string && d.author.size() <= 200
         && d.userId is string && d.timestamp is number && d.isStarred is bool
         && d.get('updatedAt', 0) is number

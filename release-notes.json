@@ -1,4 +1,4 @@
 {
-  "titolo": "Mezze stelle e votazione da capo",
-  "messaggio": "Ora puoi assegnare da 0,5 a 5 stelle, con mezze stelle e la stessa animazione di prima: tocca la metà sinistra o destra di ogni stella per scegliere il voto. I voti precedenti sono stati azzerati per rivalutare tutti gli scritti da capo."
+  "titolo": "Svelamento ripristinato per gli scritti storici",
+  "messaggio": "Ora puoi svelare l’autore anche degli scritti delle prime versioni, mantenendo il voto assegnato, comprese le mezze stelle. I messaggi di errore per voto e svelamento non invitano più a pubblicare le regole di Firebase."
 }
