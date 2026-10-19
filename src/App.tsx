@@ -2700,9 +2700,10 @@ export default function App() {
                     onKeyDown={(e) => { if (e.key === "Enter") document.execCommand("formatBlock", false, "div"); }} />
                   {drawing && <div className="absolute inset-0 z-30" style={{ touchAction: tool === "hand" ? "pan-y" : "none", cursor: tool === "hand" ? "grab" : tool === "eraser" ? "cell" : "crosshair" }} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp} />}
                 </div>
-                <div className="flex justify-between items-center px-4 py-2 text-xs mu border-t" style={{ borderColor: "var(--ln)" }}>
-                  <span className="truncate">{drawing ? `${strokes.length} tratti` : `${words} parole`}{!editingId && " · bozza automatica"}</span>
-                  <div className="flex gap-1.5 shrink-0"><div className="paper-pick" role="radiogroup" aria-label="Foglio">{CARTE.map((c) => { const on = (carta || cartaOf({ kind })) === c, Ic = c === "quadretti" ? Grid3x3 : c === "righe" ? Rows3 : File, l = c === "quadretti" ? "A quadretti" : c === "righe" ? "A righe" : "Bianco"; return <button key={c} type="button" role="radio" aria-checked={on} title={`Foglio ${l.toLowerCase()}`} aria-label={`Foglio ${l.toLowerCase()}`} className={`bt !p-2 ${on ? "on" : ""}`} onClick={() => setCarta(c)}><Ic size={16} /><span className="paper-pick-l">{l}</span></button>; })}</div><button type="button" className="bt !text-xs" onClick={() => setHeight((h) => h + 300)}><Plus size={14} />Spazio</button></div>
+                <div className="editor-footer text-xs mu border-t" style={{ borderColor: "var(--ln)" }}>
+                  <span className="editor-footer-status">{drawing ? `${strokes.length} tratti` : `${words} parole`}{!editingId && " · bozza automatica"}</span>
+                  <div className="paper-pick" role="radiogroup" aria-label="Foglio">{CARTE.map((c) => { const on = (carta || cartaOf({ kind })) === c, Ic = c === "quadretti" ? Grid3x3 : c === "righe" ? Rows3 : File, l = c === "quadretti" ? "A quadretti" : c === "righe" ? "A righe" : "Bianco"; return <button key={c} type="button" role="radio" aria-checked={on} title={`Foglio ${l.toLowerCase()}`} aria-label={`Foglio ${l.toLowerCase()}`} className={`bt !p-2 ${on ? "on" : ""}`} onClick={() => setCarta(c)}><Ic size={16} /><span className="paper-pick-l">{l}</span></button>; })}</div>
+                  <button type="button" className="editor-add-space bt !text-xs" onClick={() => setHeight((h) => h + 300)}><Plus size={14} />Spazio</button>
                 </div>
               </div>
               <div className="flex gap-2 justify-end">
