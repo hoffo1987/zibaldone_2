@@ -54,7 +54,7 @@ test('the secret shares scene passes only while revealed and clears every reflec
   await view.ready(); view.resize(800, 600, 1, 1, 0, 0);
   view.render(20, 1); await device.queue.onSubmittedWorkDone();
   const model = { update: jest.fn(), draw: jest.fn(), destroy: jest.fn() };
-  view.freddy = model;
+  view.glitchtrap = model;
   view.render(21, 1); await device.queue.onSubmittedWorkDone();
   expect(model.draw).not.toHaveBeenCalled();
   stats.passes = [];

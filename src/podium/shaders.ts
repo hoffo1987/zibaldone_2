@@ -752,8 +752,8 @@ fn shadeSurface(s: Surf, m: u32, p: vec3f, n0: vec3f, eye: vec3f, px: vec2f, kr:
   let ao = s.ao * select(contactAO(p, n0), 1.0, m == ${Mat.cloth}u);
   // During the reveal, lift existing bounced light around the alcove on every surface,
   // including the column and floor. Its direction and colour still come from the room probes.
-  let alcove = p - vec3f(-5.5, 3.0, -2.8);
-  let bounce = 1.0 + 4.0 * F.banner.w * exp(-dot(alcove, alcove) / 12.0);
+  let alcove = p - vec3f(-5.5, 2.8, -2.7);
+  let bounce = 1.0 + 7.0 * F.banner.w * exp(-dot(alcove, alcove) / 16.0);
   let gi = (giAt(p + n0 * 0.3, n) + F.skyHor.w) * ao * bounce;
   let f0 = mix(vec3f(0.04), s.alb, s.metal);
   let hv = L + V; let H = hv * inverseSqrt(max(dot(hv, hv), 1e-12)); // astro esattamente dietro il punto: niente 0/0

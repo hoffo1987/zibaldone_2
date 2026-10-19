@@ -170,15 +170,21 @@ Solo in modalità scura, toccare i sei riquadri centrali del finestrone: prima i
 interno, poi i due centrali, infine i due inferiori; per ogni coppia, sinistra e poi destra.
 Toccare il vetro visibile, evitando le targhette e le coppe davanti. Un tocco fuori sequenza
 ricomincia il conteggio; trascinamenti, scorrimenti e tocchi annullati non contano.
-Al sesto tocco Freddy spunta dalla colonna sinistra, inclinato, e saluta con la mano libera
-sulla destra per chi guarda; il microfono rimane nell'altra mano abbassata.
+Al sesto tocco Glitchtrap, nascosto dietro una colonna della navata sinistra, si sporge finché
+compare un occhio viola, scivola fuori ancora piegato di lato, cammina curvo verso la sala con lo
+sguardo fisso sulla camera, si ferma e saluta lentamente con la mano sinistra accanto alla testa
+inclinata; poi richiama con le dita, respira, ha qualche scatto improvviso della testa e torna a
+salutare ogni quindici secondi. Con il movimento ridotto resta fermo con la mano alzata.
 Cambio tema e uscita dalla pagina azzerano la sorpresa. Nei formati stretti la camera
-si sposta leggermente per mostrare la colonna e il saluto.
+si sposta e ruota verso la navata per mostrare la camminata e il saluto.
 
 Geometria, texture e renderer della sorpresa vengono caricati al primo tocco corretto,
 senza download o passaggi GPU aggiuntivi nella normale visita della sala. Il modello
-condivide profondità, ombre, riflessi e composizione HDR del podio. Le risorse vengono
-liberate uscendo dalla scena. Provenienza e comandi di conversione: `public/freddy/README.md`.
+condivide profondità, ombre, riflessi e composizione HDR del podio; lo scheletro viene posato
+a ogni fotogramma (`src/podium/glitchtrapPose.ts`) e la mesh deformata sulla GPU. Le risorse
+vengono liberate uscendo dalla scena. Nell'anteprima locale `&dark&podiosegreto` apre subito la
+sorpresa e `&podiosegreto=9` la ferma a quell'istante (solo in sviluppo, solo di notte).
+Provenienza, licenza e comandi di conversione: `public/glitchtrap/README.md`.
 
 In **Opzioni → Musica e feedback** si può attivare **Musica di sottofondo** e regolare il volume separatamente dai bip.
 Il brano allegato, Mii Channel (Plaza), è in `public/audio/mii-channel-plaza.mp3` e viene riprodotto in loop.

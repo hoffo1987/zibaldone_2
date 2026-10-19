@@ -285,6 +285,10 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
       await view.ready();
       if (!alive) return;
       if (covered && signRef.current) view.setSign(signRef.current);
+      // solo in sviluppo (anteprime, con ?dark): ?podiosegreto apre subito la sorpresa notturna; ?podiosegreto=8.5 la
+      // ferma a quell'istante, che window.__podioSegreto può poi spostare (fotogrammi per le prove). Di giorno non c'è.
+      const devSecret = process.env.NODE_ENV !== "production" ? params.get("podiosegreto") : null;
+      if (devSecret !== null) view.prepareSecret().then((ready) => { if (alive && ready && darkRef.current) { secretReady = true; secret.revealed = true; } });
       fit();
       console.info(`Podio 3D: GPU ${dev.adapter.vendor || "?"} ${dev.adapter.architecture || ""}, ${Math.round(dev.gflops)} GFLOPS → fascia ${tier}`);
       const pace = (vsync: number) => { frameMs = vsync ? refreshes(fps, vsync) * vsync : 1000 / fps; return steadyFps(fps, vsync); };
@@ -302,7 +306,8 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
         const t = still ?? (now - t0) / 1000, ease = (rate: number) => 1 - Math.exp(-dt * rate);
         if (!darkRef.current) { secret.reset(); secretStart = -1; }
         if (secret.revealed && secretReady && secretStart < 0) secretStart = now;
-        const secretSeconds = secretStart < 0 ? -1 : (now - secretStart) / 1000;
+        let secretSeconds = secretStart < 0 ? -1 : (now - secretStart) / 1000;
+        if (devSecret && secretStart >= 0) secretSeconds = Number((window as { __podioSegreto?: number }).__podioSegreto ?? devSecret) || 0;
         night += ((darkRef.current ? 1 : 0) - night) * ease(2.2); // il sole lascia il posto alla luna piano piano
         // camera: respiro lento, parallasse col puntatore, ritorno dolce dopo il trascinamento
         if (!drag.on && now - drag.at > 2500) yawTarget *= 1 - ease(0.6);
@@ -316,10 +321,11 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
         // l'ambiente del podio coperto segue la stanza che gira: il cortile si sposta appena tra i due lati
         if (covered) setAmbiencePan(-motion.yaw * 1.4);
         // The left aisle lies outside a portrait crop. Ease it into view only after the secret is revealed.
+        // On phones the camera also turns towards the aisle, so the near columns do not hide his walk.
         const pan = secretSeconds >= 0 ? (narrow ? 1.8 : W - left < 900 ? 1 : 0) : 0;
         sm.secretPan += (pan - sm.secretPan) * (reduced.matches ? 1 : 1 - Math.exp(-Math.min(0.05, (now - drawn) / 1000) * 3));
         motion.x -= sm.secretPan;
-        if (narrow) motion.z += sm.secretPan * (4 / 1.8);
+        if (narrow) { motion.z += sm.secretPan * (4 / 1.8); motion.yaw += sm.secretPan * (0.45 / 1.8); }
         // coppe: girano piano, quella sotto il puntatore (o la cui targhetta è sotto il puntatore) si solleva e brilla
         hover = drag.on && drag.moved > 8 ? -1 : ptr.cx >= 0 ? pick(ptr.cx, ptr.cy) : -1;
         if (hover < 0 && hoverPlate.current >= 0) hover = hoverPlate.current;

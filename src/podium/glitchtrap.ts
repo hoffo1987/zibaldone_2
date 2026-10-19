@@ -1,116 +1,120 @@
-// Loaded only after the first correct window tap. The same lighting shader and GPU resources as the room.
+// Loaded only after the first correct window tap. Same lighting shader and GPU resources as the room; the skeleton is
+// posed on the CPU (glitchtrapPose.ts) and the vertices are skinned here, identically in every pass.
 import { modelLightingShader, type PodiumQuality } from './shaders';
-import { writeFreddyPose } from './freddyPose';
-const objectStruct = `struct Object { model: mat4x4f, head: mat4x4f, params: vec4f, pivot: vec4f };`;
-const deformation = /* wgsl */ `
-struct Input { @location(0) p: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f,
-  @location(3) dp: vec3f, @location(4) dn: vec3f, @location(5) headWeight: f32 };
-struct Deformed { p: vec3f, n: vec3f };
-fn deform(i: Input) -> Deformed {
-  let p = i.p + i.dp * O.params.x; let n = normalize(i.n + i.dn * O.params.x);
-  let hp = (O.head * vec4f(p - O.pivot.xyz, 1.0)).xyz + O.pivot.xyz;
-  let hn = (O.head * vec4f(n, 0.0)).xyz;
-  return Deformed((O.model * vec4f(mix(p, hp, i.headWeight), 1.0)).xyz,
-    normalize((O.model * vec4f(mix(n, hn, i.headWeight), 0.0)).xyz));
+import { makeRig, writeGlitchtrapPose, type JointInfo, type Rig } from './glitchtrapPose';
+
+type Meta = { version: number; vertexCount: number; indexCount: number; stride: number; joints: JointInfo[] };
+const objectStruct = (joints: number) => `struct Object { joints: array<mat4x4f, ${joints}>, params: vec4f };`;
+const skinning = /* wgsl */ `
+struct Input { @location(0) p: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f, @location(3) j: vec4u, @location(4) w: vec4f };
+struct Skinned { p: vec3f, n: vec3f };
+fn skin(i: Input) -> Skinned {
+  let m = O.joints[i.j.x] * i.w.x + O.joints[i.j.y] * i.w.y + O.joints[i.j.z] * i.w.z + O.joints[i.j.w] * i.w.w;
+  return Skinned((m * vec4f(i.p, 1.0)).xyz, normalize((m * vec4f(i.n, 0.0)).xyz));
 }`;
-const shader = (q: PodiumQuality) => /* wgsl */ `${modelLightingShader(q)}${objectStruct}
+const shader = (q: PodiumQuality, joints: number) => /* wgsl */ `${modelLightingShader(q)}${objectStruct(joints)}
 @group(2) @binding(0) var<uniform> O: Object;
 @group(3) @binding(0) var color: texture_2d<f32>;
 @group(3) @binding(1) var normalMap: texture_2d<f32>;
-@group(3) @binding(2) var smp: sampler;
-@group(3) @binding(3) var<uniform> material: vec4f;
-${deformation}
+@group(3) @binding(2) var material: texture_2d<f32>;
+@group(3) @binding(3) var smp: sampler;
+${skinning}
 struct Out { @builtin(position) pos: vec4f,
  @location(0) @interpolate(perspective, centroid) wp: vec3f,
  @location(1) @interpolate(perspective, centroid) n: vec3f,
  @location(2) @interpolate(perspective, centroid) uv: vec2f };
 @vertex fn vs(i: Input) -> Out {
-  let a = deform(i); var o: Out; o.wp = a.p; o.n = a.n; o.uv = i.uv;
+  let a = skin(i); var o: Out; o.wp = a.p; o.n = a.n; o.uv = i.uv;
   o.pos = P.vp * vec4f(select(a.p, vec3f(a.p.x, -a.p.y, a.p.z), P.misc.y == 1.0), 1.0);
   return o;
 }
 @fragment fn fs(i: Out) -> @location(0) vec4f {
   let base = textureSample(color, smp, i.uv).rgb;
   let nm = textureSample(normalMap, smp, i.uv).xyz * 2.0 - 1.0;
+  let mat = textureSample(material, smp, i.uv).rgb;
   let n0 = normalize(i.n);
   let dx = dpdx(i.wp); let dy = dpdy(i.wp); let ux = dpdx(i.uv); let uy = dpdy(i.uv);
   let a = cross(dy, n0); let b = cross(n0, dx);
   let t = a * ux.x + b * uy.x; let bt = a * ux.y + b * uy.y;
   let inv = inverseSqrt(max(max(dot(t,t),dot(bt,bt)), 1e-12));
-  // Exported UVs flip V for image upload; invert the tangent-space green axis with them.
+  // glTF UVs grow downwards; the normal map's green axis points up the image
   let n = normalize(t * inv * nm.x - bt * inv * nm.y + n0 * nm.z);
   var surface: Surf;
-  surface.alb = base; surface.n = n; surface.rough = material.y; surface.metal = material.z;
-  surface.ao = 1.0; surface.kind = 2u; surface.sheen = material.w;
+  // costume fur: rough, never metallic, with a soft velvet sheen at grazing angles
+  surface.alb = base; surface.n = n; surface.rough = max(mat.r, 0.35); surface.metal = 0.0;
+  surface.ao = 1.0; surface.kind = 2u; surface.sheen = 0.32;
   let nx = dpdx(n); let ny = dpdy(n); let kr = min(0.3 * (dot(nx, nx) + dot(ny, ny)), 0.2);
   var eye = P.pos.xyz; if (P.misc.y == 1.0) { eye.y = -eye.y; }
-  return vec4f(finite3(shadeSurface(surface, 0u, i.wp, n0, eye, i.pos.xy, kr)), 1.0);
+  // the purple irises glow on their own (the only light he brings into the room)
+  let glow = vec3f(mat.g, 0.0, mat.b) * O.params.x * 3.2;
+  return vec4f(finite3(shadeSurface(surface, 0u, i.wp, n0, eye, i.pos.xy, kr) + glow), 1.0);
 }`;
-const shadowShader = `${objectStruct}
+const shadowShader = (joints: number) => `${objectStruct(joints)}
 @group(0) @binding(0) var<uniform> O: Object;
 @group(1) @binding(0) var<uniform> light: mat4x4f;
-${deformation}
-@vertex fn shadow(i: Input) -> @builtin(position) vec4f { return light * vec4f(deform(i).p, 1.0); }`;
+${skinning}
+@vertex fn shadow(i: Input) -> @builtin(position) vec4f { return light * vec4f(skin(i).p, 1.0); }`;
 
-type Meta = { version: number; vertexCount: number; indexCount: number; stride: number; headPivot: number[]; ranges: { first: number; count: number }[]; materials: string[] };
-const vertexLayout: GPUVertexBufferLayout = { arrayStride: 60, attributes: [
+const vertexLayout: GPUVertexBufferLayout = { arrayStride: 40, attributes: [
   { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' },
-  { shaderLocation: 2, offset: 24, format: 'float32x2' }, { shaderLocation: 3, offset: 32, format: 'float32x3' },
-  { shaderLocation: 4, offset: 44, format: 'float32x3' },
-  { shaderLocation: 5, offset: 56, format: 'float32' },
+  { shaderLocation: 2, offset: 24, format: 'float32x2' }, { shaderLocation: 3, offset: 32, format: 'uint8x4' },
+  { shaderLocation: 4, offset: 36, format: 'unorm8x4' },
 ] };
 
-export class Freddy {
+export class Glitchtrap {
   private buffers: GPUBuffer[] = [];
   private textures: GPUTexture[] = [];
   private own!: GPUBindGroup;
   private uniform!: GPUBuffer;
   private vertex!: GPUBuffer;
   private index!: GPUBuffer;
-  private materials: GPUBindGroup[] = [];
+  private material!: GPUBindGroup;
   private passes: GPUBindGroup[] = [];
   private pipes!: { main: GPURenderPipeline; flat: GPURenderPipeline; shadow: GPURenderPipeline };
   private meta!: Meta;
-  private data = new Float32Array(40);
+  private rig!: Rig;
+  private data = new Float32Array(4);
   private constructor(private device: GPUDevice) {}
 
   static async load(device: GPUDevice, passBuffers: GPUBuffer[], signal: AbortSignal, q: PodiumQuality, frameLayout: GPUBindGroupLayout, passLayout: GPUBindGroupLayout) {
-    const result = new Freddy(device);
+    const result = new Glitchtrap(device);
     try { await result.init(passBuffers, signal, q, frameLayout, passLayout); return result; }
     catch (e) { result.destroy(); throw e; }
   }
 
   private async init(passBuffers: GPUBuffer[], signal: AbortSignal, q: PodiumQuality, frameLayout: GPUBindGroupLayout, passLayout: GPUBindGroupLayout) {
-    const d = this.device, base = `${process.env.PUBLIC_URL || ''}/freddy/`;
+    const d = this.device, base = `${process.env.PUBLIC_URL || ''}/glitchtrap/`;
     const fetchFile = async (name: string) => {
       const r = await fetch(base + name, { signal });
-      if (!r.ok) throw new Error(`Freddy: ${name} (${r.status})`);
+      if (!r.ok) throw new Error(`Glitchtrap: ${name} (${r.status})`);
       return r;
     };
-    const [meta, mesh] = await Promise.all([fetchFile('freddy.json').then(r => r.json()), fetchFile('freddy.bin').then(r => r.arrayBuffer())]);
+    const [meta, mesh] = await Promise.all([fetchFile('glitchtrap.json').then(r => r.json()), fetchFile('glitchtrap.bin').then(r => r.arrayBuffer())]);
     this.meta = meta;
-    if (meta.version !== 2 || meta.stride !== 60 || !meta.headPivot || mesh.byteLength !== meta.vertexCount * 60 + meta.indexCount * 4) throw new Error('Freddy: modello incompleto');
+    if (meta.version !== 1 || meta.stride !== 40 || !meta.joints?.length || mesh.byteLength !== meta.vertexCount * 40 + meta.indexCount * 2) throw new Error('Glitchtrap: modello incompleto');
+    this.rig = makeRig(meta.joints);
+    this.data = new Float32Array(this.rig.n * 16 + 4);
     const buffer = (data: ArrayBuffer | Float32Array, usage: number) => {
       const b = d.createBuffer({ size: data.byteLength, usage: usage | GPUBufferUsage.COPY_DST });
       this.buffers.push(b); d.queue.writeBuffer(b, 0, data); return b;
     };
-    this.vertex = buffer(mesh.slice(0, meta.vertexCount * 60), GPUBufferUsage.VERTEX);
-    this.index = buffer(mesh.slice(meta.vertexCount * 60), GPUBufferUsage.INDEX);
+    this.vertex = buffer(mesh.slice(0, meta.vertexCount * 40), GPUBufferUsage.VERTEX);
+    this.index = buffer(mesh.slice(meta.vertexCount * 40), GPUBufferUsage.INDEX);
     this.uniform = buffer(this.data, GPUBufferUsage.UNIFORM);
     const uni = d.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }] });
     const tex = d.createBindGroupLayout({ entries: [
       { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: {} }, { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} },
-      { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: {} }, { binding: 3, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: {} }, { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
     ] });
     const layout = d.createPipelineLayout({ bindGroupLayouts: [frameLayout, passLayout, uni, tex] });
-    const module = d.createShaderModule({ label: 'freddy', code: shader(q) });
-    const pipeline = (main: boolean) => d.createRenderPipelineAsync({ label: `freddy-${main ? 'main' : 'reflection'}`, layout,
+    const module = d.createShaderModule({ label: 'glitchtrap', code: shader(q, this.rig.n) });
+    const pipeline = (main: boolean) => d.createRenderPipelineAsync({ label: `glitchtrap-${main ? 'main' : 'reflection'}`, layout,
       vertex: { module, entryPoint: 'vs', buffers: [vertexLayout] }, fragment: { module, entryPoint: 'fs', targets: [{ format: 'rgba16float' }] },
       primitive: { topology: 'triangle-list', cullMode: 'none' }, multisample: { count: main ? 4 : 1 },
       depthStencil: { format: main ? 'depth32float' : 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
     });
-    const [main, flat, shadow] = await Promise.all([pipeline(true), pipeline(false), d.createRenderPipelineAsync({ label: 'freddy-shadow',
-      layout: d.createPipelineLayout({ bindGroupLayouts: [uni, uni] }), vertex: { module: d.createShaderModule({ label: 'freddy-shadow', code: shadowShader }), entryPoint: 'shadow', buffers: [vertexLayout] },
+    const [main, flat, shadow] = await Promise.all([pipeline(true), pipeline(false), d.createRenderPipelineAsync({ label: 'glitchtrap-shadow',
+      layout: d.createPipelineLayout({ bindGroupLayouts: [uni, uni] }), vertex: { module: d.createShaderModule({ label: 'glitchtrap-shadow', code: shadowShader(this.rig.n) }), entryPoint: 'shadow', buffers: [vertexLayout] },
       primitive: { topology: 'triangle-list', cullMode: 'none' }, depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' },
     })]);
     this.pipes = { main, flat, shadow };
@@ -122,7 +126,7 @@ export class Freddy {
       const view = new DataView(bytes);
       for (let offset = 0; offset < bytes.byteLength;) {
         const length = view.getUint32(offset, true); offset += 4;
-        if (!length || offset + length > bytes.byteLength) throw new Error('Freddy: texture incompleta');
+        if (!length || offset + length > bytes.byteLength) throw new Error('Glitchtrap: texture incompleta');
         sizes.push({ offset, length }); offset += length;
       }
       let tex!: GPUTexture;
@@ -143,34 +147,26 @@ export class Freddy {
       return tex.createView();
     };
     // Settle every upload before cleanup on failure; no late promise may allocate after destroy().
-    const uploads = await Promise.allSettled((meta.materials as string[]).map(async (name, i) => {
-      const maps = await Promise.allSettled([texture(`${name}-color.bin`, true), texture(`${name}-normal.bin`, false)]);
-      const bad = maps.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
-      if (bad) throw bad.reason;
-      const [color, normal] = maps.map(r => (r as PromiseFulfilledResult<GPUTextureView>).value);
-      return d.createBindGroup({ layout: tex, entries: [{ binding: 0, resource: color }, { binding: 1, resource: normal },
-        { binding: 2, resource: sampler }, { binding: 3, resource: { buffer: buffer(new Float32Array([
-          [0, 0.85, 0, 0.25], [1, 0.32, 0.85, 0], [2, 0.12, 0, 0], [3, 0.45, 0.6, 0],
-        ][i]), GPUBufferUsage.UNIFORM) } }] });
-    }));
-    const bad = uploads.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
+    const maps = await Promise.allSettled([texture('color.bin', true), texture('normal.bin', false), texture('material.bin', false)]);
+    const bad = maps.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
     if (bad) throw bad.reason;
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    this.materials = uploads.map(r => (r as PromiseFulfilledResult<GPUBindGroup>).value);
+    const [color, normal, material] = maps.map(r => (r as PromiseFulfilledResult<GPUTextureView>).value);
+    this.material = d.createBindGroup({ layout: tex, entries: [{ binding: 0, resource: color }, { binding: 1, resource: normal },
+      { binding: 2, resource: material }, { binding: 3, resource: sampler }] });
   }
 
   update(seconds: number, reducedMotion: boolean, eye: number[]) {
-    writeFreddyPose(this.data, seconds, reducedMotion, eye, this.meta.headPivot);
+    writeGlitchtrapPose(this.data, this.rig, seconds, reducedMotion, eye);
     this.device.queue.writeBuffer(this.uniform, 0, this.data);
   }
 
   draw(p: GPURenderPassEncoder, pass: number, lighting?: GPUBindGroup) {
     p.setPipeline(pass === 0 ? this.pipes.main : pass === 8 ? this.pipes.shadow : this.pipes.flat);
     p.setBindGroup(0, pass === 8 ? this.own : lighting!); p.setBindGroup(1, this.passes[pass]);
-    p.setVertexBuffer(0, this.vertex); p.setIndexBuffer(this.index, 'uint32');
-    if (pass === 8) { p.drawIndexed(this.meta.indexCount); return; }
-    p.setBindGroup(2, this.own);
-    this.meta.ranges.forEach((range, i) => { p.setBindGroup(3, this.materials[i]); p.drawIndexed(range.count, 1, range.first); });
+    p.setVertexBuffer(0, this.vertex); p.setIndexBuffer(this.index, 'uint16');
+    if (pass !== 8) { p.setBindGroup(2, this.own); p.setBindGroup(3, this.material); }
+    p.drawIndexed(this.meta.indexCount);
   }
 
   destroy() { this.buffers.splice(0).forEach(b => b.destroy()); this.textures.splice(0).forEach(t => t.destroy()); }
