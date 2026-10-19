@@ -22,8 +22,12 @@ di ruvidità pubblicata, G e B il rosso e il blu della mappa emissiva delle irid
 L'animazione (`src/podium/glitchtrapPose.ts`) si ispira ai movimenti del personaggio nel finale
 «Pizza Party» di Help Wanted (si sporge dalla tenda e fa cenno di avvicinarsi) e nelle animazioni
 della lobby di Dead by Daylight (saluto lento a mano aperta, testa inclinata, camminata curva).
-Piedi in appoggio fermi sul pavimento, cinematica inversa di gambe e braccia, testa che cerca la
-camera reale, orecchie che seguono la testa con ritardo.
+Passi corti e felpati (appoggio sull'avampiede, poi il tallone; piede basso che rallenta prima del
+contatto), piedi fermi sul pavimento, binari alla larghezza delle anche e braccia staccate dal corpo
+perché il costume non si compenetri, bacino a velocità quasi costante, cinematica inversa di gambe e
+braccia, dita che seguono la mano nel saluto, testa che cerca la camera reale, orecchie simulate come
+molle smorzate spinte dai movimenti della testa. Il bagliore degli occhi resta sull'iride (la mappa
+emissiva pubblicata è più larga): lo shader lo limita ai pixel viola del colore di base.
 
 Rigenerazione dal file scaricato da Sketchfab (cartella con `scene.gltf`, `scene.bin`, `textures/`):
 

@@ -171,10 +171,10 @@ interno, poi i due centrali, infine i due inferiori; per ogni coppia, sinistra e
 Toccare il vetro visibile, evitando le targhette e le coppe davanti. Un tocco fuori sequenza
 ricomincia il conteggio; trascinamenti, scorrimenti e tocchi annullati non contano.
 Al sesto tocco Glitchtrap, nascosto dietro una colonna della navata sinistra, si sporge finché
-compare un occhio viola, scivola fuori ancora piegato di lato, cammina curvo verso la sala con lo
-sguardo fisso sulla camera, si ferma e saluta lentamente con la mano sinistra accanto alla testa
-inclinata; poi richiama con le dita, respira, ha qualche scatto improvviso della testa e torna a
-salutare ogni quindici secondi. Con il movimento ridotto resta fermo con la mano alzata.
+compare un occhio viola, scivola fuori ancora piegato di lato, avanza a passi corti e felpati verso la
+sala con lo sguardo fisso sulla camera, si ferma e saluta lentamente con la mano sinistra accanto alla
+testa inclinata, le dita morbide; poi richiama con le dita, respira, ha qualche scatto improvviso della
+testa (le orecchie lo seguono come molle) e torna a salutare ogni quindici secondi. Con il movimento ridotto resta fermo con la mano alzata.
 Cambio tema e uscita dalla pagina azzerano la sorpresa. Nei formati stretti la camera
 si sposta e ruota verso la navata per mostrare la camminata e il saluto.
 

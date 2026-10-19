@@ -1,7 +1,7 @@
 // Loaded only after the first correct window tap. Same lighting shader and GPU resources as the room; the skeleton is
 // posed on the CPU (glitchtrapPose.ts) and the vertices are skinned here, identically in every pass.
 import { modelLightingShader, type PodiumQuality } from './shaders';
-import { makeRig, writeGlitchtrapPose, type JointInfo, type Rig } from './glitchtrapPose';
+import { EarSprings, makeRig, writeGlitchtrapPose, type JointInfo, type Rig } from './glitchtrapPose';
 
 type Meta = { version: number; vertexCount: number; indexCount: number; stride: number; joints: JointInfo[] };
 const objectStruct = (joints: number) => `struct Object { joints: array<mat4x4f, ${joints}>, params: vec4f };`;
@@ -45,8 +45,10 @@ struct Out { @builtin(position) pos: vec4f,
   surface.ao = 1.0; surface.kind = 2u; surface.sheen = 0.32;
   let nx = dpdx(n); let ny = dpdy(n); let kr = min(0.3 * (dot(nx, nx) + dot(ny, ny)), 0.2);
   var eye = P.pos.xyz; if (P.misc.y == 1.0) { eye.y = -eye.y; }
-  // the purple irises glow on their own (the only light he brings into the room)
-  let glow = vec3f(mat.g, 0.0, mat.b) * O.params.x * 3.2;
+  // the purple irises glow on their own (the only light he brings into the room). The published emissive map is a
+  // soft ring wider than the iris: keep the light on the lilac iris itself, never on the white, the rim or the pupil
+  let iris = smoothstep(0.1, 0.18, (base.b - 0.5 * (base.r + base.g)) / max(base.b, 0.02)) * smoothstep(0.05, 0.12, base.b);
+  let glow = vec3f(mat.g, 0.0, mat.b) * O.params.x * iris * 3.2;
   return vec4f(finite3(shadeSurface(surface, 0u, i.wp, n0, eye, i.pos.xy, kr) + glow), 1.0);
 }`;
 const shadowShader = (joints: number) => `${objectStruct(joints)}
@@ -73,6 +75,7 @@ export class Glitchtrap {
   private pipes!: { main: GPURenderPipeline; flat: GPURenderPipeline; shadow: GPURenderPipeline };
   private meta!: Meta;
   private rig!: Rig;
+  private ears = new EarSprings();
   private data = new Float32Array(4);
   private constructor(private device: GPUDevice) {}
 
@@ -157,7 +160,7 @@ export class Glitchtrap {
   }
 
   update(seconds: number, reducedMotion: boolean, eye: number[]) {
-    writeGlitchtrapPose(this.data, this.rig, seconds, reducedMotion, eye);
+    writeGlitchtrapPose(this.data, this.rig, seconds, reducedMotion, eye, this.ears);
     this.device.queue.writeBuffer(this.uniform, 0, this.data);
   }
 

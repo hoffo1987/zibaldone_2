@@ -3,10 +3,12 @@
 // beckons) and the Dead by Daylight lobby (slow open-hand wave beside a cocked head, hunched stalking walk).
 //
 // Choreography (seconds after the reveal): hidden behind the column, he leans out until one glowing eye shows
-// (0.3–2.2), slides out still bent sideways and straightens as he stalks diagonally towards the hall (2.8–7), settles
-// facing the camera, raises his left hand and waves slowly (7.7–11), lets the fingers ripple in a "come here" (11–13)
-// and lowers the hand. Then he breathes, sways, twitches now and then and waves again every fifteen seconds (from 20).
-// The head always seeks the real camera. Reduced motion: the final pose with the hand up, still.
+// (0.3–2.2), slides out still bent sideways and straightens as he pads diagonally towards the hall (3–8.2): short soft
+// steps placed ball first, knees never locked, the pelvis gliding at an even pace. He settles facing the camera, raises
+// his left hand and waves slowly with loose fingers (9–12.3), lets the fingers ripple in a "come here" (12.3–14) and
+// lowers the hand. Then he breathes, sways, twitches now and then and waves again every fifteen seconds (from 21). The head always
+// seeks the real camera; the ears are springs pushed by the head's motion (EarSprings, the only state).
+// Reduced motion: the final pose with the hand up, still.
 //
 // Rig conventions (bind pose, metres): y up, the character faces +z, its left is +x. Every joint rotation is a delta
 // from the bind pose expressed in bind-aligned axes, so a child rotates in its parent's posed frame.
@@ -84,7 +86,7 @@ type Leg = { s: number; hip: number; knee: number; foot: number; toe: number; l1
 export type Rig = {
   n: number; parent: number[]; bind: V[]; ends: number[];
   root: number; pelvis: number; spine: number[]; neck: number; head: number; tie: number;
-  ears: { a: number; b: number; s: number }[]; arms: Arm[]; legs: Leg[];
+  ears: { a: number; b: number; s: number; seg: { r: V; u: V; l: number }[] }[]; arms: Arm[]; legs: Leg[];
 };
 
 export function makeRig(joints: JointInfo[]): Rig {
@@ -125,7 +127,15 @@ export function makeRig(joints: JointInfo[]): Rig {
   return {
     n: joints.length, parent, bind, ends, root: at('_rootJoint'), pelvis: at('bip_pelvis'),
     spine: ['bip_spine_0', 'bip_spine_1', 'bip_spine_2'].map(at), neck: at('bip_neck'), head: at('bip_head'), tie: at('bip_tie'),
-    ears: [{ a: at('bip_earL1'), b: at('bip_earL2'), s: 1 }, { a: at('bip_earR1'), b: at('bip_earR2'), s: -1 }], arms, legs,
+    ears: (['L', 'R'] as const).map((side) => {
+      // two segments per ear: base to middle joint, then the floppy tip (about as long, same direction at rest)
+      const a = at(`bip_ear${side}1`), b = at(`bip_ear${side}2`), head = bind[at('bip_head')];
+      const u = norm(sub(bind[b], bind[a])), l = len(sub(bind[b], bind[a]));
+      return { a, b, s: side === 'L' ? 1 : -1, seg: [
+        { r: sub(mul(add(bind[a], bind[b]), 0.5), head), u, l },
+        { r: sub(add(bind[b], mul(u, l * 0.5)), head), u, l },
+      ] };
+    }), arms, legs,
   };
 }
 
@@ -141,25 +151,29 @@ const left = (yaw: number): V => [Math.cos(yaw), 0, -Math.sin(yaw)];
 const fwd = (yaw: number): V => [Math.sin(yaw), 0, Math.cos(yaw)];
 const ground = (p: number): V => [START[0] + PATH[0] * p, 0, START[1] + PATH[2] * p];
 
-export const TIMES = { peek: 0.3, peekHeld: 1.3, step: 2.2, settled: 7.7, wave: 8.4, beckon: 11.1, lower: 12.9, idle: 14.0, rewave: 20, every: 15 };
+export const TIMES = { peek: 0.3, peekHeld: 1.3, step: 2.2, settled: 8.95, wave: 9.65, beckon: 12.35, lower: 14.15, idle: 15.25, rewave: 21, every: 15 };
 // feet: ankle position on the floor, yaw, time of heel strike (each plant lasts until the foot lifts again)
 type Plant = { at: V; yaw: number; strike: number };
-const STAND = 0.135 * SCALE, WALK = 0.095 * SCALE, SPLAY = 6 * D;
+// the costume's thighs nearly touch at rest: the feet keep to hip-wide tracks so the legs never cross
+const STAND = 0.17 * SCALE, WALK = 0.16 * SCALE, SPLAY = 7 * D;
 const plantAt = (p: number | V, side: number, yaw: number, width: number, strike: number): Plant => {
   const c = typeof p === 'number' ? ground(p) : p;
   return { at: add(c, mul(left(yaw), side * width)), yaw: yaw + side * SPLAY, strike };
 };
 const endAt: V = [END[0], 0, END[1]];
-const SWING = 0.7;
-const STRIKES = [3.5, 4.4, 5.3, 6.2, 6.95];
+// a slow, slightly uneven pace with long double supports: the weight moves from foot to foot without hurry
+// short steps (a stalk, not a stride): five and a small closing one to stand square to the camera
+const SWING = 0.64;
+const STRIKES = [3.62, 4.6, 5.56, 6.54, 7.5, 8.18], LAST = STRIKES[STRIKES.length - 1];
 export const PLANTS: Plant[][] = [
-  [plantAt(0, 1, YAW0, STAND, -Infinity), plantAt(0.38, 1, qangle(YAW0, HEADING, 0.8), WALK, STRIKES[0]),
-    plantAt(1.72, 1, HEADING, WALK, STRIKES[2]), plantAt(endAt, 1, YAW1, STAND, STRIKES[4])],
-  [plantAt(0, -1, YAW0, STAND, -Infinity), plantAt(1.05, -1, HEADING, WALK, STRIKES[1]),
-    plantAt(endAt, -1, YAW1, STAND, STRIKES[3])],
+  [plantAt(0, 1, YAW0, STAND, -Infinity), plantAt(0.32, 1, qangle(YAW0, HEADING, 0.8), WALK, STRIKES[0]),
+    plantAt(1.4, 1, HEADING, WALK, STRIKES[2]), plantAt(endAt, 1, YAW1, STAND, STRIKES[4])],
+  [plantAt(0, -1, YAW0, STAND, -Infinity), plantAt(0.86, -1, HEADING, WALK, STRIKES[1]),
+    plantAt(1.94, -1, qangle(HEADING, YAW1, 0.5), WALK, STRIKES[3]), plantAt(endAt, -1, YAW1, STAND, LAST)],
 ];
-const swingTime = (strike: number) => (strike === STRIKES[4] ? 0.6 : SWING);
-const HEEL_STRIKE = 14 * D, TOE_OFF = 38 * D, HEEL_OFF = 0.3;
+const swingTime = (strike: number) => (strike === LAST ? 0.55 : SWING);
+// soft steps: the ball of the foot lands first (toes a little down), then the heel settles; a gentle toe-off
+const CONTACT = 5 * D, SETTLE = 0.32, TOE_OFF = 30 * D, HEEL_OFF = 0.36, CLEAR = 0.07 * SCALE;
 
 type FootState = { ankle: V; yaw: number; pitch: number; toe: number; swing: number; phase: number };
 // +1 when the left arm is fully forward, -1 when back; continuous through the whole walk
@@ -188,35 +202,37 @@ function footAt(leg: Leg, plants: Plant[], t: number): FootState {
   if (t < cur.strike) {
     // swinging towards cur
     const prev = plants[k - 1], start = cur.strike - swingTime(cur.strike), s = clamp01((t - start) / (cur.strike - start)), m = smoother(s);
-    const a = rolled(leg, prev, TOE_OFF), b = rolled(leg, cur, -HEEL_STRIKE);
-    const ankle = mixV(a, b, m);
-    ankle[1] = mix(a[1], b[1], m) + 0.11 * SCALE * 16 * s * s * (1 - s) * (1 - s);
-    const pitch = s < 0.55 ? mix(TOE_OFF, -8 * D, smoother(s / 0.55)) : mix(-8 * D, -HEEL_STRIKE, smoother((s - 0.55) / 0.45));
-    return { ankle, yaw: qangle(prev.yaw, cur.yaw, m), pitch, toe: -TOE_OFF * (1 - smoother(s / 0.35)), swing: s, phase: 1 };
+    // the foot travels low and early, then hovers and lowers slowly onto the floor (no speed left at the touch)
+    const a = rolled(leg, prev, TOE_OFF), b = rolled(leg, cur, CONTACT), reach = smoother(s ** 0.85);
+    const ankle = mixV(a, b, reach);
+    ankle[1] = mix(a[1], b[1], reach) + CLEAR * Math.sin(Math.PI * s ** 0.8) ** 2;
+    const pitch = s < 0.5 ? mix(TOE_OFF, -4 * D, smoother(s / 0.5)) : mix(-4 * D, CONTACT, smoother((s - 0.5) / 0.5));
+    return { ankle, yaw: qangle(prev.yaw, cur.yaw, reach), pitch, toe: -TOE_OFF * (1 - smoother(s / 0.35)), swing: s, phase: 1 };
   }
-  // planted: the heel comes down after the strike, rises before the lift
-  const down = Number.isFinite(cur.strike) ? -HEEL_STRIKE * (1 - smoother((t - cur.strike) / 0.16)) : 0;
+  // planted: the heel settles after the touch, rises before the lift
+  const down = Number.isFinite(cur.strike) ? CONTACT * (1 - smoother((t - cur.strike) / SETTLE)) : 0;
   const up = Number.isFinite(lift) ? TOE_OFF * smoother(1 - (lift - t) / HEEL_OFF) : 0;
   const pitch = down + up;
   return { ankle: rolled(leg, cur, pitch), yaw: cur.yaw, pitch, toe: -Math.max(0, pitch), swing: 0, phase: 0 };
 }
 
-// pelvis over the ground: between the feet at each strike, leaning over the stance foot halfway through its step
+// pelvis over the ground: right above the stance foot halfway through each swing, halfway between the feet in the
+// middle of each double support. Spaced like the steps, these keys give an almost even, gliding speed; the small
+// sideways sway over the stance foot rides on the same curve.
 type Key = { t: number; p: V };
 const PELVIS_KEYS: Key[] = (() => {
-  const keys: Key[] = [{ t: TIMES.step, p: ground(0) }];
-  const center = (a: V) => ground(clamp(dot(sub(a, ground(0)), PATH), 0, PATH_LEN));
-  const all = PLANTS.flatMap((ps, foot) => ps.slice(1).map((p) => ({ p, foot }))).sort((a, b) => a.p.strike - b.p.strike);
+  const along = (a: V) => clamp(dot(sub(a, ground(0)), PATH), 0, PATH_LEN);
   const planted = (foot: number, t: number) => [...PLANTS[foot]].reverse().find((p) => p.strike <= t)!;
-  all.forEach(({ p, foot }, i) => {
-    const start = p.strike - swingTime(p.strike), stance = planted(1 - foot, start).at;
-    // weight already over the stance foot when the swing begins (for the first step this is the anticipation)
-    if (i === 0) keys.push({ t: start, p: mixV(center(stance), stance, 0.3) });
-    keys.push({ t: (start + p.strike) / 2, p: mixV(center(stance), stance, 0.38) });
-    keys.push({ t: p.strike, p: mixV(stance, p.at, 0.5) });
+  const side = left(HEADING), sway = 0.03 * SCALE;
+  const at = (progress: number, lat: number) => add(ground(progress), mul(side, lat));
+  const keys: Key[] = [{ t: TIMES.step + 0.2, p: at(0, 0) }];
+  SWINGS.forEach((sw, i) => {
+    const stance = planted(1 - sw.foot, sw.start), landed = planted(sw.foot, sw.end), toward = sw.foot === 0 ? -1 : 1;
+    const last = i === SWINGS.length - 1, next = SWINGS[i + 1];
+    if (i === 0) keys.push({ t: sw.start, p: at(0, toward * sway * 0.8) });
+    keys.push({ t: (sw.start + sw.end) / 2, p: at(along(stance.at) + (i === 0 ? 0.05 : last ? -0.12 : 0), toward * sway) });
+    keys.push({ t: last ? sw.end + 0.5 : (sw.end + next.start) / 2, p: at((along(stance.at) + along(landed.at)) / 2, 0) });
   });
-  const last = keys[keys.length - 1].t;
-  keys.push({ t: last + 0.6, p: endAt });
   return keys;
 })();
 function hermite(keys: Key[], t: number): V {
@@ -231,7 +247,7 @@ function hermite(keys: Key[], t: number): V {
 }
 
 // sudden glitches of the head: [time, roll, yaw]
-const TWITCHES: number[][] = [[1.85, -16, 7], [9.55, 13, -6], [12.1, -11, 4]];
+const TWITCHES: number[][] = [[1.85, -16, 7], [10.8, 13, -6], [13.35, -11, 4]];
 function twitch(t: number) {
   let roll = 0, yaw = 0, glow = 0;
   const events = [...TWITCHES];
@@ -245,28 +261,29 @@ function twitch(t: number) {
   return { roll: roll * D, yaw: yaw * D, glow };
 }
 
-// the left hand's gestures: weight of the raised hand, wave angle, finger ripple; repeated in the idle
-function gesture(t: number, still: boolean) {
-  if (still) return { up: 1, wave: 0, beckon: 0, lift: 1 };
+// the left hand's gestures: weight of the raised hand, wave phase and strength, finger ripple; repeated in the idle
+type Gesture = { up: number; wave: number; phase: number; amp: number; beckon: number; lift: number };
+function gesture(t: number, still: boolean): Gesture {
+  if (still) return { up: 1, wave: 0, phase: 0, amp: 0, beckon: 0, lift: 1 };
   let up = ramp(t, TIMES.settled, TIMES.wave) * (1 - ramp(t, TIMES.lower, TIMES.idle));
   let lift = backOut((t - TIMES.settled - 0.12) / (TIMES.wave - TIMES.settled - 0.12));
-  let wave = Math.sin(((t - TIMES.wave) / 0.9) * 2 * Math.PI) * ramp(t, TIMES.wave - 0.2, TIMES.wave + 0.35) * (1 - ramp(t, TIMES.beckon - 0.35, TIMES.beckon + 0.1));
+  let phase = ((t - TIMES.wave) / 0.9) * 2 * Math.PI;
+  let amp = ramp(t, TIMES.wave - 0.2, TIMES.wave + 0.35) * (1 - ramp(t, TIMES.beckon - 0.35, TIMES.beckon + 0.1));
   const beckon = ramp(t, TIMES.beckon - 0.2, TIMES.beckon + 0.3) * (1 - ramp(t, TIMES.lower - 0.3, TIMES.lower + 0.4));
   if (t > TIMES.rewave - 1) {
     // later waves: raise, two slow cycles, lower
     const u = (t - TIMES.rewave) % TIMES.every;
     if (t >= TIMES.rewave && u < 4.6) {
-      const w = ramp(u, 0, 0.7) * (1 - ramp(u, 3.6, 4.6));
-      up = Math.max(up, w); lift = backOut(u / 0.7);
-      wave = Math.sin(((u - 0.7) / 0.95) * 2 * Math.PI) * ramp(u, 0.5, 0.95) * (1 - ramp(u, 2.9, 3.5));
+      up = Math.max(up, ramp(u, 0, 0.7) * (1 - ramp(u, 3.6, 4.6))); lift = backOut(u / 0.7);
+      phase = ((u - 0.7) / 0.95) * 2 * Math.PI; amp = ramp(u, 0.5, 0.95) * (1 - ramp(u, 2.9, 3.5));
     }
   }
-  return { up, wave, beckon, lift };
+  return { up, wave: Math.sin(phase) * amp, phase, amp, beckon, lift };
 }
 
 // ---------- evaluation ----------
-type Pose = { rot: Q[]; pos: V[]; glow: number };
-function evaluate(rig: Rig, t: number, still: boolean, eye: V, ears?: { now: Q; lag1: Q; lag2: Q; accel: V }): Pose {
+type Pose = { rot: Q[]; pos: V[]; glow: number; earBase: Q };
+function evaluate(rig: Rig, t: number, still: boolean, eye: V): Pose {
   const rot: Q[] = new Array(rig.n), pos: V[] = new Array(rig.n), bind = rig.bind;
   const offset = (i: number) => mul(sub(bind[i], bind[rig.parent[i]]), SCALE);
   const fk = (i: number, delta: Q = I) => { const p = rig.parent[i]; pos[i] = add(pos[p], qrot(rot[p], offset(i))); rot[i] = qmul(rot[p], delta); };
@@ -277,8 +294,8 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V, ears?: { now: Q; 
   // the lean carries into the first steps: he slides out still bent sideways, then straightens
   const peek = still ? 0 : ramp(t, TIMES.peek, TIMES.peekHeld) * (1 - ramp(t, TIMES.step + 0.6, STRIKES[1] - 0.1));
   const stare = still ? 0 : ramp(t, TIMES.peekHeld, TIMES.step) * (1 - ramp(t, TIMES.step + 0.3, STRIKES[0] + 0.2));
-  const walk = still ? 0 : ramp(t, TIMES.step + 0.3, STRIKES[0]) * (1 - ramp(t, STRIKES[4] - 0.4, TIMES.settled));
-  const after = still ? 1e3 : t - STRIKES[4];
+  const walk = still ? 0 : ramp(t, TIMES.step + 0.3, STRIKES[0]) * (1 - ramp(t, LAST - 0.5, TIMES.settled));
+  const after = still ? 1e3 : t - LAST;
   const idle = still ? 1 : ramp(t, TIMES.settled - 0.6, TIMES.settled + 1);
   const g = gesture(t, still);
   const tw = still ? { roll: 0, yaw: 0, glow: 0 } : twitch(t);
@@ -297,10 +314,11 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V, ears?: { now: Q; 
   let hip = hermite(PELVIS_KEYS, tf);
   hip = add(hip, qrot(heading, [0.075 * SCALE * peek + 0.018 * SCALE * sway - 0.03 * SCALE * g.up * idle, 0, -0.03 * SCALE * peek]));
   hip = add(hip, mul(fwd(yaw), 0.05 * SCALE * settle(after, 1.1, 0.35)));
-  const bob = walk * 0.024 * SCALE * (swingSide ? Math.sin(Math.PI * swingS) ** 2 - 0.5 : -0.5);
-  let y = (bind[rig.pelvis][1] - 0.006) * SCALE - 0.034 * SCALE * walk + bob + 0.004 * SCALE * breath * idle - 0.02 * SCALE * settle(after, 0.8, 0.25);
-  const yawOsc = -swingSide * 5 * D * swingWave * walk;
-  const pelvisRot = qmul(heading, euler((2 + 5 * walk) * D, (-swingSide * 3 * swingWave * walk + 3 * peek + 2.5 * sway) * D, yawOsc));
+  // knees stay soft while he pads along, so the pelvis glides low with only a small rise over each step
+  const bob = walk * 0.012 * SCALE * (swingSide ? Math.sin(Math.PI * swingS) ** 2 - 0.5 : -0.5);
+  let y = (bind[rig.pelvis][1] - 0.006) * SCALE - 0.042 * SCALE * walk + bob + 0.004 * SCALE * breath * idle - 0.02 * SCALE * settle(after, 0.8, 0.25);
+  const yawOsc = -swingSide * 4 * D * swingWave * walk, rollOsc = -swingSide * 2 * D * swingWave * walk;
+  const pelvisRot = qmul(heading, euler((2 + 4 * walk) * D, rollOsc + (3 * peek + 2.5 * sway) * D, yawOsc));
   // never stretch a leg past its length: lower the pelvis smoothly where a foot is far away
   for (const [i, leg] of rig.legs.entries()) {
     const h = add([hip[0], y, hip[2]], qrot(pelvisRot, mul(sub(bind[leg.hip], bind[rig.pelvis]), SCALE)));
@@ -314,28 +332,31 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V, ears?: { now: Q; 
   // spine: hunched while stalking, bent sideways for the peek, breathing, a recoil after stopping
   const recoil = 4 * D * settle(after - 0.05, 0.9, 0.3);
   const lean = 2.5 * D * g.up * idle;
-  fk(rig.spine[0], euler((2 + 4 * walk) * D, -7 * D * peek - 1.5 * D * sway, -0.35 * yawOsc));
-  fk(rig.spine[1], euler((3 + 6 * walk + 0.8 * breath) * D + recoil, -10 * D * peek - D * sway + lean, -0.4 * yawOsc));
-  fk(rig.spine[2], euler((4 + 8 * walk + 0.8 * breath) * D + recoil * 0.6, -10 * D * peek + lean, -0.35 * yawOsc + 3 * D * g.up * idle));
+  // the spine undoes the pelvis' rocking, so the shoulders and the head stay level and quiet
+  fk(rig.spine[0], euler((2 + 3 * walk) * D, -7 * D * peek - 1.5 * D * sway - 0.5 * rollOsc, -0.35 * yawOsc));
+  fk(rig.spine[1], euler((3 + 4 * walk + 0.8 * breath) * D + recoil, -10 * D * peek - D * sway + lean - 0.4 * rollOsc, -0.4 * yawOsc));
+  fk(rig.spine[2], euler((4 + 5 * walk + 0.8 * breath) * D + recoil * 0.6, -10 * D * peek + lean - 0.2 * rollOsc, -0.35 * yawOsc + 3 * D * g.up * idle));
   const chest = rot[rig.spine[2]];
   fk(rig.tie);
 
   // arms
-  // the arms swing against the legs: the left arm comes back while the left foot travels forward, and holds through
-  // the double support
-  const gait = swingPhase(tf);
+  // the arms swing against the legs, a beat late (they are carried, not driven): the left arm comes back while the
+  // left foot travels forward, and drifts through the double support
+  const gait = swingPhase(tf - 0.14);
   const armSwing = (side: number) => side * gait * walk;
   for (const arm of rig.arms) {
     const s = arm.s, raised = s === 1 ? g.up * idle : 0, swing = armSwing(s) + 0.5 * settle(after, 1.0, 0.4);
     fk(arm.collar, qmul(qz(s * (10 * raised + 1.2 * breath * idle) * D), qy(-s * 4 * raised * D)));
     const shoulder = add(pos[arm.collar], qrot(rot[arm.collar], offset(arm.upper)));
     // relaxed: hanging a little in front, elbow soft, swinging with the walk
-    const flex = (8 + 12 * swing + 6 * walk) * D, abd = (9 - 2 * walk) * D, elbow = (26 + 8 * (0.5 * (swing + Math.sqrt(swing * swing + 0.04)) - 0.1) + 14 * walk) * D;
+    // relaxed: hanging clear of the costume's belly and hips, a little in front, elbows soft and slightly out
+    const forward = 0.5 * (swing + Math.sqrt(swing * swing + 0.04)) - 0.1;
+    const flex = (10 + 8 * swing + 5 * walk) * D, abd = (17 + 3 * walk) * D, elbow = (28 + 6 * forward + 12 * walk) * D;
     const along = (angle: number, abd: number): V => qrot(qmul(qz(s * abd), qx(-angle)), [0, -1, 0]);
-    const hangUpper = along(flex, abd), hangLower = along(flex + elbow, abd * 0.4);
+    const hangUpper = along(flex, abd), hangLower = along(flex + elbow, abd * 0.85);
     let wrist = add(mul(hangUpper, arm.l1 * SCALE), mul(hangLower, arm.l2 * SCALE));
-    let pole = qrot(qmul(qz(s * abd), qx(-flex)), [s * 0.35, 0, -1]);
-    let handQ: Q | null = null, curl = 0.45 + 0.2 * walk, spread = 0;
+    let pole = qrot(qmul(qz(s * abd), qx(-flex)), [s * 0.5, 0, -1]);
+    let handQ: Q | null = null, curl = 0.42 + 0.12 * walk, spread = 0;
     if (raised > 0) {
       // the wave: upper arm out to the side, forearm upright, open palm towards the camera beside the cocked head
       const e: V = [0.96 * s, -0.16, 0.24], up: V = [0.04 * s, 1, 0.12];
@@ -371,14 +392,18 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V, ears?: { now: Q; 
     // half of the wrist's twist goes into the forearm helper, so the sleeve does not pinch
     const wristRel = qmul(qinv(rot[arm.lower]), rot[arm.hand]);
     place(arm.forearmTwist, qmul(rot[arm.lower], qslerp(I, qtwist(wristRel, arm.lowerDir), 0.5)));
-    // fingers: curled at rest, open and fanned for the wave, rippling closed and open for the beckon (index first)
+    // fingers: loosely curled at rest and never frozen, open and fanned for the wave but trailing the hand (each a
+    // little later than the one before), rippling closed and open for the beckon (index first)
+    const raisedWave = s === 1 ? g.amp * raised * (1 - g.beckon) : 0;
     arm.fingers.forEach((f, k) => {
       let c = curl * (k === 4 ? 0.45 : 1) + (k === 3 ? 0.06 : 0);
+      if (!still) c += 0.035 * Math.sin(t * 1.7 + k * 0.9 + s) * (1 - raised);
+      c += 0.1 * raisedWave * (0.6 + Math.sin(g.phase - 1.1 - k * 0.45)) * (k === 4 ? 0.5 : 1);
       if (g.beckon > 0 && s === 1 && k < 4) {
         const phase = ((t - TIMES.beckon) / 0.9 - k * 0.07) * 2 * Math.PI;
         c = mix(c, 0.15 + 0.62 * (0.5 - 0.5 * Math.cos(phase)), g.beckon);
       }
-      const fan = k === 4 ? 0 : (1.5 - k) * spread * 0.7;
+      const fan = k === 4 ? 0 : (1.5 - k) * spread * 0.7 * (1 + 0.3 * raisedWave * Math.sin(g.phase - 0.7));
       const base = qmul(qaxis(f.spread, fan * s), qaxis(f.axis, c * (k === 4 ? 0.6 : 1) * 55 * D));
       fk(f.joints[0], base);
       fk(f.joints[1], qaxis(f.axis, c * 75 * D));
@@ -403,19 +428,9 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V, ears?: { now: Q; 
   rot[rig.neck] = qmul(qslerp(I, turn, 0.38), rot[rig.neck]);
   place(rig.head, want);
 
-  // ears: they trail the head's turns and bob with its motion
-  for (const ear of rig.ears) {
-    let a = qx(-2 * D * breath), b: Q = I;
-    if (ears) {
-      const lag1 = qmul(qinv(ears.now), ears.lag1), lag2 = qmul(qinv(ears.now), ears.lag2);
-      const push = qrot(qinv(ears.now), mul(ears.accel, -0.06));
-      const bend = qaxis([push[2], 0, -push[0]], clamp(len(push), 0, 0.25));
-      a = qmul(qmul(qslerp(I, lag1, 0.65), bend), a);
-      b = qslerp(I, qmul(lag2, qinv(lag1)), 0.5);
-    }
-    fk(ear.a, a);
-    fk(ear.b, qmul(b, qz(still ? 0 : ear.s * 2 * D * Math.sin(t * 1.3 + ear.s))));
-  }
+  // ears at rest on the head (they sag a hair as he breathes); their springs are added in writeGlitchtrapPose
+  const earBase = qx(-1.5 * D * breath);
+  for (const ear of rig.ears) { fk(ear.a, earBase); fk(ear.b); }
 
   // legs: two-bone IK to the ankle; the knee points along the foot, slightly outwards
   for (const [i, leg] of rig.legs.entries()) {
@@ -434,17 +449,73 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V, ears?: { now: Q; 
   for (const i of rig.ends) { rot[i] = rot[rig.parent[i]]; pos[i] = pos[rig.parent[i]]; }
   // the eyes light up as he leans out; they flare during a glitch
   const glow = still ? 1 : clamp01((t - 0.2) / 0.9) * (1 + 0.8 * tw.glow);
-  return { rot, pos, glow };
+  return { rot, pos, glow, earBase };
 }
 
-// Skinning matrices (column-major, world space, scale included) followed by [eye glow, 0, 0, 0].
-export function writeGlitchtrapPose(out: Float32Array, rig: Rig, seconds: number, reduced: boolean, eye: number[]) {
-  const t = Math.max(0, seconds), dt = 0.1;
-  const past = (k: number) => evaluate(rig, Math.max(0, t - k * dt), reduced, eye);
-  const now0 = past(0), p1 = past(1), p2 = past(2);
-  const head = (p: Pose) => p.pos[rig.head];
-  const accel = mul(add(sub(head(now0), mul(head(p1), 2)), head(p2)), 1 / (dt * dt));
-  const pose = reduced ? now0 : evaluate(rig, t, false, eye, { now: now0.rot[rig.head], lag1: p1.rot[rig.head], lag2: p2.rot[rig.head], accel });
+// ---------- ears ----------
+// Each ear segment is a damped torsional spring in the head's frame. The head's motion pushes it (the inertia of the
+// ear: linear acceleration, angular acceleration, centripetal), gravity pulls it when the head tilts, and the tip is
+// also whipped by its base. Integrated frame by frame in small steps; this is the pose's only state.
+// push ≈ 1.5 is a uniform rod hinged at its base; the costume's tips are a little floppier
+const EAR = [{ hz: 2.6, damping: 0.26, push: 1.8, gravity: 0.12 }, { hz: 2.0, damping: 0.22, push: 2.4, gravity: 0.2 }];
+export class EarSprings {
+  bend: V[] = []; speed: V[] = []; base: V[] = []; last = -1;
+  constructor() { this.reset(); }
+  reset() { this.bend = [0, 1, 2, 3].map(() => [0, 0, 0]); this.speed = [0, 1, 2, 3].map(() => [0, 0, 0]); this.base = [[0, 0, 0], [0, 0, 0]]; this.last = -1; }
+  // rotation of segment k, saturating softly (a costume ear bends a lot but never folds over)
+  turn(k: number): Q { const b = this.bend[k], a = len(b); return a < 1e-6 ? I : qaxis(b, 0.42 * Math.tanh(a / 0.42)); }
+}
+const rotvec = (q: Q): V => { const w = clamp(Math.abs(q[3]), 0, 1), s = q[3] < 0 ? -1 : 1, a = 2 * Math.acos(w), k = a < 1e-6 ? 2 : a / Math.sin(a / 2); return [q[0] * k * s, q[1] * k * s, q[2] * k * s]; };
+function stepEars(ears: EarSprings, rig: Rig, t: number, head: Q, spin: V, spinRate: V, accel: V) {
+  let dt = t - ears.last;
+  if (ears.last < 0 || dt < 0 || dt > 0.3) { ears.reset(); dt = 0; }
+  ears.last = t;
+  if (dt <= 0) return;
+  const inv = qinv(head), w = qrot(inv, spin), alpha = qrot(inv, spinRate), lin = qrot(inv, accel);
+  const tilt = sub(qrot(inv, [0, -9.81, 0]), [0, -9.81, 0]);
+  const steps = Math.ceil(dt * 240), h = dt / steps;
+  for (let n = 0; n < steps; n++) rig.ears.forEach((ear, e) => ear.seg.forEach((seg, j) => {
+    const k = e * 2 + j, P = EAR[j], om = 2 * Math.PI * P.hz, r = mul(seg.r, SCALE), u = seg.u;
+    // a glitch snaps the head far faster than any muscle could: past ~7 m/s² the fabric's stiffness takes over
+    const inertia = add(add(lin, cross(alpha, r)), cross(w, cross(w, r))), strength = len(inertia);
+    const felt = add(mul(inertia, strength > 1e-6 ? -7 * Math.tanh(strength / 7) / strength : 0), mul(tilt, P.gravity));
+    let push = mul(cross(u, felt), P.push / (seg.l * SCALE));
+    if (j === 1) push = sub(push, mul(ears.base[e], 0.4));
+    const acc = sub(sub(push, mul(ears.bend[k], om * om)), mul(ears.speed[k], 2 * P.damping * om));
+    const flat = (v: V) => sub(v, mul(u, dot(v, u))); // bending only, no twist along the ear
+    ears.speed[k] = flat(add(ears.speed[k], mul(acc, h)));
+    ears.bend[k] = flat(add(ears.bend[k], mul(ears.speed[k], h)));
+    if (j === 0) ears.base[e] = acc;
+  }));
+}
+function placeEars(rig: Rig, pose: Pose, ears: EarSprings) {
+  const fk = (i: number, delta: Q) => {
+    const p = rig.parent[i];
+    pose.pos[i] = add(pose.pos[p], qrot(pose.rot[p], mul(sub(rig.bind[i], rig.bind[p]), SCALE)));
+    pose.rot[i] = qmul(pose.rot[p], delta);
+  };
+  rig.ears.forEach((ear, e) => {
+    const a = ears.turn(e * 2), b = ears.turn(e * 2 + 1);
+    fk(ear.a, qmul(a, pose.earBase));
+    // the tip's bend is held in the head's frame: express it in the base segment's frame
+    fk(ear.b, qmul(qinv(a), qmul(b, a)));
+  });
+  for (const i of rig.ends) { pose.rot[i] = pose.rot[rig.parent[i]]; pose.pos[i] = pose.pos[rig.parent[i]]; }
+}
+
+// Skinning matrices (column-major, world space, scale included) followed by [eye glow, 0, 0, 0]. With `ears`, the
+// ears move as springs driven by the head (step it with every frame's time; a jump in time resets it).
+export function writeGlitchtrapPose(out: Float32Array, rig: Rig, seconds: number, reduced: boolean, eye: number[], ears?: EarSprings) {
+  const t = Math.max(0, seconds), pose = evaluate(rig, t, reduced, eye);
+  if (ears && !reduced) {
+    // the head's motion right now, from the same pure performance a moment earlier
+    const h = 1 / 120, p1 = evaluate(rig, Math.max(0, t - h), false, eye), p2 = evaluate(rig, Math.max(0, t - 2 * h), false, eye);
+    const R0 = pose.rot[rig.head], R1 = p1.rot[rig.head], R2 = p2.rot[rig.head];
+    const spin = mul(rotvec(qmul(R0, qinv(R1))), 1 / h), before = mul(rotvec(qmul(R1, qinv(R2))), 1 / h);
+    const accel = mul(add(sub(pose.pos[rig.head], mul(p1.pos[rig.head], 2)), p2.pos[rig.head]), 1 / (h * h));
+    stepEars(ears, rig, t, R0, spin, mul(sub(spin, before), 1 / h), accel);
+    placeEars(rig, pose, ears);
+  }
   for (let i = 0; i < rig.n; i++) {
     const q = pose.rot[i], b = rig.bind[i];
     const x = qrot(q, [SCALE, 0, 0]), y = qrot(q, [0, SCALE, 0]), z = qrot(q, [0, 0, SCALE]);
@@ -463,4 +534,4 @@ export function headAt(rig: Rig, seconds: number, reduced: boolean, eye: number[
   const p = evaluate(rig, Math.max(0, seconds), reduced, eye);
   return { pos: p.pos[rig.head], forward: qrot(p.rot[rig.head], [0, 0, 1]) };
 }
-export const STAGE = { START, END, YAW0, HEADING, YAW1, STRIKES };
+export const STAGE = { START, END, YAW0, HEADING, YAW1, STRIKES, swingTime };

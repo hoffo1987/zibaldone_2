@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { makeRig, writeGlitchtrapPose, feetAt, headAt, PLANTS, STAGE, SCALE } from './glitchtrapPose';
+import { makeRig, writeGlitchtrapPose, feetAt, headAt, EarSprings, PLANTS, STAGE, SCALE } from './glitchtrapPose';
 import meta from '../../public/glitchtrap/glitchtrap.json';
 import { COL_X, COL_Z } from './stage';
 
@@ -31,8 +31,7 @@ test('planted feet do not slide and the ankles never sink below the floor', () =
     plants.forEach((plant, k) => {
       const next = plants[k + 1];
       // between the heel coming down and the heel lifting, the ankle is fixed on its footprint
-      const swing = next && next.strike === STAGE.STRIKES[4] ? 0.6 : 0.7;
-      const from = Number.isFinite(plant.strike) ? plant.strike + 0.17 : 0, to = next ? next.strike - swing - 0.31 : 20;
+      const from = Number.isFinite(plant.strike) ? plant.strike + 0.33 : 0, to = next ? next.strike - STAGE.swingTime(next.strike) - 0.37 : 20;
       if (to <= from) return;
       for (let t = from; t <= to; t += 0.05) {
         const foot = feetAt(rig, t, false, eye)[i];
@@ -71,4 +70,19 @@ test('reduced motion holds one still pose with the hand raised', () => {
   const hand = rig.arms[0].hand, head = rig.head;
   const pos = (m, i) => [0, 1, 2].map((k) => m[i * 16 + k] * rig.bind[i][0] + m[i * 16 + 4 + k] * rig.bind[i][1] + m[i * 16 + 8 + k] * rig.bind[i][2] + m[i * 16 + 12 + k]);
   expect(pos(a, hand)[1]).toBeGreaterThan(pos(a, head)[1] - 0.45 * SCALE);
+});
+
+test('the ears swing after a sudden turn of the head, then settle; with reduced motion they stay put', () => {
+  const out = new Float32Array(rig.n * 16 + 4), ears = new EarSprings();
+  const bend = () => Math.max(...ears.bend.map((b) => Math.hypot(...b)));
+  let peak = 0;
+  for (let t = 0; t <= 2.4; t += 1 / 60) { writeGlitchtrapPose(out, rig, t, false, eye, ears); if (t > 1.85) peak = Math.max(peak, bend()); }
+  expect(peak).toBeGreaterThan((4 * Math.PI) / 180);
+  // the idle long after the last gesture: only breathing and slow sways move the head
+  for (let t = 15.6; t <= 20.5; t += 1 / 60) writeGlitchtrapPose(out, rig, t, false, eye, ears);
+  expect(bend()).toBeLessThan((4 * Math.PI) / 180);
+  for (const b of ears.bend) expect(b.every(Number.isFinite)).toBe(true);
+  const still = new EarSprings();
+  for (let t = 0; t < 3; t += 1 / 60) writeGlitchtrapPose(out, rig, t, true, eye, still);
+  expect(Math.max(...still.bend.map((b) => Math.hypot(...b)))).toBe(0);
 });
