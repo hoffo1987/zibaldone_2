@@ -1253,8 +1253,6 @@ export default function App() {
   const pendFmt = useRef<{ node: Node | null; off: number; size?: string; color?: string } | null>(null);
   const sizeEm = useRef(0); // dimensione (em) scelta col solo cursore, usata quando si inizia a scrivere
   const fmtBusy = useRef(false); // true mentre un comando di formattazione sta lavorando: l'evento input che execCommand scatena non deve toccare il risultato
-  const tbTouch = useRef(0); // istante dell'ultimo tocco sulla toolbar: gli scroll subito dopo sono causati dal testo che cambia, non dall'utente
-  const [tbHide, setTbHide] = useState(false); // su telefono la toolbar si nasconde scorrendo verso il basso
   const [colorOpen, setColorOpen] = useState(false);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [loadTick, setLoadTick] = useState(0);
@@ -1518,32 +1516,10 @@ export default function App() {
   }, [tab, drawing]);
   useEffect(() => { setPanel(null); }, [tab, drawing]);
   useEffect(() => {
-    if (tab !== "write") { setTbHide(false); return; }
-    if (kb || drawing) return; // si sta scrivendo o disegnando: la toolbar e i suoi pannelli non si toccano
-    let last = window.scrollY, raf = 0;
-    const on = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        const y = window.scrollY, d = y - last;
-        // cambiando dimensione/colore il testo si ridimensiona e il browser scrolla da solo per tenere visibile il cursore:
-        // non è l'utente che scorre, quindi la toolbar e il pannello aperto non vanno toccati
-        if (Date.now() - tbTouch.current < 1500) { last = y; return; }
-        if (Math.abs(d) < 10) return;
-        last = y;
-        if (!window.matchMedia("(max-width:767px)").matches) { setTbHide(false); return; }
-        if (d > 0) { if (y > 140) { setTbHide(true); setPanel(null); } } else setTbHide(false);
-      });
-    };
-    window.addEventListener("scroll", on, { passive: true });
-    return () => { window.removeEventListener("scroll", on); cancelAnimationFrame(raf); };
-  }, [tab, kb, drawing]);
-  useEffect(() => {
     if (panel !== "color") return;
     const box: any = document.querySelector(".swr"), el: any = box && box.querySelector('[aria-pressed="true"]');
     if (box && el) box.scrollLeft = el.getBoundingClientRect().left - box.getBoundingClientRect().left + box.scrollLeft - (box.clientWidth - el.offsetWidth) / 2;
   }, [panel]);
-  const tbHidden = tbHide && !kb && !drawing; // con la tastiera aperta (si sta scrivendo) la toolbar resta sempre visibile
   // Esegue un comando sul testo SENZA riaprire la tastiera: se l'editor non ha il focus si ripristina l'ultima selezione
   // (il focus serve solo come ripiego se il browser non applica il comando senza)
   const restoreSel = () => {
@@ -1564,7 +1540,6 @@ export default function App() {
       if (!focused && snap() === before) { ed.focus(); restoreSel(); fn(); }
     } finally { fmtBusy.current = false; }
     setContent(ed.innerHTML); readFmt();
-    tbTouch.current = Date.now(); // il layout cambia dopo il comando: gli scroll che seguono non sono dell'utente
   };
   // con il solo cursore grassetto/corsivo/ecc. non cambiano l'HTML ma cambiano lo stato: va controllato anche quello,
   // altrimenti il comando veniva rieseguito e quindi annullato (serviva toccare due volte)
@@ -2668,7 +2643,7 @@ export default function App() {
                     <button type="button" className={`bt !border-0 ${drawing ? "on" : "!bg-transparent"}`} onClick={() => { setDrawing(true); setImg(null); }}><Pencil size={16} />Disegno</button>
                   </div>
                 </div>
-                <div className="tbw sticky top-[64px] md:top-0 z-[35] p-2 pt-0 space-y-2 border-b" data-hide={tbHidden ? "1" : undefined} style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { tbTouch.current = Date.now(); const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }} onMouseDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }}>
+                <div className="tbw sticky top-[64px] md:top-0 z-[35] p-2 pt-0 space-y-2 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }} onMouseDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }}>
                   {!drawing ? (<>
                     <div className="grid grid-cols-7 gap-1.5 pt-2">
                       <TB on={fmt.b} fn={() => cmd("bold")} icon={Bold} label="Grassetto" />
@@ -2789,6 +2764,7 @@ export default function App() {
               {/* la pista di lettura: si disegna aprendo il foglio, poi segue lo scorrimento; in fondo il nodo diventa ambra */}
               <div ref={railRef} className="read-rail" aria-hidden="true"><i /><b /></div>
               <div key={sel.id} ref={readRef} data-sheet-scroll="" className={`overflow-y-auto flex-1 min-h-0 ${swap ? "doc-swap" : ""}`} style={{ ["--dir" as any]: swap || 1 }}>
+              <div className="reader-scroll-content">
               {isAdmin && !anon && !diary && <div className="flex items-center gap-3 px-4 py-2 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
               {hidS && !diary && <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 py-2.5 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
                 <div className="text-sm min-w-0"><b>Autore nascosto.</b> <span className="mu">{sel.rating > 0 ? "Puoi svelarlo: dopo lo svelamento il voto non si cambia più." : "Dai da 0,5 a 5 stelle per poterlo svelare. Tocca la metà sinistra di una stella per il mezzo voto."}</span></div>
@@ -2821,6 +2797,7 @@ export default function App() {
                     </nav>
                   </Reveal>
                 )}
+              </div>
               </div>
               </div>
             </div>

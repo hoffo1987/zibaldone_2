@@ -54,9 +54,18 @@ const sheetFrames = (from: Rect, to: Rect, win: Win | null, r0: number, r1: numb
   ];
 };
 // paper: si è partiti dalla carta di una scheda
+const mobileReader = () => window.matchMedia?.("(max-width:767px)").matches;
+const readerText = (panel: HTMLElement) => panel.querySelector<HTMLElement>("[data-sheet-paper] > .rt");
 export const openSheet = (panel: HTMLElement, from: Rect | null, paper = false) => {
   panel.getAnimations().forEach((a) => a.cancel());
   if (!moving()) return;
+  // Il lettore mobile è a tutto schermo: cornice e carta restano opache e ferme.
+  // Ritagliare o sfumare il pannello intero esponeva la pagina dietro all'intestazione.
+  if (mobileReader()) {
+    const text = readerText(panel);
+    if (text) run(text, [{ transform: "translateY(10px)" }, { transform: "none" }], { duration: DUR.base, easing: EASE.land });
+    return;
+  }
   const to = rectOf(panel);
   if (!from || !to || !onScreen(from)) {
     run(panel, [{ opacity: 0, transform: "translateY(18px)" }, { opacity: 1, transform: "none" }], { duration: DUR.base, easing: EASE.land });
@@ -70,6 +79,10 @@ export const openSheet = (panel: HTMLElement, from: Rect | null, paper = false) 
 export const closeSheet = (panel: HTMLElement, id: string): Promise<void> => {
   panel.getAnimations().forEach((a) => a.cancel());
   if (!moving()) return Promise.resolve();
+  if (mobileReader()) {
+    const text = readerText(panel);
+    return text ? run(text, [{ transform: "none" }, { transform: "translateY(8px)" }], { duration: 180, easing: EASE.exit }).finished.then(() => {}, () => {}) : Promise.resolve();
+  }
   const home = document.querySelector<HTMLElement>(`[data-doc="${(window as any).CSS?.escape ? CSS.escape(id) : id}"]`);
   const sheet = home?.querySelector(".paper"), tgt = rectOf(sheet || home), to = rectOf(panel);
   let a: Animation;

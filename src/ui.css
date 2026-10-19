@@ -42,6 +42,9 @@ transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s cubic-bezier(.1
 .mm{background-image:linear-gradient(rgba(15,139,122,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(15,139,122,.12) 1px,transparent 1px);background-size:20px 20px}
 .rt{overflow-wrap:anywhere;line-height:32px;font-size:17px}
 .reader-paper{display:grid;isolation:isolate}
+.reader-scroll-content{display:flex;flex-direction:column;min-height:100%}
+.reader-scroll-content>*{flex-shrink:0}
+.reader-scroll-content>.reader-paper{flex:1 0 auto}
 .reader-paper>.rt,.reader-paper>.reader-drawing{grid-area:1/1;min-width:0}
 .reader-drawing{position:relative;align-self:start;pointer-events:none}
 .writing-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px 16px}
@@ -116,8 +119,6 @@ transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s cubic-bezier(.1
 .tb:active{transform:scale(.95)}
 .tb[data-open="true"]:not(.on){border-color:var(--ac);color:var(--ac);background:color-mix(in srgb,var(--ac) 14%,var(--pn))}
 .tb.on[data-open="true"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 35%,transparent)}
-.tbw{transition:transform .22s var(--ez),opacity .18s}
-.tbw[data-hide="1"]{transform:translateY(-110%);opacity:0;pointer-events:none}
 .swr{scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%)}.swr:before,.swr:after{content:"";flex:0 0 6px}.swr::-webkit-scrollbar{display:none}
 .sws{transition:transform .1s,box-shadow .12s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.sws:active{transform:scale(.86)}
 .rt span[style*="font-size"]{line-height:1.25}
@@ -253,7 +254,8 @@ body{margin:0}
   .hero{padding:1.5rem}
   header.hdr{padding-top:calc(.75rem + env(safe-area-inset-top))}
   .settings-panel{max-height:calc(100dvh - env(safe-area-inset-top) - 1rem)}
-  .doc-ov{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);align-items:stretch}
+  .root .doc-ov,.root .doc-ov.out{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);align-items:stretch;background:var(--pn);animation:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+  .reader-panel .doc-hd,.reader-panel .doc-tt{animation:none}
   .doc-ov>.reader-panel{height:100%;max-height:none;max-width:none;min-height:0;border-radius:0}
   .reader-panel .doc-hd{padding:12px;gap:10px}
   .reader-panel .doc-hd>div:first-of-type{padding-right:52px}
