@@ -314,18 +314,22 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
         const amp = narrow ? 0.5 : 1;
         sm.x += ((ptr.in && !narrow ? ptr.x : 0) - sm.x) * ease(2.5); sm.y += ((ptr.in && !narrow ? ptr.y : 0) - sm.y) * ease(2.5);
         sm.yaw += (yawTarget - sm.yaw) * ease(drag.on ? 10 : 3);
-        motion.x = (0.45 * Math.sin(t * 0.13) + 0.6 * sm.x) * amp;
-        motion.y = (0.14 * Math.sin(t * 0.09 + 1) - 0.3 * sm.y) * amp;
+        // while the secret plays the slow drift calms down: the framing stays on him
+        const calm = 1 - 0.6 * Math.min(1, sm.secretPan);
+        motion.x = (0.45 * Math.sin(t * 0.13) * calm + 0.6 * sm.x) * amp;
+        motion.y = (0.14 * Math.sin(t * 0.09 + 1) * calm - 0.3 * sm.y) * amp;
         motion.z = -0.7 * (0.5 + 0.5 * Math.sin(t * 0.06 - 1.2)) * amp;
-        motion.yaw = 0.035 * Math.sin(t * 0.05) * amp + sm.yaw;
+        motion.yaw = 0.035 * Math.sin(t * 0.05) * calm * amp + sm.yaw;
         // l'ambiente del podio coperto segue la stanza che gira: il cortile si sposta appena tra i due lati
         if (covered) setAmbiencePan(-motion.yaw * 1.4);
-        // The left aisle lies outside a portrait crop. Ease it into view only after the secret is revealed.
-        // On phones the camera also turns towards the aisle, so the near columns do not hide his walk.
-        const pan = secretSeconds >= 0 ? (narrow ? 1.8 : W - left < 900 ? 1 : 0) : 0;
+        // Once the secret is revealed the camera eases towards the left aisle, where he comes out from behind a column and
+        // stops behind the corner of the dais: on computers it moves a metre closer and swings round to the left (from
+        // there he stands clear of the columns and of the plates over the cups); the left aisle lies outside a portrait
+        // crop, so on phones it also turns towards it.
+        const pan = secretSeconds >= 0 ? (narrow ? 1.8 : 1) : 0;
         sm.secretPan += (pan - sm.secretPan) * (reduced.matches ? 1 : 1 - Math.exp(-Math.min(0.05, (now - drawn) / 1000) * 3));
-        motion.x -= sm.secretPan;
-        if (narrow) { motion.z += sm.secretPan * (4 / 1.8); motion.yaw += sm.secretPan * (0.45 / 1.8); }
+        if (narrow) { const k = sm.secretPan / 1.8; motion.x -= 3.6 * k; motion.z -= 1.5 * k; motion.yaw += 0.1 * k; }
+        else { motion.z -= 1.0 * sm.secretPan; motion.yaw -= 0.26 * sm.secretPan; }
         // coppe: girano piano, quella sotto il puntatore (o la cui targhetta è sotto il puntatore) si solleva e brilla
         hover = drag.on && drag.moved > 8 ? -1 : ptr.cx >= 0 ? pick(ptr.cx, ptr.cy) : -1;
         if (hover < 0 && hoverPlate.current >= 0) hover = hoverPlate.current;

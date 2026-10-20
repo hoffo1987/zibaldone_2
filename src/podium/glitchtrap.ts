@@ -1,10 +1,16 @@
 // Loaded only after the first correct window tap. Same lighting shader and GPU resources as the room; the skeleton is
 // posed on the CPU (glitchtrapPose.ts) and the vertices are skinned here, identically in every pass.
+// He looks the way he does in Help Wanted: the costume seen through a green phosphor with burning edges, lines of the
+// scan climbing through him, blocks of corrupted pixels, and at every glitch his image tears into slices that jump aside
+// and split into colours; green fragments of him float and blink around his body. The lamp over the place where he
+// stops and his green glow on the room are in shaders.ts / engine.ts.
 import { modelLightingShader, type PodiumQuality } from './shaders';
-import { attachWalk, EarSprings, makeRig, writeGlitchtrapPose, type JointInfo, type Rig, type WalkMeta } from './glitchtrapPose';
+import { attachWalk, chestAt, EarSprings, makeRig, secretLights, writeGlitchtrapPose, SCALE, STAGE, type JointInfo, type Rig, type WalkMeta } from './glitchtrapPose';
 
 type Meta = { version: number; vertexCount: number; indexCount: number; stride: number; joints: JointInfo[] };
-const objectStruct = (joints: number) => `struct Object { joints: array<mat4x4f, ${joints}>, params: vec4f };`;
+// params: eye glow, seconds since the reveal, glitch (0..1), -; center: his chest (world), scale
+const objectStruct = (joints: number) => `struct Object { joints: array<mat4x4f, ${joints}>, params: vec4f, center: vec4f };`;
+const MOTES = 160;
 const skinning = /* wgsl */ `
 struct Input { @location(0) p: vec3f, @location(1) n: vec3f, @location(2) uv: vec2f, @location(3) j: vec4u, @location(4) w: vec4f };
 struct Skinned { p: vec3f, n: vec3f };
@@ -24,8 +30,17 @@ struct Out { @builtin(position) pos: vec4f,
  @location(1) @interpolate(perspective, centroid) n: vec3f,
  @location(2) @interpolate(perspective, centroid) uv: vec2f };
 @vertex fn vs(i: Input) -> Out {
-  let a = skin(i); var o: Out; o.wp = a.p; o.n = a.n; o.uv = i.uv;
-  o.pos = P.vp * vec4f(select(a.p, vec3f(a.p.x, -a.p.y, a.p.z), P.misc.y == 1.0), 1.0);
+  let a = skin(i); var o: Out; var p = a.p;
+  // at every glitch his image tears: horizontal slices of him jump sideways for a few frames (across the view)
+  let g = O.params.z;
+  if (g > 0.001) {
+    let tq = floor(O.params.y * 24.0);
+    let band = floor(p.y / O.center.w * 6.0 + hash2(vec2f(tq, 1.0)) * 4.0);
+    let jump = (hash2(vec2f(band * 3.1, tq)) - 0.5) * step(0.55, hash2(vec2f(band, tq + 7.0)));
+    p += P.right.xyz * jump * 0.45 * O.center.w * g;
+  }
+  o.wp = p; o.n = a.n; o.uv = i.uv;
+  o.pos = P.vp * vec4f(select(p, vec3f(p.x, -p.y, p.z), P.misc.y == 1.0), 1.0);
   return o;
 }
 @fragment fn fs(i: Out) -> @location(0) vec4f {
@@ -45,12 +60,55 @@ struct Out { @builtin(position) pos: vec4f,
   surface.ao = 1.0; surface.kind = 2u; surface.sheen = 0.32;
   let nx = dpdx(n); let ny = dpdy(n); let kr = min(0.3 * (dot(nx, nx) + dot(ny, ny)), 0.2);
   var eye = P.pos.xyz; if (P.misc.y == 1.0) { eye.y = -eye.y; }
-  // the purple irises glow on their own (the only light he brings into the room). The published emissive map is a
-  // soft ring wider than the iris: keep the light on the lilac iris itself, never on the white, the rim or the pupil
+  // lit like the room (the lamp's penumbra, the moon, the bounced light), but not by his own glow (255)
+  let lit = shadeSurface(surface, 255u, i.wp, n0, eye, i.pos.xy, kr);
+  let time = O.params.y; let g = O.params.z; let s = O.center.w;
+  let V = normalize(eye - i.wp);
+  // Help Wanted's glitch: the costume seen through a green phosphor (its light and shade kept, the shade deep), the
+  // edges of his silhouette burning green, brighter where the lamp catches him
+  let lum = dot(lit, vec3f(0.2126, 0.7152, 0.0722));
+  var c = mix(lit, GLOW_COL * lum * 1.25, 0.6);
+  let rim = pow(1.0 - saturate(abs(dot(n0, V))), 4.0) * (0.35 + min(lum * 4.0, 1.4));
+  // lines of the scan climbing through him, a slow brighter sweep, blocks of corrupted pixels (more in a glitch)
+  let y = i.wp.y / s;
+  let scan = pow(0.5 + 0.5 * sin(y * 70.0 - time * 5.0), 16.0);
+  let sweep = 1.0 - smoothstep(0.0, 0.05, abs(fract(y * 0.4 - time * 0.17) - 0.5));
+  let cell = floor(i.pos.xy / 6.0); let tq = floor(time * 12.0);
+  let corrupt = step(0.994 - 0.06 * g, hash2(cell + vec2f(tq * 7.13, tq * 3.71)));
+  let hum = 0.88 + 0.12 * sin(time * 29.0) * sin(time * 11.0);
+  c = c * (1.0 - 0.3 * scan) + GLOW_COL * (rim * 0.8 + scan * 0.03 + sweep * 0.1 + corrupt * 1.3) * hum * (1.0 + 0.8 * g);
+  // the torn slices of a glitch split into colours (magenta and green, like a broken signal)
+  let tear = g * step(0.62, hash2(vec2f(floor(i.pos.y / 9.0), tq + 3.0)));
+  c = mix(c, vec3f(c.g * 1.3, c.r * 0.25, c.g * 1.5) + vec3f(0.35, 0.0, 0.45) * rim, tear * 0.75);
+  // the purple irises glow on their own. The published emissive map is a soft ring wider than the iris: keep the light
+  // on the lilac iris itself, never on the white, the rim or the pupil
   let iris = smoothstep(0.1, 0.18, (base.b - 0.5 * (base.r + base.g)) / max(base.b, 0.02)) * smoothstep(0.05, 0.12, base.b);
-  let glow = vec3f(mat.g, 0.0, mat.b) * O.params.x * iris * 3.2;
-  return vec4f(finite3(shadeSurface(surface, 0u, i.wp, n0, eye, i.pos.xy, kr) + glow), 1.0);
-}`;
+  c += vec3f(mat.g, 0.0, mat.b) * O.params.x * iris * 3.2;
+  // at the strongest glitches a few blocks of him drop out
+  if (hash2(cell * 1.7 + vec2f(tq, 5.0)) < 0.3 * g * g) { discard; }
+  return vec4f(finite3(c), 1.0);
+}
+// green fragments of him: small square pixels that float up around his body and blink on and off, more and bigger in a
+// glitch (additive, in the room's light units)
+struct MOut { @builtin(position) pos: vec4f, @location(0) @interpolate(flat) col: vec3f };
+@vertex fn vsMote(@builtin(vertex_index) k: u32, @builtin(instance_index) ii: u32) -> MOut {
+  var o: MOut;
+  let fi = f32(ii); let time = O.params.y; let s = O.center.w; let g = O.params.z;
+  let life = 2.0 + 2.2 * hash2(vec2f(fi, 1.0));
+  let clock = time / life + hash2(vec2f(fi, 2.0));
+  let age = fract(clock); let gen = floor(clock);
+  let a = 6.2831853 * hash2(vec2f(fi, gen + 3.0));
+  let r = s * (0.22 + 0.4 * sqrt(hash2(vec2f(fi, gen + 4.0)))) * (1.0 + 0.4 * age);
+  let p = O.center.xyz + vec3f(cos(a) * r, s * (-1.25 + 1.9 * hash2(vec2f(fi, gen + 5.0)) + 0.5 * age), sin(a) * r);
+  let on = step(0.28, hash2(vec2f(fi, floor(time * 10.0) + 11.0)));
+  let size = s * (0.007 + 0.014 * hash2(vec2f(fi, gen + 6.0))) * (1.0 + 1.2 * g);
+  let c = vec2f(f32(k & 1u), f32(k >> 1u)) * 2.0 - 1.0;
+  o.pos = P.vp * vec4f(p + (P.right.xyz * c.x + P.up.xyz * c.y) * size, 1.0);
+  let white = step(0.88, hash2(vec2f(fi, gen + 8.0)));
+  o.col = mix(GLOW_COL, vec3f(0.8, 1.0, 0.85), white) * on * sin(3.14159 * age) * (1.2 + 1.8 * g) * saturate(time / 2.0);
+  return o;
+}
+@fragment fn fsMote(i: MOut) -> @location(0) vec4f { return vec4f(finite3(i.col), 0.0); }`;
 const shadowShader = (joints: number) => `${objectStruct(joints)}
 @group(0) @binding(0) var<uniform> O: Object;
 @group(1) @binding(0) var<uniform> light: mat4x4f;
@@ -71,12 +129,16 @@ export class Glitchtrap {
   private vertex!: GPUBuffer;
   private index!: GPUBuffer;
   private material!: GPUBindGroup;
+  // 0 main, 1 floor reflection, 2–7 cubemap faces, 8 the moon's shadow, 9 the shadow from his lamp
   private passes: GPUBindGroup[] = [];
-  private pipes!: { main: GPURenderPipeline; flat: GPURenderPipeline; shadow: GPURenderPipeline };
+  private pipes!: { main: GPURenderPipeline; flat: GPURenderPipeline; shadow: GPURenderPipeline; motes: GPURenderPipeline };
   private meta!: Meta;
   private rig!: Rig;
   private ears = new EarSprings();
   private data = new Float32Array(4);
+  // his chest now, and where it ends up once he has stopped (the lamp is aimed there)
+  chest = [0, 0, 0];
+  standing = [0, 0, 0];
   private constructor(private device: GPUDevice) {}
 
   static async load(device: GPUDevice, passBuffers: GPUBuffer[], signal: AbortSignal, q: PodiumQuality, frameLayout: GPUBindGroupLayout, passLayout: GPUBindGroupLayout) {
@@ -98,7 +160,8 @@ export class Glitchtrap {
     if (meta.version !== 1 || meta.stride !== 40 || !meta.joints?.length || mesh.byteLength !== meta.vertexCount * 40 + meta.indexCount * 2) throw new Error('Glitchtrap: modello incompleto');
     this.rig = makeRig(meta.joints);
     attachWalk(this.rig, walkMeta, new Float32Array(walk));
-    this.data = new Float32Array(this.rig.n * 16 + 4);
+    this.data = new Float32Array(this.rig.n * 16 + 8);
+    this.standing = chestAt(this.rig, 40, false, [STAGE.CAMERA[0], 2.75, STAGE.CAMERA[1]]).slice();
     const buffer = (data: ArrayBuffer | Float32Array, usage: number) => {
       const b = d.createBuffer({ size: data.byteLength, usage: usage | GPUBufferUsage.COPY_DST });
       this.buffers.push(b); d.queue.writeBuffer(b, 0, data); return b;
@@ -118,13 +181,18 @@ export class Glitchtrap {
       primitive: { topology: 'triangle-list', cullMode: 'none' }, multisample: { count: main ? 4 : 1 },
       depthStencil: { format: main ? 'depth32float' : 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
     });
-    const [main, flat, shadow] = await Promise.all([pipeline(true), pipeline(false), d.createRenderPipelineAsync({ label: 'glitchtrap-shadow',
+    const add: GPUBlendComponent = { srcFactor: 'one', dstFactor: 'one' };
+    const [main, flat, shadow, motes] = await Promise.all([pipeline(true), pipeline(false), d.createRenderPipelineAsync({ label: 'glitchtrap-shadow',
       layout: d.createPipelineLayout({ bindGroupLayouts: [uni, uni] }), vertex: { module: d.createShaderModule({ label: 'glitchtrap-shadow', code: shadowShader(this.rig.n) }), entryPoint: 'shadow', buffers: [vertexLayout] },
       primitive: { topology: 'triangle-list', cullMode: 'none' }, depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' },
+    }), d.createRenderPipelineAsync({ label: 'glitchtrap-motes', layout,
+      vertex: { module, entryPoint: 'vsMote' }, fragment: { module, entryPoint: 'fsMote', targets: [{ format: 'rgba16float', blend: { color: add, alpha: add } }] },
+      primitive: { topology: 'triangle-strip' }, multisample: { count: 4 },
+      depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'less' },
     })]);
-    this.pipes = { main, flat, shadow };
+    this.pipes = { main, flat, shadow, motes };
     this.own = d.createBindGroup({ layout: uni, entries: [{ binding: 0, resource: { buffer: this.uniform } }] });
-    this.passes = passBuffers.map((b, i) => d.createBindGroup({ layout: i === 8 ? uni : passLayout, entries: [{ binding: 0, resource: { buffer: b } }] }));
+    this.passes = passBuffers.map((b, i) => d.createBindGroup({ layout: i >= 8 ? uni : passLayout, entries: [{ binding: 0, resource: { buffer: b } }] }));
     const sampler = d.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', maxAnisotropy: 4 });
     const texture = async (name: string, srgb: boolean) => {
       const bytes = await (await fetchFile(name)).arrayBuffer(), sizes: { offset: number; length: number }[] = [];
@@ -163,15 +231,25 @@ export class Glitchtrap {
 
   update(seconds: number, reducedMotion: boolean, eye: number[]) {
     writeGlitchtrapPose(this.data, this.rig, seconds, reducedMotion, eye, this.ears);
+    // his chest: the joint's bind position through its skinning matrix
+    const j = this.rig.spine[2], b = this.rig.bind[j], o = j * 16, m = this.data;
+    this.chest = [0, 1, 2].map((k) => m[o + k] * b[0] + m[o + 4 + k] * b[1] + m[o + 8 + k] * b[2] + m[o + 12 + k]);
+    m.set([...this.chest, SCALE], this.rig.n * 16 + 4);
     this.device.queue.writeBuffer(this.uniform, 0, this.data);
   }
 
+  // the lamp, the glitches and his glow at this moment (each 0..1)
+  lights(seconds: number, reducedMotion: boolean) { return secretLights(seconds, reducedMotion); }
+
   draw(p: GPURenderPassEncoder, pass: number, lighting?: GPUBindGroup) {
-    p.setPipeline(pass === 0 ? this.pipes.main : pass === 8 ? this.pipes.shadow : this.pipes.flat);
-    p.setBindGroup(0, pass === 8 ? this.own : lighting!); p.setBindGroup(1, this.passes[pass]);
+    const shadow = pass >= 8;
+    p.setPipeline(pass === 0 ? this.pipes.main : shadow ? this.pipes.shadow : this.pipes.flat);
+    p.setBindGroup(0, shadow ? this.own : lighting!); p.setBindGroup(1, this.passes[pass]);
     p.setVertexBuffer(0, this.vertex); p.setIndexBuffer(this.index, 'uint16');
-    if (pass !== 8) { p.setBindGroup(2, this.own); p.setBindGroup(3, this.material); }
+    if (!shadow) { p.setBindGroup(2, this.own); p.setBindGroup(3, this.material); }
     p.drawIndexed(this.meta.indexCount);
+    // the floating fragments, in the room's own view only
+    if (pass === 0) { p.setPipeline(this.pipes.motes); p.draw(4, MOTES); }
   }
 
   destroy() { this.buffers.splice(0).forEach(b => b.destroy()); this.textures.splice(0).forEach(t => t.destroy()); }

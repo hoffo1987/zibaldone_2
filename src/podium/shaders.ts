@@ -30,7 +30,10 @@ const f = (x: number) => (Number.isInteger(x) ? `${x}.0` : x.toFixed(5));
 const v3 = (a: number[]) => `vec3f(${a.map(f).join(", ")})`;
 export const GI_DIM = [18, 10, 16], GI_MIN = [-8.6, 0.25, -6.6], GI_MAX = [8.6, 11.6, 13];
 export const GI_PROBES = GI_DIM[0] * GI_DIM[1] * GI_DIM[2];
-export const FRAME_FLOATS = 16 + 15 * 4 + 3 * 4; // matrice della luce + 15 vec4 + le tre coppe
+export const FRAME_FLOATS = 16 + 15 * 4 + 3 * 4 + 16 + 4 * 4; // matrice della luce + 15 vec4 + le tre coppe + il faro e il bagliore della sorpresa
+// The night guest's lamp (engine.ts aims it where he stops): perspective shadow map of the guest alone, near and far
+// planes, half-angle of its frustum and the radius of the lamp (the softness of the penumbra)
+export const SPOT = { near: 2.0, far: 20.0, tan: Math.tan((27 * Math.PI) / 180), radius: 0.35 };
 export const PASS_FLOATS = 16 + 5 * 4; // matrice + 5 vec4
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -49,11 +52,14 @@ struct Frame {
   wall: vec4f, wainscot: vec4f, ceiling: vec4f, tileA: vec4f, tileB: vec4f, stone: vec4f, darkStone: vec4f, carpet: vec4f, banner: vec4f, frameC: vec4f,
   res: vec4f,
   cups: array<vec4f, 3>, // per coppa: angolo, sollevamento, bagliore (puntatore sopra)
+  // the night guest: the lamp over the place where he stops (shadow map of the guest), and his own green glow
+  spotVP: mat4x4f, spotPos: vec4f, spotDir: vec4f, spotCol: vec4f, glow: vec4f,
 };
 // w: sun.w intensità; sunCol.w notte; skyTop.w esposizione; skyHor.w luce minima; wall.w nebbia; wainscot.w pulviscolo;
 //    ceiling.w nuvole; tileA.w tempo; tileB.w fotogramma; stone.w passi della nebbia; darkStone.w fusione temporale;
-//    carpet.w turno delle sonde; banner.w luce della sorpresa; frameC.w cantiere (podio coperto); res: immagine piena e
-//    nebbia
+//    carpet.w turno delle sonde; banner.w libero; frameC.w cantiere (podio coperto); res: immagine piena e
+//    nebbia; spotPos.w intensità del faro (0 spento); spotDir.w coseno del bordo del cono; spotCol.w coseno del pieno;
+//    glow: petto dell'ospite e intensità del suo bagliore verde
 struct Pass { vp: mat4x4f, pos: vec4f, right: vec4f, up: vec4f, fwd: vec4f, misc: vec4f };
 // pos.w tan(fov/2); right.w, up.w centro ottico (px); fwd.w altezza di riferimento (px); misc: -, modo (0 scena,
 // 1 riflesso del pavimento, 2 cubemap), larghezza e altezza del bersaglio (px)
@@ -236,6 +242,7 @@ const frameBindings = (gi: "read" | "read_write") => /* wgsl */ `
 @group(0) @binding(9) var anisoSamp: sampler;
 @group(0) @binding(10) var envTex: texture_cube<f32>;
 @group(0) @binding(11) var planarTex: texture_2d<f32>;
+@group(0) @binding(12) var spotTex: texture_depth_2d;
 `;
 
 const lightFns = (q: PodiumQuality) => /* wgsl */ `
@@ -278,6 +285,44 @@ fn sunLight(p: vec3f, soft: bool) -> f32 {
     vis /= 12.0;
   }
   return vis * cloudAt(sc.xy, s * 0.0047 + 0.01);
+}
+// the guest's lamp: depth from a perspective projection (WebGPU: z = A - B / distance)
+const SPOT_A = ${f(SPOT.far / (SPOT.far - SPOT.near))}; const SPOT_B = ${f((SPOT.far * SPOT.near) / (SPOT.far - SPOT.near))};
+const SPOT_DIM = ${f(q.mobile ? 512 : 1024)}; const SPOT_TAN = ${f(SPOT.tan)}; const SPOT_R = ${f(SPOT.radius)};
+const GLOW_COL = vec3f(0.2, 1.0, 0.4);
+fn spotDist(z: f32) -> f32 { return SPOT_B / max(SPOT_A - z, 1e-5); }
+fn spotDepth(d: f32) -> f32 { return SPOT_A - SPOT_B / max(d, 1e-3); }
+// how much of the lamp reaches p past the guest (0..1). soft: PCSS, the penumbra widens with the distance from his body
+// to what he shades (his shadow on the floor and the wall is sharp at the feet, soft further away)
+fn spotShadow(p: vec3f, soft: bool) -> f32 {
+  let c = F.spotVP * vec4f(p, 1.0);
+  if (c.w <= 0.0) { return 1.0; }
+  let q = c.xyz / c.w; let uv = vec2f(q.x * 0.5 + 0.5, 0.5 - q.y * 0.5);
+  if (any(uv <= vec2f(0.0)) || any(uv >= vec2f(1.0)) || q.z >= 1.0 || q.z <= 0.0) { return 1.0; }
+  let dR = spotDist(q.z); let bias = 0.012 + 0.002 * dR;
+  if (!soft) { return textureSampleCompareLevel(spotTex, cmpSamp, uv, spotDepth(dR - bias)); }
+  let perM = 1.0 / (2.0 * dR * SPOT_TAN); // uv per metre at the receiver
+  var blk = 0.0; var nb = 0.0;
+  for (var i = 0; i < 12; i++) {
+    let s = clamp(uv + spun(POISSON[i]) * SPOT_R * perM * 1.5, vec2f(0.0), vec2f(0.9999));
+    let d = spotDist(textureLoad(spotTex, vec2i(s * SPOT_DIM), 0));
+    if (d < dR - bias) { blk += d; nb += 1.0; }
+  }
+  if (nb == 0.0) { return 1.0; }
+  let dB = blk / nb;
+  let pen = clamp(SPOT_R * (dR - dB) / dB * perM, 1.5 / SPOT_DIM, 0.05);
+  var vis = 0.0;
+  for (var i = 0; i < 12; i++) { vis += textureSampleCompareLevel(spotTex, cmpSamp, uv + spun(POISSON[i]) * pen, spotDepth(dR - bias)); }
+  return vis / 12.0;
+}
+// light of the lamp arriving at p from direction *dir (radiance before the cosine), zero outside its cone
+fn spotAt(p: vec3f, soft: bool, dir: ptr<function, vec3f>) -> vec3f {
+  if (F.spotPos.w <= 0.0) { return vec3f(0.0); }
+  let ld = F.spotPos.xyz - p; let dd = max(dot(ld, ld), 0.25); let L = ld * inverseSqrt(dd);
+  *dir = L;
+  let cone = smoothstep(F.spotDir.w, F.spotCol.w, dot(-L, F.spotDir.xyz));
+  if (cone <= 0.0) { return vec3f(0.0); }
+  return F.spotCol.rgb * F.spotPos.w * cone * spotShadow(p, soft) / dd;
 }
 `;
 
@@ -750,15 +795,26 @@ fn shadeSurface(s: Surf, m: u32, p: vec3f, n0: vec3f, eye: vec3f, px: vec2f, kr:
   let light = F.sunCol.rgb * F.sun.w * vis * ndl;
   // il telo ha la sua occlusione (pieghe e orlo): l'ombra di contatto della pedana lo scurirebbe tutto dove ci si posa
   let ao = s.ao * select(contactAO(p, n0), 1.0, m == ${Mat.cloth}u);
-  // During the reveal, lift existing bounced light around the alcove on every surface,
-  // including the column and floor. Its direction and colour still come from the room probes.
-  let alcove = p - vec3f(-5.5, 2.8, -2.7);
-  let bounce = 1.0 + 7.0 * F.banner.w * exp(-dot(alcove, alcove) / 16.0);
-  let gi = (giAt(p + n0 * 0.3, n) + F.skyHor.w) * ao * bounce;
+  // (the night guest takes less of the room's bounced light: the lamp's penumbra on him stays deep)
+  let gi = (giAt(p + n0 * 0.3, n) + F.skyHor.w) * ao * select(1.0, 0.45, m == 255u);
   let f0 = mix(vec3f(0.04), s.alb, s.metal);
   let hv = L + V; let H = hv * inverseSqrt(max(dot(hv, hv), 1e-12)); // astro esattamente dietro il punto: niente 0/0
-  let spec = light * fresnel(f0, dot(V, H)) * ggx(saturate(dot(n, H)), max(rough, 0.05)) * 0.25 / nv;
-  var col = s.alb * (1.0 - s.metal) * (light / PI + gi) + spec;
+  var spec = light * fresnel(f0, dot(V, H)) * ggx(saturate(dot(n, H)), max(rough, 0.05)) * 0.25 / nv;
+  // the night guest's lamp: a pool of cold light where he stops, with his soft shadow (on himself too)
+  var lamp = vec3f(0.0); var Ls = vec3f(0.0, 1.0, 0.0);
+  let lampIn = spotAt(p + n0 * 0.015, P.misc.y == 0.0, &Ls);
+  if (dot(n0, Ls) > -0.05) {
+    lamp = lampIn * max(dot(n, Ls), 0.0);
+    let hs = normalize(Ls + V);
+    spec += lamp * fresnel(f0, dot(V, hs)) * ggx(saturate(dot(n, hs)), max(rough, 0.05)) * 0.25 / nv;
+  }
+  var col = s.alb * (1.0 - s.metal) * ((light + lamp) / PI + gi) + spec;
+  // and his own green glow on everything around him (not on himself: m 255)
+  if (F.glow.w > 0.0 && m != 255u) {
+    let lg = F.glow.xyz - p; let dg = max(dot(lg, lg), 0.05); let Lg = lg * inverseSqrt(dg);
+    let fade = saturate(1.0 - dg / 42.0);
+    col += s.alb * (1.0 - s.metal * 0.7) * GLOW_COL * F.glow.w * saturate((dot(n, Lg) + 0.2) / 1.2) * fade * fade / (1.0 + dg);
+  }
   // velluto e stoffa: riflesso radente
   let g1 = 1.0 - nv; let g2 = g1 * g1;
   col += s.sheen * g2 * g2 * (gi + light * 0.1) * s.alb * 2.0;
@@ -889,7 +945,16 @@ fn fogLight(p: vec3f) -> f32 {
     let p = ro + rd * ((i + j) * dt);
     let dust = 0.6 + 0.4 * snoise3(p * 0.35 + vec3f(t * 0.02, -t * 0.04, t * 0.015));
     let dens = F.wall.w * max(0.0, 1.0 + F.wainscot.w * (dust - 0.6) * 1.6);
-    acc += T * dens * dt * (sunC * fogLight(p) * phase + amb);
+    var extra = vec3f(0.0);
+    // the guest's lamp: its cone shows in the dust (with his shadow cut out of it), and a green haze around him
+    if (F.spotPos.w > 0.0) {
+      var Ls = vec3f(0.0);
+      let lampIn = spotAt(p, false, &Ls);
+      let ms = dot(rd, Ls);
+      extra += lampIn * 7.0 * (1.0 - 0.36) / (4.0 * PI * pow(1.36 - 1.2 * ms, 1.5));
+    }
+    if (F.glow.w > 0.0) { let lg = F.glow.xyz - p; extra += GLOW_COL * F.glow.w * 0.35 / (dot(lg, lg) + 0.8); }
+    acc += T * dens * dt * (sunC * fogLight(p) * phase + amb + extra);
     T *= exp(-dens * dt);
   }
   let prev = textureLoad(volPrev, vec2i(fc.xy), 0);

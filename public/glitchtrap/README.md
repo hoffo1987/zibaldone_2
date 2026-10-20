@@ -46,13 +46,16 @@ riposo, +z lungo il percorso).
 
 `src/podium/glitchtrapPose.ts` mette sopra la camminata i gesti del personaggio, presi dal finale
 «Pizza Party» di Help Wanted (si sporge dalla tenda e fa cenno di avvicinarsi) e dalle animazioni
-della lobby di Dead by Daylight (saluto lento a mano aperta, testa inclinata): si sporge dalla colonna,
-esce in diagonale dietro di essa, abbastanza lontano da non toccarne la base, e si ferma girandosi
+della lobby di Dead by Daylight (saluto lento a mano aperta, testa inclinata), ingrandito di quasi una
+volta e mezzo perché regga le proporzioni della sala: si sporge dalla colonna, esce verso destra dietro di
+essa, abbastanza lontano da non toccarne la base, fino all'angolo posteriore della pedana, e si ferma girandosi
 verso la camera in un solo movimento: appena l'ultimo passo tocca terra il corpo prosegue sul piede
 davanti, che fa perno sull'avampiede, mentre l'altro si stacca e gli si affianca; anche e bacino
 partono dalla velocità che la camminata aveva e rallentano fino a fermarsi. Poi saluta con la mano
 destra aperta all'altezza degli occhi, accanto alla testa inclinata (alzata, la sinistra finirebbe
-dietro la targhetta del secondo posto, che gli fluttua accanto), richiama con le dita, respira. Da
+dietro la targhetta del secondo posto), richiama con le dita, respira. Mentre accade la camera si
+avvicina e gira verso la navata (`src/podium/Podium3D.tsx`): da lì lui, colonne e targhette non si
+coprono, anche sui telefoni, dove scivola nella navata e la guarda di lungo. Da
 fermo non è mai immobile: il peso passa piano da un piede all'altro, oscilla appena avanti e indietro,
 lo sguardo ha piccoli scarti attorno alla camera e annuisce col saluto; la mano libera pende come un
 pendolo in ritardo sul corpo, il gomito morbido, e ogni tanto le dita tamburellano a partire dal
@@ -65,6 +68,22 @@ braccio si allarga quanto basta per passare (le distanze sono funzioni lisce, pe
 scatti). La testa cerca la camera reale; le orecchie sono molle smorzate spinte dai movimenti della
 testa. Il bagliore degli occhi resta sull'iride (la mappa emissiva pubblicata è più larga): lo shader
 lo limita ai pixel viola del colore di base.
+
+## Il glitch e la luce
+
+Come in Help Wanted lo si vede attraverso un fosforo verde (`src/podium/glitchtrap.ts`): luci e ombre
+del costume restano, i bordi della sagoma bruciano di verde, linee di scansione gli salgono addosso e
+qualche blocco di pixel si corrompe. A ogni scatto della testa, e in piccolo anche tra uno e l'altro,
+l'immagine si strappa in fasce orizzontali che saltano di lato e si sdoppiano nei colori, e qualche
+blocco sparisce; frammenti quadrati verdi gli galleggiano attorno e lampeggiano. Il suo bagliore
+verde illumina colonna, pavimento e gradini vicini e fa un alone nella nebbia.
+
+Quando appare la luna si vela e la sala scurisce (`src/podium/engine.ts`). Mentre arriva, un faro
+freddo sopra il punto dove si ferma si accende a fatica, come un vecchio tubo, e cala a ogni glitch:
+lo prende di tre quarti, metà viso nella luce e metà in penombra, con un'ombra morbida tutta sua
+(`spotShadow` in `src/podium/shaders.ts`: mappa d'ombra dal faro, penombra che si allarga lontano dal
+corpo) su di sé, sul pavimento e sul muro; il cono si vede nella polvere. Di lui la sala prende meno
+luce rimbalzata, così la penombra resta profonda.
 
 ## Rigenerazione
 

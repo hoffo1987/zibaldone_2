@@ -8,7 +8,8 @@ import { COL_X, COL_Z } from './stage';
 const asset = (name) => fs.readFileSync(path.join(__dirname, '../../public/glitchtrap', name));
 const rig = makeRig(meta.joints);
 attachWalk(rig, walkMeta, new Float32Array(new Uint8Array(asset('walk.bin')).buffer));
-const eye = [0, 2.75, 10.2];
+// the camera as the secret frames it on computers (it eases towards the left aisle)
+const eye = [STAGE.CAMERA[0], 2.75, STAGE.CAMERA[1]];
 const angle = (a, b) => Math.acos(Math.min(1, a.reduce((s, v, i) => s + v * b[i], 0) / Math.hypot(...a) / Math.hypot(...b)));
 const index = (name) => meta.joints.findIndex((j) => j.name === name);
 // world position of a point given in bind coordinates, carried by joint `name`
@@ -170,12 +171,16 @@ test('no part of him ever goes through the columns or their bases', () => {
 test('he stops in one movement: the hips slow down to rest and never halt and set off again', () => {
   const out = new Float32Array(rig.n * 16 + 4);
   const hips = (t) => { writeGlitchtrapPose(out, rig, t, false, eye); return at(out, 'bip_pelvis'); };
-  let rest = null;
+  const speeds = [];
   for (let t = walkEnd - 0.5; t < TIMES.settled; t += 1 / 60) {
-    const a = hips(t), b = hips(t + 1 / 60), speed = Math.hypot(b[0] - a[0], b[2] - a[2]) * 60;
-    if (rest === null && speed < 0.03) rest = t;
-    if (rest !== null) expect(speed).toBeLessThan(0.08);
+    const a = hips(t), b = hips(t + 1 / 60);
+    speeds.push([t, Math.hypot(b[0] - a[0], b[2] - a[2]) * 60]);
   }
+  // against his walking speed: at rest once below a twentieth of it, and from then on only the idle sway (no new start)
+  const v0 = Math.max(...speeds.filter(([t]) => t <= walkEnd).map(([, v]) => v));
+  const rest = speeds.find(([t, v]) => t > walkEnd && v < 0.05 * v0)?.[0] ?? null;
+  expect(rest).not.toBeNull();
+  for (const [t, v] of speeds) if (t > rest) expect(v).toBeLessThan(0.1 * v0);
   // still moving well after the last step has landed, at rest before the hand rises
   expect(rest).toBeGreaterThan(walkEnd + 0.9);
   expect(rest).toBeLessThan(TIMES.settled);

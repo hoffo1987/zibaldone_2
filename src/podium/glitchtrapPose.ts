@@ -140,21 +140,23 @@ export function makeRig(joints: JointInfo[]): Rig {
 }
 
 // ---------- the stage ----------
-// The room is in metres; the camera sits near (0, 2.75, 10.2) looking towards -z. He starts hidden behind the second
-// column of the left aisle and walks out towards the hall along HEADING; the captured walk decides where he stops
-// (beside the back corner of the dais) and already turns him towards the camera at both ends.
-export const SCALE = 1.42;
+// The room is in metres; the camera sits near (0, 2.75, 10.2) looking towards -z, and while the secret plays it eases
+// closer to the left aisle and swings round to the left (Podium3D.tsx; CAMERA is where it then stands on computers).
+// He starts hidden behind the second column of the left aisle and walks out along HEADING; the captured walk decides
+// where he stops (behind the back corner of the dais). Nearly half as big again as a costume: the hall is monumental.
+export const SCALE = 1.85;
 // the actor is slimmer than the costume: his arms hang this much further out, clear of the belly and the thighs
 const ARM_OUT = 14 * D;
 // The hand that waves: his right (-1; +1 is his left). Raised to his eyes, the left hand would disappear behind the
-// second place's plate, which floats just beside him; the right one rises against the dark between him and the column.
+// second place's plate, which floats just beside him; the right one rises against the dark aisle.
 const WAVE = -1;
 // the waving arm (in an upright frame turned with the chest): where the elbow points and where the forearm does
 const ELBOW = [0.58, -0.35, 0.64], FOREARM = [-0.04, 1, 0.08];
-// He hides behind the column at z -1.9 and walks out diagonally behind it, far enough that neither his feet nor his
-// swinging hands touch its base, stopping where the camera sees him whole: between that column and the second
-// place's step (not behind the step or its plate).
-const START = [-6.95, -3.85], HEADING = 62 * D, CAMERA = [0, 10.2];
+// He hides behind the column at z -1.9 (seen from the secret's camera) and walks out to the right behind it, far
+// enough that neither his feet nor his swinging hands touch it or the one behind, stopping where the camera sees him
+// whole: behind the corner of the dais, clear of the columns and of the plates over the cups. He peeks out towards
+// LEAN.
+const START = [-6.95, -3.6], HEADING = 84 * D, CAMERA = [-2.62, 8.51], LEAN = [1, 0, 0.2];
 const fwd = (yaw: number): V => [Math.sin(yaw), 0, Math.cos(yaw)];
 const left = (yaw: number): V => [Math.cos(yaw), 0, -Math.sin(yaw)];
 const mixV = (a: V, b: V, t: number): V => [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)];
@@ -203,17 +205,46 @@ function sampleWalk(w: Walk, time: number): Frame {
 export const TIMES = { peek: 0.3, peekHeld: 1.3, step: 2.3, settled: 7.9, wave: 8.6, beckon: 11.3, lower: 13.1, idle: 14.2, rewave: 21, every: 15 };
 // sudden glitches of the head: [time, roll, yaw]
 const TWITCHES: number[][] = [[1.85, -16, 7], [9.75, 13, -6], [12.3, -11, 4]];
-function twitch(t: number) {
-  let roll = 0, yaw = 0, glow = 0;
+// the twitches near t: the scripted ones, then one every 11.3 s in the idle
+function twitches(t: number) {
   const events = [...TWITCHES];
   if (t > 18) { const k = Math.floor((t - 18) / 11.3); for (const j of [k - 1, k]) if (j >= 0) events.push([18 + j * 11.3 + 4.1, j % 2 ? 12 : -14, j % 2 ? -5 : 6]); }
-  for (const [at, r, y] of events) {
+  return events;
+}
+function twitch(t: number) {
+  let roll = 0, yaw = 0, glow = 0;
+  for (const [at, r, y] of twitches(t)) {
     const u = t - at;
     if (u < 0 || u > 0.7) continue;
     const e = u < 0.06 ? smoother(u / 0.06) : u < 0.16 ? 1 : 1 - smoother((u - 0.16) / 0.5);
     roll += r * e; yaw += y * e; glow = Math.max(glow, u < 0.16 ? 1 : 0);
   }
   return { roll: roll * D, yaw: yaw * D, glow };
+}
+
+// The lights that come with him (engine.ts, glitchtrap.ts), each 0..1: the lamp over the place where he stops, which
+// struggles on like an old tube as he steps under it and dips at every glitch; the glitches themselves (the green tearing
+// of his image), the twitches of the head and smaller ones in between; his own glow, which flares with them.
+const LAMP_ON = 5.3;
+const BLINKS = [[0, 0.07], [0.2, 0.26], [0.52, 0.66], [0.9, 99]];
+const pulse = (k: number) => { const x = Math.sin(k * 12.9898) * 43758.5453; return x - Math.floor(x); };
+function glitchAt(t: number) {
+  let g = 0;
+  const events = twitches(t).map(([at]) => [at, 1]);
+  for (let k = Math.max(0, Math.floor(t / 2.9) - 1); k <= Math.floor(t / 2.9); k++) events.push([k * 2.9 + 2.2 * pulse(k), 0.35 + 0.3 * pulse(k + 7)]);
+  for (const [at, amp] of events) {
+    const u = t - at;
+    if (u >= 0 && u < 0.4) g = Math.max(g, amp * (u < 0.03 ? u / 0.03 : 1 - smoother((u - 0.03) / 0.37)));
+  }
+  return g;
+}
+export function secretLights(seconds: number, reduced: boolean) {
+  if (reduced) return { lamp: 1, glitch: 0, glow: 1 };
+  const t = Math.max(0, seconds), g = glitchAt(t), u = t - LAMP_ON;
+  let lamp = 0;
+  for (const [a, b] of BLINKS) lamp = Math.max(lamp, smoother((u - a) / 0.02) * (1 - smoother((u - b) / 0.03)));
+  lamp *= 1 - 0.7 * g + 0.035 * Math.sin(t * 7.3) * Math.sin(t * 13.1);
+  return { lamp: Math.max(0, lamp), glitch: g, glow: 0.8 + 0.12 * Math.sin(t * 2.3) + 0.9 * g };
 }
 
 // the waving hand's gestures: weight of the raised hand, wave phase and strength, finger ripple; repeated in the idle
@@ -370,7 +401,7 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V): Pose {
   const toCamera = Math.atan2(eye[0] - b.hips[0], eye[2] - b.hips[2]), faceTurn = clamp(qangle(yawOf(b.pelvis), toCamera, 1) - yawOf(b.pelvis), -0.5, 0.5);
   const heading = qy(yawOf(b.pelvis));
   // he leans out towards the open edge of the column (+x in the room), whichever way his body faces
-  const leanTo = norm([1, 0, 0.2]), lean3 = qrot(qinv(heading), leanTo), lx = lean3[0], lz = lean3[2];
+  const leanTo = norm(LEAN), lean3 = qrot(qinv(heading), leanTo), lx = lean3[0], lz = lean3[2];
   // pelvis: the captured one, plus the peek, the idle sway and the lean while waving
   const pelvisRot = qmul(b.pelvis, euler((0.6 * breath * idle + 0.8 * rock) * D, (3 * peek * lx + 3.5 * sway) * D));
   const hipsMid = mul(add(bind[rig.legs[0].hip], bind[rig.legs[1].hip]), 0.5);
@@ -505,7 +536,7 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V): Pose {
   // standing, the gaze never quite locks: small slow glances around the camera, a nod with each swing of the wave
   const glance = (2.2 * Math.sin((t / 4.1) * 2 * Math.PI) + 1.2 * Math.sin((t / 2.3) * 2 * Math.PI + 2)) * D * life;
   const nod = (1.5 * Math.sin((t / 3.7) * 2 * Math.PI + 1) * life + 1.5 * g.wave * idle) * D;
-  const lyaw = clamp(Math.atan2(local[0], local[2]), -75 * D, 75 * D) + glance, lpitch = clamp(Math.asin(clamp(local[1], -1, 1)), -40 * D, 55 * D) + nod;
+  const lyaw = clamp(Math.atan2(local[0], local[2]), -88 * D, 88 * D) + glance, lpitch = clamp(Math.asin(clamp(local[1], -1, 1)), -40 * D, 55 * D) + nod;
   aim = qrot(chest, [Math.sin(lyaw) * Math.cos(lpitch), Math.sin(lpitch), Math.cos(lyaw) * Math.cos(lpitch)]);
   aim = qrot(qy(tw.yaw), aim);
   const tilt = (22 * peek + 10 * stare + WAVE * (13 * g.up * idle * (1 - g.beckon) - 17 * g.beckon) + 7 * Math.sin((t / 9.1) * 2 * Math.PI) * idle * (1 - g.up)) * D
@@ -577,7 +608,7 @@ function placeEars(rig: Rig, pose: Pose, ears: EarSprings) {
   for (const i of rig.ends) { pose.rot[i] = pose.rot[rig.parent[i]]; pose.pos[i] = pose.pos[rig.parent[i]]; }
 }
 
-// Skinning matrices (column-major, world space, scale included) followed by [eye glow, 0, 0, 0]. With `ears`, the
+// Skinning matrices (column-major, world space, scale included) followed by [eye glow, seconds, glitch, 0]. With `ears`, the
 // ears move as springs driven by the head (step it with every frame's time; a jump in time resets it).
 export function writeGlitchtrapPose(out: Float32Array, rig: Rig, seconds: number, reduced: boolean, eye: number[], ears?: EarSprings) {
   const t = Math.max(0, seconds), pose = evaluate(rig, t, reduced, eye);
@@ -596,7 +627,8 @@ export function writeGlitchtrapPose(out: Float32Array, rig: Rig, seconds: number
     const p = sub(pose.pos[i], add(add(mul(x, b[0]), mul(y, b[1])), mul(z, b[2])));
     out.set([x[0], x[1], x[2], 0, y[0], y[1], y[2], 0, z[0], z[1], z[2], 0, p[0], p[1], p[2], 1], i * 16);
   }
-  out.set([pose.glow, 0, 0, 0], rig.n * 16);
+  // (with reduced motion the effects' clock stands still: no scan lines running, no blinking)
+  out.set([pose.glow, reduced ? 30 : t, reduced ? 0 : glitchAt(t), 0], rig.n * 16);
 }
 
 // where the ankles are (for tests): world positions of the two foot joints
@@ -608,4 +640,8 @@ export function headAt(rig: Rig, seconds: number, reduced: boolean, eye: number[
   const p = evaluate(rig, Math.max(0, seconds), reduced, eye);
   return { pos: p.pos[rig.head], forward: qrot(p.rot[rig.head], [0, 0, 1]) };
 }
-export const STAGE = { START, HEADING };
+// where his chest is (world): the green glow's source; long after the walk, where the lamp is aimed
+export function chestAt(rig: Rig, seconds: number, reduced: boolean, eye: number[]) {
+  return evaluate(rig, Math.max(0, seconds), reduced, eye).pos[rig.spine[2]];
+}
+export const STAGE = { START, HEADING, CAMERA };

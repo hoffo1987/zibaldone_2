@@ -2,7 +2,8 @@
 // (meshes.ts), texture procedurali di marmo e stoffa con le mip, l'atlante dei numeri incisi e dell'emblema (Canvas 2D).
 // Ogni fotogramma:
 //  1. compute: nuvole sul piano del vetro + mip (la penombra delle nuvole sceglie il livello)
-//  2. render:  profondità dal piano del vetro lungo la luce (mappa d'ombra, filtrata poi con PCSS)
+//  2. render:  profondità dal piano del vetro lungo la luce (mappa d'ombra, filtrata poi con PCSS); con la sorpresa
+//              notturna anche l'ospite visto dal faro che lo illumina (la sua ombra morbida)
 //  3. compute: un dodicesimo delle sonde di luce, raggi fissi (niente sfarfallio), rimbalzi multipli dal riuso
 //  4. render:  una faccia della cubemap della sala (riflessi delle superfici lucide) + mip
 //  5. render:  la sala capovolta per il riflesso del pavimento, a risoluzione ridotta + mip
@@ -15,7 +16,7 @@
 // Il canvas ha sempre i pixel dello schermo: cambiare la risoluzione della scena non lo ridimensiona (niente lampi) e
 // l'immagine non passa dal filtro bilineare del browser. Al massimo tre fotogrammi in coda sulla GPU.
 import { buildScene, VERTEX_FLOATS, type Site } from "./meshes";
-import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, combineMSShader, taaShader, GI_PROBES, FRAME_FLOATS, PASS_FLOATS, type PodiumQuality } from "./shaders";
+import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, combineMSShader, taaShader, GI_PROBES, FRAME_FLOATS, PASS_FLOATS, SPOT, type PodiumQuality } from "./shaders";
 import { camera, viewProj, celestial, moodAt, lightMatrix, jittered, invert4, JITTER, LIGHT_RECT, STILL, type Cam, type CamMotion } from "./stage";
 import type { Glitchtrap } from './glitchtrap';
 import { Letters, type SignText } from './letters';
@@ -27,6 +28,10 @@ const HDR: GPUTextureFormat = "rgba16float";
 const CLOUD = [512, Math.round((512 * (LIGHT_RECT.y1 - LIGHT_RECT.y0)) / (LIGHT_RECT.x1 - LIGHT_RECT.x0))];
 const ENV_POS = [0, 3.0, 0.6]; // centro della cubemap: sopra il primo gradino, all'altezza delle coppe
 const PLANAR_MIPS = 6, ENV_MIPS = 8;
+// The night guest's lamp: high above and in front of the place where he stops (from his left, so half of him falls in
+// shadow and his own shadow lands on the floor and the wall behind him), cold light, the cone's edge and full beam
+// (half-angles), its intensity; his green glow at full strength
+const LAMP = { from: [3.0, 7.2, 0.9], aimDrop: 0.45, color: [0.72, 0.88, 1.0], outer: 24, inner: 11, power: 260, glow: 1.8 };
 const RT = GPUTextureUsage;
 const mipCount = (w: number, h: number) => Math.floor(Math.log2(Math.max(w, h))) + 1;
 type Geometry = { vertex: GPUBuffer; index: GPUBuffer; ranges: Record<string, [number, number]>; site: Site | null };
@@ -132,6 +137,11 @@ export class PodiumView {
   private readonly ibuf: GPUBuffer;
   private readonly ranges: Record<string, [number, number]>;
   private readonly shadow: GPUTexture;
+  private readonly spotShadow: GPUTexture;
+  private readonly spotView: GPUTextureView;
+  private readonly spotBuf: GPUBuffer;
+  private readonly spotData = new Float32Array(32);
+  private lampOn = false;
   private readonly cloud: GPUTexture;
   private readonly marble: GPUTexture;
   private readonly fabric: GPUTexture;
@@ -190,6 +200,7 @@ export class PodiumView {
     this.passBuf = { main: buf("podium-pass", PASS_FLOATS * 4, UNI), planar: buf("podium-pass-planar", PASS_FLOATS * 4, UNI), env: FACES.map((_, i) => buf(`podium-pass-env${i}`, PASS_FLOATS * 4, UNI)) };
     this.postBuf = [buf("podium-post0", 16, UNI), buf("podium-post1", 16, UNI), buf("podium-post2", 16, UNI)];
     this.taaBuf = buf("podium-taa", 36 * 4, UNI);
+    this.spotBuf = buf("podium-spot", 64, UNI);
     this.weighted = !q.mobile;
     this.gi = buf("podium-gi", GI_PROBES * 6 * 16, GPUBufferUsage.STORAGE);
     if (timestamps) this.ts = {
@@ -204,6 +215,9 @@ export class PodiumView {
 
     const tex = (desc: GPUTextureDescriptor) => { const t = d.createTexture(desc); this.ownTextures.push(t); return t; };
     this.shadow = tex({ label: "podium-shadow", size: q.shadow, format: "depth32float", usage: RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING });
+    const spotSize = q.mobile ? 512 : 1024;
+    this.spotShadow = tex({ label: "podium-spot-shadow", size: [spotSize, spotSize], format: "depth32float", usage: RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING });
+    this.spotView = this.spotShadow.createView();
     this.cloud = tex({ label: "podium-clouds", size: CLOUD, format: HDR, mipLevelCount: mipCount(CLOUD[0], CLOUD[1]), usage: RT.STORAGE_BINDING | RT.TEXTURE_BINDING });
     this.materials = materials(d, q.mobile);
     this.marble = this.materials.marble; this.fabric = this.materials.fabric; this.decal = this.materials.decal;
@@ -234,6 +248,7 @@ export class PodiumView {
       { binding: 9, visibility: v, sampler: { type: "filtering" } },
       { binding: 10, visibility: v, texture: { sampleType: "float", viewDimension: "cube" } },
       { binding: 11, visibility: v, texture: { sampleType: "float" } },
+      { binding: 12, visibility: v, texture: { sampleType: "depth" } },
     ];
     this.layouts = {
       frameRW: d.createBindGroupLayout({ label: "podium-frame-rw", entries: frameEntries(C, "storage") }),
@@ -262,7 +277,7 @@ export class PodiumView {
 
   private frameGroup(layout: GPUBindGroupLayout, env: GPUTextureView, planar: GPUTextureView) {
     const s = this.samplers;
-    const res = [this.frameBuf, this.shadow.createView(), s.cmp, this.cloud.createView(), s.lin, this.gi, this.marble.createView(), this.fabric.createView(), this.decal.createView(), s.aniso, env, planar];
+    const res = [this.frameBuf, this.shadow.createView(), s.cmp, this.cloud.createView(), s.lin, this.gi, this.marble.createView(), this.fabric.createView(), this.decal.createView(), s.aniso, env, planar, this.spotView];
     return this.device.createBindGroup({ layout, entries: res.map((r, i) => ({ binding: i, resource: r instanceof GPUBuffer ? { buffer: r } : r })) });
   }
 
@@ -464,7 +479,7 @@ export class PodiumView {
     if (!this.glitchtrapPending) this.glitchtrapPending = import('./glitchtrap')
       .then(({ Glitchtrap }) => {
         if (this.dead) return null;
-        return Glitchtrap.load(this.device, [this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, this.frameBuf], this.glitchtrapAbort.signal, this.q, this.layouts.frame, this.layouts.pass);
+        return Glitchtrap.load(this.device, [this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, this.frameBuf, this.spotBuf], this.glitchtrapAbort.signal, this.q, this.layouts.frame, this.layouts.pass);
       }).then(model => {
         if (!model) return false;
         if (this.dead) { model.destroy(); return false; }
@@ -478,6 +493,9 @@ export class PodiumView {
 
   private writeFrame(t: number, night: number, turn: number) {
     const s = this.sized!, m = moodAt(night), q = this.q;
+    // when the night guest appears the moon veils over: the hall sinks into the dark, his lamp and his glow take over
+    const veil = this.secretLight * night;
+    m.sunI *= 1 - 0.4 * veil; m.ambient *= 1 - 0.5 * veil;
     // nel cantiere l'aria del giorno è più polverosa: i fasci del finestrone si vedono di più (di notte la nebbia è già
     // fitta, di più spegnerebbe la sala)
     // Il cantiere è una sala in pausa e deve dare calma: di giorno il sole entra velato e caldo, meno forte, e la luce
@@ -499,8 +517,30 @@ export class PodiumView {
       s.pw, s.ph, s.vw, s.vh,
     ], 16);
     u.set(this.cups, 76);
+    u.set(this.spotData, 88);
     this.device.queue.writeBuffer(this.frameBuf, 0, u);
     return m;
+  }
+
+  // the lamp and the glow that come with the night guest (off without him): uniforms for every pass, and the matrix
+  // of his shadow from the lamp
+  private placeLamp(seconds: number, reduced: boolean, night: number) {
+    const g = this.glitchtrap, d = this.spotData;
+    d.fill(0);
+    this.lampOn = false;
+    if (!g || seconds < 0) return;
+    const lights = g.lights(seconds, reduced), fade = Math.min(1, seconds / 1.6) * night;
+    const aim = [g.standing[0], g.standing[1] - LAMP.aimDrop, g.standing[2]], pos = aim.map((v, i) => v + LAMP.from[i]);
+    const len = Math.hypot(aim[0] - pos[0], aim[1] - pos[1], aim[2] - pos[2]), fwd = aim.map((v, i) => (v - pos[i]) / len);
+    const r = [fwd[2], 0, -fwd[0]].map((v, _, a) => v / Math.hypot(a[0], a[2])), right = [-r[0], 0, -r[2]];
+    const up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
+    const cam: Cam = { pos, right, up, fwd, tan: SPOT.tan, cx: 0.5, cy: 0.5, h: 1, w: 1 };
+    const vp = viewProj(cam, SPOT.near, SPOT.far);
+    const power = LAMP.power * lights.lamp * fade, cos = (deg: number) => Math.cos((deg * Math.PI) / 180);
+    d.set(vp, 0);
+    d.set([...pos, power, ...fwd, cos(LAMP.outer), ...LAMP.color, cos(LAMP.inner), ...g.chest, LAMP.glow * lights.glow * fade], 16);
+    this.device.queue.writeBuffer(this.spotBuf, 0, vp);
+    this.lampOn = power > 0;
   }
 
   private giPass(enc: GPUCommandEncoder) {
@@ -523,6 +563,12 @@ export class PodiumView {
     if (this.glitchtrapVisible) this.glitchtrap?.draw(sp, 8);
     this.letters?.draw(sp, 8);
     sp.end();
+    // the guest seen from his lamp: only his body casts its shadow (on himself, the floor, the wall)
+    if (this.lampOn && this.glitchtrap) {
+      const lp = enc.beginRenderPass({ label: "podium-spot", colorAttachments: [], depthStencilAttachment: { view: this.spotView, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" } });
+      this.glitchtrap.draw(lp, 9);
+      lp.end();
+    }
   }
 
   private drawScene(p: GPURenderPassEncoder | GPURenderBundleEncoder, skip: string[]) {
@@ -557,6 +603,7 @@ export class PodiumView {
     this.glitchtrapVisible = visible;
     this.secretLight = visible ? Math.min(1, secretSeconds / 1.6) : 0;
     if (this.glitchtrapVisible) this.glitchtrap!.update(secretSeconds, reducedMotion, c.pos);
+    this.placeLamp(visible ? secretSeconds : -1, reducedMotion, night);
     this.letters?.update(t, night, c, reducedMotion);
     if (first) d.pushErrorScope("validation");
 
@@ -669,7 +716,7 @@ export class PodiumView {
     this.sized?.textures.forEach((t) => t.destroy()); this.sized = null;
     this.ownTextures.splice(0).forEach((t) => t.destroy());
     this.ts?.set.destroy();
-    [...(this.ts ? [this.ts.resolve, ...this.ts.read] : []), this.frameBuf, this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, ...this.postBuf, this.taaBuf, this.gi].forEach((b) => b.destroy());
+    [...(this.ts ? [this.ts.resolve, ...this.ts.read] : []), this.frameBuf, this.passBuf.main, this.passBuf.planar, ...this.passBuf.env, ...this.postBuf, this.taaBuf, this.spotBuf, this.gi].forEach((b) => b.destroy());
     try { this.ctx.unconfigure(); } catch {}
   }
 }

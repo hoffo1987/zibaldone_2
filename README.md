@@ -170,20 +170,25 @@ Solo in modalità scura, toccare i sei riquadri centrali del finestrone: prima i
 interno, poi i due centrali, infine i due inferiori; per ogni coppia, sinistra e poi destra.
 Toccare il vetro visibile, evitando le targhette e le coppe davanti. Un tocco fuori sequenza
 ricomincia il conteggio; trascinamenti, scorrimenti e tocchi annullati non contano.
-Al sesto tocco Glitchtrap, nascosto dietro una colonna della navata sinistra, si sporge finché
-compare un occhio viola, scivola fuori e avanza furtivo verso la sala (una camminata vera, registrata
-in motion capture, che passa al largo della colonna; le mani sciolte non entrano mai nel costume) con lo
-sguardo fisso sulla camera, si ferma girandosi verso chi guarda in un solo movimento e saluta
+Al sesto tocco la luna si vela, la camera si avvicina alla navata sinistra e Glitchtrap, verde e
+disturbato come in Help Wanted (bordi che bruciano, linee di scansione, frammenti di pixel attorno,
+l'immagine che si strappa a ogni glitch), nascosto dietro una colonna, si sporge finché compare un
+occhio viola, scivola fuori e avanza furtivo (una camminata vera, registrata in motion capture, che
+passa al largo della colonna; le mani sciolte non entrano mai nel costume) con lo sguardo fisso sulla
+camera; sopra l'angolo della pedana un faro si accende a fatica e lo prende in penombra, con la sua
+ombra sul pavimento, mentre il suo bagliore verde illumina la colonna e il pavimento. Si ferma
+girandosi verso chi guarda in un solo movimento e saluta
 lentamente con la mano destra all'altezza degli occhi, accanto alla testa inclinata, le dita morbide;
 poi richiama con le dita, respira, sposta il peso da un piede all'altro, muove la mano libera e
 tamburella con le dita, ha qualche scatto improvviso della testa (le orecchie lo seguono come molle) e
 torna a salutare ogni quindici secondi. Con il movimento ridotto resta fermo con la mano alzata.
 Cambio tema e uscita dalla pagina azzerano la sorpresa. Nei formati stretti la camera
-si sposta e ruota verso la navata per mostrare la camminata e il saluto.
+scivola nella navata per mostrare la camminata e il saluto.
 
 Geometria, texture e renderer della sorpresa vengono caricati al primo tocco corretto,
 senza download o passaggi GPU aggiuntivi nella normale visita della sala. Il modello
-condivide profondità, ombre, riflessi e composizione HDR del podio; lo scheletro viene posato
+condivide profondità, ombre, riflessi e composizione HDR del podio (il faro aggiunge una piccola
+mappa d'ombra solo sua, solo mentre è acceso); lo scheletro viene posato
 a ogni fotogramma (`src/podium/glitchtrapPose.ts`, sopra la camminata catturata in `walk.bin`) e la
 mesh deformata sulla GPU. Le risorse
 vengono liberate uscendo dalla scena. Nell'anteprima locale `&dark&podiosegreto` apre subito la

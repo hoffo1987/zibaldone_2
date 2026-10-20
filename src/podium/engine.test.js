@@ -53,22 +53,28 @@ test('the secret shares scene passes only while revealed and clears every reflec
   const view = new PodiumView(device, document.createElement('canvas'), podiumQuality('low', true));
   await view.ready(); view.resize(800, 600, 1, 1, 0, 0);
   view.render(20, 1); await device.queue.onSubmittedWorkDone();
-  const model = { update: jest.fn(), draw: jest.fn(), destroy: jest.fn() };
+  const model = { update: jest.fn(), draw: jest.fn(), destroy: jest.fn(), lights: () => ({ lamp: 1, glitch: 0, glow: 1 }), standing: [-4.6, 2.4, -4.2], chest: [-4.6, 2.4, -4.2] };
   view.glitchtrap = model;
   view.render(21, 1); await device.queue.onSubmittedWorkDone();
   expect(model.draw).not.toHaveBeenCalled();
   stats.passes = [];
   view.render(22, 1, undefined, undefined, 0.5, true); await device.queue.onSubmittedWorkDone();
   expect(model.update).toHaveBeenCalledWith(0.5, true, view.camera.pos);
-  expect(model.draw.mock.calls.map(args => args[1]).sort()).toEqual([0,1,2,3,4,5,6,7,8]);
+  expect(model.draw.mock.calls.map(args => args[1]).sort()).toEqual([0,1,2,3,4,5,6,7,8,9]);
   for (const [, pass, lighting] of model.draw.mock.calls) {
-    if (pass !== 8) expect(lighting).toBe(pass === 0 ? view.sized.frameMain : view.groups.frameOff);
+    if (pass < 8) expect(lighting).toBe(pass === 0 ? view.sized.frameMain : view.groups.frameOff);
   }
   expect(view.secretLight).toBeGreaterThan(0);
+  // his lamp: a shadow pass of its own, its light and his glow in the frame uniforms
+  expect(stats.passes.some(p => p.label === 'podium-spot')).toBe(true);
+  expect(view.frameData[88 + 16 + 3]).toBeGreaterThan(0);
+  expect(view.frameData[88 + 28 + 3]).toBeGreaterThan(0);
   model.draw.mockClear(); stats.passes = [];
   view.render(23, 0, undefined, undefined, -1); await device.queue.onSubmittedWorkDone();
   expect(model.draw).not.toHaveBeenCalled();
   expect(view.secretLight).toBe(0);
+  expect(view.frameData[88 + 16 + 3]).toBe(0); expect(view.frameData[88 + 28 + 3]).toBe(0);
+  expect(stats.passes.some(p => p.label === 'podium-spot')).toBe(false);
   expect(stats.passes.filter(p => p.label === 'podium-env')).toHaveLength(6);
   view.destroy(); expect(model.destroy).toHaveBeenCalledTimes(1);
 });
