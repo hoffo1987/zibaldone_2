@@ -156,7 +156,7 @@ const ELBOW = [0.58, -0.35, 0.64], FOREARM = [-0.04, 1, 0.08];
 // enough that neither his feet nor his swinging hands touch it or the one behind, stopping where the camera sees him
 // whole: behind the corner of the dais, clear of the columns and of the plates over the cups. He peeks out towards
 // LEAN.
-const START = [-6.95, -3.6], HEADING = 84 * D, CAMERA = [-2.62, 8.51], LEAN = [1, 0, 0.2];
+const START = [-6.95, -3.6], HEADING = 84 * D, CAMERA = [-3.42, 8.45], LEAN = [1, 0, 0.2];
 const fwd = (yaw: number): V => [Math.sin(yaw), 0, Math.cos(yaw)];
 const left = (yaw: number): V => [Math.cos(yaw), 0, -Math.sin(yaw)];
 const mixV = (a: V, b: V, t: number): V => [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)];

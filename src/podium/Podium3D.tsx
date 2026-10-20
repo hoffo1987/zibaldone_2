@@ -329,7 +329,7 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
         const pan = secretSeconds >= 0 ? (narrow ? 1.8 : 1) : 0;
         sm.secretPan += (pan - sm.secretPan) * (reduced.matches ? 1 : 1 - Math.exp(-Math.min(0.05, (now - drawn) / 1000) * 3));
         if (narrow) { const k = sm.secretPan / 1.8; motion.x -= 3.6 * k; motion.z -= 1.5 * k; motion.yaw += 0.1 * k; }
-        else { motion.z -= 1.0 * sm.secretPan; motion.yaw -= 0.26 * sm.secretPan; }
+        else { motion.x -= 0.6 * sm.secretPan; motion.z -= 1.0 * sm.secretPan; motion.yaw -= 0.28 * sm.secretPan; }
         // coppe: girano piano, quella sotto il puntatore (o la cui targhetta è sotto il puntatore) si solleva e brilla
         hover = drag.on && drag.moved > 8 ? -1 : ptr.cx >= 0 ? pick(ptr.cx, ptr.cy) : -1;
         if (hover < 0 && hoverPlate.current >= 0) hover = hoverPlate.current;
