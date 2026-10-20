@@ -78,6 +78,20 @@ l'immagine si strappa in fasce orizzontali che saltano di lato e si sdoppiano ne
 blocco sparisce; frammenti quadrati verdi gli galleggiano attorno e lampeggiano. Il suo bagliore
 verde illumina colonna, pavimento e gradini vicini e fa un alone nella nebbia.
 
+Dopo il primo saluto, ogni quindici secondi un glitch pesante lo porta altrove nella sala
+(`TELEPORT` e `SPOTS` in `src/podium/glitchtrapPose.ts`): dietro l'angolo sinistro o destro della
+pedana, oppure davanti a sinistra, vicinissimo; mai due volte di fila nello stesso posto, in un ordine
+che sembra casuale ma è sempre lo stesso. I posti sono stati cercati su tutta la pianta: lì sta ad
+almeno 14 cm da colonne, pedana, gradini e muri e, dall'inquadratura che la camera prende per
+ciascuno (su computer e telefono), nessuna colonna, targhetta o bordo dello schermo gli copre la testa
+o la mano che saluta. Prima si tende (spalle alzate, mani ad artiglio, tremito) mentre il glitch lo
+strappa sempre di più; poi l'immagine si schiaccia in una riga di luce e la riga in un punto, come un
+vecchio televisore spento, tra frammenti che esplodono; la camera intanto si sposta sul nuovo posto,
+dove la stessa riga si riapre e lui si rialza da accucciato. Il faro si spegne con lui e si riaccende a
+fatica sopra il nuovo posto. Tecnicamente è uno spostamento rigido dell'intera posa (la stessa
+recitazione, ruotata e posata altrove, con la camera riportata nel suo riferimento): orecchie e
+sguardo non saltano.
+
 Quando appare la luna si vela e la sala scurisce (`src/podium/engine.ts`). Mentre arriva, un faro
 freddo sopra il punto dove si ferma si accende a fatica, come un vecchio tubo, e cala a ogni glitch:
 lo prende di tre quarti, metà viso nella luce e metà in penombra, con un'ombra morbida tutta sua

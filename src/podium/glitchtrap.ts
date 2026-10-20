@@ -2,13 +2,15 @@
 // posed on the CPU (glitchtrapPose.ts) and the vertices are skinned here, identically in every pass.
 // He looks the way he does in Help Wanted: the costume seen through a green phosphor with burning edges, lines of the
 // scan climbing through him, blocks of corrupted pixels, and at every glitch his image tears into slices that jump aside
-// and split into colours; green fragments of him float and blink around his body. The lamp over the place where he
-// stops and his green glow on the room are in shaders.ts / engine.ts.
+// and split into colours; green fragments of him float and blink around his body. When a heavy glitch takes him
+// somewhere else (glitchtrapPose.ts) his image collapses like an old television switched off, into a line and then a
+// point in a burst of fragments, and opens the same way where he reappears. The lamp over the place where he stands and
+// his green glow on the room are in shaders.ts / engine.ts.
 import { modelLightingShader, type PodiumQuality } from './shaders';
-import { attachWalk, chestAt, EarSprings, makeRig, secretLights, writeGlitchtrapPose, SCALE, STAGE, type JointInfo, type Rig, type WalkMeta } from './glitchtrapPose';
+import { attachWalk, EarSprings, makeRig, placeAt, secretLights, writeGlitchtrapPose, SCALE, type JointInfo, type Rig, type WalkMeta } from './glitchtrapPose';
 
 type Meta = { version: number; vertexCount: number; indexCount: number; stride: number; joints: JointInfo[] };
-// params: eye glow, seconds since the reveal, glitch (0..1), -; center: his chest (world), scale
+// params: eye glow, seconds since the reveal, glitch (0..1), vanish (0 there .. 1 gone); center: his chest (world), scale
 const objectStruct = (joints: number) => `struct Object { joints: array<mat4x4f, ${joints}>, params: vec4f, center: vec4f };`;
 const MOTES = 160;
 const skinning = /* wgsl */ `
@@ -38,6 +40,15 @@ struct Out { @builtin(position) pos: vec4f,
     let band = floor(p.y / O.center.w * 6.0 + hash2(vec2f(tq, 1.0)) * 4.0);
     let jump = (hash2(vec2f(band * 3.1, tq)) - 0.5) * step(0.55, hash2(vec2f(band, tq + 7.0)));
     p += P.right.xyz * jump * 0.45 * O.center.w * g;
+  }
+  // a teleport: like an old television switched off, his image squashes into a line across the view at his chest,
+  // then the line shrinks to a point; it opens the same way where he reappears
+  let v = O.params.w;
+  if (v > 0.0) {
+    let squash = smoothstep(0.0, 0.62, v); let shrink = smoothstep(0.55, 1.0, v);
+    let d = p - O.center.xyz; let side = P.right.xyz;
+    let across = dot(d, side); let rest = d - side * across - vec3f(0.0, d.y, 0.0);
+    p = O.center.xyz + (side * across * (1.0 + 0.8 * squash) + vec3f(0.0, d.y * (1.0 - 0.97 * squash), 0.0) + rest * (1.0 - squash)) * (1.0 - shrink);
   }
   o.wp = p; o.n = a.n; o.uv = i.uv;
   o.pos = P.vp * vec4f(select(p, vec3f(p.x, -p.y, p.z), P.misc.y == 1.0), 1.0);
@@ -84,8 +95,10 @@ struct Out { @builtin(position) pos: vec4f,
   // on the lilac iris itself, never on the white, the rim or the pupil
   let iris = smoothstep(0.1, 0.18, (base.b - 0.5 * (base.r + base.g)) / max(base.b, 0.02)) * smoothstep(0.05, 0.12, base.b);
   c += vec3f(mat.g, 0.0, mat.b) * O.params.x * iris * 3.2;
-  // at the strongest glitches a few blocks of him drop out
-  if (hash2(cell * 1.7 + vec2f(tq, 5.0)) < 0.3 * g * g) { discard; }
+  // collapsing into the line of light he burns white-green; at the strongest glitches a few blocks of him drop out
+  let v = O.params.w;
+  c += (GLOW_COL * 3.5 + vec3f(1.2)) * v * v;
+  if (v > 0.985 || hash2(cell * 1.7 + vec2f(tq, 5.0)) < 0.3 * g * g) { discard; }
   return vec4f(finite3(c), 1.0);
 }
 // green fragments of him: small square pixels that float up around his body and blink on and off, more and bigger in a
@@ -98,14 +111,16 @@ struct MOut { @builtin(position) pos: vec4f, @location(0) @interpolate(flat) col
   let clock = time / life + hash2(vec2f(fi, 2.0));
   let age = fract(clock); let gen = floor(clock);
   let a = 6.2831853 * hash2(vec2f(fi, gen + 3.0));
-  let r = s * (0.22 + 0.4 * sqrt(hash2(vec2f(fi, gen + 4.0)))) * (1.0 + 0.4 * age);
+  // as he vanishes or reappears the fragments burst out round him
+  let v = O.params.w;
+  let r = s * (0.22 + 0.4 * sqrt(hash2(vec2f(fi, gen + 4.0)))) * (1.0 + 0.4 * age) * (1.0 + 2.5 * v);
   let p = O.center.xyz + vec3f(cos(a) * r, s * (-1.25 + 1.9 * hash2(vec2f(fi, gen + 5.0)) + 0.5 * age), sin(a) * r);
   let on = step(0.28, hash2(vec2f(fi, floor(time * 10.0) + 11.0)));
-  let size = s * (0.007 + 0.014 * hash2(vec2f(fi, gen + 6.0))) * (1.0 + 1.2 * g);
+  let size = s * (0.007 + 0.014 * hash2(vec2f(fi, gen + 6.0))) * (1.0 + 1.2 * g + v);
   let c = vec2f(f32(k & 1u), f32(k >> 1u)) * 2.0 - 1.0;
   o.pos = P.vp * vec4f(p + (P.right.xyz * c.x + P.up.xyz * c.y) * size, 1.0);
   let white = step(0.88, hash2(vec2f(fi, gen + 8.0)));
-  o.col = mix(GLOW_COL, vec3f(0.8, 1.0, 0.85), white) * on * sin(3.14159 * age) * (1.2 + 1.8 * g) * saturate(time / 2.0);
+  o.col = mix(GLOW_COL, vec3f(0.8, 1.0, 0.85), white) * on * sin(3.14159 * age) * (1.2 + 1.8 * g + 2.0 * v) * saturate(time / 2.0);
   return o;
 }
 @fragment fn fsMote(i: MOut) -> @location(0) vec4f { return vec4f(finite3(i.col), 0.0); }`;
@@ -136,9 +151,14 @@ export class Glitchtrap {
   private rig!: Rig;
   private ears = new EarSprings();
   private data = new Float32Array(4);
-  // his chest now, and where it ends up once he has stopped (the lamp is aimed there)
+  // his chest now; where it is once he stands at his present place (the lamp is aimed there), and how that place is
+  // turned from where his walk ended; how far gone he is in a teleport
   chest = [0, 0, 0];
   standing = [0, 0, 0];
+  spotYaw = 0;
+  vanish = 0;
+  // how the secret's camera should frame his present (or next) place
+  framing: { desk: number[]; phone: number[] } = { desk: [0, 0, 0], phone: [0, 0, 0] };
   private constructor(private device: GPUDevice) {}
 
   static async load(device: GPUDevice, passBuffers: GPUBuffer[], signal: AbortSignal, q: PodiumQuality, frameLayout: GPUBindGroupLayout, passLayout: GPUBindGroupLayout) {
@@ -161,7 +181,7 @@ export class Glitchtrap {
     this.rig = makeRig(meta.joints);
     attachWalk(this.rig, walkMeta, new Float32Array(walk));
     this.data = new Float32Array(this.rig.n * 16 + 8);
-    this.standing = chestAt(this.rig, 40, false, [STAGE.CAMERA[0], 2.75, STAGE.CAMERA[1]]).slice();
+    this.standing = placeAt(this.rig, 0, false).chest.slice();
     const buffer = (data: ArrayBuffer | Float32Array, usage: number) => {
       const b = d.createBuffer({ size: data.byteLength, usage: usage | GPUBufferUsage.COPY_DST });
       this.buffers.push(b); d.queue.writeBuffer(b, 0, data); return b;
@@ -235,6 +255,8 @@ export class Glitchtrap {
     const j = this.rig.spine[2], b = this.rig.bind[j], o = j * 16, m = this.data;
     this.chest = [0, 1, 2].map((k) => m[o + k] * b[0] + m[o + 4 + k] * b[1] + m[o + 8 + k] * b[2] + m[o + 12 + k]);
     m.set([...this.chest, SCALE], this.rig.n * 16 + 4);
+    const place = placeAt(this.rig, seconds, reducedMotion);
+    this.standing = place.chest; this.spotYaw = place.yaw; this.framing = place.framing; this.vanish = m[this.rig.n * 16 + 3];
     this.device.queue.writeBuffer(this.uniform, 0, this.data);
   }
 
@@ -243,11 +265,13 @@ export class Glitchtrap {
 
   draw(p: GPURenderPassEncoder, pass: number, lighting?: GPUBindGroup) {
     const shadow = pass >= 8;
+    // mid-teleport he casts no shadow, and once gone there is nothing of him to draw but his fragments
+    if (shadow && this.vanish > 0.5) return;
     p.setPipeline(pass === 0 ? this.pipes.main : shadow ? this.pipes.shadow : this.pipes.flat);
     p.setBindGroup(0, shadow ? this.own : lighting!); p.setBindGroup(1, this.passes[pass]);
     p.setVertexBuffer(0, this.vertex); p.setIndexBuffer(this.index, 'uint16');
     if (!shadow) { p.setBindGroup(2, this.own); p.setBindGroup(3, this.material); }
-    p.drawIndexed(this.meta.indexCount);
+    if (this.vanish < 0.985) p.drawIndexed(this.meta.indexCount);
     // the floating fragments, in the room's own view only
     if (pass === 0) { p.setPipeline(this.pipes.motes); p.draw(4, MOTES); }
   }

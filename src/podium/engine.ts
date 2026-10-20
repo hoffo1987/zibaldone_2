@@ -181,6 +181,8 @@ export class PodiumView {
   private glitchtrapAbort = new AbortController();
   private glitchtrapVisible = false;
   private secretLight = 0;
+  // where the secret's camera should be while he is out (Podium3D eases its motion to it); null without him
+  secretFraming: { desk: number[]; phone: number[] } | null = null;
   // le scritte sospese sopra il podio coperto (letters.ts), quando ci sono
   private letters: Letters | null = null;
   private lettersPending = 0;
@@ -530,7 +532,10 @@ export class PodiumView {
     this.lampOn = false;
     if (!g || seconds < 0) return;
     const lights = g.lights(seconds, reduced), fade = Math.min(1, seconds / 1.6) * night;
-    const aim = [g.standing[0], g.standing[1] - LAMP.aimDrop, g.standing[2]], pos = aim.map((v, i) => v + LAMP.from[i]);
+    // the lamp keeps the same angle on him wherever he stands (the offset turns with his place), inside the hall
+    const c = Math.cos(g.spotYaw), sn = Math.sin(g.spotYaw), [fx, fy, fz] = LAMP.from;
+    const aim = [g.standing[0], g.standing[1] - LAMP.aimDrop, g.standing[2]];
+    const pos = [Math.max(-8.4, Math.min(8.4, aim[0] + fx * c + fz * sn)), aim[1] + fy, Math.max(-6.5, aim[2] - fx * sn + fz * c)];
     const len = Math.hypot(aim[0] - pos[0], aim[1] - pos[1], aim[2] - pos[2]), fwd = aim.map((v, i) => (v - pos[i]) / len);
     const r = [fwd[2], 0, -fwd[0]].map((v, _, a) => v / Math.hypot(a[0], a[2])), right = [-r[0], 0, -r[2]];
     const up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
@@ -603,6 +608,7 @@ export class PodiumView {
     this.glitchtrapVisible = visible;
     this.secretLight = visible ? Math.min(1, secretSeconds / 1.6) : 0;
     if (this.glitchtrapVisible) this.glitchtrap!.update(secretSeconds, reducedMotion, c.pos);
+    this.secretFraming = this.glitchtrapVisible ? this.glitchtrap!.framing : null;
     this.placeLamp(visible ? secretSeconds : -1, reducedMotion, night);
     this.letters?.update(t, night, c, reducedMotion);
     if (first) d.pushErrorScope("validation");

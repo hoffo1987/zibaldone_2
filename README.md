@@ -181,7 +181,10 @@ girandosi verso chi guarda in un solo movimento e saluta
 lentamente con la mano destra all'altezza degli occhi, accanto alla testa inclinata, le dita morbide;
 poi richiama con le dita, respira, sposta il peso da un piede all'altro, muove la mano libera e
 tamburella con le dita, ha qualche scatto improvviso della testa (le orecchie lo seguono come molle) e
-torna a salutare ogni quindici secondi. Con il movimento ridotto resta fermo con la mano alzata.
+torna a salutare ogni quindici secondi. Dopo il primo saluto, a ogni glitch pesante si tende, si
+spegne come un vecchio televisore e riappare in un altro punto della sala (dietro un angolo della
+pedana o davanti, vicinissimo), con la camera che lo segue e il faro che si riaccende sopra di lui.
+Con il movimento ridotto resta fermo con la mano alzata.
 Cambio tema e uscita dalla pagina azzerano la sorpresa. Nei formati stretti la camera
 scivola nella navata per mostrare la camminata e il saluto.
 

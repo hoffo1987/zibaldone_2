@@ -1,9 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { makeRig, attachWalk, writeGlitchtrapPose, headAt, EarSprings, STAGE, SCALE, TIMES } from './glitchtrapPose';
+import { makeRig, attachWalk, writeGlitchtrapPose, headAt, chestAt, placeAt, EarSprings, STAGE, SCALE, TIMES, TELEPORT } from './glitchtrapPose';
 import meta from '../../public/glitchtrap/glitchtrap.json';
 import walkMeta from '../../public/glitchtrap/walk.json';
-import { COL_X, COL_Z } from './stage';
+import { COL_X, COL_Z, STEP_X, STEP_TOP } from './stage';
 
 const asset = (name) => fs.readFileSync(path.join(__dirname, '../../public/glitchtrap', name));
 const rig = makeRig(meta.joints);
@@ -111,7 +111,7 @@ test('he starts hidden behind the column and ends in the open, his face turned t
   expect(stop[0] < -4.55 - 0.4 || stop[2] < -1.85 - 0.5).toBe(true);
   expect(Math.hypot(stop[0] - STAGE.START[0], stop[2] - STAGE.START[1])).toBeGreaterThan(1.4);
   // the chin is held a little low, but the face points at whoever is watching
-  for (const t of [1.5, 5, walkEnd + 2, 30]) {
+  for (const t of [1.5, 5, walkEnd + 2, TELEPORT.first - 2]) {
     const h = headAt(rig, t, false, eye);
     expect(angle(h.forward, eye.map((v, k) => v - h.pos[k]))).toBeLessThan((14 * Math.PI) / 180);
   }
@@ -132,7 +132,7 @@ test('the ears swing after a sudden turn of the head, then settle; with reduced 
   for (let t = 0; t <= 2.4; t += 1 / 60) { writeGlitchtrapPose(out, rig, t, false, eye, ears); if (t > 1.85) peak = Math.max(peak, bend()); }
   expect(peak).toBeGreaterThan((4 * Math.PI) / 180);
   // the idle long after the last gesture: only breathing and slow sways move the head
-  for (let t = 16.4; t <= 21; t += 1 / 60) writeGlitchtrapPose(out, rig, t, false, eye, ears);
+  for (let t = 18.3; t <= 21; t += 1 / 60) writeGlitchtrapPose(out, rig, t, false, eye, ears);
   expect(bend()).toBeLessThan((4 * Math.PI) / 180);
   for (const b of ears.bend) expect(b.every(Number.isFinite)).toBe(true);
   const still = new EarSprings();
@@ -221,4 +221,64 @@ test('the knees always point the way the feet do, so the legs never look twisted
       expect(Math.abs(d)).toBeLessThan((25 * Math.PI) / 180);
     }
   }
+});
+
+test('at every heavy glitch he vanishes and reappears somewhere else, never twice in the same place in a row', () => {
+  const out = new Float32Array(rig.n * 16 + 4);
+  const vanish = (t) => { writeGlitchtrapPose(out, rig, t, false, eye); return out[rig.n * 16 + 3]; };
+  const glitch = (t) => { writeGlitchtrapPose(out, rig, t, false, eye); return out[rig.n * 16 + 2]; };
+  const places = new Set();
+  for (let n = 0; n < 8; n++) {
+    const at = TELEPORT.first + n * TELEPORT.every;
+    // the glitch builds up to its heaviest, his image is gone at that instant and whole again a second later
+    expect(glitch(at - 0.1)).toBeGreaterThan(0.85);
+    expect(vanish(at - 1.2)).toBe(0); expect(vanish(at + 0.1)).toBe(1); expect(vanish(at + 1.0)).toBe(0);
+    const before = chestAt(rig, at - 1.2, false, eye), after = chestAt(rig, at + 1.8, false, eye);
+    expect(Math.hypot(after[0] - before[0], after[2] - before[2])).toBeGreaterThan(2);
+    // between two teleports he stays where he is (only the small glitches, no jumps)
+    const settled = chestAt(rig, at + 2, false, eye), later = chestAt(rig, at + TELEPORT.every - 1.2, false, eye);
+    expect(Math.hypot(later[0] - settled[0], later[2] - settled[2])).toBeLessThan(0.6);
+    places.add(`${Math.round(after[0])},${Math.round(after[2])}`);
+  }
+  // all of the places come round
+  expect(places.size).toBe(STAGE.SPOTS.length);
+  // with reduced motion he stays put
+  expect(chestAt(rig, TELEPORT.first + 3, true, eye)).toEqual(chestAt(rig, 1, true, eye));
+});
+
+test('wherever he reappears he stands clear of the columns, the dais, the steps and the walls, facing his camera', () => {
+  const bin = asset('glitchtrap.bin'), out = new Float32Array(rig.n * 16 + 4), stride = meta.stride;
+  const solid = (p) => {
+    let d = -9;
+    for (const sx of [-1, 1]) for (const z of COL_Z) {
+      const dx = p[0] - sx * COL_X, dz = p[2] - z, r = Math.hypot(dx, dz);
+      d = Math.max(d, p[1] < 0.28 ? Math.min(0.62 - Math.abs(dx), 0.62 - Math.abs(dz)) : p[1] < 0.62 ? 0.6 - r : 0.42 - r);
+    }
+    d = Math.max(d, Math.min(4.55 - Math.abs(p[0]), p[2] + 1.85, 2.05 - p[2], 0.36 - p[1]));
+    STEP_X.forEach((x, i) => { d = Math.max(d, Math.min(1.1 - Math.abs(p[0] - x), 0.92 - Math.abs(p[2]), STEP_TOP[i] - p[1])); });
+    return Math.max(d, Math.abs(p[0]) - 8.93, -6.93 - p[2]);
+  };
+  let worst = -9;
+  for (let n = 0; n < 6; n++) {
+    const at = TELEPORT.first + n * TELEPORT.every;
+    // the camera that frames this place (on computers)
+    const place = STAGE.SPOTS.find((s) => { const c = chestAt(rig, at + 2, false, eye); return s.at && Math.hypot(s.at[0] - c[0], s.at[1] - c[2]) < 1; }) || STAGE.SPOTS[0];
+    const cam = [place.camera[0], 2.75, place.camera[1]];
+    for (let t = at + 0.6; t < at + TELEPORT.every - 1.2; t += 0.4) {
+      writeGlitchtrapPose(out, rig, t, false, cam);
+      for (let v = 0; v < meta.vertexCount; v += 5) {
+        const o = v * stride, p = [0, 0, 0], x = bin.readFloatLE(o), y = bin.readFloatLE(o + 4), z = bin.readFloatLE(o + 8);
+        for (let k = 0; k < 4; k++) {
+          const w = bin[o + 36 + k] / 255; if (!w) continue;
+          const m = bin[o + 32 + k] * 16;
+          for (let c = 0; c < 3; c++) p[c] += w * (out[m + c] * x + out[m + 4 + c] * y + out[m + 8 + c] * z + out[m + 12 + c]);
+        }
+        worst = Math.max(worst, solid(p));
+      }
+    }
+    const h = headAt(rig, at + 3, false, cam);
+    expect(angle(h.forward, cam.map((v, k) => v - h.pos[k]))).toBeLessThan((14 * Math.PI) / 180);
+    expect(placeAt(rig, at + 3, false).framing.desk).toEqual(place.desk);
+  }
+  expect(worst).toBeLessThan(-0.05);
 });

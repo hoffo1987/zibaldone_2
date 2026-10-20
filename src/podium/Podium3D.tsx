@@ -294,7 +294,7 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
       const pace = (vsync: number) => { frameMs = vsync ? refreshes(fps, vsync) * vsync : 1000 / fps; return steadyFps(fps, vsync); };
       const t0 = performance.now();
       let last = t0, first = true, night = darkRef.current ? 1 : 0, frames = 0, slowUntil = 0, avg = 1000 / fps, drawn = t0, hudAt = 0;
-      const sm = { x: 0, y: 0, yaw: 0, secretPan: 0 };
+      const sm = { x: 0, y: 0, yaw: 0, secretPan: 0, fx: 0, fz: 0, fyaw: 0 };
       const cups = new Float32Array(12), hot = [0, 0, 0];
       for (let i = 0; i < 3; i++) cups[i * 4] = i * 2.1;
       const motion: CamMotion = { x: 0, y: 0, z: 0, yaw: 0 };
@@ -322,14 +322,15 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
         motion.yaw = 0.035 * Math.sin(t * 0.05) * calm * amp + sm.yaw;
         // l'ambiente del podio coperto segue la stanza che gira: il cortile si sposta appena tra i due lati
         if (covered) setAmbiencePan(-motion.yaw * 1.4);
-        // Once the secret is revealed the camera eases towards the left aisle, where he comes out from behind a column and
-        // stops behind the corner of the dais: on computers it moves a metre closer and swings round to the left (from
-        // there he stands clear of the columns and of the plates over the cups); the left aisle lies outside a portrait
-        // crop, so on phones it also turns towards it.
-        const pan = secretSeconds >= 0 ? (narrow ? 1.8 : 1) : 0;
-        sm.secretPan += (pan - sm.secretPan) * (reduced.matches ? 1 : 1 - Math.exp(-Math.min(0.05, (now - drawn) / 1000) * 3));
-        if (narrow) { const k = sm.secretPan / 1.8; motion.x -= 3.6 * k; motion.z -= 1.5 * k; motion.yaw += 0.1 * k; }
-        else { motion.x -= 0.6 * sm.secretPan; motion.z -= 1.0 * sm.secretPan; motion.yaw -= 0.28 * sm.secretPan; }
+        // Once the secret is revealed the camera eases to frame him wherever he is: first the left aisle, where he comes
+        // out from behind a column and stops behind the corner of the dais, then each place a teleport takes him to (the
+        // places and their framings come with him, glitchtrapPose.ts; it sets off as his image collapses). From each, he
+        // stands clear of the columns and of the plates over the cups; on phones it turns further into the aisles.
+        const fk = reduced.matches ? 1 : 1 - Math.exp(-Math.min(0.05, (now - drawn) / 1000) * 3);
+        const framing = secretSeconds >= 0 ? view!.secretFraming : null, goal = framing ? (narrow ? framing.phone : framing.desk) : [0, 0, 0];
+        sm.secretPan += ((secretSeconds >= 0 ? 1 : 0) - sm.secretPan) * fk;
+        sm.fx += (goal[0] - sm.fx) * fk; sm.fz += (goal[1] - sm.fz) * fk; sm.fyaw += (goal[2] - sm.fyaw) * fk;
+        motion.x += sm.fx; motion.z += sm.fz; motion.yaw += sm.fyaw;
         // coppe: girano piano, quella sotto il puntatore (o la cui targhetta è sotto il puntatore) si solleva e brilla
         hover = drag.on && drag.moved > 8 ? -1 : ptr.cx >= 0 ? pick(ptr.cx, ptr.cy) : -1;
         if (hover < 0 && hoverPlate.current >= 0) hover = hoverPlate.current;

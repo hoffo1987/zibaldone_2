@@ -53,7 +53,7 @@ test('the secret shares scene passes only while revealed and clears every reflec
   const view = new PodiumView(device, document.createElement('canvas'), podiumQuality('low', true));
   await view.ready(); view.resize(800, 600, 1, 1, 0, 0);
   view.render(20, 1); await device.queue.onSubmittedWorkDone();
-  const model = { update: jest.fn(), draw: jest.fn(), destroy: jest.fn(), lights: () => ({ lamp: 1, glitch: 0, glow: 1 }), standing: [-4.6, 2.4, -4.2], chest: [-4.6, 2.4, -4.2] };
+  const model = { update: jest.fn(), draw: jest.fn(), destroy: jest.fn(), lights: () => ({ lamp: 1, glitch: 0, glow: 1 }), standing: [-4.6, 2.4, -4.2], chest: [-4.6, 2.4, -4.2], spotYaw: 0 };
   view.glitchtrap = model;
   view.render(21, 1); await device.queue.onSubmittedWorkDone();
   expect(model.draw).not.toHaveBeenCalled();
