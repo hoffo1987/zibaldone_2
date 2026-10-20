@@ -1,7 +1,7 @@
 // Loaded only after the first correct window tap. Same lighting shader and GPU resources as the room; the skeleton is
 // posed on the CPU (glitchtrapPose.ts) and the vertices are skinned here, identically in every pass.
 import { modelLightingShader, type PodiumQuality } from './shaders';
-import { EarSprings, makeRig, writeGlitchtrapPose, type JointInfo, type Rig } from './glitchtrapPose';
+import { attachWalk, EarSprings, makeRig, writeGlitchtrapPose, type JointInfo, type Rig, type WalkMeta } from './glitchtrapPose';
 
 type Meta = { version: number; vertexCount: number; indexCount: number; stride: number; joints: JointInfo[] };
 const objectStruct = (joints: number) => `struct Object { joints: array<mat4x4f, ${joints}>, params: vec4f };`;
@@ -92,10 +92,12 @@ export class Glitchtrap {
       if (!r.ok) throw new Error(`Glitchtrap: ${name} (${r.status})`);
       return r;
     };
-    const [meta, mesh] = await Promise.all([fetchFile('glitchtrap.json').then(r => r.json()), fetchFile('glitchtrap.bin').then(r => r.arrayBuffer())]);
+    const [meta, mesh, walkMeta, walk] = await Promise.all([fetchFile('glitchtrap.json').then(r => r.json()), fetchFile('glitchtrap.bin').then(r => r.arrayBuffer()),
+      fetchFile('walk.json').then(r => r.json() as Promise<WalkMeta>), fetchFile('walk.bin').then(r => r.arrayBuffer())]);
     this.meta = meta;
     if (meta.version !== 1 || meta.stride !== 40 || !meta.joints?.length || mesh.byteLength !== meta.vertexCount * 40 + meta.indexCount * 2) throw new Error('Glitchtrap: modello incompleto');
     this.rig = makeRig(meta.joints);
+    attachWalk(this.rig, walkMeta, new Float32Array(walk));
     this.data = new Float32Array(this.rig.n * 16 + 4);
     const buffer = (data: ArrayBuffer | Float32Array, usage: number) => {
       const b = d.createBuffer({ size: data.byteLength, usage: usage | GPUBufferUsage.COPY_DST });

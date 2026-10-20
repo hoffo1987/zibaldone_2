@@ -19,18 +19,41 @@ Ogni texture `.bin` è una catena mip di immagini WebP lossless, ognuna precedut
 uint32 little-endian: `color` (sRGB, 2048), `normal` (lineare, 2048) e `material` (1024; R la mappa
 di ruvidità pubblicata, G e B il rosso e il blu della mappa emissiva delle iridi).
 
-L'animazione (`src/podium/glitchtrapPose.ts`) si ispira ai movimenti del personaggio nel finale
-«Pizza Party» di Help Wanted (si sporge dalla tenda e fa cenno di avvicinarsi) e nelle animazioni
-della lobby di Dead by Daylight (saluto lento a mano aperta, testa inclinata, camminata curva).
-Passi corti e felpati (appoggio sull'avampiede, poi il tallone; piede basso che rallenta prima del
-contatto), piedi fermi sul pavimento, binari alla larghezza delle anche e braccia staccate dal corpo
-perché il costume non si compenetri, bacino a velocità quasi costante, cinematica inversa di gambe e
-braccia, dita che seguono la mano nel saluto, testa che cerca la camera reale, orecchie simulate come
-molle smorzate spinte dai movimenti della testa. Il bagliore degli occhi resta sull'iride (la mappa
-emissiva pubblicata è più larga): lo shader lo limita ai pixel viola del colore di base.
+## La camminata
 
-Rigenerazione dal file scaricato da Sketchfab (cartella con `scene.gltf`, `scene.bin`, `textures/`):
+La camminata è reale: una presa di motion capture del CMU Graphics Lab Motion Capture Database
+(http://mocap.cs.cmu.edu), soggetto 139, prova 29 «Sneaking» (camminata furtiva), nella conversione
+BVH di Bruce Hahne (cgspeed). The data used in this project was obtained from mocap.cs.cmu.edu. The
+database was created with funding from NSF EIA-0196217. CMU non pone restrizioni all'uso dei dati e la
+conversione BVH non ne aggiunge.
+
+`scripts/bake-glitchtrap-walk.cjs` la trasferisce sullo scheletro di Glitchtrap: dall'attore fermo
+a cinque passi e un arresto rallentato, al 85% della velocità, 60 fotogrammi al secondo. Ogni osso
+riceve la rotazione dell'attore corretta per la diversa posa a riposo (l'attore in T, Glitchtrap in
+A); il percorso è scalato sulla lunghezza delle gambe. I piedi del costume sono il doppio di quelli
+dell'attore: durante l'appoggio il piede di Glitchtrap rotola sul proprio tallone o sul proprio
+avampiede a partire dall'impronta piatta, non scivola e non attraversa il pavimento.
+`walk.json` elenca i giunti; `walk.bin` contiene per fotogramma (float32) il punto medio delle anche,
+le due caviglie e la rotazione globale di ogni giunto, nel sistema della camminata (metri della posa a
+riposo, +z lungo il percorso).
+
+## L'interpretazione
+
+`src/podium/glitchtrapPose.ts` mette sopra la camminata i gesti del personaggio, presi dal finale
+«Pizza Party» di Help Wanted (si sporge dalla tenda e fa cenno di avvicinarsi) e dalle animazioni
+della lobby di Dead by Daylight (saluto lento a mano aperta, testa inclinata): si sporge dalla colonna,
+una volta fermo gira bacino e busto verso la camera, saluta, richiama con le dita, respira. Le braccia
+dell'attore sono tenute un po' più larghe, così le mani non entrano nella pancia e nelle cosce del
+costume. La testa cerca la camera reale; le orecchie sono molle smorzate spinte dai movimenti della
+testa. Il bagliore degli occhi resta sull'iride (la mappa emissiva pubblicata è più larga): lo shader
+lo limita ai pixel viola del colore di base.
+
+## Rigenerazione
+
+Dal file scaricato da Sketchfab (cartella con `scene.gltf`, `scene.bin`, `textures/`) e dalla presa
+CMU `139_29.bvh`:
 
 ```sh
 node scripts/export-glitchtrap.cjs <cartella> public/glitchtrap
+node scripts/bake-glitchtrap-walk.cjs <139_29.bvh> public/glitchtrap
 ```
