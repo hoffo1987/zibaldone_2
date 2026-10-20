@@ -172,7 +172,8 @@ Toccare il vetro visibile, evitando le targhette e le coppe davanti. Un tocco fu
 ricomincia il conteggio; trascinamenti, scorrimenti e tocchi annullati non contano.
 Al sesto tocco Glitchtrap, nascosto dietro una colonna della navata sinistra, si sporge finché
 compare un occhio viola, scivola fuori e avanza furtivo verso la sala (una camminata vera, registrata
-in motion capture) con lo sguardo fisso sulla camera, si ferma, si gira verso chi guarda e saluta
+in motion capture, che passa al largo della colonna; le mani sciolte non entrano mai nel costume) con lo
+sguardo fisso sulla camera, si ferma, si gira verso chi guarda con un passo e saluta
 lentamente con la mano sinistra accanto alla testa inclinata, le dita morbide; poi richiama con le
 dita, respira, ha qualche scatto improvviso della testa (le orecchie lo seguono come molle) e torna a
 salutare ogni quindici secondi. Con il movimento ridotto resta fermo con la mano alzata.

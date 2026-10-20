@@ -28,9 +28,11 @@ database was created with funding from NSF EIA-0196217. CMU non pone restrizioni
 conversione BVH non ne aggiunge.
 
 `scripts/bake-glitchtrap-walk.cjs` la trasferisce sullo scheletro di Glitchtrap: dall'attore fermo
-a cinque passi e un arresto rallentato, al 85% della velocità, 60 fotogrammi al secondo. Ogni osso
+a quattro passi e un arresto rallentato, all'85% della velocità, 60 fotogrammi al secondo. Ogni osso
 riceve la rotazione dell'attore corretta per la diversa posa a riposo (l'attore in T, Glitchtrap in
-A); il percorso è scalato sulla lunghezza delle gambe. I piedi del costume sono il doppio di quelli
+A); il percorso è scalato sulla lunghezza delle gambe e non viene mai curvato (girarlo con un piede a
+terra lo farebbe scivolare). La presa è appena levigata; busto, testa e braccia un po' di più, perché
+i loro marcatori tremano (la schiena dà un colpo a metà camminata che le mani ripeterebbero). I piedi del costume sono il doppio di quelli
 dell'attore: durante l'appoggio il piede di Glitchtrap rotola sul proprio tallone o sul proprio
 avampiede a partire dall'impronta piatta, non scivola e non attraversa il pavimento.
 `walk.json` elenca i giunti; `walk.bin` contiene per fotogramma (float32) il punto medio delle anche,
@@ -42,9 +44,14 @@ riposo, +z lungo il percorso).
 `src/podium/glitchtrapPose.ts` mette sopra la camminata i gesti del personaggio, presi dal finale
 «Pizza Party» di Help Wanted (si sporge dalla tenda e fa cenno di avvicinarsi) e dalle animazioni
 della lobby di Dead by Daylight (saluto lento a mano aperta, testa inclinata): si sporge dalla colonna,
-una volta fermo gira bacino e busto verso la camera, saluta, richiama con le dita, respira. Le braccia
-dell'attore sono tenute un po' più larghe, così le mani non entrano nella pancia e nelle cosce del
-costume. La testa cerca la camera reale; le orecchie sono molle smorzate spinte dai movimenti della
+esce in diagonale dietro di essa, abbastanza lontano da non toccarne la base, e una volta fermo si gira
+verso la camera con un passo (fa perno sull'avampiede del piede davanti mentre l'altro gli si
+affianca), poi saluta, richiama con le dita, respira. Le gambe sono risolte su caviglie e bacino: le
+ginocchia seguono la punta dei piedi, non la torsione della coscia dell'attore, la parte più rumorosa
+di una presa. Le mani pendono rilassate, seguono in ritardo l'oscillazione dell'avambraccio e le dita
+non stanno mai ferme. Cosce e pancia del costume sono molto più larghe di quelle dell'attore: sono
+descritte come tubi ellittici misurati sulla mesh e, dove dita, palmo o polso le sfiorerebbero, il
+braccio si allarga quanto basta per passare. La testa cerca la camera reale; le orecchie sono molle smorzate spinte dai movimenti della
 testa. Il bagliore degli occhi resta sull'iride (la mappa emissiva pubblicata è più larga): lo shader
 lo limita ai pixel viola del colore di base.
 

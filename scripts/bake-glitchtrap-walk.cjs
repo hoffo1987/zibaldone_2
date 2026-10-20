@@ -15,9 +15,9 @@ const [source, output] = process.argv.slice(2);
 if (!source || !output) throw new Error('Usage: node scripts/bake-glitchtrap-walk.cjs 139_29.bvh public/glitchtrap');
 
 // ---------- the take ----------
-const CLIP = { from: 1.0, to: 5.17 };   // standing, then five steps; ends with both feet down (right just landed)
+const CLIP = { from: 1.0, to: 4.36 };   // standing, then four steps; ends with both feet down (left just landed)
 const RATE = 0.85;                       // a touch slower than the actor: a bigger, heavier body
-const EASE = 4.72;                       // from here the last step slows to rest
+const EASE = 3.95;                       // from here the last step slows to rest
 const FPS = 60;
 
 // ---------- BVH ----------
@@ -115,16 +115,21 @@ const ourLeg = len(bone('bip_hip_L', 'bip_knee_L')) + len(bone('bip_knee_L', 'bi
 const K = ourLeg / actorLeg;
 
 // ---------- sampling with time warp ----------
-// light smoothing of the capture (σ ≈ 1.5 frames at 120 Hz) before resampling
-const f0 = Math.floor(CLIP.from / bvh.dt) - 8, f1 = Math.ceil(CLIP.to / bvh.dt) + 8;
+// Light smoothing of the capture before resampling: σ ≈ 1.5 frames at 120 Hz for the legs and every position (the
+// contacts depend on them), σ ≈ 4 frames for the trunk, the head and the arms, whose markers jitter (the spine kicks
+// once mid-walk, and the hands swinging from it would kick too).
+const f0 = Math.floor(CLIP.from / bvh.dt) - 12, f1 = Math.ceil(CLIP.to / bvh.dt) + 12;
 const raw = []; for (let f = f0; f <= f1; f++) raw.push(pose(f));
 const nj = bvh.joints.length;
 for (let k = 1; k < raw.length; k++) for (let j = 0; j < nj; j++) if (dot4(raw[k].rot[j], raw[k - 1].rot[j]) < 0) raw[k].rot[j] = raw[k].rot[j].map((v) => -v);
 function dot4(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]; }
-const W = [-2, -1, 0, 1, 2].map((d) => Math.exp(-(d * d) / (2 * 1.5 * 1.5))), WS = W.reduce((a, b) => a + b, 0);
+const gauss = (sigma) => { const r = Math.ceil(sigma * 2.5), w = []; for (let d = -r; d <= r; d++) w.push(Math.exp(-(d * d) / (2 * sigma * sigma))); const sum = w.reduce((a, b) => a + b, 0); return { r, w: w.map((v) => v / sum) }; };
+const FINE = gauss(1.5), CALM = gauss(4);
+const kernel = bvh.joints.map((j) => (/LowerBack|Spine|Neck|Head|Shoulder|Arm|Hand/.test(j.name) ? CALM : FINE));
+const blur = (k, K, get) => K.w.reduce((s, w, d) => s + w * get(raw[Math.min(raw.length - 1, Math.max(0, k + d - K.r))]), 0);
 const smooth = raw.map((_, k) => ({
-  rot: Array.from({ length: nj }, (_, j) => qnorm([0, 1, 2, 3].map((c) => W.reduce((s, w, d) => s + w * raw[Math.min(raw.length - 1, Math.max(0, k + d - 2))].rot[j][c], 0) / WS))),
-  pos: Array.from({ length: nj }, (_, j) => [0, 1, 2].map((c) => W.reduce((s, w, d) => s + w * raw[Math.min(raw.length - 1, Math.max(0, k + d - 2))].pos[j][c], 0) / WS)),
+  rot: Array.from({ length: nj }, (_, j) => qnorm([0, 1, 2, 3].map((c) => blur(k, kernel[j], (p) => p.rot[j][c])))),
+  pos: Array.from({ length: nj }, (_, j) => [0, 1, 2].map((c) => blur(k, FINE, (p) => p.pos[j][c]))),
 }));
 const at = (time) => {
   const x = time / bvh.dt - f0, k = Math.min(smooth.length - 2, Math.max(0, Math.floor(x))), u = x - k, A = smooth[k], B = smooth[k + 1];

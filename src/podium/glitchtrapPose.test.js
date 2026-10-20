@@ -48,17 +48,49 @@ test('planted feet do not slide and never sink below the floor', () => {
   }
 });
 
-test('the hands never sink into the thighs or the belly', () => {
-  const out = new Float32Array(rig.n * 16 + 4);
-  const segment = (p, a, b) => { const ab = b.map((v, i) => v - a[i]), ap = p.map((v, i) => v - a[i]); const u = Math.max(0, Math.min(1, ap.reduce((s, v, i) => s + v * ab[i], 0) / ab.reduce((s, v) => s + v * v, 0))); return Math.hypot(...p.map((v, i) => v - (a[i] + ab[i] * u))); };
-  for (let t = 0; t < 26; t += 1 / 30) {
+test('no finger, hand or forearm ever sinks into the thighs or the belly', () => {
+  // skin the real mesh: each vertex of the hands and forearms against the nearest skin of the legs and trunk, measured
+  // along that skin's normal (negative is inside)
+  const bin = asset('glitchtrap.bin'), out = new Float32Array(rig.n * 16 + 4), stride = meta.stride;
+  const owner = (v) => meta.joints[bin[v * stride + 32]].name, limb = [], trunk = [];
+  for (let v = 0; v < meta.vertexCount; v++) {
+    if (bin[v * stride + 36] < 150) continue; // vertices clearly carried by one joint
+    if (/hand|lowerArm|forearmTwist|_(Index|Middle|Ring|Pinky|Thumb)/.test(owner(v))) limb.push(v);
+    else if (/hip_|knee_|pelvis|spine_/.test(owner(v))) trunk.push(v);
+  }
+  const skin = (v) => {
+    const o = v * stride, p = [0, 0, 0], n = [0, 0, 0], x = [0, 1, 2].map((k) => bin.readFloatLE(o + k * 4)), m = [0, 1, 2].map((k) => bin.readFloatLE(o + 12 + k * 4));
+    for (let k = 0; k < 4; k++) {
+      const w = bin[o + 36 + k] / 255; if (!w) continue;
+      const j = bin[o + 32 + k] * 16;
+      for (let c = 0; c < 3; c++) {
+        p[c] += w * (out[j + c] * x[0] + out[j + 4 + c] * x[1] + out[j + 8 + c] * x[2] + out[j + 12 + c]);
+        n[c] += w * (out[j + c] * m[0] + out[j + 4 + c] * m[1] + out[j + 8 + c] * m[2]);
+      }
+    }
+    const l = Math.hypot(...n) || 1;
+    return { p, n: n.map((c) => c / l) };
+  };
+  // the body's skin in 6 cm cells, so each hand vertex only looks at its neighbourhood
+  const cell = (x, y, z) => ((Math.floor(x / 0.06) + 500) * 1000 + Math.floor(y / 0.06) + 500) * 1000 + Math.floor(z / 0.06) + 500;
+  let worst = 0;
+  for (let t = 0; t < 24; t += 0.1) {
     writeGlitchtrapPose(out, rig, t, false, eye);
-    for (const s of ['L', 'R']) {
-      const palm = at(out, `bip_hand_${s}`, meta.joints[index(`bip_hand_${s}`)].bind.map((v, i) => (v + meta.joints[index(`${s}_MiddleA_jnt`)].bind[i]) / 2));
-      for (const leg of ['L', 'R']) expect(segment(palm, at(out, `bip_hip_${leg}`), at(out, `bip_knee_${leg}`)) - 0.13 * SCALE).toBeGreaterThan(0.06);
-      expect(segment(palm, at(out, 'bip_pelvis'), at(out, 'bip_spine_2')) - 0.22 * SCALE).toBeGreaterThan(0.06);
+    const grid = new Map();
+    for (const v of trunk) { const b = skin(v), k = cell(...b.p); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b); }
+    for (const v of limb) {
+      const h = skin(v).p;
+      let near = null, best = 0.06;
+      for (let dx = -0.06; dx < 0.07; dx += 0.06) for (let dy = -0.06; dy < 0.07; dy += 0.06) for (let dz = -0.06; dz < 0.07; dz += 0.06) {
+        for (const b of grid.get(cell(h[0] + dx, h[1] + dy, h[2] + dz)) || []) {
+          const d = Math.hypot(h[0] - b.p[0], h[1] - b.p[1], h[2] - b.p[2]);
+          if (d < best) { best = d; near = b; }
+        }
+      }
+      if (near) worst = Math.min(worst, (h[0] - near.p[0]) * near.n[0] + (h[1] - near.p[1]) * near.n[1] + (h[2] - near.p[2]) * near.n[2]);
     }
   }
+  expect(worst).toBeGreaterThan(-0.005);
 });
 
 test('he starts hidden behind the column and ends in the open, his face turned to the camera', () => {
@@ -73,10 +105,10 @@ test('he starts hidden behind the column and ends in the open, his face turned t
     const c = [-COL_X - eye[0], z - eye[2]], d = [end.pos[0] - eye[0], end.pos[2] - eye[2]];
     if (Math.hypot(...c) < Math.hypot(...d)) expect(angle(c, d)).toBeGreaterThan(Math.asin(0.9 / Math.hypot(...c)));
   }
-  // beside the back corner of the dais, clear of it, and well away from the column he hid behind
+  // clear of the dais (half-width 4.55, back edge at z -1.85) and well away from the column he hid behind
   const stop = rig.walk.end;
-  expect(stop[0]).toBeLessThan(-4.55 - 0.3);
-  expect(Math.hypot(stop[0] - STAGE.START[0], stop[2] - STAGE.START[1])).toBeGreaterThan(2);
+  expect(stop[0] < -4.55 - 0.4 || stop[2] < -1.85 - 0.5).toBe(true);
+  expect(Math.hypot(stop[0] - STAGE.START[0], stop[2] - STAGE.START[1])).toBeGreaterThan(1.4);
   // the chin is held a little low, but the face points at whoever is watching
   for (const t of [1.5, 5, walkEnd + 2, 30]) {
     const h = headAt(rig, t, false, eye);
@@ -105,4 +137,44 @@ test('the ears swing after a sudden turn of the head, then settle; with reduced 
   const still = new EarSprings();
   for (let t = 0; t < 3; t += 1 / 60) writeGlitchtrapPose(out, rig, t, true, eye, still);
   expect(Math.max(...still.bend.map((b) => Math.hypot(...b)))).toBe(0);
+});
+
+test('no part of him ever goes through the columns or their bases', () => {
+  // skin (a sample of) the real mesh on the CPU and test it against plinth, turned base and shaft of the aisle columns
+  const bin = asset('glitchtrap.bin'), out = new Float32Array(rig.n * 16 + 4), stride = meta.stride;
+  const inside = (p) => {
+    let deepest = -1;
+    for (const z of COL_Z) {
+      const dx = p[0] + COL_X, dz = p[2] - z, r = Math.hypot(dx, dz);
+      const d = p[1] < 0.28 ? Math.min(0.62 - Math.abs(dx), 0.62 - Math.abs(dz)) : p[1] < 0.62 ? 0.6 - r : 0.42 - r;
+      deepest = Math.max(deepest, d);
+    }
+    return deepest;
+  };
+  let worst = -1;
+  for (let t = 0; t < 12; t += 0.1) {
+    writeGlitchtrapPose(out, rig, t, false, eye);
+    for (let v = 0; v < meta.vertexCount; v += 3) {
+      const o = v * stride, p = [0, 0, 0], x = bin.readFloatLE(o), y = bin.readFloatLE(o + 4), z = bin.readFloatLE(o + 8);
+      for (let k = 0; k < 4; k++) {
+        const w = bin[o + 36 + k] / 255; if (!w) continue;
+        const m = bin[o + 32 + k] * 16;
+        for (let c = 0; c < 3; c++) p[c] += w * (out[m + c] * x + out[m + 4 + c] * y + out[m + 8 + c] * z + out[m + 12 + c]);
+      }
+      worst = Math.max(worst, inside(p));
+    }
+  }
+  expect(worst).toBeLessThan(-0.02);
+});
+
+test('the knees always point the way the feet do, so the legs never look twisted', () => {
+  const out = new Float32Array(rig.n * 16 + 4);
+  const heading = (name) => { const i = index(name), f = [out[i * 16 + 8], out[i * 16 + 10]]; return Math.atan2(f[0], f[1]); };
+  for (let t = 0; t < 14; t += 1 / 20) {
+    writeGlitchtrapPose(out, rig, t, false, eye);
+    for (const s of ['L', 'R']) {
+      const d = Math.atan2(Math.sin(heading(`bip_hip_${s}`) - heading(`bip_foot_${s}`)), Math.cos(heading(`bip_hip_${s}`) - heading(`bip_foot_${s}`)));
+      expect(Math.abs(d)).toBeLessThan((25 * Math.PI) / 180);
+    }
+  }
 });
