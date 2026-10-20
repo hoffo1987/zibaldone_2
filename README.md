@@ -173,10 +173,11 @@ ricomincia il conteggio; trascinamenti, scorrimenti e tocchi annullati non conta
 Al sesto tocco Glitchtrap, nascosto dietro una colonna della navata sinistra, si sporge finché
 compare un occhio viola, scivola fuori e avanza furtivo verso la sala (una camminata vera, registrata
 in motion capture, che passa al largo della colonna; le mani sciolte non entrano mai nel costume) con lo
-sguardo fisso sulla camera, si ferma, si gira verso chi guarda con un passo e saluta
-lentamente con la mano sinistra accanto alla testa inclinata, le dita morbide; poi richiama con le
-dita, respira, ha qualche scatto improvviso della testa (le orecchie lo seguono come molle) e torna a
-salutare ogni quindici secondi. Con il movimento ridotto resta fermo con la mano alzata.
+sguardo fisso sulla camera, si ferma girandosi verso chi guarda in un solo movimento e saluta
+lentamente con la mano destra all'altezza degli occhi, accanto alla testa inclinata, le dita morbide;
+poi richiama con le dita, respira, sposta il peso da un piede all'altro, muove la mano libera e
+tamburella con le dita, ha qualche scatto improvviso della testa (le orecchie lo seguono come molle) e
+torna a salutare ogni quindici secondi. Con il movimento ridotto resta fermo con la mano alzata.
 Cambio tema e uscita dalla pagina azzerano la sorpresa. Nei formati stretti la camera
 si sposta e ruota verso la navata per mostrare la camminata e il saluto.
 

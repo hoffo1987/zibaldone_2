@@ -17,7 +17,9 @@ if (!source || !output) throw new Error('Usage: node scripts/bake-glitchtrap-wal
 // ---------- the take ----------
 const CLIP = { from: 1.0, to: 4.36 };   // standing, then four steps; ends with both feet down (left just landed)
 const RATE = 0.85;                       // a touch slower than the actor: a bigger, heavier body
-const EASE = 3.95;                       // from here the last step slows to rest
+// The actor never stops: the take runs on a little past CLIP.to, at the same pace. At runtime Glitchtrap's legs stop
+// procedurally from there, while trunk and arms carry on along this tail, slowing down (no frozen frame, no slow motion).
+const TAIL = 0.45;
 const FPS = 60;
 
 // ---------- BVH ----------
@@ -118,7 +120,7 @@ const K = ourLeg / actorLeg;
 // Light smoothing of the capture before resampling: σ ≈ 1.5 frames at 120 Hz for the legs and every position (the
 // contacts depend on them), σ ≈ 4 frames for the trunk, the head and the arms, whose markers jitter (the spine kicks
 // once mid-walk, and the hands swinging from it would kick too).
-const f0 = Math.floor(CLIP.from / bvh.dt) - 12, f1 = Math.ceil(CLIP.to / bvh.dt) + 12;
+const f0 = Math.floor(CLIP.from / bvh.dt) - 12, f1 = Math.ceil((CLIP.to + TAIL) / bvh.dt) + 12;
 const raw = []; for (let f = f0; f <= f1; f++) raw.push(pose(f));
 const nj = bvh.joints.length;
 for (let k = 1; k < raw.length; k++) for (let j = 0; j < nj; j++) if (dot4(raw[k].rot[j], raw[k - 1].rot[j]) < 0) raw[k].rot[j] = raw[k].rot[j].map((v) => -v);
@@ -138,9 +140,9 @@ const at = (time) => {
     pos: A.pos.map((p, j) => p.map((v, c) => v + (B.pos[j][c] - v) * u)),
   };
 };
-// clip time for an output time: steady RATE, then a quadratic ease-out that lands exactly on CLIP.to
-const easeLen = (2 * (CLIP.to - EASE)) / RATE, steady = (EASE - CLIP.from) / RATE, total = steady + easeLen;
-const clipTime = (u) => (u <= steady ? CLIP.from + u * RATE : EASE + (CLIP.to - EASE) * (2 * ((u - steady) / easeLen) - ((u - steady) / easeLen) ** 2));
+// clip time for an output time: a steady RATE, through the stop and the tail
+const total = (CLIP.to + TAIL - CLIP.from) / RATE, stop = Math.round(((CLIP.to - CLIP.from) / RATE) * FPS);
+const clipTime = (u) => CLIP.from + u * RATE;
 
 // the walk's frame: +z along the actor's overall direction, origin under the hips-mid of the first frame
 const hipsMid = (p) => mul(add(p.pos[J('LeftUpLeg')], p.pos[J('RightUpLeg')]), 0.5);
@@ -230,7 +232,7 @@ if (process.env.DEBUG_WALK) for (let k = 0; k < n; k += 6) console.log(k, (k / F
 const stride = 3 + 6 + MAP.length * 4, buf = new Float32Array(n * stride);
 frames.forEach((f, k) => buf.set([...f.root, ...f.ankle[0], ...f.ankle[1], ...f.rots.flat()], k * stride));
 fs.writeFileSync(path.join(output, 'walk.bin'), Buffer.from(buf.buffer));
-fs.writeFileSync(path.join(output, 'walk.json'), JSON.stringify({ version: 1, fps: FPS, frames: n, stride, joints: MAP.map(([ours]) => ours),
-  source: 'CMU Graphics Lab Motion Capture Database, subject 139 trial 29 (Sneaking)', clip: CLIP, rate: RATE }));
-const end = frames[n - 1].root;
-console.log(`walk: ${n} frames (${total.toFixed(2)} s), travel ${Math.hypot(end[0], end[2]).toFixed(3)} m at bind scale (${end.map((v) => v.toFixed(3)).join(', ')}), K ${K.toFixed(4)}`);
+fs.writeFileSync(path.join(output, 'walk.json'), JSON.stringify({ version: 2, fps: FPS, frames: n, stop, stride, joints: MAP.map(([ours]) => ours),
+  source: 'CMU Graphics Lab Motion Capture Database, subject 139 trial 29 (Sneaking)', clip: CLIP, rate: RATE, tail: TAIL }));
+const end = frames[stop].root;
+console.log(`walk: ${n} frames (stop at ${stop}, ${(stop / FPS).toFixed(2)} s), travel ${Math.hypot(end[0], end[2]).toFixed(3)} m at bind scale (${end.map((v) => v.toFixed(3)).join(', ')}), K ${K.toFixed(4)}`);

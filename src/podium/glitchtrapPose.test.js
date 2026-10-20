@@ -121,7 +121,7 @@ test('reduced motion holds one still pose with the hand raised', () => {
   writeGlitchtrapPose(a, rig, 1, true, eye);
   writeGlitchtrapPose(b, rig, 25, true, eye);
   expect(a).toEqual(b);
-  expect(at(a, 'bip_hand_L')[1]).toBeGreaterThan(at(a, 'bip_head')[1] - 0.45 * SCALE);
+  expect(at(a, 'bip_hand_R')[1]).toBeGreaterThan(at(a, 'bip_head')[1] - 0.45 * SCALE);
 });
 
 test('the ears swing after a sudden turn of the head, then settle; with reduced motion they stay put', () => {
@@ -165,6 +165,45 @@ test('no part of him ever goes through the columns or their bases', () => {
     }
   }
   expect(worst).toBeLessThan(-0.02);
+});
+
+test('he stops in one movement: the hips slow down to rest and never halt and set off again', () => {
+  const out = new Float32Array(rig.n * 16 + 4);
+  const hips = (t) => { writeGlitchtrapPose(out, rig, t, false, eye); return at(out, 'bip_pelvis'); };
+  let rest = null;
+  for (let t = walkEnd - 0.5; t < TIMES.settled; t += 1 / 60) {
+    const a = hips(t), b = hips(t + 1 / 60), speed = Math.hypot(b[0] - a[0], b[2] - a[2]) * 60;
+    if (rest === null && speed < 0.03) rest = t;
+    if (rest !== null) expect(speed).toBeLessThan(0.08);
+  }
+  // still moving well after the last step has landed, at rest before the hand rises
+  expect(rest).toBeGreaterThan(walkEnd + 0.9);
+  expect(rest).toBeLessThan(TIMES.settled);
+});
+
+test('he waves beside his head at eye level, on the side away from the second place plate', () => {
+  const out = new Float32Array(rig.n * 16 + 4);
+  for (let t = TIMES.wave + 0.3; t < TIMES.beckon; t += 0.05) {
+    writeGlitchtrapPose(out, rig, t, false, eye);
+    const head = at(out, 'bip_head'), wrist = at(out, 'bip_hand_R'), view = head.map((v, k) => v - eye[k]);
+    const right = [-view[2], 0, view[0]].map((v, _, a) => v / Math.hypot(a[0], a[2]));
+    const across = (wrist[0] - head[0]) * right[0] + (wrist[2] - head[2]) * right[2];
+    expect(wrist[1]).toBeGreaterThan(head[1]);
+    // to the left on screen (the plate floats to his right there), never in front of his face
+    expect(across).toBeLessThan(-0.4);
+  }
+});
+
+test('standing, the free hand and its fingers never freeze', () => {
+  const out = new Float32Array(rig.n * 16 + 4), hand = [], finger = [];
+  for (let t = TIMES.idle + 1; t < TIMES.rewave; t += 0.25) {
+    writeGlitchtrapPose(out, rig, t, false, eye);
+    hand.push(at(out, 'bip_hand_L'));
+    finger.push(at(out, 'L_PinkyC_jnt').map((v, k) => v - hand[hand.length - 1][k]));
+  }
+  const spread = (pts) => Math.max(...[0, 1, 2].map((k) => Math.max(...pts.map((p) => p[k])) - Math.min(...pts.map((p) => p[k]))));
+  expect(spread(hand)).toBeGreaterThan(0.04);
+  expect(spread(finger)).toBeGreaterThan(0.02);
 });
 
 test('the knees always point the way the feet do, so the legs never look twisted', () => {

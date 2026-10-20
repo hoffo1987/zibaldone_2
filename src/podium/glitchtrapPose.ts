@@ -6,9 +6,10 @@
 // glitches, breathing, and ears that are damped springs pushed by the head (EarSprings, the only state).
 //
 // Timeline (seconds after the reveal): hidden behind the column he leans out until one glowing eye shows (0.3–2.3),
-// slides out and pads diagonally behind the column (2.3–7), turns to face the camera with a step (7–8.5), waves
-// (9.4–12.1), beckons (12.1–13.9), lowers the hand and idles, waving again every fifteen seconds (from 21).
-// Reduced motion: the final pose with the hand up, still.
+// slides out and pads diagonally behind the column (2.3–6.5), stops and turns to face the camera in one movement
+// (6.5–7.7), waves with his right hand at eye level (8.6–11.3), beckons (11.3–13.1), lowers the hand and idles (the
+// weight drifting between the feet, glances, the free hand swinging and drumming its fingers), waving again every
+// fifteen seconds (from 21). Reduced motion: the final pose with the hand up, still.
 //
 // Rig conventions (bind pose, metres): y up, the character faces +z, its left is +x. Every joint rotation is a delta
 // from the bind pose expressed in bind-aligned axes, so a child rotates in its parent's posed frame.
@@ -145,6 +146,11 @@ export function makeRig(joints: JointInfo[]): Rig {
 export const SCALE = 1.42;
 // the actor is slimmer than the costume: his arms hang this much further out, clear of the belly and the thighs
 const ARM_OUT = 14 * D;
+// The hand that waves: his right (-1; +1 is his left). Raised to his eyes, the left hand would disappear behind the
+// second place's plate, which floats just beside him; the right one rises against the dark between him and the column.
+const WAVE = -1;
+// the waving arm (in an upright frame turned with the chest): where the elbow points and where the forearm does
+const ELBOW = [0.58, -0.35, 0.64], FOREARM = [-0.04, 1, 0.08];
 // He hides behind the column at z -1.9 and walks out diagonally behind it, far enough that neither his feet nor his
 // swinging hands touch its base, stopping where the camera sees him whole: between that column and the second
 // place's step (not behind the step or its plate).
@@ -159,34 +165,44 @@ const toRoom = (p: V): V => { const r = qrot(H, mul(p, SCALE)); return [START[0]
 
 // ---------- the captured walk ----------
 // A real sneaking walk (CMU motion capture, subject 139, "Sneaking"), retargeted offline onto this skeleton by
-// scripts/bake-glitchtrap-walk.cjs: 60 fps, from standing still to four padded steps and a slow stop. Per frame: the
-// midpoint of the hips, the two ankles (balls of the feet locked to the floor while planted) and the global rotation
-// of every mapped joint.
-export type WalkMeta = { version: number; fps: number; frames: number; stride: number; joints: string[] };
+// scripts/bake-glitchtrap-walk.cjs: 60 fps, from standing still to four padded steps at an even pace, then a short tail
+// of the next step (the actor never stops; Glitchtrap's legs stop at `stop`, his trunk and arms run on into the tail).
+// Per frame: the midpoint of the hips, the two ankles (balls of the feet locked to the floor while planted) and the
+// global rotation of every mapped joint.
+export type WalkMeta = { version: number; fps: number; frames: number; stop: number; stride: number; joints: string[] };
 type Walk = { fps: number; frames: number; stride: number; slot: Int16Array; joints: number[]; data: Float32Array; duration: number; end: V };
 export function attachWalk(rig: Rig, meta: WalkMeta, data: Float32Array) {
-  if (meta.version !== 1 || data.length !== meta.frames * meta.stride || meta.stride !== 9 + meta.joints.length * 4) throw new Error('Glitchtrap: camminata incompleta');
+  if (meta.version !== 2 || data.length !== meta.frames * meta.stride || meta.stride !== 9 + meta.joints.length * 4 || !(meta.stop > 0 && meta.stop < meta.frames - 1)) throw new Error('Glitchtrap: camminata incompleta');
   const joints = meta.joints.map((name) => { const i = rig.names.indexOf(name); if (i < 0) throw new Error(`Glitchtrap: joint ${name}`); return i; });
   const slot = new Int16Array(rig.n).fill(-1);
   joints.forEach((j, k) => (slot[j] = k));
-  const last = (meta.frames - 1) * meta.stride;
-  rig.walk = { fps: meta.fps, frames: meta.frames, stride: meta.stride, slot, joints, data, duration: (meta.frames - 1) / meta.fps, end: toRoom([data[last], 0, data[last + 2]]) };
+  const stop = meta.stop * meta.stride;
+  rig.walk = { fps: meta.fps, frames: meta.frames, stride: meta.stride, slot, joints, data, duration: meta.stop / meta.fps, end: toRoom([data[stop], 0, data[stop + 2]]) };
 }
 type Frame = { root: V; ankle: V[]; rot: Q[] };
 function sampleWalk(w: Walk, time: number): Frame {
   const x = clamp(time * w.fps, 0, w.frames - 1), k = Math.min(w.frames - 2, Math.floor(x)), u = x - k, d = w.data;
   const A = k * w.stride, B = A + w.stride, P0 = Math.max(0, k - 1) * w.stride, P3 = Math.min(w.frames - 1, k + 2) * w.stride;
-  // positions on a Catmull-Rom curve through the frames: smooth speed at any refresh rate
+  // positions and rotations on Catmull-Rom curves through the frames: no jolt in speed from one frame to the next, at
+  // any refresh rate (rotations: on the quaternions' components, kept on one hemisphere, then normalised)
   const u2 = u * u, u3 = u2 * u;
-  const cr = (o: number) => 0.5 * (2 * d[A + o] + (d[B + o] - d[P0 + o]) * u + (2 * d[P0 + o] - 5 * d[A + o] + 4 * d[B + o] - d[P3 + o]) * u2 + (3 * d[A + o] - d[P0 + o] - 3 * d[B + o] + d[P3 + o]) * u3);
+  const spline = (p: number, a: number, b: number, n: number) => 0.5 * (2 * a + (b - p) * u + (2 * p - 5 * a + 4 * b - n) * u2 + (3 * a - p - 3 * b + n) * u3);
+  const cr = (o: number) => spline(d[P0 + o], d[A + o], d[B + o], d[P3 + o]);
   const v = (o: number): V => [cr(o), cr(o + 1), cr(o + 2)];
-  const q = (o: number): Q => qslerp([d[A + o], d[A + o + 1], d[A + o + 2], d[A + o + 3]], [d[B + o], d[B + o + 1], d[B + o + 2], d[B + o + 3]], u);
+  const quat = (at: number, ref?: Q): Q => {
+    const q = [d[at], d[at + 1], d[at + 2], d[at + 3]];
+    return ref && q[0] * ref[0] + q[1] * ref[1] + q[2] * ref[2] + q[3] * ref[3] < 0 ? q.map((x) => -x) : q;
+  };
+  const q = (o: number): Q => {
+    const a = quat(A + o), b = quat(B + o, a), p = quat(P0 + o, a), n = quat(P3 + o, b);
+    return qnorm(a.map((x, c) => spline(p[c], x, b[c], n[c])));
+  };
   return { root: v(0), ankle: [v(3), v(6)], rot: w.joints.map((_, j) => q(9 + j * 4)) };
 }
 
-export const TIMES = { peek: 0.3, peekHeld: 1.3, step: 2.3, settled: 8.7, wave: 9.4, beckon: 12.1, lower: 13.9, idle: 15.0, rewave: 21, every: 15 };
+export const TIMES = { peek: 0.3, peekHeld: 1.3, step: 2.3, settled: 7.9, wave: 8.6, beckon: 11.3, lower: 13.1, idle: 14.2, rewave: 21, every: 15 };
 // sudden glitches of the head: [time, roll, yaw]
-const TWITCHES: number[][] = [[1.85, -16, 7], [10.55, 13, -6], [13.1, -11, 4]];
+const TWITCHES: number[][] = [[1.85, -16, 7], [9.75, 13, -6], [12.3, -11, 4]];
 function twitch(t: number) {
   let roll = 0, yaw = 0, glow = 0;
   const events = [...TWITCHES];
@@ -200,7 +216,7 @@ function twitch(t: number) {
   return { roll: roll * D, yaw: yaw * D, glow };
 }
 
-// the left hand's gestures: weight of the raised hand, wave phase and strength, finger ripple; repeated in the idle
+// the waving hand's gestures: weight of the raised hand, wave phase and strength, finger ripple; repeated in the idle
 type Gesture = { up: number; wave: number; phase: number; amp: number; beckon: number; lift: number };
 function gesture(t: number, still: boolean): Gesture {
   if (still) return { up: 1, wave: 0, phase: 0, amp: 0, beckon: 0, lift: 1 };
@@ -227,13 +243,16 @@ function gesture(t: number, still: boolean): Gesture {
 type Tube = { a: V; b: V; q: Q; s: number; from: number; to: number; r: number[][] };
 const THIGH = { from: -0.25, to: 1.05, r: [[0.114, 0.151, 0.146, 0.142], [0.111, 0.149, 0.145, 0.128], [0.082, 0.103, 0.108, 0.098]] };
 const BELLY = { from: -0.3, to: 1.1, r: [[0.241, 0.241, 0.205, 0.2], [0.22, 0.22, 0.205, 0.159], [0.211, 0.211, 0.18, 0.157]] };
-// signed distance from p to the tube's skin (negative inside), along the ray from its axis
+// signed distance from p to the tube's skin (negative inside), along the ray from its axis. Smooth everywhere (the
+// half-widths follow a parabola through the three rings, ends and limits are rounded): the arm that gives way to it
+// must not jolt.
+const smax = (a: number, b: number, k: number) => (a + b + Math.hypot(a - b, k)) / 2;
 function tubeGap(p: V, t: Tube) {
-  const ab = sub(t.b, t.a), l = len(ab), d = mul(ab, 1 / l), r = sub(p, t.a), u = dot(r, d) / l;
-  const k = clamp(u, 0, 1) * 2, i = Math.min(1, Math.floor(k)), half = t.r[i].map((v, j) => mix(v, t.r[i + 1][j], k - i) * SCALE);
+  const ab = sub(t.b, t.a), l = len(ab), d = mul(ab, 1 / l), r = sub(p, t.a), u = dot(r, d) / l, k = softClamp(u, 0, 1);
+  const half = t.r[0].map((a, j) => { const m = t.r[1][j], b = t.r[2][j]; return (a + k * (4 * m - 3 * a - b) + k * k * (2 * a - 4 * m + 2 * b)) * SCALE; });
   const q = qrot(qinv(t.q), sub(r, mul(d, u * l))), x = q[0] * t.s, z = q[2], rho = Math.hypot(x, z);
   const e = Math.hypot(x / (x > 0 ? half[0] : half[1]), z / (z > 0 ? half[2] : half[3]));
-  return Math.max(e > 1e-6 ? rho - rho / e : -Math.min(...half), (t.from - u) * l, (u - t.to) * l);
+  return smax(e > 1e-6 ? rho - rho / e : -Math.min(...half), smax((t.from - u) * l, (u - t.to) * l, 0.02), 0.02);
 }
 // the gap the hanging hand keeps from the costume (metres), how softly the arm starts to give way, and how sharply the
 // nearest part of the hand is told from the others
@@ -256,55 +275,68 @@ function handGap(rig: Rig, arm: Arm, pos: V[], rot: Q[], tubes: Tube[]) {
 // ---------- evaluation ----------
 type Pose = { rot: Q[]; pos: V[]; glow: number; earBase: Q };
 type Base = { hips: V; pelvis: Q; ankle: V[]; foot: Q[]; local: (j: number) => Q; lag: (j: number) => Q };
-// the captured pose at time t: standing before the walk, the walk itself, then the turn to face the camera
-// the captured clip starts while the actor already moves: it is eased in, so nothing jumps when the walk begins
-const EASE_IN = 0.5, TURN = 1.5;
+// The captured pose at time t: standing before the walk, the walk itself, then the stop facing the camera. The clip is
+// eased in, so nothing jumps when the walk begins; past its stop frame its clock runs on ever slower (CALM seconds of
+// the tail in all), so the trunk and arms come to rest instead of freezing; the stop itself lasts STOP seconds.
+const EASE_IN = 0.5, CALM = 0.32, STOP = 1.2;
 const walkTime = (u: number) => (u <= 0 ? 0 : u < EASE_IN ? (u * u) / (2 * EASE_IN) : u - EASE_IN / 2);
 const walkDone = (w: Walk) => TIMES.step + w.duration + EASE_IN / 2;
+const calmed = (w: Walk, x: number) => (x <= w.duration ? x : w.duration + CALM * (1 - Math.exp(-(x - w.duration) / CALM)));
+// cubic from a (moving at rate va) to b (at rest) over T seconds, at time x: picks up any motion without a jolt
+const hermite = (a: number, va: number, b: number, T: number, x: number) => {
+  const s = clamp01(x / T), s2 = s * s, s3 = s2 * s;
+  return (2 * s3 - 3 * s2 + 1) * a + (s3 - 2 * s2 + s) * T * va + (3 * s2 - 2 * s3) * b;
+};
+const level = (q: Q) => qmul(qy(-yawOf(q)), q);
 function capturedBase(rig: Rig, t: number, still: boolean): Base {
-  const w = rig.walk!, done = walkDone(w);
-  const f = sampleWalk(w, still ? w.duration : walkTime(t - TIMES.step));
+  const w = rig.walk!, x = still ? w.duration + 10 : walkTime(t - TIMES.step);
+  const f = sampleWalk(w, calmed(w, x)), before = sampleWalk(w, calmed(w, x - 0.1));
   const local = (j: number) => qmul(qinv(f.rot[w.slot[rig.parent[j]]]), f.rot[w.slot[j]]);
   // how a joint turned over the last tenth of a second (room axes): loose parts trail it
-  const before = still ? f : sampleWalk(w, walkTime(t - TIMES.step - 0.1));
   const lag = (j: number) => qmul(H, qmul(qmul(before.rot[w.slot[j]], qinv(f.rot[w.slot[j]])), qinv(H)));
-  const base: Base = { hips: toRoom(f.root), pelvis: qmul(H, f.rot[w.slot[rig.pelvis]]), ankle: f.ankle.map(toRoom), foot: rig.legs.map((l) => qmul(H, f.rot[w.slot[l.foot]])), local, lag };
-  // After the walk he turns to face the camera the way a person does: he pivots on the ball of the front foot while
-  // the back foot steps round beside it, the weight passing over the front foot; the hunch eases off and he
-  // straightens up a little. (Turning only the hips would cross his legs.)
-  const turn = still ? 1 : ramp(t, done, done + TURN);
-  if (turn <= 0) return base;
-  const last = sampleWalk(w, w.duration), rest = sampleWalk(w, 0);
-  const lastHips = toRoom(last.root), lastPelvis = qmul(H, last.rot[w.slot[rig.pelvis]]);
-  const lastFoot = rig.legs.map((l) => qmul(H, last.rot[w.slot[l.foot]])), ballOff = rig.legs.map((l) => mul(l.ball, SCALE));
-  const balls = last.ankle.map((a, i) => add(toRoom(a), qrot(lastFoot[i], ballOff[i])));
-  const front = dot(sub(balls[0], balls[1]), fwd(yawOf(lastPelvis))) > 0 ? 0 : 1, back = 1 - front;
-  const face = Math.atan2(CAMERA[0] - lastHips[0], CAMERA[1] - lastHips[2]);
+  const pelvis = qmul(H, f.rot[w.slot[rig.pelvis]]);
+  if (x <= w.duration) return { hips: toRoom(f.root), pelvis, ankle: f.ankle.map(toRoom), foot: rig.legs.map((l) => qmul(H, f.rot[w.slot[l.foot]])), local, lag };
+
+  // The stop, the way a person stops and turns: the last step has just landed, the body rides on over the front foot
+  // while the back foot peels off, swings round and sets down beside it, the front foot pivoting on its ball so both
+  // end up facing the camera; the hips turn with them and settle between the feet, a little taller (the hunch eases
+  // off). Hips and pelvis start at the speed the walk had: nothing halts and restarts. (Turning the hips alone would
+  // cross his legs.)
+  // (rates as the walk's splines have them at that frame: across the frames either side)
+  const tau = x - w.duration, end = sampleWalk(w, w.duration), rest = sampleWalk(w, 0);
+  const prev = sampleWalk(w, w.duration - 1 / w.fps), next = sampleWalk(w, w.duration + 1 / w.fps);
+  const hips0 = toRoom(end.root), hipsRate = mul(sub(toRoom(next.root), toRoom(prev.root)), w.fps / 2);
+  const pelvisYaw = (f: Frame) => yawOf(qmul(H, f.rot[w.slot[rig.pelvis]])), yaw0 = pelvisYaw(end), yawPrev = pelvisYaw(prev);
+  const yawRate = ((qangle(yawPrev, pelvisYaw(next), 1) - yawPrev) * w.fps) / 2;
+  const lastFoot = rig.legs.map((l) => qmul(H, end.rot[w.slot[l.foot]])), ballOff = rig.legs.map((l) => mul(l.ball, SCALE));
+  const balls = end.ankle.map((a, i) => add(toRoom(a), qrot(lastFoot[i], ballOff[i])));
+  const front = dot(sub(balls[0], balls[1]), fwd(yaw0)) > 0 ? 0 : 1, back = 1 - front;
+  const face = qangle(yaw0, Math.atan2(CAMERA[0] - hips0[0], CAMERA[1] - hips0[2]), 1);
   const toeOut = (i: number) => face + rig.legs[i].s * 7 * D;
-  const goal = [balls[0], balls[1]];
-  goal[back] = add(add(balls[front], mul(left(face), ((rig.legs[back].s - rig.legs[front].s) / 2) * 0.34 * SCALE)), mul(fwd(face), -0.03 * SCALE));
-  // the back foot lifts once the weight is over the front one, swings low and sets down flat
-  const stepS = clamp01((turn - 0.1) / 0.78), step = smoother(stepS), turned = smoother(turn);
-  const foot: Q[] = [], ankle: V[] = [];
-  foot[front] = qslerp(lastFoot[front], qy(toeOut(front)), turned);
-  ankle[front] = sub(balls[front], qrot(foot[front], ballOff[front]));
-  const swingBall = add(mixV(balls[back], goal[back], step), [0, 0.07 * SCALE * Math.sin(Math.PI * stepS) ** 2, 0]);
-  foot[back] = qmul(qslerp(lastFoot[back], qy(toeOut(back)), step), qx(12 * D * Math.sin(Math.PI * stepS)));
+  const goal = add(add(balls[front], mul(left(face), ((rig.legs[back].s - rig.legs[front].s) / 2) * 0.34 * SCALE)), mul(fwd(face), -0.03 * SCALE));
+  // the back foot peels off as the weight rolls onto the front one, swings low and sets down flat. Both feet start
+  // from the walk's own roll and contact as it runs on (it keeps the balls planted): no foot stops dead.
+  const stepS = clamp01((tau - 0.15) / 0.55), step = smoother(stepS), pivot = smoother(tau / 0.8);
+  const rolling = rig.legs.map((l) => qmul(H, f.rot[w.slot[l.foot]])), foot: Q[] = [], ankle: V[] = [];
+  const contact = (i: number) => add(toRoom(f.ankle[i]), qrot(rolling[i], ballOff[i]));
+  foot[front] = qslerp(rolling[front], qy(toeOut(front)), pivot);
+  ankle[front] = sub(contact(front), qrot(foot[front], ballOff[front]));
+  const swingBall = add(mixV(contact(back), goal, step), [0, 0.07 * SCALE * Math.sin(Math.PI * stepS) ** 2, 0]);
+  foot[back] = qmul(qslerp(rolling[back], qy(toeOut(back)), step), qx(12 * D * Math.sin(Math.PI * step)));
   ankle[back] = sub(swingBall, qrot(foot[back], ballOff[back]));
   // the hips: over the front foot while the other one travels, then centred between both
-  const flatAnkle = (i: number) => sub(goal[i], qrot(qy(toeOut(i)), ballOff[i]));
-  const centred = mul(add(flatAnkle(0), flatAnkle(1)), 0.5), overFront = sub(balls[front], qrot(qy(toeOut(front)), ballOff[front]));
-  const stand = toRoom(rest.root)[1];
-  const hipsXZ = mixV(mixV(lastHips, overFront, 0.35 * Math.sin(Math.PI * Math.min(1, turn * 1.3))), centred, turned);
-  const restPelvis = qmul(H, rest.rot[w.slot[rig.pelvis]]);
+  const flat = (i: number, ball: V) => sub(ball, qrot(qy(toeOut(i)), ballOff[i]));
+  // (he ends with more weight on the back foot, the one that stepped round: towards the column, clear of the plate)
+  const centred = mul(add(flat(front, balls[front]), flat(back, goal)), 0.5), overFront = sub(flat(front, balls[front]), centred);
+  const to = add([centred[0], mix(hips0[1], toRoom(rest.root)[1], 0.6), centred[2]], mul([overFront[0], 0, overFront[2]], 0.35 * Math.sin(Math.PI * stepS) ** 2 - 0.3 * step));
+  const hips = [0, 1, 2].map((k) => hermite(hips0[k], hipsRate[k], to[k], STOP, tau));
+  const yaw = hermite(yaw0, yawRate, face, 1.0, tau);
+  const restPelvis = qmul(H, rest.rot[w.slot[rig.pelvis]]), settle = smoother(tau / STOP);
   const restLocal = (j: number) => qmul(qinv(rest.rot[w.slot[rig.parent[j]]]), rest.rot[w.slot[j]]);
   const upper = new Set([...rig.spine, rig.neck, ...rig.arms.flatMap((a) => [a.collar, a.upper, a.lower, a.hand])]);
-  const s = 0.8 * turned;
   return {
-    hips: [hipsXZ[0], mix(lastHips[1], stand, 0.6 * turned), hipsXZ[2]],
-    pelvis: qslerp(lastPelvis, qmul(qy(face - yawOf(restPelvis)), restPelvis), turned),
-    ankle, foot,
-    local: (j: number) => (upper.has(j) ? qslerp(local(j), restLocal(j), s) : local(j)),
+    hips, pelvis: qmul(qy(yaw), qslerp(level(pelvis), level(restPelvis), settle)), ankle, foot,
+    local: (j: number) => (upper.has(j) ? qslerp(local(j), restLocal(j), 0.8 * settle) : local(j)),
     lag,
   };
 }
@@ -326,7 +358,11 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V): Pose {
   const g = gesture(t, still);
   const tw = still ? { roll: 0, yaw: 0, glow: 0 } : twitch(t);
   const breath = still ? 0 : Math.sin((t / 4.2) * 2 * Math.PI);
-  const sway = still ? 0 : Math.sin((t / 7.3) * 2 * Math.PI) * idle;
+  // standing, he is never still: the weight drifts from foot to foot (never quite periodic), he rocks a little, his
+  // head and hands keep moving; it starts while he is still settling from the stop
+  const life = still ? 0 : ramp(t, done + 0.5, done + 1.8);
+  const sway = (0.75 * Math.sin((t / 7.3) * 2 * Math.PI) + 0.25 * Math.sin((t / 3.1) * 2 * Math.PI + 1)) * life;
+  const rock = Math.sin((t / 5.3) * 2 * Math.PI + 0.7) * life;
   const b = capturedBase(rig, t, still);
 
   // once he faces the camera, his chest keeps following the real one (it drifts and follows the pointer)
@@ -336,9 +372,9 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V): Pose {
   // he leans out towards the open edge of the column (+x in the room), whichever way his body faces
   const leanTo = norm([1, 0, 0.2]), lean3 = qrot(qinv(heading), leanTo), lx = lean3[0], lz = lean3[2];
   // pelvis: the captured one, plus the peek, the idle sway and the lean while waving
-  const pelvisRot = qmul(b.pelvis, euler(0.6 * breath * idle * D, (3 * peek * lx + 2 * sway) * D));
+  const pelvisRot = qmul(b.pelvis, euler((0.6 * breath * idle + 0.8 * rock) * D, (3 * peek * lx + 3.5 * sway) * D));
   const hipsMid = mul(add(bind[rig.legs[0].hip], bind[rig.legs[1].hip]), 0.5);
-  const hips = add(add(b.hips, mul(leanTo, 0.075 * SCALE * peek)), qrot(heading, [(0.015 * sway - 0.03 * g.up * idle) * SCALE, 0.003 * SCALE * breath * idle, 0]));
+  const hips = add(add(b.hips, mul(leanTo, 0.075 * SCALE * peek)), qrot(heading, [(0.035 * sway + 0.03 * WAVE * g.up * idle) * SCALE, 0.003 * SCALE * breath * idle, 0.012 * SCALE * rock]));
   // never stretch a leg past its length: lower the hips smoothly where a foot is far away
   for (const [i, leg] of rig.legs.entries()) {
     const h = add(hips, qrot(pelvisRot, mul(sub(bind[leg.hip], hipsMid), SCALE)));
@@ -370,11 +406,12 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V): Pose {
     place(leg.foot, footRot);
     fk(leg.toe, b.local(leg.toe));
   }
-  // spine: the captured one, bent sideways for the peek, breathing, leaning away from the raised hand
-  const lean = 2.5 * D * g.up * idle;
-  fk(rig.spine[0], qmul(b.local(rig.spine[0]), euler(7 * D * peek * lz, -7 * D * peek * lx - 1.5 * D * sway, 0.1 * faceTurn * settled)));
-  fk(rig.spine[1], qmul(b.local(rig.spine[1]), euler((0.8 * breath + 10 * peek * lz) * D, -10 * D * peek * lx - D * sway + lean, 0.12 * faceTurn * settled)));
-  fk(rig.spine[2], qmul(b.local(rig.spine[2]), euler((0.8 * breath + 10 * peek * lz) * D, -10 * D * peek * lx + lean, 3 * D * g.up * idle + 0.12 * faceTurn * settled)));
+  // spine: the captured one, bent sideways for the peek, breathing, leaning into the wave (away from the plate beside
+  // him), balancing the hips' drift (the chest stays over the feet) and turning a touch with each swing of the wave
+  const lean = -2.5 * D * WAVE * g.up * idle, waveTurn = 1.8 * D * WAVE * g.wave * idle;
+  fk(rig.spine[0], qmul(b.local(rig.spine[0]), euler((7 * peek * lz - 0.5 * rock) * D, (-7 * peek * lx - 2.6 * sway) * D, 0.1 * faceTurn * settled)));
+  fk(rig.spine[1], qmul(b.local(rig.spine[1]), euler((1.1 * breath + 10 * peek * lz) * D, (-10 * peek * lx - 1.6 * sway) * D + lean, 0.12 * faceTurn * settled + waveTurn)));
+  fk(rig.spine[2], qmul(b.local(rig.spine[2]), euler((1.1 * breath + 10 * peek * lz) * D, (-10 * peek * lx - 0.5 * sway) * D + lean, 3 * D * WAVE * g.up * idle + 0.12 * faceTurn * settled + waveTurn)));
   const chest = rot[rig.spine[2]];
   fk(rig.tie);
 
@@ -384,20 +421,29 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V): Pose {
     { a: pos[rig.pelvis], b: pos[rig.spine[2]], q: rot[rig.spine[1]], s: 1, ...BELLY },
   ];
   for (const arm of rig.arms) {
-    const s = arm.s, raised = s === 1 ? g.up * idle : 0;
+    const s = arm.s, raised = s === WAVE ? g.up * idle : 0, other = s === WAVE ? 0 : g.up * idle;
+    // a hanging arm is a pendulum: it swings a little behind the body's drift, the elbow softens and the fingers drum
+    // now and then (little finger first); while the other hand waves this one drifts forward, the elbow bent
+    const pend = ((3 * Math.sin((t / 7.3) * 2 * Math.PI - 1.2) + 1.5 * Math.sin((t / 3.1) * 2 * Math.PI + 0.2 + s)) * life + 6 * other) * D;
+    const flex = ((10 + 3 * breath + 4 * Math.sin((t / 5.9) * 2 * Math.PI + s)) * life + 14 * other) * D * (1 - raised);
+    const hinge = norm(cross(arm.upperDir, [0, 0, 1]));
+    const drum = (k: number) => {
+      const u = ((t + (s === 1 ? 0 : 1.7)) % 3.9) - 0.5 - (3 - Math.min(k, 3)) * 0.09;
+      return u > 0 && u < 0.45 ? Math.sin((u / 0.45) * Math.PI) ** 2 * (k === 4 ? 0.3 : 1) : 0;
+    };
     fk(arm.collar, qmul(b.local(arm.collar), qmul(qz(s * (10 * raised + 1.2 * breath * idle) * D), qy(-s * 4 * raised * D))));
     const trail = b.lag(arm.lower), swingBack = 2 * Math.acos(clamp(Math.abs(trail[3]), 0, 1));
     // fingers: loosely curled and never frozen, open and fanned for the wave but trailing the hand (each a little later
     // than the one before), rippling closed and open for the beckon (index first)
-    const raisedWave = s === 1 ? g.amp * raised * (1 - g.beckon) : 0, spread = 9 * D * raised * (1 - g.beckon);
+    const raisedWave = s === WAVE ? g.amp * raised * (1 - g.beckon) : 0, spread = 9 * D * raised * (1 - g.beckon);
     // relaxed fingers curl a little more from the index to the little finger, flex as the hand is dragged, and keep
     // moving a little on their own
     const RELAXED = [0.2, 0.28, 0.34, 0.4, 0.5];
     const curls = arm.fingers.map((f, k) => {
       let c = mix(RELAXED[k] + 0.05 * walk + 0.6 * swingBack, 0.08 * (k === 4 ? 0.45 : 1), raised);
-      if (!still) c += (0.05 + 0.03 * walk) * Math.sin(t * (1.7 + 1.1 * walk) + k * 0.9 + s) * (1 - raised);
+      if (!still) c += (0.05 + 0.03 * walk) * Math.sin(t * (1.7 + 1.1 * walk) + k * 0.9 + s) * (1 - raised) + 0.32 * drum(k) * life * (1 - raised);
       c += 0.1 * raisedWave * (0.6 + Math.sin(g.phase - 1.1 - k * 0.45)) * (k === 4 ? 0.5 : 1);
-      if (g.beckon > 0 && s === 1 && k < 4) {
+      if (g.beckon > 0 && s === WAVE && k < 4) {
         const phase = ((t - TIMES.beckon) / 0.9 - k * 0.07) * 2 * Math.PI;
         c = mix(c, 0.15 + 0.62 * (0.5 - 0.5 * Math.cos(phase)), g.beckon);
       }
@@ -409,36 +455,37 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V): Pose {
     // he leans out, the arm on that side swings away from the bending body. The costume's thighs and belly are far
     // wider than the actor's: wherever the hand would brush them, the whole arm swings out just enough to pass by.
     const hang = (away: number) => {
-      fk(arm.upper, qmul(b.local(arm.upper), qz(s * (ARM_OUT + 8 * D * peek + away))));
-      fk(arm.lower, b.local(arm.lower));
+      fk(arm.upper, qmul(qx(-pend), qmul(b.local(arm.upper), qz(s * (ARM_OUT + 8 * D * peek + away)))));
+      fk(arm.lower, qmul(qaxis(hinge, flex), b.local(arm.lower)));
       fk(arm.hand, qslerp(b.local(arm.hand), qaxis(cross(arm.handDir, arm.palm), 14 * D), 0.7));
       rot[arm.hand] = qmul(qslerp(I, trail, 0.75 * (1 - raised)), rot[arm.hand]);
       fingers();
       return handGap(rig, arm, pos, rot, tubes);
     };
-    const gap = hang(0), slope = Math.max(0.15, (hang(4 * D) - gap) / (4 * D));
+    const gap = hang(0), slope = smax(0.15, (hang(4 * D) - gap) / (4 * D), 0.05);
     const away = (HAND_GAP.soft * Math.log1p(Math.exp((HAND_GAP.min - gap) / HAND_GAP.soft))) / slope;
     hang(35 * D * Math.tanh(away / (35 * D)));
     if (raised > 0) {
-      // the wave: upper arm out to the side, forearm upright, open palm towards the camera beside the cocked head
-      const shoulder = pos[arm.upper], l1 = arm.l1 * SCALE, l2 = arm.l2 * SCALE;
-      // (low, beside the chin, like his beckon in Help Wanted: the second place's plate floats just to his left)
-      const e: V = [0.66 * s, -0.6, 0.5], up: V = [0.06 * s, 1, 0.34];
-      const swingA = (8 + 22 * g.wave) * D * Math.min(1, g.up * 3);
+      // The wave: elbow out and forward, forearm upright, the open palm towards the camera beside the cocked head, the
+      // fingers level with his eyes. Upright in the room, not along his hunched chest (that would tip the hand
+      // forward, down to his chin); the chest only turns it.
+      const shoulder = pos[arm.upper], l1 = arm.l1 * SCALE, l2 = arm.l2 * SCALE, upright = qy(yawOf(chest));
+      const e: V = [ELBOW[0] * s, ELBOW[1], ELBOW[2]], up: V = [FOREARM[0] * s, FOREARM[1], FOREARM[2]];
+      const swingA = (10 + 12 * g.wave) * D * Math.min(1, g.up * 3);
       const side: V = [s, 0, 0], fore = norm(add(mul(norm(up), Math.cos(swingA)), mul(side, Math.sin(swingA))));
-      const target = add(shoulder, qrot(chest, add(add(mul(norm(e), l1), mul(fore, l2)), [0, (1 - g.lift) * -0.06 * SCALE, 0])));
-      const pole = qrot(chest, norm([0.72 * s, -0.66, 0]));
+      const target = add(shoulder, qrot(upright, add(add(mul(norm(e), l1), mul(fore, l2)), [0, (1 - g.lift) * -0.06 * SCALE, 0])));
+      const pole = qrot(upright, norm([0.72 * s, -0.66, 0]));
       const reach = sub(target, shoulder), d = clamp(len(reach), Math.abs(l1 - l2) + 1e-4, (l1 + l2) * 0.999), dir = norm(reach);
       const cosA = (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), out = norm(sub(pole, mul(dir, dot(pole, dir))));
       const elbowP = add(shoulder, add(mul(dir, l1 * cosA), mul(out, l1 * Math.sqrt(Math.max(0, 1 - cosA * cosA)))));
       // the hand lags the forearm (it is dragged, then whips): its own angle runs a little behind and further
-      const lagged = gesture(t - 0.11, still), lag = (10 + 30 * lagged.wave) * D * Math.min(1, lagged.up * 3);
+      const lagged = gesture(t - 0.11, still), lag = (12 + 19 * lagged.wave) * D * Math.min(1, lagged.up * 3);
       const fingersUp = norm(add(mul(norm(up), Math.cos(lag)), mul(side, Math.sin(lag))));
       const palmOut = norm(qrot(qx(-(14 + 34 * g.beckon) * D), [0.12 * s, 0, 1]));
       const k = clamp(g.lift * raised, 0, 1.15);
       place(arm.upper, qslerp(rot[arm.upper], qlook(arm.upperDir, arm.pole, sub(elbowP, shoulder), out), k));
       place(arm.lower, qslerp(rot[arm.lower], qlook(arm.lowerDir, arm.pole, sub(target, elbowP), out), k));
-      place(arm.hand, qslerp(rot[arm.hand], qlook(arm.handDir, arm.palm, qrot(chest, fingersUp), qrot(chest, palmOut)), raised * (2 - raised)));
+      place(arm.hand, qslerp(rot[arm.hand], qlook(arm.handDir, arm.palm, qrot(upright, fingersUp), qrot(upright, palmOut)), raised * (2 - raised)));
       fingers();
     }
     // the shoulder helper follows the arm's swing without its twist
@@ -455,10 +502,13 @@ function evaluate(rig: Rig, t: number, still: boolean, eye: V): Pose {
   const headFk = rot[rig.head];
   let aim = norm(sub(add(eye, [0, -1.4 - 1.4 * walk, 0]), pos[rig.head]));
   const local = qrot(qinv(chest), aim);
-  const lyaw = clamp(Math.atan2(local[0], local[2]), -75 * D, 75 * D), lpitch = clamp(Math.asin(clamp(local[1], -1, 1)), -40 * D, 55 * D);
+  // standing, the gaze never quite locks: small slow glances around the camera, a nod with each swing of the wave
+  const glance = (2.2 * Math.sin((t / 4.1) * 2 * Math.PI) + 1.2 * Math.sin((t / 2.3) * 2 * Math.PI + 2)) * D * life;
+  const nod = (1.5 * Math.sin((t / 3.7) * 2 * Math.PI + 1) * life + 1.5 * g.wave * idle) * D;
+  const lyaw = clamp(Math.atan2(local[0], local[2]), -75 * D, 75 * D) + glance, lpitch = clamp(Math.asin(clamp(local[1], -1, 1)), -40 * D, 55 * D) + nod;
   aim = qrot(chest, [Math.sin(lyaw) * Math.cos(lpitch), Math.sin(lpitch), Math.cos(lyaw) * Math.cos(lpitch)]);
   aim = qrot(qy(tw.yaw), aim);
-  const tilt = (22 * peek + 10 * stare + 13 * g.up * idle * (1 - g.beckon) - 17 * g.beckon + 7 * Math.sin((t / 9.1) * 2 * Math.PI) * idle * (1 - g.up)) * D
+  const tilt = (22 * peek + 10 * stare + WAVE * (13 * g.up * idle * (1 - g.beckon) - 17 * g.beckon) + 7 * Math.sin((t / 9.1) * 2 * Math.PI) * idle * (1 - g.up)) * D
     + tw.roll;
   const headUp = qrot(qaxis(aim, -tilt), [0, 1, 0]);
   const want = qlook([0, 0, 1], [0, 1, 0], aim, headUp);
