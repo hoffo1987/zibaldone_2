@@ -21,7 +21,7 @@ import NotificationPanel from "./NotificationPanel";
 import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt } from "./WritingSections";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
-import type { Spunto } from "./spunti";
+import { onSheet, type Spunto } from "./spunti";
 import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 import { Navigation, SectionLocation, ScrittiSwitch, NAV_ORDER, inHub } from "./Navigation";
 import { Text3D, Terminal3D } from "./d3";
@@ -2663,7 +2663,7 @@ export default function App() {
             <form onSubmit={submit} className="space-y-4 fadein">
               <div>
                 <KindPicker value={kind} onChange={setKind} locked={!!editingId} sign={!editingId || rawItems.find((x) => x.id === editingId)?.userId === user.uid ? { on: signed, set: setSigned, name: myName } : undefined} />
-                {!editingId && <DiaryPrompts key={user.uid} show={kind === "diary"} uid={user.uid} onPaper={spLast ? { id: spLast.s.id, untouched: content === spLast.after } : null} onUse={putSpunto} onRemove={takeSpunto} />}
+                {!editingId && <DiaryPrompts key={user.uid} show={kind === "diary"} uid={user.uid} onPaper={spLast && onSheet(plain(content), spLast.s) ? { id: spLast.s.id, untouched: content === spLast.after } : null} onUse={putSpunto} onRemove={takeSpunto} />}
               </div>
               <input maxLength={200} aria-label="Titolo dello scritto" className="inp !text-xl !py-3 hd font-bold" placeholder={kind === "diary" ? "Dai un titolo al tuo pensiero" : "Titolo dello scritto"} value={title} onChange={(e) => setTitle(e.target.value)} required />
               <div className="pn">

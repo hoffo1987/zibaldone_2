@@ -315,6 +315,10 @@ export const USE_NOTE: Record<Tipo, string> = {
 // Che cosa si scrive sul foglio: la domanda (o la traccia) in corsivo e una riga vuota sotto per rispondere; la mezza
 // frase senza i puntini, con uno spazio dopo, pronta da continuare.
 export const paperText = (s: Spunto) => (s.tipo === "incipit" ? `${s.text.replace(/…$/, "")} ` : s.text);
+// lo spunto è ancora sul foglio? (testo semplice del foglio). Se chi scrive l'ha cancellato, anche solo in parte, lo
+// si può rimettere
+const flat = (t: string) => t.replace(/ /g, " ").replace(/\s+/g, " ").trim();
+export const onSheet = (text: string, s: Spunto) => flat(text).includes(flat(paperText(s)));
 
 // memoria di questo dispositivo: gli spunti già visti (i più recenti in fondo), se il pannello è aperto, l'ultimo
 // giorno in cui si è scritto dallo spunto di oggi

@@ -2,7 +2,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
-import { ALL, SETS, MOMENTI, draw, dailyOf, momentiOf, fits, tipoOf, paperText, remember, loadMemo, saveMemo, SEEN_MAX } from "./spunti";
+import { ALL, SETS, MOMENTI, draw, dailyOf, momentiOf, fits, tipoOf, paperText, onSheet, remember, loadMemo, saveMemo, SEEN_MAX } from "./spunti";
 import { DiaryPrompts, inkInto } from "./DiaryPrompts";
 
 // giovedì 22 ottobre 2026, ore 10 (mattina, autunno) e alle 21 (sera)
@@ -130,6 +130,14 @@ describe("sul foglio", () => {
     const ed2 = editor("<div>prima</div><div><br></div>");
     inkInto(ed2, domanda);
     expect(ed2.innerHTML).toBe(`<div>prima</div><div><br></div><div><i>${domanda.text}</i></div><div><br></div>`);
+  });
+
+  test("lo spunto conta come sul foglio solo finché il suo testo c'è: cancellato, si può rimettere", () => {
+    expect(onSheet("Oggi ho capito che  tutto cambia", incipit)).toBe(true);
+    expect(onSheet(`${domanda.text}\nla mia risposta`, domanda)).toBe(true);
+    expect(onSheet("la mia risposta", domanda)).toBe(false);
+    expect(onSheet(domanda.text.slice(0, -4), domanda)).toBe(false);
+    expect(onSheet("", incipit)).toBe(false);
   });
 
   test("le immagini restano: un foglio con solo una foto non è un foglio vuoto", () => {
