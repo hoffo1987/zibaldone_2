@@ -106,10 +106,7 @@ transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s cubic-bezier(.1
 @keyframes ledP{50%{opacity:.35}}
 @keyframes blink{50%{opacity:0}}
 .stat{font:inherit;color:inherit;text-align:left;display:block;cursor:pointer;-webkit-appearance:none;appearance:none}
-.stat .go{position:absolute;top:1rem;right:1rem;color:var(--ac);opacity:0;transform:translate(-6px,6px);transition:opacity .3s,transform .4s var(--spring)}
-.stat:hover .go,.stat:focus-visible .go{opacity:1;transform:none}
 .stat:focus-visible{outline:2px solid var(--ac);outline-offset:3px}
-@media (hover:none){.stat .go{opacity:.55;transform:none}}
 .bd-p.w{background:#fff;opacity:.09;--m:var(--m-circuit);--ts:160px}
 @media (hover:none){.bt:hover{transform:none;box-shadow:none}.bt.on:hover{transform:none;filter:none;box-shadow:none}}
 /* toolbar editor: risposta immediata (niente molla), stati distinti.

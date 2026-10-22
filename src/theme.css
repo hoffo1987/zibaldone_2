@@ -70,11 +70,10 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 
 /* ---------- riquadri con titolo (home, numeri) ---------- */
 /* la traccia di luce sul bordo alto: verderame che sfuma nell'ambra */
-.pn.card:not(:has(> .paper)):not(.room-card),.pn.trace{background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 55%,transparent) 28%,color-mix(in srgb,var(--am) 55%,transparent) 72%,transparent 94%),linear-gradient(180deg,color-mix(in srgb,#fff 55%,transparent),transparent 120px);
+.pn.card:not(:has(> .paper)):not(.room-card,.stat-card),.pn.trace{background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 55%,transparent) 28%,color-mix(in srgb,var(--am) 55%,transparent) 72%,transparent 94%),linear-gradient(180deg,color-mix(in srgb,#fff 55%,transparent),transparent 120px);
   background-size:100% 1px,auto;background-repeat:no-repeat;background-position:0 0,0 0}
-.root.dark .pn.card:not(:has(> .paper)):not(.room-card),.root.dark .pn.trace{background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 60%,transparent) 28%,color-mix(in srgb,var(--am) 50%,transparent) 72%,transparent 94%),linear-gradient(180deg,rgba(255,255,255,.035),transparent 140px)}
-/* numeri: la cifra grande e allineata, l'icona dentro una piazzola, l'etichetta in caratteri tecnici */
-.stat>svg:not(.go){box-sizing:content-box;padding:9px;border-radius:12px;color:var(--ac);background:color-mix(in srgb,var(--ac) 9%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 22%,transparent)}
+.root.dark .pn.card:not(:has(> .paper)):not(.room-card,.stat-card),.root.dark .pn.trace{background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 60%,transparent) 28%,color-mix(in srgb,var(--am) 50%,transparent) 72%,transparent 94%),linear-gradient(180deg,rgba(255,255,255,.035),transparent 140px)}
+/* numeri: la cifra grande e allineata, l'etichetta in caratteri tecnici (gli oggetti disegnati: stat-art.css) */
 .stat .hd{font-variant-numeric:tabular-nums;letter-spacing:-.04em}
 .stat .hd+.mu{font:600 .66rem/1.3 var(--label);letter-spacing:.1em;text-transform:uppercase;margin-top:.35rem}
 

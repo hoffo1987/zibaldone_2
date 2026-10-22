@@ -85,7 +85,7 @@ export function PublicExcerpt({ excerpt }: { excerpt: string }) {
 // la grafia sul quaderno del Diario: archetti di altezze diverse sulle righe del foglio (passo 13 px), qualche asta che
 // sale e qualche coda che scende, come una calligrafia vista da lontano. L'ultima riga si scrive passandoci sopra: è un
 // tratto solo, senza spazi tra le parole, perché il tratteggio che la disegna scorra continuo
-const scrawl = (x: number, y: number, n: number, seed: number, gaps = true) => {
+export const scrawl = (x: number, y: number, n: number, seed: number, gaps = true) => {
   let d = `M${x} ${y}`;
   for (let i = 0; i < n; i++) {
     const k = (seed * 7 + i * 5) % 11, w = 3.2 + (k % 3) * .8, h = k === 3 ? 8.5 : k === 8 ? -4 : 2.6 + (k % 4) * .7;

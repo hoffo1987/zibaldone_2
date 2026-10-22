@@ -8,9 +8,9 @@ import {
   getFirestore, collection, onSnapshot, doc, writeBatch, query, where, orderBy, limit, setDoc, getDoc, getDocs, deleteField, connectFirestoreEmulator
 } from "firebase/firestore";
 import {
-  Cpu, Bookmark, Loader2, Activity, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
+  Cpu, Bookmark, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Rows3, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, SlidersHorizontal, Clapperboard, Compass, BookOpen
+  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Rows3, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, ArrowRight, SlidersHorizontal, Clapperboard, Compass, BookOpen
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import Stars from "./Stars";
@@ -20,6 +20,7 @@ import { snapshotReader } from "./snapshot";
 import NotificationPanel from "./NotificationPanel";
 import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt, RoomCard } from "./WritingSections";
+import { StatArt, type StatKind } from "./StatArt";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
 import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
@@ -2374,13 +2375,13 @@ export default function App() {
   );
 
   const stats = isAdmin
-    ? [{ l: "Scritti ricevuti", v: items.length, i: Cpu, a: () => go("read") },
-      { l: "Autori", v: new Set(items.map((t) => t.userId)).size, i: Users, a: () => go("authors") },
-      { l: "Questo mese", v: thisMonth.length, i: Activity, a: () => { go("read"); setMonthFilter(monthNow); } },
-      { l: "Da valutare", v: thisMonth.filter((t) => !isDiary(t) && !t.rating).length, i: Star, a: () => { go("read"); setMonthFilter(monthNow); setUnrated(true); } }]
-    : [{ l: "I tuoi scritti", v: items.length, i: Bookmark, a: () => go("my_pages") },
-      { l: "Questo mese", v: thisMonth.length, i: Activity, a: () => { go("my_pages"); setMonthFilter(monthNow); } },
-      { l: "Parole scritte", v: items.reduce((a, t) => a + wc(t), 0), i: Pen, a: () => go("my_pages") }];
+    ? [{ l: "Scritti ricevuti", v: items.length, k: "received" as StatKind, a: () => go("read") },
+      { l: "Autori", v: new Set(items.map((t) => t.userId)).size, k: "authors" as StatKind, a: () => go("authors") },
+      { l: "Questo mese", v: thisMonth.length, k: "month" as StatKind, a: () => { go("read"); setMonthFilter(monthNow); } },
+      { l: "Da valutare", v: thisMonth.filter((t) => !isDiary(t) && !t.rating).length, k: "rate" as StatKind, a: () => { go("read"); setMonthFilter(monthNow); setUnrated(true); } }]
+    : [{ l: "I tuoi scritti", v: items.length, k: "mine" as StatKind, a: () => go("my_pages") },
+      { l: "Questo mese", v: thisMonth.length, k: "month" as StatKind, a: () => { go("my_pages"); setMonthFilter(monthNow); } },
+      { l: "Parole scritte", v: items.reduce((a, t) => a + wc(t), 0), k: "words" as StatKind, a: () => go("my_pages") }];
   const heroMove = (e: any) => {
     // si misura sul contenitore e non sul pannello: il pannello si inclina e, all'ingresso, si muove e si rimpicciolisce; il suo rettangolo
     // dà coordinate sbagliate e a mouse fermo l'inclinazione sbagliata restava finché non si rimuoveva il puntatore (o si cambiava pagina)
@@ -2426,7 +2427,7 @@ export default function App() {
         <RoomCard kind="diary" onOpen={() => go("diario")} />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((x, i) => <Reveal key={x.l} delay={(boot ? 620 : 0) + i * 70} className="h-full"><button type="button" onClick={x.a} data-snd="nav" className="pn card stat p-5 h-full w-full"><ArrowUpRight size={18} className="go" aria-hidden="true" /><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3 tabular-nums"><CountUp v={x.v} on={G.reveal} delay={(boot ? 620 : 0) + i * 70 + 150} /></div><div className="mu text-sm">{x.l}</div></button></Reveal>)}
+        {stats.map((x, i) => <Reveal key={x.l} delay={(boot ? 620 : 0) + i * 70} className="h-full"><button type="button" onClick={x.a} data-snd="nav" className={`pn card stat stat-card st-${x.k} h-full w-full`}><StatArt k={x.k} /><span className="st-tx"><div className="hd text-4xl font-bold tabular-nums"><CountUp v={x.v} on={G.reveal} delay={(boot ? 620 : 0) + i * 70 + 150} /></div><div className="mu text-sm">{x.l}<ArrowRight size={13} aria-hidden="true" /></div></span></button></Reveal>)}
       </div>
       <Reveal delay={boot ? 820 : 0}><div className="pn p-2">
         <div className="flex items-center justify-between px-4 pt-4 pb-2"><h3 className="hd text-lg font-bold">Ultimi scritti</h3><button type="button" data-snd="nav" className="mu text-sm lk inline-flex items-center gap-1" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>

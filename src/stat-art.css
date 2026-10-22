@@ -1,0 +1,163 @@
+/* ===== I numeri della Panoramica: un colore e un oggetto per ciascuno =====
+   Come i riquadri delle due stanze (rooms.css): il colore del numero (--tone) sul bordo, sulla traccia in alto e nel
+   bagliore, un motivo di sfondo che sfuma dall'angolo, l'oggetto in alto a destra con i pezzi a profondità diverse.
+   Teal per i propri scritti e per quelli ricevuti, rame per autori e parole, azzurro per il mese, oro per i voti. Solo
+   sfumature e ombre statiche; si muove qualcosa al passaggio, niente a riposo. Si carica prima di ui.css e theme.css */
+
+.root .stat-card{--tone:var(--ac)}
+.root .stat-card:is(.st-authors,.st-words){--tone:var(--cu)}
+.root .stat-card.st-month{--tone:#2E73BF}
+.root.dark .stat-card.st-month{--tone:#7DB4F0}
+.root .stat-card.st-rate{--tone:var(--am)}
+
+.root .pn.card.stat-card{display:flex;flex-direction:column;justify-content:flex-end;min-height:158px;padding:1.2rem 1.25rem 1.15rem;
+  border-color:color-mix(in srgb,var(--tone) 28%,var(--ln));background-color:var(--pn);
+  background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--tone) 75%,transparent) 30%,color-mix(in srgb,var(--tone) 30%,transparent) 75%,transparent 94%),
+    radial-gradient(90% 85% at 100% 0,color-mix(in srgb,var(--tone) 15%,transparent),transparent 70%),
+    linear-gradient(180deg,color-mix(in srgb,#fff 55%,transparent),transparent 120px);
+  background-size:100% 1px,auto,auto;background-repeat:no-repeat;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 1px 2px rgba(12,29,26,.05),0 16px 28px -22px color-mix(in srgb,var(--tone) 70%,transparent)}
+.root.dark .pn.card.stat-card{
+  background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--tone) 75%,transparent) 30%,color-mix(in srgb,var(--tone) 30%,transparent) 75%,transparent 94%),
+    radial-gradient(90% 85% at 100% 0,color-mix(in srgb,var(--tone) 16%,transparent),transparent 70%),
+    linear-gradient(180deg,rgba(255,255,255,.035),transparent 140px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 1px 2px rgba(0,0,0,.4),0 18px 34px -26px color-mix(in srgb,var(--tone) 50%,transparent)}
+@media (hover:hover){
+  .root .pn.card.stat-card:hover{border-color:color-mix(in srgb,var(--tone) 60%,var(--ln));
+    box-shadow:0 26px 46px -24px color-mix(in srgb,var(--tone) 60%,transparent),0 4px 0 -1px color-mix(in srgb,var(--tone) 32%,var(--ln)),var(--sh2)}
+}
+.root .stat-card:before{background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--tone) 20%,transparent),transparent 65%)}
+.root .stat-card:after{background:linear-gradient(90deg,var(--tone),color-mix(in srgb,var(--tone) 25%,transparent))}
+.root .stat-card:focus-visible{outline-color:var(--tone)}
+
+/* il numero e l'etichetta in basso, sopra il bagliore; la freccia dell'etichetta nel colore del numero */
+.st-tx{position:relative;z-index:2;display:block}
+.st-tx .mu svg{display:inline-block;margin-left:.35rem;vertical-align:-2px;color:var(--tone);transition:translate .35s var(--e-land)}
+
+/* ---------- lo sfondo, dall'angolo in alto a destra ---------- */
+.stat-art{position:absolute;inset:0;border-radius:inherit;pointer-events:none;transform-style:preserve-3d}
+.stat-bg{position:absolute;inset:0;border-radius:inherit;--motif:color-mix(in srgb,var(--tone) 26%,transparent);
+  -webkit-mask-image:radial-gradient(ellipse 80% 95% at 100% 0,#000 20%,transparent 80%);mask-image:radial-gradient(ellipse 80% 95% at 100% 0,#000 20%,transparent 80%)}
+/* la posta: le righe oblique delle buste per via aerea */
+.st-received .stat-bg{background:repeating-linear-gradient(135deg,var(--motif) 0 5px,transparent 5px 13px);opacity:.55}
+/* gli autori: cerchi che si allargano dall'angolo */
+.st-authors .stat-bg{background:repeating-radial-gradient(circle at 100% 0,transparent 0 13px,var(--motif) 13px 14px)}
+/* il mese: la griglia dei giorni */
+.st-month .stat-bg{background:linear-gradient(var(--motif) 1px,transparent 1px) 0 0/17px 17px,linear-gradient(90deg,var(--motif) 1px,transparent 1px) 0 0/17px 17px}
+/* i voti: i raggi della stella */
+.st-rate .stat-bg{background:repeating-conic-gradient(from 0deg at 100% 0,var(--motif) 0 3deg,transparent 3deg 10deg)}
+/* i propri scritti: i quadretti di punti */
+.st-mine .stat-bg{background:radial-gradient(circle,color-mix(in srgb,var(--tone) 38%,transparent) 1px,transparent 1.5px) 0 0/14px 14px}
+/* le parole: le righe del quaderno */
+.st-words .stat-bg{background:repeating-linear-gradient(180deg,transparent 0 15px,var(--motif) 15px 16px)}
+
+/* ---------- l'oggetto ---------- */
+.stat-obj{position:absolute;right:.85rem;top:.8rem;width:88px;height:88px;transform-origin:100% 0;transform-style:preserve-3d;
+  --paper:#FFFFFD;--type:rgba(24,46,56,.18);--o-sh:0 1px 2px rgba(12,29,26,.16),0 9px 14px -8px rgba(12,29,26,.42)}
+.root.dark .stat-obj{--paper:#ECEEEC;--type:rgba(24,46,56,.24);--o-sh:0 1px 2px rgba(0,0,0,.5),0 12px 18px -8px rgba(0,0,0,.85)}
+.stat-obj i,.stat-obj>span{position:absolute;display:block}
+.stat-obj>*{transition:rotate .6s var(--e-land),translate .6s var(--e-land),scale .6s var(--e-land),opacity .4s}
+
+/* un foglio con il titolo nel colore del numero e qualche riga */
+.sa-sheet{width:48px;height:56px;border-radius:3px;box-shadow:inset 0 1px 0 #fff,var(--o-sh);
+  background:linear-gradient(var(--tone),var(--tone)) 7px 8px/22px 3.5px no-repeat,repeating-linear-gradient(180deg,var(--type) 0 2px,transparent 2px 7px) 7px 17px/34px 30px no-repeat,var(--paper)}
+
+/* Scritti ricevuti: il vassoio della posta, due fogli già dentro e una busta che arriva */
+.st-received .sa-a{left:12px;top:10px;rotate:-9deg;translate:0 0 2px}
+.st-received .sa-b{left:28px;top:6px;rotate:7deg;translate:0 0 5px}
+.sa-env{left:16px;top:24px;width:56px;height:34px;border-radius:3px;rotate:-5deg;translate:0 0 9px;--fold:color-mix(in srgb,var(--tone) 40%,#9aa9a5);box-shadow:var(--o-sh);
+  background:linear-gradient(to top right,transparent calc(50% - .8px),var(--fold) 50%,transparent calc(50% + .8px)) 0 0/50% 62% no-repeat,
+    linear-gradient(to top left,transparent calc(50% - .8px),var(--fold) 50%,transparent calc(50% + .8px)) 100% 0/50% 62% no-repeat,
+    linear-gradient(var(--tone),var(--tone)) calc(100% - 5px) calc(100% - 5px)/9px 10px no-repeat,var(--paper)}
+.sa-tray{left:3px;bottom:5px;width:82px;height:32px;translate:0 0 14px;clip-path:polygon(0 0,100% 0,93% 100%,7% 100%);
+  background:linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,.55)) 0 0/100% 2px no-repeat,
+    linear-gradient(rgba(255,255,255,.3),rgba(255,255,255,.3)) 50% 62%/28px 6px no-repeat,
+    linear-gradient(180deg,color-mix(in srgb,var(--tone) 72%,#fff),var(--tone) 45%,color-mix(in srgb,var(--tone) 70%,#000))}
+
+/* Autori: tre ritratti in fila, quello in mezzo davanti */
+.sa-av{width:40px;height:40px;border-radius:50%;--bg:var(--tone);--fg:#fff;
+  background:radial-gradient(19% 19% at 50% 39%,var(--fg) 96%,transparent),radial-gradient(34% 27% at 50% 100%,var(--fg) 97%,transparent),
+    linear-gradient(160deg,color-mix(in srgb,var(--bg) 75%,#fff),var(--bg) 60%);
+  box-shadow:0 0 0 3px var(--pn),0 10px 16px -8px rgba(12,29,26,.45)}
+.root.dark .sa-av{box-shadow:0 0 0 3px var(--pn),0 12px 18px -8px rgba(0,0,0,.85)}
+.sa-l1{left:-6px;top:34px;--bg:color-mix(in srgb,var(--tone) 32%,#fff);--fg:color-mix(in srgb,var(--tone) 70%,#000);translate:0 0 2px}
+.sa-r1{right:-6px;top:34px;--bg:color-mix(in srgb,var(--tone) 72%,#000);--fg:color-mix(in srgb,var(--tone) 30%,#fff);translate:0 0 2px}
+.sa-c1{left:21px;top:12px;width:46px;height:46px;translate:0 0 12px}
+
+/* Questo mese: il blocco del calendario, con il mese e il giorno di oggi */
+.sa-pad,.sa-cal{left:12px;top:13px;width:64px;height:68px;border-radius:9px}
+.sa-pad{rotate:5deg;background:var(--paper);box-shadow:0 3px 0 -1px #DCE2E8,0 6px 0 -2px #C3CCD5,var(--o-sh)}
+.root.dark .sa-pad{box-shadow:0 3px 0 -1px #B8C0C8,0 6px 0 -2px #8C96A0,var(--o-sh)}
+.sa-cal{rotate:-3deg;translate:0 0 12px;overflow:hidden;text-align:center;box-shadow:inset 0 -1px 0 rgba(0,0,0,.06),var(--o-sh);transform-origin:0 0;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--tone) 85%,#fff),color-mix(in srgb,var(--tone) 82%,#000)) 0 0/100% 22px no-repeat,var(--paper)}
+.sa-cal b{display:block;height:22px;padding-top:9px;font:700 .46rem/1 var(--label);letter-spacing:.14em;text-transform:uppercase;color:#fff}
+.sa-cal em{display:block;margin-top:8px;font:800 1.75rem/1 'Bricolage Grotesque','Instrument Sans',sans-serif;font-style:normal;letter-spacing:-.04em;color:#13212E}
+.sa-rings{left:26px;top:7px;width:38px;height:11px;rotate:-3deg;translate:0 0 14px;
+  background:linear-gradient(180deg,#5C6773,#262E37) 5px 0/5px 100% no-repeat,linear-gradient(180deg,#5C6773,#262E37) 27px 0/5px 100% no-repeat}
+
+/* Da valutare: la scheda delle stelline e una stella grande, a facce, che sta davanti */
+.stat-obj>.sa-card{left:0;bottom:8px;width:70px;height:24px;border-radius:7px;rotate:-7deg;translate:0 0 2px;display:flex;align-items:center;justify-content:center;
+  font:13px/1 system-ui,sans-serif;letter-spacing:1px;color:#D3D9DE;background:var(--paper);box-shadow:var(--o-sh)}
+.sa-card b{color:var(--tone);font-weight:inherit}
+.stat-obj>.sa-starw{right:4px;top:0;width:62px;height:62px;rotate:10deg;translate:0 0 18px;filter:drop-shadow(0 6px 6px color-mix(in srgb,var(--tone) 45%,rgba(0,0,0,.45)))}
+.sa-star{inset:0;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
+  background:repeating-conic-gradient(from 0deg at 50% 51%,color-mix(in srgb,var(--tone) 50%,#fff) 0 36deg,color-mix(in srgb,var(--tone) 82%,#5a3000) 36deg 72deg)}
+.sa-spark{width:12px;height:12px;background:color-mix(in srgb,var(--tone) 60%,#fff);opacity:.7;scale:.65;
+  clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%)}
+.sa-s1{left:8px;top:14px;translate:0 0 6px}
+.sa-s2{left:30px;top:0;width:9px;height:9px;translate:0 0 6px}
+
+/* I tuoi scritti: la cartellina con i fogli dentro e il segnalibro */
+.sa-fback{left:5px;top:20px;width:78px;height:58px;border-radius:3px 8px 8px 8px;background:linear-gradient(180deg,color-mix(in srgb,var(--tone) 70%,#000),color-mix(in srgb,var(--tone) 55%,#000))}
+.sa-fback:before{content:"";position:absolute;left:0;top:-8px;width:30px;height:9px;border-radius:6px 6px 0 0;background:color-mix(in srgb,var(--tone) 70%,#000)}
+.st-mine .sa-a{left:13px;top:10px;rotate:-6deg;translate:0 0 3px}
+.st-mine .sa-b{left:27px;top:6px;rotate:4deg;translate:0 0 5px}
+.sa-mark{left:58px;top:2px;width:9px;height:40px;translate:0 0 7px;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--am) 75%,#000),var(--am) 40%,color-mix(in srgb,var(--am) 75%,#fff) 60%,color-mix(in srgb,var(--am) 80%,#000));
+  clip-path:polygon(0 0,100% 0,100% 100%,50% calc(100% - 6px),0 100%)}
+.sa-ffront{left:3px;bottom:5px;width:82px;height:46px;border-radius:5px 5px 8px 8px;translate:0 0 13px;
+  background:linear-gradient(rgba(255,255,255,.72),rgba(255,255,255,.72)) 10px 11px/30px 8px no-repeat,
+    linear-gradient(170deg,color-mix(in srgb,var(--tone) 68%,#fff),var(--tone) 55%,color-mix(in srgb,var(--tone) 78%,#000));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 10px 16px -8px rgba(12,29,26,.45)}
+.root.dark .sa-ffront{box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 12px 18px -8px rgba(0,0,0,.85)}
+
+/* Parole scritte: un foglio a righe e la stilografica col pennino di rame che scrive */
+.stat-obj>.sa-paper{left:0;top:32px;width:70px;height:48px;border-radius:4px;rotate:-6deg;translate:0 0 2px;box-shadow:var(--o-sh);
+  background:linear-gradient(transparent 12px,rgba(24,46,56,.13) 12px) 0 3px/100% 13px,var(--paper)}
+.sa-paper svg{position:absolute;inset:0;fill:none;stroke:#22304A;stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round}
+.sa-pending{stroke-dasharray:1;stroke-dashoffset:.55;transition:stroke-dashoffset 1.1s cubic-bezier(.45,.05,.4,1)}
+.stat-obj>.sa-pen{left:36px;top:2px;width:13px;height:72px;rotate:36deg;transform-origin:50% 100%;translate:0 0 18px;border-radius:6px 6px 0 0;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--tone) 70%,#000),color-mix(in srgb,var(--tone) 45%,#fff) 40%,color-mix(in srgb,var(--tone) 78%,#000)) 0 44px/100% 5px no-repeat,
+    linear-gradient(90deg,#0C1518,#34464F 38%,#0C1518) 0 0/100% 54px no-repeat;
+  filter:drop-shadow(-3px 6px 4px rgba(0,0,0,.3))}
+.sa-nib{left:1.5px;bottom:0;width:10px;height:19px;clip-path:polygon(0 0,100% 0,100% 32%,50% 100%,0 32%);
+  background:radial-gradient(circle at 50% 36%,#1A1A1A 0 1.3px,transparent 1.7px),linear-gradient(#1A1A1A,#1A1A1A) 50% 100%/1px 58% no-repeat,
+    linear-gradient(90deg,color-mix(in srgb,var(--tone) 78%,#000),color-mix(in srgb,var(--tone) 40%,#fff) 45%,var(--tone) 58%,color-mix(in srgb,var(--tone) 80%,#000))}
+
+/* ---------- al passaggio ---------- */
+@media (hover:hover){
+  .stat-card:hover .st-tx .mu svg{translate:3px 0}
+  .st-received:hover .sa-env{rotate:-2deg;translate:0 9px 9px}
+  .st-received:hover .sa-b{rotate:10deg;translate:2px -3px 5px}
+  .st-authors:hover .sa-l1{translate:-6px 3px 2px}
+  .st-authors:hover .sa-r1{translate:6px 3px 2px}
+  .st-authors:hover .sa-c1{translate:0 -4px 18px;scale:1.06}
+  .st-month:hover .sa-cal{rotate:-11deg;translate:-4px -3px 20px}
+  .st-rate:hover .sa-starw{rotate:-8deg;scale:1.1;translate:0 -3px 26px}
+  .st-rate:hover .sa-spark{opacity:1;scale:1.2}
+  .st-mine:hover .sa-a{translate:0 -7px 3px}
+  .st-mine:hover .sa-b{translate:0 -11px 5px}
+  .st-mine:hover .sa-mark{translate:0 -8px 7px}
+  .st-words:hover .sa-pen{translate:10px 0 22px}
+  .st-words:hover .sa-pending{stroke-dashoffset:.05}
+}
+
+/* ---------- schermi più stretti: l'oggetto più piccolo ---------- */
+@media (max-width:1279px){.stat-obj{right:.7rem;top:.7rem;scale:.82}}
+@media (max-width:767px){
+  .root .pn.card.stat-card{min-height:146px;padding:1rem 1rem 1rem}
+  .stat-obj{right:.55rem;top:.55rem;scale:.72}
+}
+
+.root.nomotion .stat-card *{transition:none}
+@media (prefers-reduced-motion:reduce){.stat-card *{transition:none}}
