@@ -1,0 +1,119 @@
+/* ===== I due riquadri della Panoramica: la pila degli Scritti completi, il quaderno del Diario =====
+   Ogni stanza ha il suo colore (--room), il suo sfondo (quadretti di punti / righe del quaderno) e il suo oggetto: una
+   pila di fogli composti col sigillo della selezione del mese, un quaderno di pelle col nastrino. Gli oggetti stanno a
+   profondità diverse e si separano quando il riquadro si inclina sotto il mouse. Solo sfumature e ombre statiche: si muove
+   qualcosa al passaggio, niente a riposo. Il foglio si carica prima di ui.css e theme.css, perciò le regole partono da
+   .root e pesano di più delle loro */
+
+.root .pn.card.room-card{--room:var(--complete);display:block;width:100%;min-height:184px;padding:1.5rem 10rem 1.35rem 1.5rem;
+  border-color:color-mix(in srgb,var(--room) 30%,var(--ln));background-color:var(--pn);
+  background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--room) 75%,transparent) 30%,color-mix(in srgb,var(--room) 30%,transparent) 75%,transparent 94%),
+    radial-gradient(75% 130% at 100% 50%,color-mix(in srgb,var(--room) 15%,transparent),transparent 72%),
+    linear-gradient(180deg,color-mix(in srgb,#fff 55%,transparent),transparent 120px);
+  background-size:100% 1px,auto,auto;background-repeat:no-repeat;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 1px 2px rgba(12,29,26,.05),0 16px 30px -22px color-mix(in srgb,var(--room) 70%,transparent)}
+.root .pn.card.room-diary{--room:var(--diary)}
+.root.dark .pn.card.room-card{
+  background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--room) 75%,transparent) 30%,color-mix(in srgb,var(--room) 30%,transparent) 75%,transparent 94%),
+    radial-gradient(75% 130% at 100% 50%,color-mix(in srgb,var(--room) 17%,transparent),transparent 72%),
+    linear-gradient(180deg,rgba(255,255,255,.035),transparent 140px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 1px 2px rgba(0,0,0,.4),0 20px 40px -26px color-mix(in srgb,var(--room) 50%,transparent)}
+@media (hover:hover){
+  .root .pn.card.room-card:hover{border-color:color-mix(in srgb,var(--room) 60%,var(--ln));
+    box-shadow:0 28px 50px -24px color-mix(in srgb,var(--room) 60%,transparent),0 4px 0 -1px color-mix(in srgb,var(--room) 32%,var(--ln)),var(--sh2)}
+}
+.root .room-card:before{background:radial-gradient(300px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--room) 20%,transparent),transparent 65%)}
+.root .room-card:after{background:linear-gradient(90deg,var(--room),color-mix(in srgb,var(--room) 25%,transparent))}
+.root .room-card:focus-visible{outline:2px solid var(--room);outline-offset:3px}
+
+/* il testo sopra il bagliore della carta; resta sul piano del riquadro, dove i caratteri restano nitidi */
+.room-tx{position:relative;z-index:2;display:block}
+.room-go{display:inline-flex;align-items:center;gap:.4rem;margin-top:1.05rem;font:700 .64rem/1 var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--room)}
+.room-go svg{transition:translate .35s var(--e-land)}
+
+/* ---------- lo sfondo: quadretti di punti per gli Scritti, le righe del quaderno per il Diario; sfumano verso il testo ---------- */
+.room-art{position:absolute;inset:0;border-radius:inherit;pointer-events:none;transform-style:preserve-3d}
+.room-art i{position:absolute;display:block}
+.room-bg{position:absolute;inset:0;border-radius:inherit;
+  -webkit-mask-image:radial-gradient(ellipse 62% 115% at 100% 50%,#000 25%,transparent 85%);mask-image:radial-gradient(ellipse 62% 115% at 100% 50%,#000 25%,transparent 85%)}
+.room-complete .room-bg{background:radial-gradient(circle,color-mix(in srgb,var(--room) 38%,transparent) 1px,transparent 1.5px) 0 0/14px 14px}
+.room-diary .room-bg{background:repeating-linear-gradient(180deg,transparent 0 21px,color-mix(in srgb,var(--room) 24%,transparent) 21px 22px)}
+
+/* l'oggetto a destra: rimpicciolisce sugli schermi stretti, attaccato al bordo */
+.room-obj{position:absolute;right:2.1rem;top:50%;width:124px;height:156px;translate:0 -50%;transform-origin:100% 50%;transform-style:preserve-3d}
+.room-obj>*{transition:rotate .6s var(--e-land),translate .6s var(--e-land),scale .6s var(--e-land)}
+
+/* ---------- Scritti completi: la pila dei fogli composti ---------- */
+.ra-stack{--type:rgba(52,38,92,.2);--sheet-sh:0 1px 2px rgba(40,24,90,.14),0 12px 20px -10px rgba(40,24,90,.42)}
+.ra-sheet{left:10px;top:8px;width:104px;height:134px;border-radius:4px;box-shadow:inset 0 1px 0 rgba(255,255,255,.85),var(--sheet-sh)}
+.ra-sheet.s3{background:color-mix(in srgb,var(--room) 24%,#fff);rotate:-13deg;translate:-10px 6px 0}
+.ra-sheet.s2{background:color-mix(in srgb,var(--room) 11%,#fff);rotate:-5deg;translate:-3px 2px 7px}
+/* il foglio davanti: il titolo nel colore della stanza, un occhiello, le righe del testo giustificato e l'ultima corta */
+.ra-sheet.s1{rotate:4deg;translate:0 0 15px;
+  background:linear-gradient(var(--room),var(--room)) 12px 14px/52% 5px no-repeat,
+    linear-gradient(color-mix(in srgb,var(--room) 45%,transparent),color-mix(in srgb,var(--room) 45%,transparent)) 12px 25px/32% 2.5px no-repeat,
+    repeating-linear-gradient(180deg,var(--type) 0 2.5px,transparent 2.5px 8px) 12px 40px/calc(100% - 24px) 66px no-repeat,
+    linear-gradient(var(--type),var(--type)) 12px 108px/44% 2.5px no-repeat,#FFFFFD}
+/* il sigillo della selezione del mese: una coccarda con le code, in rilievo sopra la pila */
+.ra-tails{right:7px;bottom:-4px;width:26px;height:26px;rotate:-14deg;translate:0 0 24px;background:color-mix(in srgb,var(--room) 78%,#1d0f3d);
+  clip-path:polygon(0 0,100% 0,100% 100%,77% 80%,56% 100%,56% 12%,44% 12%,44% 100%,23% 80%,0 100%)}
+.ra-seal{right:1px;bottom:10px;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;rotate:-14deg;translate:0 0 27px;color:#fff;
+  background:radial-gradient(circle at 34% 28%,color-mix(in srgb,var(--room) 55%,#fff),var(--room) 55%,color-mix(in srgb,var(--room) 72%,#1d0f3d));
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--room) 22%,var(--pn)),inset 0 1px 0 rgba(255,255,255,.5),0 9px 16px -6px color-mix(in srgb,var(--room) 70%,#000)}
+.ra-seal:before{content:"";position:absolute;inset:4px;border-radius:50%;border:1px dashed rgba(255,255,255,.55)}
+.ra-seal svg{fill:currentColor}
+.root.dark .ra-stack{--type:rgba(52,38,92,.24);--sheet-sh:0 1px 2px rgba(0,0,0,.5),0 16px 24px -10px rgba(0,0,0,.8)}
+.root.dark .ra-sheet.s3{background:color-mix(in srgb,var(--room) 38%,#3c3456)}
+.root.dark .ra-sheet.s2{background:color-mix(in srgb,var(--room) 30%,#9d97b4)}
+.root.dark .ra-sheet.s1{background-color:#ECE9F3}
+.root.dark .ra-seal{color:#2a1858}
+.root.dark .ra-seal:before{border-color:rgba(42,24,88,.4)}
+.root.dark .ra-tails{background:color-mix(in srgb,var(--room) 62%,#2a1858)}
+
+/* ---------- Diario: il quaderno di pelle, la pagina a righe col margine rosa, il nastrino ---------- */
+.ra-book{--leather:var(--diary);--ribbon:color-mix(in srgb,var(--diary) 72%,#5a0f2a);--ink:color-mix(in srgb,var(--diary) 35%,#2b1830)}
+.root.dark .ra-book{--leather:color-mix(in srgb,var(--diary) 52%,#3b0f22);--ribbon:var(--diary)}
+.ra-cover{left:9px;top:5px;width:112px;height:134px;border-radius:5px 12px 12px 5px;rotate:5deg;
+  background:linear-gradient(135deg,color-mix(in srgb,var(--leather) 78%,#fff),var(--leather) 45%,color-mix(in srgb,var(--leather) 72%,#000));
+  box-shadow:inset 4px 0 0 rgba(0,0,0,.16),inset 0 0 0 1px rgba(0,0,0,.1),0 16px 24px -12px rgba(60,10,30,.55)}
+.ra-cover:before{content:"";position:absolute;inset:5px 5px 5px 8px;border-radius:3px 9px 9px 3px;border:1px dashed rgba(255,255,255,.42)}
+.root.dark .ra-cover{box-shadow:inset 4px 0 0 rgba(0,0,0,.2),inset 0 0 0 1px rgba(255,255,255,.06),0 18px 26px -12px rgba(0,0,0,.85)}
+/* le righe cadono sotto la grafia: una ogni 13 px, la prima a 30 */
+.ra-page{position:absolute;left:0;top:0;width:112px;height:132px;border-radius:3px 9px 9px 3px;rotate:-3deg;translate:0 0 10px;
+  background:linear-gradient(90deg,transparent 16px,color-mix(in srgb,var(--diary) 60%,transparent) 16px 17px,transparent 17px),
+    linear-gradient(transparent 12px,rgba(120,95,65,.2) 12px) 0 18px/100% 13px,#FBF6EB;
+  box-shadow:inset 8px 0 9px -7px rgba(90,60,40,.3),0 1px 2px rgba(60,20,30,.16),0 12px 20px -10px rgba(60,20,30,.42)}
+.root.dark .ra-page{background-color:#EFE9DC;box-shadow:inset 8px 0 9px -7px rgba(90,60,40,.35),0 1px 2px rgba(0,0,0,.5),0 16px 24px -10px rgba(0,0,0,.8)}
+.ra-page svg{position:absolute;inset:0;fill:none;stroke:var(--ink);stroke-width:1.15;stroke-linecap:round;stroke-linejoin:round}
+/* l'ultima riga è a metà: passandoci sopra la penna la finisce */
+.ra-pending{stroke-dasharray:1;stroke-dashoffset:.64;transition:stroke-dashoffset 1.2s cubic-bezier(.45,.05,.4,1)}
+.ra-ribbon{left:82px;top:-3px;width:10px;height:154px;rotate:-3deg;translate:0 0 13px;transform-origin:50% 0;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--ribbon) 78%,#000),var(--ribbon) 38%,color-mix(in srgb,var(--ribbon) 82%,#fff) 62%,color-mix(in srgb,var(--ribbon) 80%,#000));
+  clip-path:polygon(0 0,100% 0,100% 100%,50% calc(100% - 7px),0 100%)}
+
+/* ---------- al passaggio: i fogli si aprono a ventaglio, il quaderno si solleva e la riga si completa ---------- */
+@media (hover:hover){
+  .room-card:hover .room-go svg{translate:4px 0}
+  .room-card:hover .s3{rotate:-19deg;translate:-17px 8px 0}
+  .room-card:hover .s2{rotate:-8deg;translate:-7px 2px 9px}
+  .room-card:hover .s1{rotate:6deg;translate:3px -5px 19px}
+  .room-card:hover .ra-tails{rotate:4deg;translate:0 -2px 30px}
+  .room-card:hover .ra-seal{rotate:6deg;scale:1.08;translate:0 -4px 34px}
+  .room-card:hover .ra-cover{rotate:8deg;translate:3px 2px 0}
+  .room-card:hover .ra-page{rotate:-5deg;translate:-3px -4px 16px}
+  .room-card:hover .ra-ribbon{rotate:2deg;translate:-2px -4px 20px}
+  .room-card:hover .ra-pending{stroke-dashoffset:0}
+}
+
+/* ---------- schermi più stretti: l'oggetto più piccolo, il testo si allarga ---------- */
+@media (max-width:1279px){
+  .root .pn.card.room-card{padding-right:8.6rem}
+  .room-obj{right:1.3rem;scale:.84}
+}
+@media (max-width:767px){
+  .root .pn.card.room-card{min-height:168px;padding:1.3rem 7.4rem 1.2rem 1.25rem}
+  .room-obj{right:.9rem;scale:.76}
+}
+
+.root.nomotion .room-card *{transition:none}
+@media (prefers-reduced-motion:reduce){.room-card *{transition:none}}

@@ -1,8 +1,9 @@
 import React from "react";
-import { BookOpen, FileText, ArrowUpRight, EyeOff, LockKeyhole, Pen, Signature } from "lucide-react";
+import { ArrowRight, BookOpen, FileText, ArrowUpRight, EyeOff, LockKeyhole, Pen, Signature, Star } from "lucide-react";
 import { plain } from "./sanitize";
 import { isDiary, signatureOf, cartaOf, paperClass, type WritingKind } from "./testi";
 import "./writing.css";
+import "./rooms.css";
 
 type Sign = { on: boolean; set: (v: boolean) => void; name: string };
 export function KindPicker({ value, onChange, locked = false, sign }: { value: WritingKind; onChange: (v: WritingKind) => void; locked?: boolean; sign?: Sign }) {
@@ -79,4 +80,47 @@ export function ReadingNotice({ item }: { item: any }) {
 
 export function PublicExcerpt({ excerpt }: { excerpt: string }) {
   return <div className="paper excerpt-paper p-6 md:p-10" data-sheet-paper=""><p className="whitespace-pre-wrap text-lg leading-relaxed">{excerpt || "Questo scritto non contiene un estratto testuale disponibile."}{excerpt && "…"}</p><div className="excerpt-end" aria-hidden="true" /><p className="mu text-sm mt-5 flex items-center gap-2"><LockKeyhole size={16} />Il resto dello scritto rimane riservato.</p></div>;
+}
+
+// la grafia sul quaderno del Diario: archetti di altezze diverse sulle righe del foglio (passo 13 px), qualche asta che
+// sale e qualche coda che scende, come una calligrafia vista da lontano. L'ultima riga si scrive passandoci sopra: è un
+// tratto solo, senza spazi tra le parole, perché il tratteggio che la disegna scorra continuo
+const scrawl = (x: number, y: number, n: number, seed: number, gaps = true) => {
+  let d = `M${x} ${y}`;
+  for (let i = 0; i < n; i++) {
+    const k = (seed * 7 + i * 5) % 11, w = 3.2 + (k % 3) * .8, h = k === 3 ? 8.5 : k === 8 ? -4 : 2.6 + (k % 4) * .7;
+    d += ` q${(w / 2).toFixed(1)} ${(-h).toFixed(1)} ${w.toFixed(1)} 0`;
+    if (gaps && k === 5) d += " m3.5 0";
+  }
+  return d;
+};
+const DIARY_LINES = [scrawl(24, 30, 16, 1), scrawl(20, 43, 18, 2), scrawl(20, 56, 11, 3)];
+const DIARY_PENDING = scrawl(20, 69, 14, 4, false);
+
+// i due riquadri della Panoramica: ogni stanza ha il suo oggetto. Per gli Scritti completi una pila di fogli composti con
+// il sigillo della selezione del mese, per il Diario il quaderno di pelle col nastrino. Inclinando il riquadro gli oggetti
+// stanno a profondità diverse; al passaggio i fogli si aprono a ventaglio e sul quaderno si scrive una riga in più
+export function RoomCard({ kind, onOpen }: { kind: WritingKind; onOpen: () => void }) {
+  const diary = kind === "diary";
+  return <button type="button" className={`pn card room-card ${diary ? "room-diary" : "room-complete"} text-left`} onClick={onOpen} data-snd="nav">
+    <span className="room-art" aria-hidden="true">
+      <span className="room-bg" />
+      {diary
+        ? <span className="room-obj ra-book">
+          <i className="ra-cover" />
+          <span className="ra-page"><svg viewBox="0 0 112 132" width="112" height="132">{DIARY_LINES.map(d => <path key={d} d={d} />)}<path className="ra-pending" d={DIARY_PENDING} pathLength={1} /></svg></span>
+          <i className="ra-ribbon" />
+        </span>
+        : <span className="room-obj ra-stack">
+          <i className="ra-sheet s3" /><i className="ra-sheet s2" /><i className="ra-sheet s1" />
+          <i className="ra-tails" /><i className="ra-seal"><Star size={15} strokeWidth={2.2} /></i>
+        </span>}
+    </span>
+    <span className="room-tx">
+      <span className={`kind-badge ${diary ? "diary" : ""}`}>{diary ? "Diario" : "Scritti completi"}</span>
+      <span className="hd text-xl font-bold mt-3 block">{diary ? "Lascia un pensiero" : "Dai forma alle tue idee"}</span>
+      <span className="mu text-sm mt-2 block">{diary ? "Pagine da leggere per intero, anonime o firmate, senza voti o categorie." : "Temi e racconti, estratti da leggere e selezione del mese."}</span>
+      <span className="room-go">{diary ? "Apri il diario" : "Entra negli scritti"}<ArrowRight size={14} /></span>
+    </span>
+  </button>;
 }

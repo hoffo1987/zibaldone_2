@@ -19,7 +19,7 @@ import { pubOf, pubSig, readPublic, isDiary, signatureOf, writingKind, writingLa
 import { snapshotReader } from "./snapshot";
 import NotificationPanel from "./NotificationPanel";
 import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
-import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt } from "./WritingSections";
+import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt, RoomCard } from "./WritingSections";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
 import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
@@ -2422,8 +2422,8 @@ export default function App() {
         </div>
       </div></Reveal>
       <div className="grid md:grid-cols-2 gap-4">
-        <button className="pn card complete-card p-6 text-left" onClick={() => go(isAdmin ? "read" : "altri")}><span className="kind-badge">Scritti completi</span><h3 className="hd text-xl font-bold mt-3">Dai forma alle tue idee</h3><p className="mu text-sm mt-2">Temi e racconti, estratti da leggere e selezione del mese.</p></button>
-        <button className="pn card p-6 text-left diary-intro" onClick={() => go("diario")}><span className="kind-badge diary">Diario</span><h3 className="hd text-xl font-bold mt-3">Lascia un pensiero</h3><p className="mu text-sm mt-2">Pagine da leggere per intero, anonime o firmate, senza voti o categorie.</p></button>
+        <RoomCard kind="complete" onOpen={() => go(isAdmin ? "read" : "altri")} />
+        <RoomCard kind="diary" onOpen={() => go("diario")} />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((x, i) => <Reveal key={x.l} delay={(boot ? 620 : 0) + i * 70} className="h-full"><button type="button" onClick={x.a} data-snd="nav" className="pn card stat p-5 h-full w-full"><ArrowUpRight size={18} className="go" aria-hidden="true" /><x.i size={18} className="mu" /><div className="hd text-4xl font-bold mt-3 tabular-nums"><CountUp v={x.v} on={G.reveal} delay={(boot ? 620 : 0) + i * 70 + 150} /></div><div className="mu text-sm">{x.l}</div></button></Reveal>)}

@@ -70,9 +70,9 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 
 /* ---------- riquadri con titolo (home, numeri) ---------- */
 /* la traccia di luce sul bordo alto: verderame che sfuma nell'ambra */
-.pn.card:not(:has(> .paper)):not(.diary-intro),.pn.trace{background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 55%,transparent) 28%,color-mix(in srgb,var(--am) 55%,transparent) 72%,transparent 94%),linear-gradient(180deg,color-mix(in srgb,#fff 55%,transparent),transparent 120px);
+.pn.card:not(:has(> .paper)):not(.room-card),.pn.trace{background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 55%,transparent) 28%,color-mix(in srgb,var(--am) 55%,transparent) 72%,transparent 94%),linear-gradient(180deg,color-mix(in srgb,#fff 55%,transparent),transparent 120px);
   background-size:100% 1px,auto;background-repeat:no-repeat;background-position:0 0,0 0}
-.root.dark .pn.card:not(:has(> .paper)):not(.diary-intro),.root.dark .pn.trace{background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 60%,transparent) 28%,color-mix(in srgb,var(--am) 50%,transparent) 72%,transparent 94%),linear-gradient(180deg,rgba(255,255,255,.035),transparent 140px)}
+.root.dark .pn.card:not(:has(> .paper)):not(.room-card),.root.dark .pn.trace{background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 60%,transparent) 28%,color-mix(in srgb,var(--am) 50%,transparent) 72%,transparent 94%),linear-gradient(180deg,rgba(255,255,255,.035),transparent 140px)}
 /* numeri: la cifra grande e allineata, l'icona dentro una piazzola, l'etichetta in caratteri tecnici */
 .stat>svg:not(.go){box-sizing:content-box;padding:9px;border-radius:12px;color:var(--ac);background:color-mix(in srgb,var(--ac) 9%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 22%,transparent)}
 .stat .hd{font-variant-numeric:tabular-nums;letter-spacing:-.04em}
@@ -164,15 +164,7 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 
 /* ---------- i colori delle due stanze: viola per gli Scritti completi, rosa per il Diario ----------
    gli stessi della barra di navigazione e del selettore in cima alla sezione */
-/* i due riquadri della Panoramica */
-.root .pn.card.complete-card{--room:var(--complete)}
-.root .pn.card.diary-intro{--room:var(--diary)}
-.root .pn.card:is(.complete-card,.diary-intro){border-color:color-mix(in srgb,var(--room) 28%,var(--ln));
-  background-color:var(--pn);background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--room) 70%,transparent) 30%,color-mix(in srgb,var(--room) 30%,transparent) 75%,transparent 94%),linear-gradient(125deg,color-mix(in srgb,var(--room) 10%,var(--pn)),var(--pn) 70%);
-  background-size:100% 1px,auto;background-repeat:no-repeat}
-.root.dark .pn.card:is(.complete-card,.diary-intro){background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--room) 70%,transparent) 30%,color-mix(in srgb,var(--room) 30%,transparent) 75%,transparent 94%),linear-gradient(125deg,color-mix(in srgb,var(--room) 13%,var(--pn)),var(--pn) 70%)}
-@media (hover:hover){.root .pn.card:is(.complete-card,.diary-intro):hover{border-color:color-mix(in srgb,var(--room) 55%,var(--ln))}}
-.pn.card:is(.complete-card,.diary-intro):after{background:linear-gradient(90deg,var(--room),color-mix(in srgb,var(--room) 30%,transparent))}
+/* i due riquadri della Panoramica hanno il loro foglio: rooms.css */
 /* la scelta del tipo nell'editor */
 .kind-option.complete{--room:var(--complete)}.kind-option.diary{--room:var(--diary)}
 .kind-option svg{color:var(--room)}
