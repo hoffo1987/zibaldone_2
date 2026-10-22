@@ -1,0 +1,66 @@
+/* ===== Autori: la tessera di ognuno =====
+   Ogni autore ha la sua tessera del Circuito. In alto la copertina scelta nel profilo (il suo colore o la sua foto), con
+   le piste del circuito in trasparenza, la fessura per il cordino e la sigla come su un componente (AU-01). Il ritratto
+   si appoggia a cavallo della copertina, con l'anello nel colore di carta. Sotto il nome, l'handle, lo stato del profilo
+   tra caporali, tre letture in piastrine (scritti, media, ultimo invio) e l'attività degli ultimi sei mesi in una barra
+   di LED: una colonna per mese, che al passaggio si accende dal basso, colonna dopo colonna. Si carica prima di ui.css
+   e theme.css: le regole partono da .root */
+
+.root .pn.card.au-card{display:flex;flex-direction:column;padding:0;overflow:hidden;border-radius:20px}
+
+/* ---------- la copertina ---------- */
+.au-cover{position:relative;height:78px;flex:none;background:var(--bn);overflow:hidden}
+.au-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+/* le piste del circuito sopra il colore, e una luce che scende */
+.au-cover:before{content:"";position:absolute;inset:0;z-index:1;opacity:.5;transition:transform .8s var(--e-land);
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='78' fill='none' stroke='white' stroke-opacity='.45' stroke-width='1.2'%3E%3Cpath d='M0 20h30l10 10h30l8-8h42M0 52h18l12-12h24M60 78V58l10-10h50M92 0v14l-8 8'/%3E%3Ccircle cx='54' cy='40' r='2.4'/%3E%3Ccircle cx='84' cy='22' r='2.4'/%3E%3Ccircle cx='60' cy='58' r='2.4'/%3E%3C/svg%3E") 0 0/120px 78px}
+.au-cover:after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 45%,rgba(0,0,0,.18))}
+/* la fessura del cordino */
+.au-slot{position:absolute;z-index:2;left:50%;top:10px;width:34px;height:7px;margin-left:-17px;border-radius:4px;background:rgba(0,0,0,.32);box-shadow:inset 0 1px 2px rgba(0,0,0,.4),0 1px 0 rgba(255,255,255,.25)}
+/* la sigla */
+.au-id{position:absolute;z-index:2;right:10px;top:9px;padding:.25rem .45rem;border-radius:5px;font:700 .58rem/1 ui-monospace,'Courier New',monospace;letter-spacing:.08em;color:#fff;
+  background:rgba(0,0,0,.28);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+
+/* ---------- il corpo ---------- */
+.au-body{position:relative;display:flex;flex-direction:column;flex:1;padding:0 1.25rem 1.1rem}
+.au-who{display:flex;align-items:flex-start;gap:.85rem;margin-top:-29px}
+.au-av{position:relative;z-index:2;flex:none;border-radius:50%;box-shadow:0 0 0 4px var(--pn),0 10px 18px -8px rgba(0,0,0,.5);transition:transform .35s var(--spring)}
+.au-av:hover{transform:scale(1.06) rotate(-3deg)}
+/* il nome comincia sotto il bordo della copertina, sulla carta */
+.au-who>.min-w-0{padding-top:35px}
+.au-sub{font:600 .7rem/1.3 var(--label);letter-spacing:.02em;color:var(--mu)}
+.au-status{margin-top:.75rem;font-size:.82rem;font-style:italic;line-height:1.45;color:color-mix(in srgb,var(--ink) 78%,var(--mu));display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.au-status.none{font-style:normal;color:var(--mu);opacity:.7}
+
+/* tre letture in piastrine */
+.au-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:.95rem}
+.au-stat{display:flex;flex-direction:column;align-items:flex-start;gap:.3rem;min-width:0;padding:.55rem .6rem;border-radius:11px;background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 0 rgba(255,255,255,.6)}
+.root.dark .au-stat{box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 0 rgba(255,255,255,.03)}
+.au-stat b{font:800 1.35rem/1 'Bricolage Grotesque','Instrument Sans',sans-serif;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.au-stat span{font:600 .56rem/1.2 var(--label);letter-spacing:.1em;text-transform:uppercase;color:var(--mu)}
+.au-avg b{color:color-mix(in srgb,var(--am) 75%,var(--ink))}
+.root.dark .au-avg b{color:var(--am)}
+.au-last b{font-size:1rem;line-height:1.35rem;letter-spacing:-.02em}
+
+/* la barra di LED dell'attività */
+.au-bars{display:flex;align-items:flex-end;justify-content:space-between;gap:.8rem;margin-top:.95rem;padding-top:.85rem;border-top:1px dashed var(--ln2)}
+.au-bars-k{font:700 .58rem/1.2 var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--mu);padding-bottom:1rem}
+.au-cols{display:flex;gap:7px}
+.au-col{display:flex;flex-direction:column;align-items:center;gap:3px}
+.au-col i{width:14px;height:5px;border-radius:2px;background:color-mix(in srgb,var(--ink) 9%,transparent);transition:background .3s,box-shadow .3s}
+.au-col i.on{background:var(--ac);box-shadow:0 0 6px color-mix(in srgb,var(--ac) 70%,transparent)}
+.au-col i.on:first-child{background:var(--am);box-shadow:0 0 6px color-mix(in srgb,var(--am) 70%,transparent)}
+.au-col em{margin-top:2px;font:700 .55rem/1 var(--label);font-style:normal;text-transform:uppercase;color:var(--mu)}
+/* al passaggio le colonne si riaccendono dal basso, una dopo l'altra */
+@keyframes auLed{0%,40%{opacity:.15}100%{opacity:1}}
+@media (hover:hover){.au-card:hover .au-col i.on{animation:auLed .5s ease-out backwards;animation-delay:calc(var(--j)*70ms)}}
+
+.au-go{display:inline-flex;align-items:center;gap:.4rem;margin-top:1rem;font:700 .62rem/1 var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--ac)}
+.au-go svg{transition:translate .35s var(--e-land)}
+@media (hover:hover){
+  .au-card:hover .au-go svg{translate:4px 0}
+  .au-card:hover .au-cover:before{transform:translateX(-14px)}
+}
+
+.root.nomotion .au-card *,.root.nomotion .au-card *:before{animation:none;transition:none}
+@media (prefers-reduced-motion:reduce){.au-card *,.au-card *:before{animation:none!important;transition:none!important}}

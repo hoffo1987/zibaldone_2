@@ -25,6 +25,7 @@ import "./recent.css";
 import "./editor.css";
 import "./scritti.css";
 import "./reader.css";
+import "./authors.css";
 import { EmptyCircuit } from "./EmptyCircuit";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
@@ -2514,26 +2515,43 @@ export default function App() {
     </div>
   ));
 
-  const authors: any[] = Object.values((tab === "authors" ? items : []).filter((t) => !isDiary(t)).filter((t) => t.svelato || t.userId === user.uid).reduce((m: any, t) => { const k = t.userId || t.author; const a = (m[k] = m[k] || { name: dn(t.userId, t.author || "?"), uid: t.userId, n: 0, r: [], last: 0 }); a.n++; if (t.rating) a.r.push(t.rating); a.last = Math.max(a.last, t.timestamp); return m; }, {}))
+  const authors: any[] = Object.values((tab === "authors" ? items : []).filter((t) => !isDiary(t)).filter((t) => t.svelato || t.userId === user.uid).reduce((m: any, t) => { const k = t.userId || t.author; const a = (m[k] = m[k] || { name: dn(t.userId, t.author || "?"), uid: t.userId, n: 0, r: [], last: 0, ts: [] }); a.n++; a.ts.push(t.timestamp); if (t.rating) a.r.push(t.rating); a.last = Math.max(a.last, t.timestamp); return m; }, {}))
     .map((a: any) => ({ ...a, avg: a.r.length ? a.r.reduce((x: number, y: number) => x + y, 0) / a.r.length : 0 })).sort((a: any, b: any) => b.n - a.n);
   const authorsView = loading ? <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div> : authors.length === 0 ? (
     <div className="pn p-12 text-center max-w-md mx-auto"><Users className="mx-auto mb-4 mu" size={36} /><h3 className="hd text-xl font-bold">Ancora nessun autore</h3><p className="mu text-sm mt-1">Compariranno dopo lo svelamento del loro primo scritto.</p></div>
   ) : (
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {authors.map((a, i) => (
-        <Reveal key={a.name + i} delay={(i % 3) * 90} className="h-full">
-          <div className="pn card h-full p-6 cursor-pointer" onClick={() => { setTab("read"); setSearch(a.name); setMonthFilter("all"); }}>
-            <div className="flex items-center gap-4">
-              <button type="button" aria-label="Apri profilo" onClick={(e) => { e.stopPropagation(); setViewProf(a.uid); }}><Avatar p={profiles[a.uid]} name={a.name} size={48} /></button>
-              <div className="min-w-0"><div className="hd font-bold text-lg truncate">{a.name}</div><div className="mu text-xs">Ultimo invio {fmtDate(a.last)}</div></div>
-            </div>
-            <div className="flex justify-between items-end mt-6">
-              <div><div className="hd text-3xl font-bold">{a.n}</div><div className="mu text-xs">{a.n === 1 ? "scritto" : "scritti"}</div></div>
-              <div className="text-right"><Stars v={Math.round(a.avg * 2) / 2} size={14} /><div className="mu text-xs mt-1">{a.avg ? `media ${a.avg.toLocaleString("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}` : "senza voti"}</div></div>
+      {authors.map((a, i) => {
+        // la tessera dell'autore: la copertina del suo profilo, la sigla come su un componente, lo stato e l'attività
+        // degli ultimi sei mesi in una barra di LED (una colonna per mese, fino a quattro scritti accesi)
+        const p = profiles[a.uid] || {}, bn = BANNERS.find((x) => x.id === p.banner) || BANNERS[0];
+        const bImg = typeof p.bannerImg === "string" && /^data:image\//.test(p.bannerImg) ? p.bannerImg : "";
+        const now = new Date(), months = [5, 4, 3, 2, 1, 0].map((k) => { const d = new Date(now.getFullYear(), now.getMonth() - k, 1); return { y: d.getFullYear(), m: d.getMonth(), l: d.toLocaleDateString("it-IT", { month: "narrow" }) }; });
+        const per = months.map((mo) => a.ts.filter((t: number) => { const d = new Date(t); return d.getFullYear() === mo.y && d.getMonth() === mo.m; }).length);
+        const avg = a.avg ? a.avg.toLocaleString("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "";
+        return <Reveal key={a.name + i} delay={(i % 3) * 90} className="h-full">
+          <div className="pn card au-card h-full cursor-pointer" style={{ ["--bn" as any]: bn.g }} onClick={() => { setTab("read"); setSearch(a.name); setMonthFilter("all"); }}>
+            <div className="au-cover" aria-hidden="true">{bImg && <img src={bImg} alt="" style={{ objectPosition: `50% ${typeof p.bannerY === "number" ? p.bannerY : 50}%` }} />}<i className="au-slot" /><span className="au-id">AU-{String(i + 1).padStart(2, "0")}</span></div>
+            <div className="au-body">
+              <div className="au-who">
+                <button type="button" className="au-av" aria-label="Apri profilo" onClick={(e) => { e.stopPropagation(); setViewProf(a.uid); }}><Avatar p={p} name={a.name} size={58} /></button>
+                <div className="min-w-0 flex-1"><div className="hd font-bold text-lg truncate">{a.name}</div><div className="au-sub">{p.handle ? `@${p.handle}` : "Autore del Circuito"}</div></div>
+              </div>
+              {p.status ? <p className="au-status">«{p.status}»</p> : <p className="au-status none">Nessuno stato, per ora.</p>}
+              <div className="au-stats">
+                <div className="au-stat"><b>{a.n}</b><span>{a.n === 1 ? "scritto" : "scritti"}</span></div>
+                <div className="au-stat au-avg"><b>{avg || "—"}</b><span>{avg ? <Stars v={Math.round(a.avg * 2) / 2} size={11} /> : "senza voti"}</span></div>
+                <div className="au-stat au-last"><b>{fmtDate(a.last).replace(/ \d{4}$/, "")}</b><span>ultimo invio</span></div>
+              </div>
+              <div className="au-bars" role="img" aria-label={`Scritti negli ultimi sei mesi: ${per.join(", ")}`}>
+                <span className="au-bars-k">Attività</span>
+                <span className="au-cols">{per.map((c, j) => <span key={j} className="au-col" style={{ ["--j" as any]: j }}>{[3, 2, 1, 0].map((r) => <i key={r} className={c > r ? "on" : ""} />)}<em>{months[j].l}</em></span>)}</span>
+              </div>
+              <div className="au-go">Leggi i suoi scritti<ArrowRight size={14} /></div>
             </div>
           </div>
-        </Reveal>
-      ))}
+        </Reveal>;
+      })}
     </div>
   );
   const titles: any = { write: editingId ? "Modifica scritto" : "Nuovo scritto", my_pages: "I miei scritti", read: "Scritti completi", altri: "Scritti completi", diario: "Diario", home: "Panoramica", profile: "Il tuo profilo", podio: "Podio del mese", authors: "Autori" };
