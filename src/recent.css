@@ -1,0 +1,79 @@
+/* ===== Ultimi scritti nella Panoramica: una scheda del circuito =====
+   Il pannello è un tratto di circuito stampato: le piste entrano dall'angolo, un chip con il suo LED fa da intestazione e
+   gli scritti arrivano uno sotto l'altro lungo una pista verticale che passa dietro i ritratti. Ogni ritratto ha l'anello
+   del suo tipo (viola gli Scritti completi, rosa il Diario) e al passaggio la riga si colora dello stesso tono. Solo
+   sfumature e ombre statiche. Il foglio si carica prima di ui.css e theme.css: le regole partono da .root */
+
+.root .pn.recent-list{position:relative;overflow:hidden;padding:.5rem .5rem .6rem;
+  background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 55%,transparent) 28%,color-mix(in srgb,var(--am) 55%,transparent) 72%,transparent 94%),
+    radial-gradient(55% 100% at 100% 0,color-mix(in srgb,var(--ac) 9%,transparent),transparent 70%),
+    linear-gradient(180deg,color-mix(in srgb,#fff 55%,transparent),transparent 120px);
+  background-size:100% 1px,auto,auto;background-repeat:no-repeat}
+.root.dark .pn.recent-list{
+  background-image:linear-gradient(90deg,transparent 6%,color-mix(in srgb,var(--ac) 60%,transparent) 28%,color-mix(in srgb,var(--am) 50%,transparent) 72%,transparent 94%),
+    radial-gradient(55% 100% at 100% 0,color-mix(in srgb,var(--ac) 10%,transparent),transparent 70%),
+    linear-gradient(180deg,rgba(255,255,255,.035),transparent 140px)}
+
+/* le piste nell'angolo, che sfumano verso il titolo */
+.recent-pcb{position:absolute;top:0;right:0;width:260px;height:120px;pointer-events:none;fill:none;stroke:color-mix(in srgb,var(--ac) 32%,transparent);stroke-width:1.5;stroke-linejoin:round;
+  -webkit-mask-image:linear-gradient(to left,#000 35%,transparent);mask-image:linear-gradient(to left,#000 35%,transparent)}
+.recent-pcb circle{fill:var(--pn);stroke-width:1.6}
+
+/* ---------- l'intestazione: il chip, il titolo con il conteggio, il pulsante per vedere tutto ---------- */
+.recent-head{position:relative;z-index:1;display:flex;align-items:center;gap:.85rem;padding:1rem 1rem .8rem}
+.recent-head h3{line-height:1.2}
+.recent-sub{display:block;margin-top:.25rem;font:600 .62rem/1.3 var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--mu)}
+/* il chip: il corpo nero con la tacca, i piedini di rame ai lati, il LED acceso */
+.recent-chip{position:relative;flex:none;width:36px;height:36px;margin:0 4px;border-radius:8px;
+  background:radial-gradient(circle at 50% 0,rgba(255,255,255,.2) 0 3.5px,transparent 4px),linear-gradient(rgba(255,255,255,.07),rgba(255,255,255,.07)) 50% 58%/16px 14px no-repeat,linear-gradient(160deg,#2A4640,#0C1D1A);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 6px 12px -6px rgba(12,29,26,.65)}
+.recent-chip:before,.recent-chip:after{content:"";position:absolute;top:7px;bottom:7px;width:4px;background:repeating-linear-gradient(180deg,var(--cu) 0 3px,transparent 3px 6.5px)}
+.recent-chip:before{left:-4px;border-radius:2px 0 0 2px}
+.recent-chip:after{right:-4px;border-radius:0 2px 2px 0}
+.recent-chip i{position:absolute;right:6px;bottom:6px;width:6px;height:6px;border-radius:50%;background:var(--ac);box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 25%,transparent),0 0 8px var(--ac)}
+.root.dark .recent-chip{box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 1px rgba(255,255,255,.06),0 6px 14px -6px rgba(0,0,0,.8)}
+.recent-all{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:.35rem;padding:.45rem .55rem .45rem .8rem;border-radius:999px;font-size:.78rem;font-weight:650;
+  color:var(--ac);background:color-mix(in srgb,var(--ac) 8%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 24%,transparent);transition:background .25s,box-shadow .25s}
+.recent-all svg{transition:translate .35s var(--e-land)}
+@media (hover:hover){
+  .recent-all:hover{background:color-mix(in srgb,var(--ac) 14%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 45%,transparent)}
+  .recent-all:hover svg{translate:2px -2px}
+}
+.recent-all:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+
+/* ---------- le righe: la pista verticale dietro i ritratti, l'anello del tipo ---------- */
+.root .recent-list .writing-row{--kind:var(--complete);--ring-bg:var(--pn);z-index:1}
+.root .recent-list .writing-row[data-kind="diary"]{--kind:var(--diary)}
+.recent-list .writing-row:before{content:"";position:absolute;left:33px;top:0;bottom:0;width:2px;pointer-events:none;background:color-mix(in srgb,var(--ac) 28%,var(--ln2))}
+.recent-list .writing-row:first-of-type:before{top:50%}
+.recent-list .writing-row:last-of-type:before{bottom:50%}
+.recent-list .writing-row-avatar{position:relative;z-index:1;border-radius:50%;transition:box-shadow .3s;
+  box-shadow:0 0 0 3px var(--ring-bg),0 0 0 4.5px color-mix(in srgb,var(--kind) 70%,transparent)}
+.recent-list .writing-row-title{font-family:'Bricolage Grotesque','Instrument Sans',sans-serif;letter-spacing:-.015em;transition:color .25s,translate .35s var(--e-land)}
+/* tra una riga e l'altra una perforazione, che parte dopo il ritratto */
+.root .recent-list .idx:after{left:calc(1rem + 52px);background:repeating-linear-gradient(90deg,var(--ln2) 0 4px,transparent 4px 8px)}
+/* in fondo alla riga una freccia nel colore del tipo, che compare al passaggio */
+.recent-list .writing-row-details:after{content:"";flex:none;width:14px;height:14px;background:var(--kind);opacity:0;translate:-4px 4px;transition:opacity .25s,translate .35s var(--e-land);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E") center/contain no-repeat}
+@media (hover:hover){
+  .root .recent-list .writing-row.nv:hover{--ring-bg:color-mix(in srgb,var(--kind) 10%,var(--pn));background:linear-gradient(90deg,var(--ring-bg),var(--pn) 80%)!important}
+  .recent-list .writing-row:hover .writing-row-avatar{box-shadow:0 0 0 3px var(--ring-bg),0 0 0 4.5px var(--kind),0 0 16px color-mix(in srgb,var(--kind) 55%,transparent)}
+  .recent-list .writing-row:hover .writing-row-title{color:color-mix(in srgb,var(--kind) 30%,var(--ink));translate:3px 0}
+  .recent-list .writing-row:hover .writing-row-details:after{opacity:1;translate:0 0}
+}
+.recent-list .writing-row:focus-visible{outline:2px solid var(--kind);outline-offset:-2px}
+
+/* sui telefoni il ritratto sta in alto e i dettagli vanno a capo: la pista parte dal ritratto, la freccia non serve */
+@media (max-width:767px){
+  .recent-head{padding:.85rem .75rem .7rem;gap:.75rem}
+  .recent-pcb{width:200px;height:92px}
+  .recent-list .writing-row:first-of-type:before{top:30px}
+  .recent-list .writing-row:last-of-type:before{bottom:auto;height:30px}
+  .recent-list .writing-row:first-of-type:last-of-type:before{display:none}
+  .root .recent-list .idx:after{left:calc(1rem + 48px)}
+  .recent-list .writing-row-details:after{display:none}
+}
+@media (max-width:479px){.recent-sub-x{display:none}}
+.root.nomotion .recent-list *{transition:none}
+@media (prefers-reduced-motion:reduce){.recent-list *{transition:none}}

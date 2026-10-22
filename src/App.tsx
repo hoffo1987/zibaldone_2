@@ -21,6 +21,7 @@ import NotificationPanel from "./NotificationPanel";
 import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt, RoomCard } from "./WritingSections";
 import { StatArt, type StatKind } from "./StatArt";
+import "./recent.css";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
 import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
@@ -2268,7 +2269,7 @@ export default function App() {
   );
   const wc = (t: any) => wordCounts.get(t.id) || 0;
   const row = (t: any, i = 0, rank?: number) => (
-    <button key={t.id} data-doc={t.id} onClick={(e) => openView(t, e)} className="writing-row nv idx w-full px-4 py-3 rounded-xl text-left transition-colors" style={{ ["--i" as any]: i }}>
+    <button key={t.id} data-doc={t.id} data-kind={isDiary(t) ? "diary" : "complete"} onClick={(e) => openView(t, e)} className="writing-row nv idx w-full px-4 py-3 rounded-xl text-left transition-colors" style={{ ["--i" as any]: i }}>
       <span className="writing-row-avatar">{rank && <span className="hd w-8 text-center font-bold mu">{rank}</span>}{who(t, 36)}</span>
       <span className="writing-row-copy"><span className="writing-row-title font-semibold">{t.title}</span><span className="writing-row-byline mu text-xs"><span>{wn(t)}</span><span className="writing-row-date">{fmtDate(t.timestamp)}</span></span></span>
       <span className="writing-row-details"><span className={`kind-badge ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span>
@@ -2429,8 +2430,10 @@ export default function App() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((x, i) => <Reveal key={x.l} delay={(boot ? 620 : 0) + i * 70} className="h-full"><button type="button" onClick={x.a} data-snd="nav" className={`pn card stat stat-card st-${x.k} h-full w-full`}><StatArt k={x.k} /><span className="st-tx"><div className="hd text-4xl font-bold tabular-nums"><CountUp v={x.v} on={G.reveal} delay={(boot ? 620 : 0) + i * 70 + 150} /></div><div className="mu text-sm">{x.l}<ArrowRight size={13} aria-hidden="true" /></div></span></button></Reveal>)}
       </div>
-      <Reveal delay={boot ? 820 : 0}><div className="pn p-2">
-        <div className="flex items-center justify-between px-4 pt-4 pb-2"><h3 className="hd text-lg font-bold">Ultimi scritti</h3><button type="button" data-snd="nav" className="mu text-sm lk inline-flex items-center gap-1" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>
+      <Reveal delay={boot ? 820 : 0}><div className="pn p-2 recent-list">
+        {/* le piste del circuito che entrano dall'angolo: gli scritti arrivano lungo una traccia */}
+        <svg className="recent-pcb" viewBox="0 0 260 120" aria-hidden="true"><path d="M260 22H190l-18 18h-46" /><path d="M260 44h-52l-14 14h-28l-12 12H96" /><path d="M260 70h-38l-20 20h-40" /><circle cx="126" cy="40" r="3.5" /><circle cx="96" cy="70" r="3.5" /><circle cx="162" cy="90" r="3.5" /></svg>
+        <div className="recent-head"><span className="recent-chip" aria-hidden="true"><i /></span><span className="min-w-0"><h3 className="hd text-lg font-bold">Ultimi scritti</h3><span className="recent-sub">{recent.length ? <>{recent.length} {recent.length === 1 ? "pagina" : "pagine"}<span className="recent-sub-x"> · in ordine di arrivo</span></> : "In attesa del primo scritto"}</span></span><button type="button" data-snd="nav" className="recent-all" onClick={() => go(isAdmin ? "read" : "my_pages")}>Vedi tutti<ArrowUpRight size={14} /></button></div>
         {loading ? <div className="p-6 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
           : recent.length === 0 ? <p className="mu text-sm px-4 pb-5">Ancora niente qui. Il primo scritto comparirà in questa lista.</p>
           : recent.map((t, i) => row(t, i))}
