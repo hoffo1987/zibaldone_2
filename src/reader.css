@@ -1,0 +1,100 @@
+/* ===== Lo scritto aperto =====
+   Il foglio che si legge non cambia: cambia tutto quello che gli sta intorno. Il pannello prende il colore del tipo
+   (--room: viola gli Scritti completi, rosa il Diario) sul bordo, sul bagliore e sullo sfondo velato dietro. In testa una
+   fascia con la sigla del tipo e il suo LED, il ritratto con l'anello e i comandi raccolti in due piastre: gli strumenti
+   e la navigazione con il contatore. Le barre di servizio (voto, stato, svelamento) sono strisce di un registro, con
+   l'etichetta tecnica e lo stato come timbro. In fondo al foglio un nodo del circuito chiude la pagina con le parole e
+   il tempo di lettura. Si carica prima di ui.css e theme.css: le regole partono da .root */
+
+.rd-ov{--room:var(--complete)}
+.rd-ov.is-diary{--room:var(--diary)}
+/* dietro il pannello, il buio prende appena il colore del tipo */
+.root .rd-ov{background:radial-gradient(70% 60% at 50% 35%,color-mix(in srgb,var(--room) 22%,rgba(0,0,0,.55)),rgba(0,0,0,.66))}
+
+/* ---------- il pannello ---------- */
+.root .pn.rd{position:relative;border-radius:22px;border-color:color-mix(in srgb,var(--room) 32%,var(--ln));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 0 0 1px rgba(0,0,0,.04),0 40px 90px -30px rgba(0,0,0,.7),0 0 60px -20px color-mix(in srgb,var(--room) 55%,transparent)}
+.root.dark .pn.rd{box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 40px 90px -30px rgba(0,0,0,.9),0 0 70px -24px color-mix(in srgb,var(--room) 45%,transparent)}
+
+/* ---------- la testata ---------- */
+.root .rd-hd{z-index:2;background:linear-gradient(115deg,color-mix(in srgb,var(--room) 10%,var(--pn)),var(--pn) 62%);
+  box-shadow:inset 0 3px 0 -1px color-mix(in srgb,var(--room) 70%,transparent)}
+/* in alto a destra una griglia di punti; sotto, una perforazione al posto del filetto */
+.root .rd-hd:before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle,color-mix(in srgb,var(--room) 30%,transparent) 1px,transparent 1.6px) 0 0/14px 14px;
+  -webkit-mask-image:radial-gradient(ellipse 40% 120% at 100% 0,#000,transparent 75%);mask-image:radial-gradient(ellipse 40% 120% at 100% 0,#000,transparent 75%)}
+.root .rd-hd:after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:repeating-linear-gradient(90deg,var(--ln2) 0 5px,transparent 5px 9px)}
+.rd-hd>*{position:relative}
+.rd-kind{display:inline-flex;align-items:center;gap:.4rem;margin-bottom:.2rem;font:700 .58rem/1.2 var(--label);letter-spacing:.16em;text-transform:uppercase;color:var(--room)}
+.rd-kind i{width:6px;height:6px;border-radius:50%;background:var(--room);box-shadow:0 0 0 2px color-mix(in srgb,var(--room) 20%,transparent),0 0 7px var(--room)}
+/* il ritratto con l'anello del tipo */
+.rd-av{border-radius:50%;box-shadow:0 0 0 3px var(--pn),0 0 0 4.5px color-mix(in srgb,var(--room) 70%,transparent),0 8px 16px -8px var(--room);transition:box-shadow .3s,transform .35s var(--spring)}
+button.rd-av:hover{transform:scale(1.05);box-shadow:0 0 0 3px var(--pn),0 0 0 4.5px var(--room),0 0 18px color-mix(in srgb,var(--room) 60%,transparent)}
+.rd-av-anon{width:44px;height:44px;color:var(--room);background:color-mix(in srgb,var(--room) 10%,var(--sf))}
+
+/* ---------- i comandi: due piastre e il pulsante tondo per chiudere ---------- */
+.rd-grp{display:inline-flex;align-items:center;gap:2px;padding:3px;border-radius:13px;background:color-mix(in srgb,var(--ink) 5%,var(--sf));box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 2px rgba(12,29,26,.06)}
+.root.dark .rd-grp{background:color-mix(in srgb,#000 25%,var(--sf));box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 3px rgba(0,0,0,.45)}
+.root .rd-grp .bt{width:34px;height:34px;min-height:0;padding:0;justify-content:center;border:0;border-radius:10px;color:var(--mu);background:transparent;background-image:none;box-shadow:none;transition:color .2s,background .2s,transform .25s var(--spring)}
+@media (hover:hover){.root .rd-grp .bt:not(:disabled):hover{color:var(--room);background:var(--pn);box-shadow:0 1px 3px rgba(12,29,26,.12)}}
+.root .rd-grp .bt:not(:disabled):active{transform:scale(.9)}
+.root .rd-grp .bt:disabled{opacity:.35}
+@media (hover:hover){.root .rd-grp .bt.rd-del:hover{color:#DC2626;background:color-mix(in srgb,#DC2626 10%,var(--pn))}}
+/* il segnalibro segnato: pieno, verde acqua */
+.root .rd-grp .bt.rd-bm.on{color:#fff;background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 80%,#fff),var(--ac));box-shadow:0 4px 10px -5px var(--ac)}
+.root.dark .rd-grp .bt.rd-bm.on{color:#062521}
+.rd-bm.on svg{fill:currentColor;animation:bmDrop .45s var(--spring)}
+/* il contatore tra le frecce */
+.rd-pos{min-width:44px;text-align:center;font:600 .7rem/1 var(--label);letter-spacing:.04em;font-variant-numeric:tabular-nums;color:var(--mu)}
+.rd-pos b{display:inline-block;font-size:.82rem;font-weight:800;color:var(--ink);animation:rdTick .35s var(--e-land)}
+@keyframes rdTick{from{transform:translateY(-4px);color:var(--room)}}
+.root .bt.rd-close{width:40px;height:40px;min-height:0;padding:0;justify-content:center;border-radius:50%;color:var(--ink)}
+.rd-close svg{transition:transform .35s var(--spring)}
+@media (hover:hover){.root .bt.rd-close:hover{border-color:var(--room);color:var(--room)}.rd-close:hover svg{transform:rotate(90deg)}}
+@media (max-width:767px){
+  /* la X torna in alto a destra della testata (ui.css): il gruppo dei comandi non le fa da riferimento */
+  .root .rd-hd>.rd-acts{position:static;justify-content:flex-start}
+  .rd-grp{flex:1;justify-content:space-around}
+  .root .rd-grp .bt{flex:1;height:38px}
+}
+
+/* ---------- le strisce del registro ---------- */
+.root .rd-bar{position:relative;display:flex;align-items:center;gap:.8rem;padding:.6rem 1rem .6rem 1.15rem;font-size:.875rem;background:var(--sf);border-bottom:1px solid var(--ln)}
+.rd-k{display:inline-flex;align-items:center;gap:.4rem;flex:none;font:700 .6rem/1.2 var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--mu)}
+.rd-k svg{color:var(--room)}
+/* il voto: la striscia si scalda d'oro */
+.root .rd-vote{background:linear-gradient(90deg,color-mix(in srgb,var(--am) 11%,var(--sf)),var(--sf) 55%)}
+.root .rd-vote .rd-k svg{color:var(--am);fill:var(--am)}
+.rd-num{font:800 .95rem/1 'Bricolage Grotesque','Instrument Sans',sans-serif;letter-spacing:-.02em;color:color-mix(in srgb,var(--am) 70%,var(--ink))}
+.rd-num small{font-size:.65rem;font-weight:600;color:var(--mu)}
+.rd-lock{display:inline-flex;align-items:center;gap:.3rem;padding:.28rem .5rem;border-radius:999px;font:700 .58rem/1 var(--label);letter-spacing:.1em;text-transform:uppercase;color:var(--mu);background:var(--pn);box-shadow:inset 0 0 0 1px var(--ln)}
+/* lo svelamento: una banda tratteggiata, come un sigillo da rompere */
+.root .rd-reveal{background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--room) 7%,var(--sf)) 0 10px,var(--sf) 10px 20px)}
+/* lo stato: un timbro col suo colore, che cade quando cambia */
+.root .rd-state{cursor:pointer;transition:background .2s}
+@media (hover:hover){.root .rd-state:hover{background:color-mix(in srgb,var(--room) 6%,var(--sf))}}
+.rd-st{--st:var(--mu);display:inline-flex;align-items:center;padding:.3rem .55rem;border-radius:6px;font:800 .58rem/1 var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--st);rotate:-3deg;
+  background:var(--pn);box-shadow:inset 0 0 0 1.5px currentColor,inset 0 0 0 3px var(--pn),inset 0 0 0 4px color-mix(in srgb,currentColor 40%,transparent);animation:stamp .45s var(--spring) backwards}
+.rd-st.st-letto{--st:var(--ac)}
+.rd-st.st-shortlist{--st:var(--cu)}
+.rd-st.st-scelto{color:#3B2A00;background:linear-gradient(120deg,#FFE9A6,#F2B21C 42%,#FFE08A 58%,#D99000);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 0 0 1px rgba(120,80,0,.35),0 5px 12px -7px rgba(160,100,0,.85)}
+.rd-st.st-scelto:before{content:"\2605";margin-right:.3rem;font-size:.7rem}
+.rd-note{display:inline-flex;align-items:center;gap:.3rem;font-size:.72rem;color:var(--mu)}
+
+/* l'avviso di lettura (diario, estratti): la striscia prende il colore del tipo */
+.root .rd .reading-notice{background:linear-gradient(90deg,color-mix(in srgb,var(--room) 9%,var(--sf)),var(--sf) 60%)}
+.root .rd .reading-notice>svg{box-sizing:content-box;padding:6px;margin-top:0;border-radius:50%;color:var(--room);background:color-mix(in srgb,var(--room) 12%,var(--pn))}
+
+/* ---------- il foglio: il margine nel colore del tipo, l'ombra delle strisce che ci cade sopra ---------- */
+.root .rd .reader-paper{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--room) 60%,transparent),inset 0 10px 12px -12px rgba(12,29,26,.4)}
+
+/* ---------- la fine del foglio ---------- */
+.rd-end{display:flex;align-items:center;gap:.8rem;padding:1.1rem 1.25rem;background:var(--sf);border-top:1px solid var(--ln)}
+.rd-end-l{flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--room) 45%,var(--ln2)))}
+.rd-end-l:last-child{background:linear-gradient(90deg,color-mix(in srgb,var(--room) 45%,var(--ln2)),transparent)}
+.rd-end-n{display:inline-flex;align-items:center;gap:.5rem;padding:.42rem .8rem;border-radius:999px;font:700 .6rem/1.2 var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--mu);text-align:center;
+  background:var(--pn);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--room) 30%,var(--ln))}
+.rd-end-n i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--am);box-shadow:0 0 0 3px color-mix(in srgb,var(--am) 22%,transparent),0 0 8px var(--am)}
+@media (max-width:480px){.rd-end{padding:1rem .75rem}.rd-end-n{letter-spacing:.06em}}
+
+.root.nomotion .rd *{animation:none}
+@media (prefers-reduced-motion:reduce){.rd-st,.rd-pos b,.rd-bm.on svg{animation:none}.rd-close svg,.rd-av{transition:none}}

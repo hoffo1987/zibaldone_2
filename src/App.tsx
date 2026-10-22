@@ -10,7 +10,7 @@ import {
 import {
   Bookmark, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, ArrowRight, SendHorizontal, SlidersHorizontal, Clapperboard, Compass, BookOpen
+  Save, Search, Sun, Moon, Pencil, Minus, Square, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, ArrowRight, SendHorizontal, LockKeyhole, SlidersHorizontal, Clapperboard, Compass, BookOpen
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import Stars from "./Stars";
@@ -24,6 +24,7 @@ import { StatArt, type StatKind } from "./StatArt";
 import "./recent.css";
 import "./editor.css";
 import "./scritti.css";
+import "./reader.css";
 import { EmptyCircuit } from "./EmptyCircuit";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
@@ -2777,26 +2778,30 @@ export default function App() {
         const mates = anon || hidS || diary ? [] : prepared.filter((x) => !isDiary(x) && x.userId === sel.userId && !hid(x)).sort((a, b) => a.timestamp - b.timestamp);
         const mi = mates.findIndex((x) => x.id === sel.id), m0 = Math.max(0, Math.min(mi - 3, mates.length - 7)), near = mates.slice(m0, m0 + 7);
         const own = !anon && sel.userId === user.uid, sign = anon ? signatureOf(sel) : null;
+        // in fondo al foglio: quante parole e quanto si impiega a leggerle (circa 200 al minuto)
+        const nw = anon && !diary ? 0 : plain(sel.content || "").split(/\s+/).filter(Boolean).length, stato = vals[sel.id]?.stato || "da_leggere";
         return (
-          <div className={`doc-ov fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm ${closing ? "out" : ""}`} onClick={closeView}>
-            <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={sel.title} className="reader-panel pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-              <div className="doc-hd relative overflow-hidden shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4 border-b" style={{ borderColor: "var(--ln)" }}>
+          <div className={`doc-ov rd-ov fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm ${diary ? "is-diary" : ""} ${closing ? "out" : ""}`} onClick={closeView}>
+            <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={sel.title} className="reader-panel rd pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="doc-hd rd-hd relative overflow-hidden shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4">
                 {fresh && <span className="rvl-sweep" />}
                 {anon ? <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
-                  {sign ? <button type="button" onClick={() => setViewProf(sign.uid)} className="shrink-0" aria-label="Apri profilo"><Avatar p={profiles[sign.uid]} name={sign.name} size={44} /></button>
-                    : <span className="rounded-full shrink-0 inline-flex items-center justify-center" style={{ width: 44, height: 44, background: "var(--sf)", border: "1px solid var(--ln)" }}><BookOpen size={20} className="mu" /></span>}
-                  <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title || "Senza titolo"}</h2><div className="mu text-xs truncate">{sign ? `${dn(sign.uid, sign.name)} · pensiero firmato` : diary ? "Pensiero anonimo · lettura integrale" : "Scritto anonimo · estratto"}</div></div>
+                  {sign ? <button type="button" onClick={() => setViewProf(sign.uid)} className="rd-av shrink-0" aria-label="Apri profilo"><Avatar p={profiles[sign.uid]} name={sign.name} size={44} /></button>
+                    : <span className="rd-av rd-av-anon rounded-full shrink-0 inline-flex items-center justify-center"><BookOpen size={20} /></span>}
+                  <div className="flex-1 min-w-0"><span className="rd-kind"><i aria-hidden="true" />{diary ? "Pensiero del diario" : "Scritto completo · estratto"}</span><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title || "Senza titolo"}</h2><div className="mu text-xs truncate">{sign ? `${dn(sign.uid, sign.name)} · pensiero firmato` : diary ? "Pensiero anonimo · lettura integrale" : "Scritto anonimo · estratto"}</div></div>
                 </div> : <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
-                  {hidS ? who(sel, 44) : <button type="button" onClick={() => setViewProf(sel.userId)} className="shrink-0" aria-label="Apri profilo">{fresh ? <span className="rvl-av"><i className="rg" /><i className="rg" /><span className="pf-av"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></span></span> : <Avatar p={profiles[sel.userId]} name={sel.author} size={44} />}</button>}
-                  <div className="flex-1 min-w-0"><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
+                  {hidS ? <span className="rd-av shrink-0">{who(sel, 44)}</span> : <button type="button" onClick={() => setViewProf(sel.userId)} className="rd-av shrink-0" aria-label="Apri profilo">{fresh ? <span className="rvl-av"><i className="rg" /><i className="rg" /><span className="pf-av"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></span></span> : <Avatar p={profiles[sel.userId]} name={sel.author} size={44} />}</button>}
+                  <div className="flex-1 min-w-0"><span className="rd-kind"><i aria-hidden="true" />{diary ? "Pensiero del diario" : "Scritto completo"}</span><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
                 </div>}
-                <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end self-end md:self-auto w-full md:w-auto">
-                  {!anon && <button className="bt flex-1 md:flex-none justify-center !p-2" title="Copia testo" aria-label="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>}
-                  {isAdmin && !anon && !diary && <button className="bt flex-1 md:flex-none justify-center !p-2" title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} aria-label="Segnalibro" onClick={() => star(sel)}><Bookmark size={15} style={sel.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : {}} /></button>}
-                  {!anon && canEdit(sel) && <button className="bt flex-1 md:flex-none justify-center !p-2" onClick={() => startEdit(sel)} title="Modifica" aria-label="Modifica"><Pencil size={15} /></button>}
-                  {!anon && canEdit(sel) && <button className="bt dng flex-1 md:flex-none justify-center !p-2" onClick={() => setToDelete([sel.id])} title="Elimina" aria-label="Elimina"><Trash2 size={15} /></button>}
-                  {si >= 0 && list.length > 1 && <><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si <= 0} onClick={() => stepTo(list[si - 1], -1)} aria-label="Scritto precedente"><ChevronLeft size={15} /></button><button className="bt flex-1 md:flex-none justify-center !p-2" disabled={si >= list.length - 1} onClick={() => stepTo(list[si + 1], 1)} aria-label="Scritto successivo"><ChevronRight size={15} /></button></>}
-                  <button className="reader-close bt flex-1 md:flex-none justify-center !p-2" onClick={closeView} title="Chiudi" aria-label="Chiudi"><X size={15} /></button>
+                <div className="rd-acts flex items-center gap-2 shrink-0 justify-end self-end md:self-auto w-full md:w-auto">
+                  {!anon && <span className="rd-grp">
+                    <button className="bt" title="Copia testo" aria-label="Copia testo" onClick={() => { navigator.clipboard?.writeText(plain(sel.content)); notify("Testo copiato."); }}><Copy size={15} /></button>
+                    {isAdmin && !diary && <button className={`bt rd-bm ${sel.isStarred ? "on" : ""}`} title={sel.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} aria-label="Segnalibro" aria-pressed={!!sel.isStarred} onClick={() => star(sel)}><Bookmark size={15} /></button>}
+                    {canEdit(sel) && <button className="bt" onClick={() => startEdit(sel)} title="Modifica" aria-label="Modifica"><Pencil size={15} /></button>}
+                    {canEdit(sel) && <button className="bt rd-del" onClick={() => setToDelete([sel.id])} title="Elimina" aria-label="Elimina"><Trash2 size={15} /></button>}
+                  </span>}
+                  {si >= 0 && list.length > 1 && <span className="rd-grp rd-nav"><button className="bt" disabled={si <= 0} onClick={() => stepTo(list[si - 1], -1)} aria-label="Scritto precedente"><ChevronLeft size={15} /></button><span className="rd-pos" aria-label={`Scritto ${si + 1} di ${list.length}`}><b key={si}>{si + 1}</b>/{list.length}</span><button className="bt" disabled={si >= list.length - 1} onClick={() => stepTo(list[si + 1], 1)} aria-label="Scritto successivo"><ChevronRight size={15} /></button></span>}
+                  <button className="reader-close rd-close bt" onClick={closeView} title="Chiudi" aria-label="Chiudi"><X size={15} /></button>
                 </div>
               </div>
               <div className="relative flex-1 min-h-0 flex flex-col">
@@ -2804,15 +2809,15 @@ export default function App() {
               <div ref={railRef} className="read-rail" aria-hidden="true"><i /><b /></div>
               <div key={sel.id} ref={readRef} data-sheet-scroll="" className={`overflow-y-auto flex-1 min-h-0 ${swap ? "doc-swap" : ""}`} style={{ ["--dir" as any]: swap || 1 }}>
               <div className="reader-scroll-content">
-              {isAdmin && !anon && !diary && <div className="flex items-center gap-3 px-4 py-2 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato && <span className="mu text-xs">definitivo</span>}</div>}
-              {hidS && !diary && <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 py-2.5 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
+              {isAdmin && !anon && !diary && <div className="rd-bar rd-vote"><span className="rd-k"><Star size={13} aria-hidden="true" />Voto</span><Stars v={sel.rating || 0} onSet={sel.svelato ? undefined : (n: number) => rate(sel, n)} size={22} />{sel.svelato ? <span className="rd-lock"><LockKeyhole size={11} aria-hidden="true" />definitivo</span> : sel.rating > 0 && <span className="rd-num">{String(sel.rating).replace(".", ",")}<small>/5</small></span>}</div>}
+              {hidS && !diary && <div className="rd-bar rd-reveal flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
                 <div className="text-sm min-w-0"><b>Autore nascosto.</b> <span className="mu">{sel.rating > 0 ? "Puoi svelarlo: dopo lo svelamento il voto non si cambia più." : "Dai da 0,5 a 5 stelle per poterlo svelare. Tocca la metà sinistra di una stella per il mezzo voto."}</span></div>
                 <button type="button" className={`bt w-full sm:w-auto shrink-0 ${confirmRvl ? "on" : ""}`} disabled={!(sel.rating > 0)} onClick={() => confirmRvl ? reveal(sel) : setConfirmRvl(true)}><Eye size={15} />{confirmRvl ? "Conferma: voto definitivo" : "Svela autore"}</button>
               </div>}
-              {!isAdmin && !anon && !diary && sel.svelato && sel.rating > 0 && <div className="flex items-center gap-3 px-4 py-2.5 border-b text-sm" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}><span className="mu">Il tuo voto</span><Stars v={sel.rating} size={22} /></div>}
+              {!isAdmin && !anon && !diary && sel.svelato && sel.rating > 0 && <div className="rd-bar rd-vote"><span className="rd-k"><Star size={13} aria-hidden="true" />Il tuo voto</span><Stars v={sel.rating} size={22} /></div>}
               {isAdmin && !anon && !diary && <>
-                <button type="button" onClick={() => setPanelOpen(!panelOpen)} aria-expanded={panelOpen} className="w-full flex items-center justify-between gap-3 px-4 py-2.5 border-b text-sm text-left" style={{ borderColor: "var(--ln)", background: "var(--sf)" }}>
-                  <span className="mu">Stato e nota privata <span className="font-semibold" style={{ color: "var(--ink)" }}>· {(STATI.find(([k]) => k === (vals[sel.id]?.stato || "da_leggere")) || ["", "Da leggere"])[1]}{vals[sel.id]?.nota ? " · con nota" : ""}</span></span>
+                <button type="button" onClick={() => setPanelOpen(!panelOpen)} aria-expanded={panelOpen} className="rd-bar rd-state w-full text-left">
+                  <span className="rd-k"><ListChecks size={13} aria-hidden="true" />Stato e nota privata</span><span key={stato} className={`rd-st st-${stato}`}>{(STATI.find(([k]) => k === stato) || ["", "Da leggere"])[1]}</span>{vals[sel.id]?.nota && <span className="rd-note"><Pencil size={11} aria-hidden="true" />con nota</span>}<span className="flex-1" />
                   <ChevronDown size={16} className="mu shrink-0" style={{ transform: panelOpen ? "rotate(180deg)" : "none", transition: "transform .25s" }} />
                 </button>
                 {panelOpen && <PannelloAdmin db={db} id={sel.id} notify={notify} />}
@@ -2822,6 +2827,8 @@ export default function App() {
                   {sel.strokes?.length > 0 && <div className="reader-drawing" style={{ aspectRatio: `${w}/${h}` }}><Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" /></div>}
                   <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: readingHtml(sel.content) }} />
                 </div>}
+                {/* la fine del foglio: un nodo del circuito tra due piste, le parole e il tempo di lettura */}
+                <div className="rd-end"><i className="rd-end-l" /><span className="rd-end-n"><i />{nw ? <>Fine · {nw.toLocaleString("it-IT")} {nw === 1 ? "parola" : "parole"} · {Math.max(1, Math.round(nw / 200))} min di lettura</> : "Fine dell’estratto"}</span><i className="rd-end-l" /></div>
                 {near.length > 1 && (
                   <Reveal>
                     <nav className="cx" aria-label={own ? "I tuoi scritti" : `Scritti di ${dn(sel.userId, sel.author)}`}>
