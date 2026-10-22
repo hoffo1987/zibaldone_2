@@ -1,0 +1,131 @@
+/* ===== Le notifiche =====
+   Il pannello si allarga. In testa il riepilogo (quante da leggere, o «Tutto letto» con la spunta) e «Segna tutte
+   come lette»; sotto i filtri Tutte / Voti / Novità con il loro conteggio e il puntino di quelle nuove. L'elenco è
+   diviso per giorni. I due tipi si riconoscono a colpo d'occhio: il voto è una scheda dorata col voto in medaglia e le
+   stelle, che apre lo scritto; la novità è una nota verde acqua con la versione e il tasto per leggerla tutta.
+   Leggere: la notifica nuova ha la pista accesa a sinistra e un LED; mentre resta in vista il LED si riempie come un
+   timer, poi diventa una spunta e la pista si spegne. La campanella: il numero scende con un salto, a zero se ne va
+   con la spunta e un lampo; quando arriva qualcosa la campanella oscilla */
+
+.root .cp.cp-wide{width:400px}
+@media (max-width:767px){.root .cp.cp-wide{width:auto}}
+
+.nt{--vote:#D99000;--upd:var(--ac)}
+.root.dark .nt{--vote:var(--am)}
+
+/* ---------- riepilogo ---------- */
+.nt-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin:-.35rem 0 .75rem}
+.nt-sum{display:inline-flex;align-items:center;gap:.45rem;font-size:.82rem;color:var(--mu)}
+.nt-sum i{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--am);box-shadow:0 0 0 3px color-mix(in srgb,var(--am) 22%,transparent),0 0 10px color-mix(in srgb,var(--am) 70%,transparent);animation:ntPulse 2.2s ease-in-out infinite}
+.nt-sum.clear i{color:#fff;background:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 20%,transparent);animation:ntPop .5s var(--spring)}
+.root.dark .nt-sum.clear i{color:#062521}
+.nt-sum b{display:inline-block;font:800 1rem/1 'Bricolage Grotesque','Instrument Sans',sans-serif;color:var(--ink);animation:ntTick .4s var(--e-land)}
+@keyframes ntPulse{50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--am) 10%,transparent),0 0 14px color-mix(in srgb,var(--am) 80%,transparent)}}
+@keyframes ntPop{0%{transform:scale(.3)}100%{transform:none}}
+@keyframes ntTick{from{transform:translateY(-6px);opacity:0}}
+.nt-all{display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .6rem;border-radius:9px;font-size:.72rem;font-weight:650;color:var(--ac);transition:background .2s,opacity .2s}
+@media (hover:hover){.nt-all:not(:disabled):hover{background:color-mix(in srgb,var(--ac) 10%,transparent)}}
+.nt-all:disabled{opacity:.4;cursor:default}
+
+/* ---------- filtri ---------- */
+.nt-tabs{position:relative;display:grid;grid-template-columns:repeat(3,1fr);padding:3px;margin-bottom:.6rem;border-radius:12px;background:color-mix(in srgb,var(--ink) 5%,var(--sf));box-shadow:inset 0 0 0 1px var(--ln)}
+.root.dark .nt-tabs{background:color-mix(in srgb,#000 25%,var(--sf))}
+.nt-tab-ind{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px)/3);border-radius:9px;background:var(--pn);box-shadow:0 1px 3px rgba(12,29,26,.15),inset 0 0 0 1px var(--ln);transform:translateX(calc(var(--t) * 100%));transition:transform .45s var(--spring)}
+.nt-tab{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;gap:.35rem;height:32px;font-size:.78rem;font-weight:650;color:var(--mu);transition:color .2s}
+.nt-tab[aria-selected="true"]{color:var(--ink)}
+.nt-tab-n{min-width:18px;padding:0 4px;border-radius:6px;font:700 .62rem/16px var(--label);background:color-mix(in srgb,var(--ink) 8%,transparent)}
+.nt-tab.voti[aria-selected="true"] .nt-tab-n{color:#3B2A00;background:color-mix(in srgb,var(--vote) 35%,transparent)}
+.nt-tab.novita[aria-selected="true"] .nt-tab-n{color:var(--ac);background:color-mix(in srgb,var(--ac) 16%,transparent)}
+.nt-tab-dot{position:absolute;top:5px;right:8px;width:6px;height:6px;border-radius:50%;background:var(--am);box-shadow:0 0 6px var(--am)}
+
+/* ---------- elenco ---------- */
+.nt-list{max-height:min(58dvh,520px);overflow-y:auto;margin:0 -6px;padding:2px 6px 4px;scrollbar-width:thin}
+@media (max-width:767px){.nt-list{max-height:none;overflow:visible}}
+.nt-day{position:sticky;top:-2px;z-index:2;display:flex;align-items:center;gap:.6rem;margin:.7rem 0 .45rem;padding:.2rem 0;font:700 .58rem/1 var(--label);letter-spacing:.16em;text-transform:uppercase;color:var(--mu);background:var(--pn)}
+.nt-day:first-child{margin-top:.2rem}
+.nt-day:after{content:"";flex:1;height:1px;background:repeating-linear-gradient(90deg,var(--ln2) 0 4px,transparent 4px 8px)}
+.nt-none{padding:1.5rem .5rem;text-align:center;font-size:.82rem;color:var(--mu)}
+
+/* la scheda: la pista a sinistra si accende se è nuova */
+.nt-card{--k:var(--upd);position:relative;display:flex;gap:.75rem;width:100%;margin-bottom:.5rem;padding:.8rem .8rem .75rem .95rem;border-radius:14px;text-align:left;
+  background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln);transition:background .5s,box-shadow .5s,transform .25s var(--e-land);animation:ntIn .45s var(--e-land) backwards;animation-delay:calc(min(var(--i),8)*40ms)}
+.nt-card.vote{--k:var(--vote)}
+@keyframes ntIn{from{opacity:0;transform:translateY(6px)}}
+.nt-card:before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--k);opacity:0;transform:scaleY(.3);transition:opacity .5s,transform .5s var(--e-land)}
+.nt-card.unread{background:color-mix(in srgb,var(--k) 8%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--k) 32%,var(--ln)),0 8px 18px -14px color-mix(in srgb,var(--k) 90%,transparent)}
+.nt-card.unread:before{opacity:1;transform:none}
+/* appena letta: un lampo che scorre e svanisce */
+.nt-card.just-read:after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(100deg,transparent 30%,color-mix(in srgb,var(--k) 22%,transparent) 50%,transparent 70%) 0 0/250% 100%;animation:ntSweep .9s ease-out forwards}
+@keyframes ntSweep{from{background-position:120% 0;opacity:1}to{background-position:-60% 0;opacity:0}}
+button.nt-card{cursor:pointer}
+@media (hover:hover){.nt-card:hover{transform:translateY(-1px)}}
+.nt-card:focus-visible{outline:2px solid var(--k);outline-offset:2px}
+
+.nt-body{display:flex;flex-direction:column;flex:1;min-width:0}
+.nt-top{display:flex;align-items:center;gap:.45rem}
+.nt-kind{display:inline-flex;align-items:center;gap:.3rem;font:700 .58rem/1.2 var(--label);letter-spacing:.13em;text-transform:uppercase;color:color-mix(in srgb,var(--k) 70%,var(--ink))}
+.root.dark .nt-kind{color:var(--k)}
+.nt-kind svg{fill:currentColor}
+.nt-ver{padding:.18rem .4rem;border-radius:5px;font:700 .58rem/1 ui-monospace,'Courier New',monospace;color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 28%,transparent)}
+.nt-title{display:block;margin-top:.3rem;font-size:.9rem;font-weight:700;line-height:1.3;letter-spacing:-.01em;color:var(--ink);overflow-wrap:anywhere}
+.nt-msg{margin-top:.3rem;font-size:.82rem;line-height:1.5;color:color-mix(in srgb,var(--ink) 80%,var(--mu));overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.nt-msg.open{display:block}
+.nt-stars{display:block;margin-top:.35rem}
+.nt-foot{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.5rem}
+.nt-when{font-size:.68rem;color:var(--mu)}
+.nt-more,.nt-go{display:inline-flex;align-items:center;gap:.2rem;font:700 .6rem/1 var(--label);letter-spacing:.1em;text-transform:uppercase;color:var(--k)}
+.nt-more svg{transition:transform .3s}
+.nt-more[aria-expanded="true"] svg{transform:rotate(180deg)}
+.nt-go svg{transition:translate .3s var(--e-land)}
+@media (hover:hover){.nt-card:hover .nt-go svg{translate:2px -2px}}
+
+/* il tasto della novità e la medaglia del voto */
+.nt-key{flex:none;display:grid;place-items:center;width:36px;height:36px;border-radius:11px;color:var(--ac);background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 5%,var(--pn)),color-mix(in srgb,var(--ac) 14%,var(--pn)));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 28%,transparent),0 2px 0 color-mix(in srgb,var(--ac) 22%,var(--ln2))}
+.nt-medal{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;color:#3B2A00;
+  background:radial-gradient(circle at 35% 28%,#FFF3C4,#F2C14E 45%,#B8860B);box-shadow:inset 0 0 0 2px rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.18),0 6px 14px -6px rgba(184,134,11,.9)}
+.nt-medal b{font:800 .95rem/1 'Bricolage Grotesque','Instrument Sans',sans-serif;letter-spacing:-.03em}
+.nt-medal small{font:700 .5rem/1 var(--label);opacity:.7}
+
+/* il LED: acceso se è nuova, il timer che si riempie mentre è in vista, la spunta quando è letta */
+.nt-led{position:relative;flex:none;margin-left:auto;display:grid;place-items:center;width:18px;height:18px}
+.nt-led svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);fill:none;stroke:var(--k);stroke-width:2.4;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1}
+.nt-led:before{content:"";width:7px;height:7px;border-radius:50%;background:transparent;transition:background .3s,box-shadow .3s}
+.nt-led>svg+svg{position:static;width:10px;height:10px;transform:none;stroke:#fff;stroke-width:3.5;stroke-dasharray:none;stroke-dashoffset:0;fill:none;opacity:0}
+.unread .nt-led:before{background:var(--k);box-shadow:0 0 0 2px color-mix(in srgb,var(--k) 22%,transparent),0 0 8px var(--k)}
+.reading .nt-led svg:first-child{animation:ntFill 1.4s linear forwards}
+@keyframes ntFill{to{stroke-dashoffset:0}}
+.just-read .nt-led,.read .nt-led{border-radius:50%}
+.just-read .nt-led{background:var(--k);animation:ntPop .45s var(--spring)}
+.just-read .nt-led:before{display:none}
+.just-read .nt-led>svg+svg{position:absolute;inset:4px;width:10px;height:10px;opacity:1;stroke:#fff}
+.root.dark .just-read .nt-led>svg+svg{stroke:#062521}
+.read .nt-led{display:none}
+
+/* ---------- vuoto ---------- */
+.nt-empty{display:flex;flex-direction:column;align-items:center;gap:.35rem;padding:1.5rem .5rem 1rem;text-align:center;font-size:.82rem;color:var(--mu)}
+.nt-empty b{font-size:.95rem;color:var(--ink)}
+.nt-empty-art{position:relative;display:grid;place-items:center;width:52px;height:52px;margin-bottom:.4rem;border-radius:16px;color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,var(--sf));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 25%,transparent)}
+.nt-empty-art i{position:absolute;right:8px;top:8px;width:8px;height:8px;border-radius:50%;background:var(--ac);box-shadow:0 0 8px var(--ac)}
+
+/* ---------- la campanella ---------- */
+/* il bollino esce dall'angolo del tasto: il tasto non lo ritaglia */
+.root .bt.bm{overflow:visible}
+.bm-bell{display:inline-flex}
+.bm-bell.ring svg{transform-origin:50% 2px;animation:bmRing 1s ease-in-out}
+@keyframes bmRing{10%{transform:rotate(18deg)}25%{transform:rotate(-15deg)}40%{transform:rotate(10deg)}55%{transform:rotate(-6deg)}70%{transform:rotate(3deg)}100%{transform:none}}
+.bm-badge{position:absolute;top:-6px;right:-6px;display:flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;border-radius:999px;font:800 10px/1 var(--label);color:#3B2A00;
+  background:linear-gradient(180deg,#FFD66B,#F2B21C);box-shadow:0 0 0 2px var(--pn),0 2px 6px -1px rgba(217,144,0,.8)}
+.bm-badge.up{animation:bmUp .5s var(--spring)}
+.bm-badge.down{animation:bmDown .45s var(--e-land)}
+@keyframes bmUp{0%{transform:scale(.3)}100%{transform:none}}
+@keyframes bmDown{0%{transform:translateY(-5px) scale(1.25);background:#fff}100%{transform:none}}
+/* a zero: il bollino diventa verde con la spunta, manda un lampo e sparisce */
+.bm-badge.gone{padding:0;width:17px;color:#fff;background:var(--ac);animation:bmGone .9s var(--e-land) forwards}
+.root.dark .bm-badge.gone{color:#062521}
+.bm-badge.gone i{position:absolute;inset:-2px;border-radius:50%;border:2px solid var(--ac);animation:bmBurst .7s ease-out forwards}
+@keyframes bmGone{0%{transform:scale(.6)}25%{transform:scale(1.15)}70%{transform:scale(1);opacity:1}100%{transform:scale(0);opacity:0}}
+@keyframes bmBurst{from{transform:scale(1);opacity:.9}to{transform:scale(2.6);opacity:0}}
+
+.root.nomotion .nt *,.root.nomotion .nt *:before,.root.nomotion .nt *:after,.root.nomotion .bm-badge,.root.nomotion .bm-bell svg{animation-duration:.01ms!important;transition:none}
+@media (prefers-reduced-motion:reduce){.nt *,.nt *:before,.nt *:after,.bm-badge,.bm-bell svg{animation-duration:.01ms!important;transition:none!important}}

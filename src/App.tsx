@@ -10,14 +10,14 @@ import {
 import {
   Bookmark, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, ArrowRight, SendHorizontal, LockKeyhole, SlidersHorizontal, Clapperboard, Compass, BookOpen
+  Save, Search, Sun, Moon, Pencil, Minus, Square, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, ChevronDown, ArrowUpRight, ArrowRight, SendHorizontal, LockKeyhole, SlidersHorizontal, Clapperboard, Compass, BookOpen
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import Stars from "./Stars";
 import { clean, plain, readingHtml } from "./sanitize";
 import { pubOf, pubSig, readPublic, isDiary, signatureOf, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, cartaOf, paperClass, isCarta, CARTE, type WritingKind, type Carta } from "./testi";
 import { snapshotReader } from "./snapshot";
-import NotificationPanel from "./NotificationPanel";
+import NotificationPanel, { BellMark } from "./NotificationPanel";
 import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt, RoomCard } from "./WritingSections";
 import { StatArt, type StatKind } from "./StatArt";
@@ -704,7 +704,7 @@ const usePresence = (v: any, ms = 320): [any, boolean] => {
   return [v || keep || null, out && !v];
 };
 
-const Pop = ({ label, trigger, cls = "bt", wrap = "", right, tour, children }: any) => {
+const Pop = ({ label, trigger, cls = "bt", wrap = "", right, wide, tour, children }: any) => {
   const [o, setO] = useState(false);
   const [show, out] = usePresence(o ? 1 : null, 240);
   return (
@@ -712,7 +712,7 @@ const Pop = ({ label, trigger, cls = "bt", wrap = "", right, tour, children }: a
       <button type="button" className={cls} onClick={() => setO(!o)} title={label} aria-label={label} data-tour={tour}>{trigger}</button>
       {show && (<>
         <div className={`cpov ${out ? "out" : ""}`} onClick={() => setO(false)} />
-        <div className={`cp pn p-5 ${right ? "cp-r" : ""} ${out ? "out" : ""}`}>
+        <div className={`cp pn p-5 ${right ? "cp-r" : ""} ${wide ? "cp-wide" : ""} ${out ? "out" : ""}`}>
           <div className="flex items-center justify-between mb-4"><span className="hd font-bold text-lg">{label}</span><button type="button" className="bt !p-2 md:hidden" onClick={() => setO(false)} aria-label="Chiudi"><X size={16} /></button></div>
           {typeof children === "function" ? children(() => setO(false)) : children}
         </div>
@@ -2269,8 +2269,8 @@ export default function App() {
   };
   const unread = allNotifs.filter((n) => !n.letta).length;
   const bell = (r: boolean) => (
-    <Pop label="Notifiche" right={r} cls="bt !p-2 relative" tour="bell" trigger={<><Bell size={18} />{unread > 0 && <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center" style={{ background: "var(--am)", color: "#3b2a00" }}>{unread}</span>}</>}>
-      {(close: any) => <NotificationPanel list={allNotifs} onRead={markRead} onOpen={() => { close(); go("my_pages"); }} stars={v => <Stars v={v} size={16} />} />}
+    <Pop label="Notifiche" right={r} wide cls="bt !p-2 relative bm" tour="bell" trigger={<BellMark count={unread} />}>
+      {(close: any) => <NotificationPanel list={allNotifs} onRead={markRead} onOpen={(n) => { close(); go("my_pages"); const t = n.pensieroId && items.find((x) => x.id === n.pensieroId); if (t) setTimeout(() => openView(t), 320); }} stars={v => <Stars v={v} size={14} />} />}
     </Pop>
   );
   const wc = (t: any) => wordCounts.get(t.id) || 0;
