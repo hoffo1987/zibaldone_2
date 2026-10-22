@@ -10,7 +10,7 @@ import {
 import {
   Bookmark, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Rows3, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, ArrowRight, SlidersHorizontal, Clapperboard, Compass, BookOpen
+  Save, Search, Sun, Moon, Pencil, Minus, Square, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, ArrowRight, SendHorizontal, SlidersHorizontal, Clapperboard, Compass, BookOpen
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import Stars from "./Stars";
@@ -22,6 +22,7 @@ import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } fro
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt, RoomCard } from "./WritingSections";
 import { StatArt, type StatKind } from "./StatArt";
 import "./recent.css";
+import "./editor.css";
 import { EmptyCircuit } from "./EmptyCircuit";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
@@ -2660,22 +2661,28 @@ export default function App() {
 
           {/* EDITOR */}
           {tab === "write" && (
-            <form onSubmit={submit} className="space-y-4 fadein">
+            <form onSubmit={submit} className={`space-y-4 fadein ed-form ${kind === "diary" ? "is-diary" : ""}`}>
               <div>
                 <KindPicker value={kind} onChange={setKind} locked={!!editingId} sign={!editingId || rawItems.find((x) => x.id === editingId)?.userId === user.uid ? { on: signed, set: setSigned, name: myName } : undefined} />
                 {!editingId && <DiaryPrompts key={user.uid} show={kind === "diary"} uid={user.uid} onPaper={spLast && onSheet(plain(content), spLast.s) ? { id: spLast.s.id, untouched: content === spLast.after } : null} onUse={putSpunto} onRemove={takeSpunto} />}
               </div>
-              <input maxLength={200} aria-label="Titolo dello scritto" className="inp !text-xl !py-3 hd font-bold" placeholder={kind === "diary" ? "Dai un titolo al tuo pensiero" : "Titolo dello scritto"} value={title} onChange={(e) => setTitle(e.target.value)} required />
-              <div className="pn">
-                <div className="p-2 rounded-t-[17px]" style={{ background: "var(--sf)" }}>
-                  <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl" style={{ background: "var(--ln)" }} data-tour="editor-mode">
-                    <button type="button" className={`bt !border-0 ${!drawing ? "on" : "!bg-transparent"}`} onClick={() => setDrawing(false)}><Type size={16} />Testo</button>
-                    <button type="button" className={`bt !border-0 ${drawing ? "on" : "!bg-transparent"}`} onClick={() => { setDrawing(true); setImg(null); }}><Pencil size={16} />Disegno</button>
+              {/* il titolo come l'intestazione del foglio: l'etichetta nel colore del tipo, il conteggio dei caratteri e il filetto che si accende */}
+              <label className="ed-title">
+                <span className="ed-title-k">{kind === "diary" ? "Titolo del pensiero" : "Titolo dello scritto"}<span className="ed-title-n" aria-hidden="true">{title.length}/200</span></span>
+                <input maxLength={200} aria-label="Titolo dello scritto" className="ed-title-in hd" placeholder={kind === "diary" ? "Dai un titolo al tuo pensiero" : "Titolo dello scritto"} value={title} onChange={(e) => setTitle(e.target.value)} required />
+                <i className="ed-title-rule" aria-hidden="true" />
+              </label>
+              <div className="pn ed-shell">
+                <div className="ed-top">
+                  <div className="ed-mode" data-tour="editor-mode" style={{ ["--m" as any]: drawing ? 1 : 0 }}>
+                    <span className="ed-thumb" aria-hidden="true" />
+                    <button type="button" aria-pressed={!drawing} className={`ed-tab ${!drawing ? "on" : ""}`} onClick={() => setDrawing(false)}><Type size={16} />Testo</button>
+                    <button type="button" aria-pressed={drawing} className={`ed-tab ${drawing ? "on" : ""}`} onClick={() => { setDrawing(true); setImg(null); }}><Pencil size={16} />Disegno</button>
                   </div>
                 </div>
-                <div className="tbw sticky top-[64px] md:top-0 z-[35] p-2 pt-0 space-y-2 border-b" style={{ borderColor: "var(--ln)", background: "var(--sf)" }} onPointerDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }} onMouseDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }}>
+                <div className="tbw sticky top-[64px] md:top-0 z-[35] space-y-2" onPointerDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }} onMouseDown={(e) => { const t = (e.target as any).tagName; if (t !== "INPUT" && t !== "SELECT") e.preventDefault(); }}>
                   {!drawing ? (<>
-                    <div className="grid grid-cols-7 gap-1.5 pt-2">
+                    <div className="ed-tools txt">
                       <TB on={fmt.b} fn={() => cmd("bold")} icon={Bold} label="Grassetto" />
                       <TB on={fmt.i} fn={() => cmd("italic")} icon={Italic} label="Corsivo" />
                       <TB on={fmt.u} fn={() => cmd("underline")} icon={Underline} label="Sottolineato" />
@@ -2696,7 +2703,7 @@ export default function App() {
                       <button type="button" className="bt dng !px-0 !min-w-0 w-11 shrink-0" onClick={removeImg} aria-label="Elimina immagine"><Trash2 size={16} /></button>
                     </div>}
                   </>) : (<>
-                    <div className="grid grid-cols-7 gap-1.5 pt-2">{TOOLS.map((t) => <TB key={t.id} on={tool === t.id} fn={() => setTool(t.id)} icon={t.icon} label={t.label} />)}</div>
+                    <div className="ed-tools">{TOOLS.map((t) => <TB key={t.id} on={tool === t.id} fn={() => setTool(t.id)} icon={t.icon} label={t.label} />)}</div>
                     <div className="flex items-center gap-1.5">
                       <Pop label="Colore e spessore" wrap="flex-1 min-w-0" cls="bt w-full !justify-start" trigger={<>
                         <span className="w-5 h-5 rounded-full shrink-0" style={tool === "eraser" ? { border: "2px solid currentColor" } : { background: color, boxShadow: "inset 0 0 0 1px rgba(128,128,128,.5)" }} />
@@ -2719,7 +2726,7 @@ export default function App() {
                   </>)}
                 </div>
 
-                <div ref={canvasRef} className={`paper relative ${paperClass(carta || cartaOf({ kind }))} ${kind === "diary" ? "diary-tint" : ""}`} style={{ minHeight: height }}>
+                <div ref={canvasRef} className={`paper ed-paper relative ${paperClass(carta || cartaOf({ kind }))} ${kind === "diary" ? "diary-tint" : ""}`} style={{ minHeight: height }}>
                   <svg className="absolute inset-0 w-full h-full pointer-events-none">
                     {strokes.map((s, i) => <Shape key={i} s={s} />)}
                     {cur && <Shape s={cur} />}
@@ -2730,15 +2737,15 @@ export default function App() {
                     onKeyDown={(e) => { if (e.key === "Enter") document.execCommand("formatBlock", false, "div"); }} />
                   {drawing && <div className="absolute inset-0 z-30" style={{ touchAction: tool === "hand" ? "pan-y" : "none", cursor: tool === "hand" ? "grab" : tool === "eraser" ? "cell" : "crosshair" }} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp} />}
                 </div>
-                <div className="editor-footer text-xs mu border-t" style={{ borderColor: "var(--ln)" }}>
-                  <span className="editor-footer-status">{drawing ? `${strokes.length} tratti` : `${words} parole`}{!editingId && " · bozza automatica"}</span>
-                  <div className="paper-pick" role="radiogroup" aria-label="Foglio">{CARTE.map((c) => { const on = (carta || cartaOf({ kind })) === c, Ic = c === "quadretti" ? Grid3x3 : c === "righe" ? Rows3 : File, l = c === "quadretti" ? "A quadretti" : c === "righe" ? "A righe" : "Bianco"; return <button key={c} type="button" role="radio" aria-checked={on} title={`Foglio ${l.toLowerCase()}`} aria-label={`Foglio ${l.toLowerCase()}`} className={`bt !p-2 ${on ? "on" : ""}`} onClick={() => setCarta(c)}><Ic size={16} /><span className="paper-pick-l">{l}</span></button>; })}</div>
-                  <button type="button" className="editor-add-space bt !text-xs" onClick={() => setHeight((h) => h + 300)}><Plus size={14} />Spazio</button>
+                <div className="editor-footer ed-foot">
+                  <span className="editor-footer-status ed-status"><span className="ed-count"><b key={drawing ? strokes.length : words}>{drawing ? strokes.length : words}</b>{drawing ? (strokes.length === 1 ? "tratto" : "tratti") : (words === 1 ? "parola" : "parole")}</span>{!editingId && <span className="ed-auto"><i aria-hidden="true" />Bozza automatica</span>}</span>
+                  <div className="paper-pick" role="radiogroup" aria-label="Foglio">{CARTE.map((c) => { const on = (carta || cartaOf({ kind })) === c, l = c === "quadretti" ? "A quadretti" : c === "righe" ? "A righe" : "Bianco"; return <button key={c} type="button" role="radio" aria-checked={on} title={`Foglio ${l.toLowerCase()}`} aria-label={`Foglio ${l.toLowerCase()}`} className={`bt !p-2 ${on ? "on" : ""}`} onClick={() => setCarta(c)}><i className={`pp-sw ${c}`} aria-hidden="true" /><span className="paper-pick-l">{l}</span></button>; })}</div>
+                  <button type="button" className="editor-add-space bt" title="Allunga il foglio" onClick={() => setHeight((h) => h + 300)}><Plus size={14} />Spazio</button>
                 </div>
               </div>
-              <div className="flex gap-2 justify-end">
-                {(editingId || title || strokes.length > 0 || words > 0) && <button type="button" className="bt" onClick={() => { if (confirm("Scartare le modifiche?")) resetForm(); }}>{editingId ? "Annulla modifica" : "Scarta bozza"}</button>}
-                <button className="bt on !px-6 !py-3" disabled={saving} data-tour="save">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{editingId ? "Salva modifiche" : kind === "diary" ? "Pubblica nel diario" : "Invia scritto completo"}</button>
+              <div className="ed-actions">
+                {(editingId || title || strokes.length > 0 || words > 0) && <button type="button" className="bt ed-discard" onClick={() => { if (confirm("Scartare le modifiche?")) resetForm(); }}><Trash2 size={15} />{editingId ? "Annulla modifica" : "Scarta bozza"}</button>}
+                <button className="bt ed-send" disabled={saving} data-tour="save">{saving ? <Loader2 size={17} className="animate-spin" /> : editingId ? <Save size={17} /> : <SendHorizontal size={17} />}{editingId ? "Salva modifiche" : kind === "diary" ? "Pubblica nel diario" : "Invia scritto completo"}</button>
               </div>
             </form>
           )}

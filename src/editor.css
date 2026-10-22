@@ -1,0 +1,120 @@
+/* ===== L'editor: titolo, Testo/Disegno, strumenti, foglio, piede e invio =====
+   Lo stesso linguaggio della scelta del tipo (compose.css): il colore del tipo scelto (--room: viola gli Scritti
+   completi, rosa il Diario) accende quello che è attivo; i comandi sono tasti in rilievo che, premuti, si abbassano e si
+   riempiono. Il titolo è l'intestazione del foglio, con il filetto che si accende scrivendo. Testo e Disegno sono un
+   interruttore con il cursore che scivola. Nel piede il conteggio, il LED della bozza automatica e i tre fogli in
+   miniatura. Il foglio si carica prima di ui.css e theme.css: le regole partono da .root e pesano di più */
+
+.ed-form{--room:var(--complete)}
+.ed-form.is-diary{--room:var(--diary)}
+
+/* ---------- il titolo ---------- */
+.ed-title{position:relative;display:block;padding:.8rem 1.15rem .75rem;border-radius:18px;background:var(--pn);cursor:text;
+  box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 0 rgba(255,255,255,.8),var(--sh1);transition:box-shadow .3s}
+.root.dark .ed-title{box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 0 rgba(255,255,255,.04),var(--sh1)}
+.ed-title:focus-within{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--room) 50%,var(--ln)),0 0 0 4px color-mix(in srgb,var(--room) 12%,transparent),var(--sh1)}
+.ed-title-k{display:flex;align-items:center;justify-content:space-between;gap:1rem;font:700 .6rem/1.2 var(--label);letter-spacing:.16em;text-transform:uppercase;color:var(--room)}
+.ed-title-n{font-variant-numeric:tabular-nums;letter-spacing:.06em;color:var(--mu);opacity:0;transition:opacity .25s}
+.ed-title:focus-within .ed-title-n{opacity:1}
+.ed-title-in{display:block;width:100%;margin-top:.3rem;padding:0;border:0;outline:0;background:transparent;color:var(--ink);font-size:1.45rem;font-weight:700;line-height:1.3;letter-spacing:-.02em}
+.ed-title-in::placeholder{color:color-mix(in srgb,var(--mu) 60%,transparent)}
+.ed-title-rule{position:absolute;left:1.15rem;right:1.15rem;bottom:0;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--room),color-mix(in srgb,var(--room) 15%,transparent));
+  transform:scaleX(0);transform-origin:0 50%;transition:transform .55s var(--e-land)}
+.ed-title:focus-within .ed-title-rule{transform:scaleX(1)}
+@media (max-width:767px){.ed-title-in{font-size:1.22rem}}
+
+/* ---------- il riquadro: niente overflow nascosto, la barra degli strumenti resta appiccicata in alto ---------- */
+.root .pn.ed-shell{border-radius:20px}
+.ed-top{padding:.6rem .6rem .5rem;border-radius:19px 19px 0 0;background:var(--sf)}
+
+/* Testo / Disegno: un interruttore con il cursore pieno che scivola dall'una all'altra parte */
+.ed-mode{position:relative;display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:14px;background:color-mix(in srgb,var(--ink) 5%,var(--sf));
+  box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 3px rgba(12,29,26,.08)}
+.root.dark .ed-mode{background:color-mix(in srgb,#000 22%,var(--sf));box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 3px rgba(0,0,0,.4)}
+.ed-thumb{position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);border-radius:10px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--room) 78%,#fff),var(--room) 55%,color-mix(in srgb,var(--room) 84%,#000));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -1px 0 rgba(0,0,0,.15),0 6px 14px -6px color-mix(in srgb,var(--room) 85%,transparent);
+  transform:translateX(calc(var(--m,0) * 100%));transition:transform .5s var(--spring)}
+.ed-tab{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:.5rem;min-height:42px;border-radius:10px;font-size:.88rem;font-weight:650;color:var(--mu);
+  -webkit-tap-highlight-color:transparent;transition:color .3s}
+.ed-tab svg{transition:transform .45s var(--spring)}
+.ed-tab.on{color:#fff}
+.root.dark .ed-tab.on{color:#16101F}
+.ed-tab.on svg{transform:rotate(-10deg) scale(1.1)}
+@media (hover:hover){.ed-tab:not(.on):hover{color:var(--ink)}}
+.ed-tab:focus-visible{outline:2px solid var(--room);outline-offset:-2px}
+
+/* ---------- la barra degli strumenti: tasti in rilievo, a gruppi ---------- */
+.root .ed-shell .tbw{padding:.15rem .6rem .6rem;background:var(--sf);border-bottom:1px solid var(--ln)}
+.ed-tools{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+/* nel testo tre gruppi: stile del carattere, dimensione ed elenco, colore e foto */
+@media (min-width:480px){.ed-tools.txt>:nth-child(3),.ed-tools.txt>:nth-child(5){margin-right:10px}}
+.root .ed-shell .tbw .bt{min-height:40px;border-radius:11px;border-color:transparent;color:var(--ink);
+  background:linear-gradient(180deg,var(--pn),color-mix(in srgb,var(--ink) 3%,var(--pn)));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 0 0 1px var(--ln2),0 2px 0 var(--ln2);transition:transform .15s,box-shadow .15s,background .15s,color .15s}
+.root.dark .ed-shell .tbw .bt{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.015));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 0 0 1px var(--ln2),0 2px 0 rgba(0,0,0,.5)}
+@media (hover:hover){.root .ed-shell .tbw .bt:not(:disabled):not(.on):hover{color:var(--room);transform:translateY(-1px)}}
+.root .ed-shell .tbw .bt:active{transform:translateY(1px)}
+/* premuto: si abbassa e si riempie del colore del tipo */
+.root .ed-shell .tbw .bt.on,.root.dark .ed-shell .tbw .bt.on{color:#fff;transform:translateY(1px);text-shadow:none;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--room) 78%,#fff),var(--room) 55%,color-mix(in srgb,var(--room) 84%,#000));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -1px 0 rgba(0,0,0,.15),0 1px 0 color-mix(in srgb,var(--room) 55%,#000)}
+.root.dark .ed-shell .tbw .bt.on{color:#16101F}
+.root .ed-shell .tbw .tb[data-open="true"]:not(.on){color:var(--room);background:color-mix(in srgb,var(--room) 12%,var(--pn));box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--room) 55%,transparent)}
+.root .ed-shell .tbw .tb.on[data-open="true"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--room) 30%,transparent)}
+.root .ed-shell .tbw .bt.dng{color:#DC2626}
+.root .ed-shell .tbw .bt:disabled{opacity:.42}
+
+/* ---------- il foglio: il margine nel colore del tipo e l'ombra della barra che ci cade sopra ---------- */
+.root .ed-shell .ed-paper{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--room) 65%,transparent),inset 0 10px 12px -12px rgba(12,29,26,.35)}
+
+/* ---------- il piede ---------- */
+.root .ed-shell .ed-foot{padding:.6rem .75rem .6rem 1rem;border-top:1px solid var(--ln);border-radius:0 0 19px 19px;background:var(--sf);font-size:.75rem;color:var(--mu)}
+.ed-status{display:flex;align-items:center;flex-wrap:wrap;gap:.35rem .75rem}
+.ed-count{display:inline-flex;align-items:baseline;gap:.3rem}
+.ed-count b{font:800 1.05rem/1 'Bricolage Grotesque','Instrument Sans',sans-serif;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--ink);animation:edTick .3s var(--e-land)}
+@keyframes edTick{from{transform:translateY(-3px);color:var(--room)}}
+/* il LED della bozza: acceso, salva da solo */
+.ed-auto{display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .55rem;border-radius:999px;font:700 .58rem/1 var(--label);letter-spacing:.11em;text-transform:uppercase;
+  background:var(--pn);box-shadow:inset 0 0 0 1px var(--ln)}
+.ed-auto i{width:6px;height:6px;border-radius:50%;background:var(--ac);box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 20%,transparent),0 0 6px var(--ac)}
+
+/* i tre fogli in miniatura */
+.root .ed-shell .paper-pick .bt{gap:.5rem;border-radius:12px;font-weight:650;color:var(--ink);border-color:transparent;
+  background:linear-gradient(180deg,var(--pn),color-mix(in srgb,var(--ink) 3%,var(--pn)));box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 0 0 1px var(--ln2),0 2px 0 var(--ln2)}
+.root.dark .ed-shell .paper-pick .bt{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.015));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 0 0 1px var(--ln2),0 2px 0 rgba(0,0,0,.5)}
+@media (min-width:1024px){.root .ed-shell .paper-pick .bt{padding:.3rem .65rem .3rem .4rem!important}}
+.root .ed-shell .paper-pick .bt.on,.root.dark .ed-shell .paper-pick .bt.on{color:#fff;transform:translateY(1px);text-shadow:none;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--room) 78%,#fff),var(--room) 55%,color-mix(in srgb,var(--room) 84%,#000));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 1px 0 color-mix(in srgb,var(--room) 55%,#000),0 8px 14px -8px var(--room)}
+.root.dark .ed-shell .paper-pick .bt.on{color:#16101F}
+.pp-sw{flex:none;width:26px;height:20px;border-radius:3px;--pl:rgba(11,127,112,.32);background:#fff;box-shadow:inset 0 0 0 1px rgba(12,29,26,.14),0 1px 2px rgba(12,29,26,.15);transition:transform .35s var(--spring)}
+.ed-form.is-diary .pp-sw{--pl:rgba(120,95,65,.35);background-color:#FBF6EB}
+.pp-sw.quadretti{background-image:linear-gradient(var(--pl) 1px,transparent 1px),linear-gradient(90deg,var(--pl) 1px,transparent 1px);background-size:5px 5px;background-position:-1px -1px}
+.pp-sw.righe{background-image:linear-gradient(transparent 4px,var(--pl) 4px);background-size:100% 5px;background-position:0 1px}
+.paper-pick .bt.on .pp-sw{transform:rotate(-6deg);box-shadow:0 0 0 2px rgba(255,255,255,.75),0 3px 6px -2px rgba(0,0,0,.35)}
+
+/* «Spazio» aggiunge foglio: un tasto tratteggiato */
+.root .ed-shell .editor-add-space{font-size:.75rem;font-weight:650;color:var(--room);border:1px dashed color-mix(in srgb,var(--room) 50%,var(--ln2));background:transparent;box-shadow:none}
+@media (hover:hover){.root .ed-shell .editor-add-space:hover{background:color-mix(in srgb,var(--room) 9%,transparent);border-color:var(--room)}}
+.editor-add-space svg{transition:transform .35s var(--spring)}
+.editor-add-space:hover svg{transform:rotate(90deg)}
+
+/* ---------- l'invio ---------- */
+.ed-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:.6rem}
+.root .bt.ed-discard{min-height:48px;padding:0 1rem;border-radius:14px;color:var(--mu)}
+@media (hover:hover){.root .bt.ed-discard:hover{color:#DC2626;border-color:color-mix(in srgb,#DC2626 45%,var(--ln2))}}
+.root .bt.ed-send{min-height:50px;padding:0 1.45rem 0 1.15rem;gap:.6rem;border-radius:15px;font-size:.95rem;font-weight:700;color:#fff;--trace-c:#fff;
+  border-color:color-mix(in srgb,var(--room) 80%,#000);background:linear-gradient(180deg,color-mix(in srgb,var(--room) 80%,#fff),var(--room) 50%,color-mix(in srgb,var(--room) 85%,#000));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.18),0 14px 26px -14px var(--room);text-shadow:0 1px 0 rgba(0,0,0,.18);transition:transform .3s var(--e-land),box-shadow .3s,filter .25s}
+.root.dark .bt.ed-send{color:#16101F;text-shadow:none;border-color:color-mix(in srgb,var(--room) 70%,#fff)}
+.ed-send svg{transition:transform .4s var(--spring)}
+@media (hover:hover){
+  .root .bt.ed-send:not(:disabled):hover{transform:translateY(-2px);filter:brightness(1.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.18),0 20px 30px -14px var(--room)}
+  .ed-send:not(:disabled):hover svg{transform:translateX(3px) rotate(-10deg)}
+}
+.root .bt.ed-send:disabled{opacity:.75}
+@media (max-width:560px){.ed-actions{display:grid;grid-template-columns:auto 1fr}.ed-actions>.ed-send:only-child{grid-column:1/-1}}
+
+.root.nomotion .ed-form *,.root.nomotion .ed-form *:before{animation:none}
+@media (prefers-reduced-motion:reduce){.ed-thumb,.ed-tab svg,.ed-title-rule,.ed-count b{transition:none;animation:none}}
