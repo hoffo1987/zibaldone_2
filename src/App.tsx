@@ -20,6 +20,8 @@ import { snapshotReader } from "./snapshot";
 import NotificationPanel from "./NotificationPanel";
 import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt } from "./WritingSections";
+import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
+import type { Spunto } from "./spunti";
 import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 import { Navigation, SectionLocation, ScrittiSwitch, NAV_ORDER, inHub } from "./Navigation";
 import { Text3D, Terminal3D } from "./d3";
@@ -1260,6 +1262,9 @@ export default function App() {
   const [done, setDone] = useState<string | null>(null);
   const editorRef = useRef<any>(null);
   const canvasRef = useRef<any>(null);
+  // lo spunto del diario messo sul foglio: com'era il foglio prima e subito dopo (finché non lo si tocca si può togliere)
+  const [spLast, setSpLast] = useState<{ s: Spunto; before: string; after: string } | null>(null);
+  const spLine = useRef<HTMLElement | null>(null);
   const down = useRef(false);
   const draftKey = user ? `circuito:bozza:${user.uid}` : "";
 
@@ -1418,7 +1423,7 @@ export default function App() {
   // bozza: ripristino + salvataggio automatico
   useEffect(() => {
     // a ogni cambio di account riparto da un foglio vuoto: altrimenti il testo di chi è uscito finirebbe nella bozza di chi entra
-    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setSpLast(null); setLoadTick((n) => n + 1);
     if (!draftKey) return;
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) || "null");
@@ -1777,12 +1782,34 @@ export default function App() {
 
   const resetForm = () => {
     setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600);
-    setDrawing(false); setImg(null); setLoadTick((n) => n + 1);
+    setDrawing(false); setImg(null); setSpLast(null); setLoadTick((n) => n + 1);
     try { localStorage.removeItem(draftKey); } catch {}
   };
   const startEdit = (t: any) => {
     setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setSigned(t.firmato === true); setCarta(isCarta(t.carta) ? t.carta : null); setStrokes(t.strokes || []);
-    setHist([]); setFut([]); setHeight(t.h || 600); setSel(null); setDrawing(false); setTab("write"); setLoadTick((n) => n + 1);
+    setHist([]); setFut([]); setHeight(t.h || 600); setSel(null); setDrawing(false); setSpLast(null); setTab("write"); setLoadTick((n) => n + 1);
+  };
+  // «Scrivi da qui»: lo spunto va in fondo al foglio (al posto di quello di prima, se nessuno l'ha ancora toccato), vola
+  // dal foglietto alla sua riga e lascia il cursore pronto subito dopo
+  const putSpunto = (s: Spunto, from: HTMLElement | null) => {
+    const ed = editorRef.current; if (!ed) return;
+    if (drawing) { setDrawing(false); ed.contentEditable = "true"; }
+    if (spLast && ed.innerHTML === spLast.after) ed.innerHTML = spLast.before;
+    const before = ed.innerHTML, ink = inkInto(ed, s), after = ed.innerHTML;
+    spLine.current = ink.line; setSpLast({ s, before, after }); setContent(after); setPanel(null);
+    savedRange.current = ink.caret();
+    inkFlight(from, ink.line, ink.text, ed, s, () => {
+      if (!ed.isConnected) return;
+      ed.focus({ preventScroll: true });
+      const sel = window.getSelection(); if (sel) { sel.removeAllRanges(); sel.addRange(ink.caret()); }
+    });
+  };
+  // «Togli dal foglio»: la riga torna al foglietto e il foglio torna com'era
+  const takeSpunto = (to: HTMLElement | null) => {
+    const ed = editorRef.current; if (!ed || !spLast || ed.innerHTML !== spLast.after) return;
+    const { before, s } = spLast;
+    inkBack(spLine.current, to, ed, s, () => { ed.innerHTML = before; setContent(before); });
+    setSpLast(null); spLine.current = null;
   };
 
   const submit = async (e: any) => {
@@ -2634,7 +2661,10 @@ export default function App() {
           {/* EDITOR */}
           {tab === "write" && (
             <form onSubmit={submit} className="space-y-4 fadein">
-              <KindPicker value={kind} onChange={setKind} locked={!!editingId} sign={!editingId || rawItems.find((x) => x.id === editingId)?.userId === user.uid ? { on: signed, set: setSigned, name: myName } : undefined} />
+              <div>
+                <KindPicker value={kind} onChange={setKind} locked={!!editingId} sign={!editingId || rawItems.find((x) => x.id === editingId)?.userId === user.uid ? { on: signed, set: setSigned, name: myName } : undefined} />
+                {!editingId && <DiaryPrompts key={user.uid} show={kind === "diary"} uid={user.uid} onPaper={spLast ? { id: spLast.s.id, untouched: content === spLast.after } : null} onUse={putSpunto} onRemove={takeSpunto} />}
+              </div>
               <input maxLength={200} aria-label="Titolo dello scritto" className="inp !text-xl !py-3 hd font-bold" placeholder={kind === "diary" ? "Dai un titolo al tuo pensiero" : "Titolo dello scritto"} value={title} onChange={(e) => setTitle(e.target.value)} required />
               <div className="pn">
                 <div className="p-2 rounded-t-[17px]" style={{ background: "var(--sf)" }}>
