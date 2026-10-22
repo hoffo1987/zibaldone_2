@@ -6,12 +6,6 @@
 .writing-promises span{display:inline-flex;gap:.4rem;align-items:center}
 .diary-intro.pn{border-color:color-mix(in srgb,var(--diary) 35%,var(--ln));border-top-color:var(--diary);background:linear-gradient(125deg,color-mix(in srgb,var(--diary) 9%,var(--pn)),var(--pn) 75%)}
 .diary-intro .writing-eyebrow,.diary-intro .writing-symbol{color:var(--diary)}
-.writing-picker legend{font-size:1rem;background:var(--pn);border-radius:8px}
-.kind-option{display:flex;align-items:flex-start;gap:.8rem;padding:1rem;border:1px solid var(--ln);border-radius:14px;cursor:pointer;background:var(--sf)}
-.kind-option input{accent-color:var(--ac);margin-top:.4rem;flex-shrink:0}
-.kind-option svg{margin-top:.2rem;flex-shrink:0;color:var(--ac)}
-.kind-option.selected{background:color-mix(in srgb,var(--ac) 7%,var(--pn));border-color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
-.kind-option:focus-within{outline:3px solid color-mix(in srgb,var(--ac) 30%,transparent);outline-offset:2px}
 .kind-badge{display:inline-flex;font-size:.65rem;line-height:1.3;font-weight:700;letter-spacing:.02em;padding:.3rem .55rem;border-radius:6px;color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,var(--pn))}
 .editor-footer{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px 12px;padding:8px 16px}
 .editor-footer-status{min-width:0;overflow-wrap:break-word}
@@ -38,15 +32,4 @@
 .diary-notice>svg{color:var(--diary)}
 .excerpt-paper{min-height:260px;overflow-wrap:anywhere}.excerpt-end{height:45px;border-bottom:1px dashed #c7ceca;opacity:.8}
 @media(prefers-reduced-motion:reduce){.diary-card{transition:none}.diary-card:hover{transform:none}}
-.diary-sign{margin-top:.9rem;padding-top:.9rem;border-top:1px dashed var(--ln)}
-.diary-sign-q{font-size:.8rem;font-weight:600;margin-bottom:.55rem}
-.diary-sign-row{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border:1px solid var(--ln);border-radius:14px;background:var(--sf)}
-.diary-sign-ind{position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 6px);border-radius:10px;background:color-mix(in srgb,var(--diary) 12%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--diary) 55%,transparent);transform:translateX(calc(var(--sign-i,0) * (100% + 4px)));transition:transform .4s cubic-bezier(.25,.8,.3,1)}
-.diary-sign-opt{position:relative;z-index:1;display:flex;align-items:center;gap:.6rem;min-width:0;padding:.6rem .7rem;border-radius:10px;cursor:pointer;color:var(--mu);transition:color .25s}
-.diary-sign-opt b{color:var(--ink)}
-.diary-sign-opt.selected,.diary-sign-opt.selected svg{color:var(--diary)}
-.diary-sign-opt svg{flex-shrink:0}
-.diary-sign-opt:focus-within{outline:2px solid color-mix(in srgb,var(--diary) 60%,transparent);outline-offset:-2px}
 .diary-card-top.signed{color:var(--diary)}
-@media(max-width:480px){.diary-sign-row{grid-template-columns:1fr}.diary-sign-ind{width:auto;right:4px;bottom:auto;height:calc(50% - 6px);transform:translateY(calc(var(--sign-i,0) * (100% + 4px)))}}
-@media(prefers-reduced-motion:reduce){.diary-sign-ind{transition:none}}

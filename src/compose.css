@@ -1,0 +1,125 @@
+/* ===== Il primo passo dell'editor: che cosa stai scrivendo e come lo firmi =====
+   Un modulo da quaderno tecnico: ogni domanda ha il suo numero di passo, come la sigla di un componente sulla scheda.
+   Le due tessere del tipo hanno un tasto in rilievo con l'icona (scelto, si abbassa e si colora), un LED che si accende
+   con un piccolo impulso, la pista colorata che corre sul bordo alto e due etichette su che fine farà lo scritto.
+   Viola gli Scritti completi, rosa il Diario. La firma è un cartellino di carta: da anonimo il nome si copre con le bande
+   di un documento censurato, firmando la firma si traccia da sola. Il foglio si carica prima di ui.css e theme.css */
+
+.root .pn.compose{position:relative;min-width:0;margin:0;padding:1.15rem 1.1rem 1.05rem}
+@media (min-width:768px){.root .pn.compose{padding:1.35rem 1.45rem 1.2rem}}
+
+/* ---------- il numero del passo e la domanda ---------- */
+/* la legenda va a sinistra e occupa la riga: così si comporta come il resto del contenuto, non sul bordo */
+.cp-legend{float:left;width:100%;display:flex;align-items:center;gap:.75rem;padding:0;margin:0 0 1rem}
+.cp-legend+*{clear:both}
+.cp-step{flex:none;display:inline-grid;place-items:center;width:34px;height:34px;border-radius:10px;font:700 .72rem/1 var(--label);letter-spacing:.04em;font-variant-numeric:tabular-nums;color:var(--ac);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 6%,var(--pn)),color-mix(in srgb,var(--ac) 12%,var(--pn)));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 28%,transparent),inset 0 1px 0 rgba(255,255,255,.6)}
+.root.dark .cp-step{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 30%,transparent),inset 0 1px 0 rgba(255,255,255,.05)}
+.cp-step.sm{width:24px;height:24px;border-radius:7px;font-size:.6rem}
+.cp-eyebrow{display:block;font:700 .6rem/1.2 var(--label);letter-spacing:.16em;text-transform:uppercase;color:var(--mu)}
+.cp-q{display:block;margin-top:.18rem;font-size:1.08rem;font-weight:700;line-height:1.2;letter-spacing:-.02em}
+
+/* ---------- le due tessere ---------- */
+.cp-kinds{display:grid;gap:.75rem}
+@media (min-width:640px){.cp-kinds{grid-template-columns:1fr 1fr}}
+.cp-kind{--room:var(--complete);position:relative;isolation:isolate;overflow:hidden;display:flex;align-items:flex-start;gap:.9rem;padding:1rem 1rem 1rem .95rem;border-radius:16px;cursor:pointer;
+  background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln);transition:box-shadow .3s,background-color .3s,transform .35s var(--e-land)}
+.cp-kind.diary{--room:var(--diary)}
+/* il motivo del tipo, che sfuma dall'angolo: le colonne dell'impaginato per lo scritto, le righe del quaderno per il diario */
+.cp-kind:after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.5;transition:opacity .4s;
+  background:repeating-linear-gradient(90deg,transparent 0 17px,color-mix(in srgb,var(--room) 13%,transparent) 17px 18px);
+  -webkit-mask-image:radial-gradient(ellipse 60% 120% at 100% 0,#000,transparent 75%);mask-image:radial-gradient(ellipse 60% 120% at 100% 0,#000,transparent 75%)}
+.cp-kind.diary:after{background:repeating-linear-gradient(180deg,transparent 0 15px,color-mix(in srgb,var(--room) 15%,transparent) 15px 16px)}
+/* la pista sul bordo alto, che corre da sinistra quando la tessera si accende */
+.cp-kind:before{content:"";position:absolute;left:16px;right:16px;top:0;height:3px;border-radius:0 0 3px 3px;background:linear-gradient(90deg,var(--room),color-mix(in srgb,var(--room) 25%,transparent));
+  transform:scaleX(0);transform-origin:0 50%;transition:transform .55s var(--e-land)}
+.cp-kind.selected{background:color-mix(in srgb,var(--room) 7%,var(--pn));
+  box-shadow:inset 0 0 0 1.5px var(--room),0 0 0 4px color-mix(in srgb,var(--room) 12%,transparent),0 18px 32px -24px color-mix(in srgb,var(--room) 85%,transparent)}
+.cp-kind.selected:before{transform:scaleX(1)}
+.cp-kind.selected:after{opacity:1}
+@media (hover:hover){
+  .cp-kind:not(.selected):hover{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--room) 45%,var(--ln));transform:translateY(-1px)}
+  .cp-kind:not(.selected):hover .cp-key svg{transform:rotate(-7deg) scale(1.06)}
+}
+.cp-kind:focus-within{outline:2px solid color-mix(in srgb,var(--room) 60%,transparent);outline-offset:3px}
+.compose.locked .cp-kind{cursor:default}
+.compose.locked .cp-kind:not(.selected){opacity:.5}
+
+/* il tasto con l'icona: in rilievo; scelto, si abbassa e si riempie del colore del tipo */
+.cp-key{flex:none;display:grid;place-items:center;width:46px;height:46px;border-radius:13px;color:var(--room);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--room) 3%,#fff),color-mix(in srgb,var(--room) 11%,var(--pn)));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 0 0 1px color-mix(in srgb,var(--room) 26%,transparent),0 3px 0 color-mix(in srgb,var(--room) 24%,var(--ln2)),0 9px 14px -9px color-mix(in srgb,var(--room) 70%,transparent);
+  transition:transform .3s var(--spring),box-shadow .3s,background .3s,color .3s}
+.root.dark .cp-key{background:linear-gradient(180deg,color-mix(in srgb,var(--room) 17%,var(--pn)),color-mix(in srgb,var(--room) 7%,var(--pn)));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09),inset 0 0 0 1px color-mix(in srgb,var(--room) 30%,transparent),0 3px 0 color-mix(in srgb,var(--room) 22%,#000),0 10px 16px -9px rgba(0,0,0,.8)}
+.cp-key svg{transition:transform .35s var(--spring)}
+.cp-kind.selected .cp-key,.root.dark .cp-kind.selected .cp-key{color:#fff;transform:translateY(2px);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--room) 78%,#fff),var(--room) 55%,color-mix(in srgb,var(--room) 82%,#000));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.42),inset 0 -1px 0 rgba(0,0,0,.18),0 1px 0 color-mix(in srgb,var(--room) 55%,#000),0 8px 16px -8px var(--room)}
+.root.dark .cp-kind.selected .cp-key{color:#1A1030}
+.cp-kind.selected .cp-key svg{animation:cpIcon .55s var(--spring)}
+@keyframes cpIcon{0%{transform:scale(.55) rotate(-16deg)}100%{transform:none}}
+
+/* il titolo con il LED a destra: spento è una lente scura, acceso manda un impulso */
+.cp-kind-t{min-width:0;flex:1}
+.cp-kind-top{display:flex;align-items:center;gap:.6rem}
+.cp-kind-top b{font-size:1rem;line-height:1.25;letter-spacing:-.015em}
+.cp-led{position:relative;flex:none;margin-left:auto;width:10px;height:10px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.5),transparent 45%),color-mix(in srgb,var(--ink) 16%,var(--pn));box-shadow:inset 0 1px 2px rgba(0,0,0,.25),0 0 0 3px color-mix(in srgb,var(--ink) 5%,transparent);transition:background .3s,box-shadow .3s}
+.cp-kind.selected .cp-led{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.75),transparent 45%),var(--room);box-shadow:0 0 0 3px color-mix(in srgb,var(--room) 22%,transparent),0 0 10px var(--room)}
+.cp-led:after{content:"";position:absolute;inset:-3px;border-radius:50%;border:1.5px solid var(--room);opacity:0}
+.cp-kind.selected .cp-led:after{animation:cpPing .9s ease-out .15s}
+@keyframes cpPing{0%{opacity:.85;transform:scale(.7)}100%{opacity:0;transform:scale(2.4)}}
+.cp-kind-x{display:block;margin-top:.3rem;font-size:.84rem;line-height:1.45;color:var(--mu)}
+/* le due etichette: grigie finché la tessera è spenta */
+.cp-facts{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.75rem}
+.cp-facts span{display:inline-flex;align-items:center;gap:.32rem;padding:.3rem .52rem;border-radius:999px;font:650 .66rem/1 var(--label);letter-spacing:.02em;color:var(--mu);
+  background:var(--pn);box-shadow:inset 0 0 0 1px var(--ln);transition:color .3s,background .3s,box-shadow .3s}
+.cp-kind.selected .cp-facts span{color:color-mix(in srgb,var(--room) 72%,var(--ink));background:color-mix(in srgb,var(--room) 9%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--room) 22%,transparent)}
+.root.dark .cp-kind.selected .cp-facts span{color:var(--room)}
+
+/* ---------- la firma ---------- */
+.diary-sign{margin-top:1.15rem;padding-top:1.05rem;border-top:1px dashed var(--ln2)}
+.diary-sign-q{display:flex;align-items:center;gap:.6rem;margin-bottom:.7rem;font-size:.88rem;font-weight:650}
+.diary-sign-row{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:16px;background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln),inset 0 1px 2px rgba(12,29,26,.05)}
+.diary-sign-ind{position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 6px);border-radius:12px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--diary) 5%,var(--pn)),color-mix(in srgb,var(--diary) 13%,var(--pn)));
+  box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--diary) 55%,transparent),inset 0 1px 0 rgba(255,255,255,.7),0 8px 16px -10px color-mix(in srgb,var(--diary) 80%,transparent);
+  transform:translateX(calc(var(--sign-i,0) * (100% + 4px)));transition:transform .5s var(--spring)}
+.root.dark .diary-sign-ind{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--diary) 55%,transparent),inset 0 1px 0 rgba(255,255,255,.05),0 8px 18px -10px rgba(0,0,0,.8)}
+.diary-sign-opt{position:relative;z-index:1;display:flex;align-items:center;gap:.8rem;min-width:0;padding:.6rem .75rem;border-radius:12px;cursor:pointer;color:var(--mu);transition:color .25s}
+.diary-sign-opt b{color:var(--ink);transition:color .25s}
+.diary-sign-opt.selected b{color:color-mix(in srgb,var(--diary) 70%,var(--ink))}
+.root.dark .diary-sign-opt.selected b{color:var(--diary)}
+.diary-sign-opt:focus-within{outline:2px solid color-mix(in srgb,var(--diary) 60%,transparent);outline-offset:-2px}
+
+/* il cartellino: un ritaglio della carta del diario */
+.ds-art{position:relative;flex:none;width:56px;height:34px;border-radius:7px;overflow:hidden;background:#FBF6EB;
+  box-shadow:inset 0 0 0 1px rgba(120,95,65,.2),0 2px 4px -2px rgba(70,45,20,.3);transition:box-shadow .3s,transform .35s var(--spring)}
+.diary-sign-opt.selected .ds-art{transform:rotate(-3deg);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--diary) 45%,transparent),0 6px 12px -6px color-mix(in srgb,var(--diary) 80%,transparent)}
+.ds-art i{position:absolute;display:block}
+/* anonimo: un volto tratteggiato e il nome coperto da due bande nere, che passano quando lo si sceglie */
+.ds-face{left:7px;top:9px;width:16px;height:16px;border-radius:50%;border:1.4px dashed rgba(50,40,30,.4)}
+.ds-bar{left:28px;height:4.5px;border-radius:1.5px;background:rgba(50,40,30,.16);transform-origin:0 50%}
+.ds-bar:nth-of-type(2){top:11px;width:21px}
+.ds-bar:nth-of-type(3){top:19px;width:14px}
+.diary-sign-opt.selected .ds-bar{background:#1C1A17;animation:dsRedact .42s var(--e-land) backwards}
+.diary-sign-opt.selected .ds-bar:nth-of-type(3){animation-delay:.12s}
+@keyframes dsRedact{from{transform:scaleX(0)}}
+/* firmato: la firma in inchiostro blu-nero, che si traccia da sola sulla riga tratteggiata */
+.ds-sig svg{position:absolute;inset:0;width:100%;height:100%;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.ds-ink{stroke:rgba(34,48,74,.28);stroke-width:1.5;stroke-dasharray:1;stroke-dashoffset:0;transition:stroke .3s}
+.ds-base{stroke:rgba(120,95,65,.38);stroke-width:1;stroke-dasharray:2 2}
+.diary-sign-opt.selected .ds-ink{stroke:#22304A;animation:dsSign .95s cubic-bezier(.45,.05,.35,1) backwards}
+@keyframes dsSign{from{stroke-dashoffset:1}}
+
+/* ---------- la nota su chi potrà leggere ---------- */
+.cp-note{display:flex;align-items:flex-start;gap:.55rem;margin-top:1rem;font-size:.76rem;line-height:1.5;color:var(--mu)}
+.cp-note svg{flex:none;margin-top:.12rem;color:var(--ac)}
+
+@media (max-width:480px){
+  .diary-sign-row{grid-template-columns:1fr}
+  .diary-sign-ind{width:auto;right:4px;bottom:auto;height:calc(50% - 6px);transform:translateY(calc(var(--sign-i,0) * (100% + 4px)))}
+}
+.root.nomotion .compose *,.root.nomotion .compose *:before,.root.nomotion .compose *:after{transition:none;animation:none}
+@media (prefers-reduced-motion:reduce){.compose *,.compose *:before,.compose *:after{transition:none;animation:none}}

@@ -1,43 +1,63 @@
 import React from "react";
-import { ArrowRight, BookOpen, FileText, ArrowUpRight, EyeOff, LockKeyhole, Pen, Signature, Star } from "lucide-react";
+import { ArrowRight, BookOpen, FileText, ArrowUpRight, Eye, EyeOff, Feather, LockKeyhole, Pen, Signature, Star, Trophy } from "lucide-react";
 import { plain } from "./sanitize";
 import { isDiary, signatureOf, cartaOf, paperClass, type WritingKind } from "./testi";
 import "./writing.css";
 import "./rooms.css";
+import "./compose.css";
 
 type Sign = { on: boolean; set: (v: boolean) => void; name: string };
+const KINDS = [
+  { id: "complete", title: "Scritto completo", text: "Un tema, un racconto, una riflessione sviluppata. Partecipa alla selezione del mese.", icon: FileText,
+    facts: [{ t: "Estratto pubblico", icon: LockKeyhole }, { t: "In gara per il podio", icon: Trophy }] },
+  { id: "diary", title: "Pensiero del diario", text: "Un pensiero libero, un frammento della giornata. Si legge per intero, senza voti.", icon: BookOpen,
+    facts: [{ t: "Lettura integrale", icon: Eye }, { t: "Senza voti", icon: Feather }] },
+] as const;
+
+// La scelta del tipo, come la prima voce di un modulo tecnico: il numero del passo, poi due tessere. Ognuna ha il suo
+// tasto con l'icona, il LED che si accende quando è scelta e due righe su che fine farà lo scritto. Sotto, per il diario,
+// la firma; in fondo una nota che dice chi potrà leggere, con l'icona del caso
 export function KindPicker({ value, onChange, locked = false, sign }: { value: WritingKind; onChange: (v: WritingKind) => void; locked?: boolean; sign?: Sign }) {
-  return <fieldset className="writing-picker pn p-4 md:p-5">
-    <legend className="hd font-bold px-2">Che cosa stai scrivendo?</legend>
-    <div className="grid sm:grid-cols-2 gap-3">
-      {([{ id: "complete", title: "Scritto completo", text: "Un tema, un racconto, una riflessione sviluppata. Partecipa alla selezione del mese.", icon: FileText },
-        { id: "diary", title: "Pensiero del diario", text: "Un pensiero libero, un frammento della giornata. Si legge per intero, senza voti.", icon: BookOpen }] as const).map(x =>
-        <label key={x.id} className={`kind-option ${value === x.id ? "selected" : ""} ${x.id}`}>
-          <input type="radio" name="writing-kind" value={x.id} checked={value === x.id} disabled={locked} onChange={() => onChange(x.id)} />
-          <x.icon size={23} aria-hidden="true" /><span><b className="hd block text-base">{x.title}</b><span className="mu text-sm block mt-1">{x.text}</span></span>
+  const diary = value === "diary", NoteIc = locked ? LockKeyhole : diary ? sign?.on ? Signature : EyeOff : LockKeyhole;
+  return <fieldset className={`writing-picker compose pn ${locked ? "locked" : ""}`}>
+    <legend className="cp-legend"><span className="cp-step" aria-hidden="true">01</span><span><span className="cp-eyebrow">Tipo di pagina</span><span className="hd cp-q">Che cosa stai scrivendo?</span></span></legend>
+    <div className="cp-kinds">
+      {KINDS.map(x =>
+        <label key={x.id} className={`kind-option cp-kind ${value === x.id ? "selected" : ""} ${x.id}`}>
+          <input type="radio" className="sr-only" name="writing-kind" value={x.id} checked={value === x.id} disabled={locked} onChange={() => onChange(x.id)} />
+          <span className="cp-key" aria-hidden="true"><x.icon size={21} /></span>
+          <span className="cp-kind-t">
+            <span className="cp-kind-top"><b className="hd">{x.title}</b><i className="cp-led" aria-hidden="true" /></span>
+            <span className="cp-kind-x">{x.text}</span>
+            <span className="cp-facts" aria-hidden="true">{x.facts.map(f => <span key={f.t}><f.icon size={12} />{f.t}</span>)}</span>
+          </span>
         </label>)}
     </div>
-    {value === "diary" && sign && <DiarySignature {...sign} />}
-    <p className="mu text-xs mt-3">{locked ? "Il tipo resta quello scelto alla pubblicazione. Puoi modificare titolo e contenuto." : value === "diary"
+    {diary && sign && <DiarySignature {...sign} />}
+    <p className="cp-note"><NoteIc size={14} aria-hidden="true" /><span>{locked ? "Il tipo resta quello scelto alla pubblicazione. Puoi modificare titolo e contenuto." : diary
       ? sign?.on ? "Tutti gli utenti potranno leggere il pensiero per intero, con il tuo nome. Puoi cambiare idea modificandolo in seguito."
         : "Tutti gli utenti potranno leggere il pensiero per intero. Il tuo nome sarà visibile solo a te e all’amministratore. Evita dettagli che ti identifichino."
-      : "Gli altri utenti vedranno soltanto un breve estratto. Il testo integrale, le immagini e i disegni saranno accessibili a te e all’amministratore."}</p>
+      : "Gli altri utenti vedranno soltanto un breve estratto. Il testo integrale, le immagini e i disegni saranno accessibili a te e all’amministratore."}</span></p>
   </fieldset>;
 }
 
-// Anonimo o firmato: due scelte affiancate, l'anonimato resta la scelta di partenza.
+// Anonimo o firmato: due scelte affiancate, l'anonimato resta la scelta di partenza. Ognuna ha il suo piccolo cartellino:
+// da anonimo il nome viene coperto da due bande, come in un documento censurato; firmando, la firma si traccia da sola
 function DiarySignature({ on, set, name }: Sign) {
   const options = [
-    { id: false, title: "Anonimo", text: "Nessuno vedrà chi l’ha scritto", icon: EyeOff },
-    { id: true, title: "Con il tuo nome", text: `Firmato «${name}»`, icon: Signature },
+    { id: false, title: "Anonimo", text: "Nessuno vedrà chi l’ha scritto" },
+    { id: true, title: "Con il tuo nome", text: `Firmato «${name}»` },
   ];
   return <div className="diary-sign" role="radiogroup" aria-label="Come firmi il pensiero?">
-    <p className="diary-sign-q">Come firmi il pensiero?</p>
+    <p className="diary-sign-q"><span className="cp-step sm" aria-hidden="true">02</span>Come firmi il pensiero?</p>
     <div className="diary-sign-row" style={{ "--sign-i": on ? 1 : 0 } as React.CSSProperties}>
       <span className="diary-sign-ind" aria-hidden="true" />
       {options.map(o => <label key={String(o.id)} className={`diary-sign-opt ${on === o.id ? "selected" : ""}`}>
         <input type="radio" name="diary-sign" className="sr-only" checked={on === o.id} onChange={() => set(o.id)} />
-        <o.icon size={18} aria-hidden="true" /><span className="min-w-0"><b className="block text-sm">{o.title}</b><span className="mu text-xs block truncate">{o.text}</span></span>
+        {o.id
+          ? <span className="ds-art ds-sig" aria-hidden="true"><svg viewBox="0 0 56 34"><path className="ds-ink" pathLength={1} d="M5 23c3-7 6-12 8-10s-3 11 0 10 5-12 8-11-1 9 2 9 4-6 7-6 1 5 4 4 5-4 8-3 3 2 6 1" /><path className="ds-base" d="M5 28.5h46" /></svg></span>
+          : <span className="ds-art ds-anon" aria-hidden="true"><i className="ds-face" /><i className="ds-bar" /><i className="ds-bar" /></span>}
+        <span className="min-w-0"><b className="block text-sm">{o.title}</b><span className="mu text-xs block truncate">{o.text}</span></span>
       </label>)}
     </div>
   </div>;

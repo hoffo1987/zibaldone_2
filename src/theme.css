@@ -164,12 +164,6 @@ select.inp option{color:var(--ink);background:var(--pn);font-weight:500}
 /* ---------- i colori delle due stanze: viola per gli Scritti completi, rosa per il Diario ----------
    gli stessi della barra di navigazione e del selettore in cima alla sezione */
 /* i due riquadri della Panoramica hanno il loro foglio: rooms.css */
-/* la scelta del tipo nell'editor */
-.kind-option.complete{--room:var(--complete)}.kind-option.diary{--room:var(--diary)}
-.kind-option svg{color:var(--room)}
-.kind-option input{accent-color:var(--room)}
-.kind-option.selected{background:color-mix(in srgb,var(--room) 8%,var(--pn));border-color:var(--room);box-shadow:inset 0 0 0 1px var(--room)}
-.kind-option:focus-within{outline-color:color-mix(in srgb,var(--room) 35%,transparent)}
 /* le schede: il bordo al passaggio prende il colore del tipo */
 @media (hover:hover){.pn.card:has(> .paper):hover{border-color:color-mix(in srgb,var(--rule) 50%,var(--ln))}}
 
