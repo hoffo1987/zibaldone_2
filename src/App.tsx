@@ -22,7 +22,7 @@ import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } fro
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt, RoomCard } from "./WritingSections";
 import { StatArt, type StatKind } from "./StatArt";
 import "./recent.css";
-import { EmptyDesk } from "./EmptyDesk";
+import { EmptyCircuit } from "./EmptyCircuit";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
 import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
@@ -2626,7 +2626,7 @@ export default function App() {
           {isList && (loading ? (
             <Sheets />
           ) : shown.length === 0 ? (
-            <EmptyDesk search={search} onWrite={() => go("write")} />
+            <EmptyCircuit search={search} onWrite={() => go("write")} />
           ) : (
             <><div ref={gridRef} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {shown.slice(0, visible).map((t, i) => {
