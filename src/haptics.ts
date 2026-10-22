@@ -29,11 +29,15 @@ function iosTick() {
   if (!iosSwitch) {
     const label = document.createElement("label"), input = document.createElement("input");
     input.type = "checkbox"; input.setAttribute("switch", ""); input.tabIndex = -1;
-    label.setAttribute("aria-hidden", "true");
+    // data-haptic="off": il clic finto sull'interruttore non deve chiedere a sua volta un tic (girerebbe all'infinito)
+    label.setAttribute("aria-hidden", "true"); label.dataset.haptic = "off";
     label.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none";
     label.appendChild(input); document.body.appendChild(label); iosSwitch = label;
   }
+  // Safari sposta il focus sull'interruttore cliccato: si rimette dov'era, così un campo resta attivo con la tastiera aperta
+  const was = document.activeElement as HTMLElement | null;
   iosSwitch.click();
+  if (document.activeElement !== was) { (document.activeElement as HTMLElement | null)?.blur(); was?.focus?.({ preventScroll: true }); }
 }
 
 export function haptic(kind: Haptic) {

@@ -28,3 +28,19 @@ test("taps vibrate by what was touched: switches click twice, buttons once, disa
   expect(calls).toEqual([[7], [5, 26, 7], [10]]);
   off();
 });
+
+test("on iPhone the hidden switch ticks once, never re-triggers itself and leaves the focused field alone", () => {
+  jest.useFakeTimers();
+  delete navigator.vibrate;
+  const ua = jest.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)");
+  const off = bindUiHaptics();
+  document.body.innerHTML = `<button id="b">Registrati</button><input id="f" placeholder="Nome">`;
+  let ticks = 0; const count = (e) => { if (e.target.type === "checkbox") ticks++; };
+  document.addEventListener("click", count, true);
+  document.getElementById("f").focus();
+  document.getElementById("b").click();
+  jest.advanceTimersByTime(1000);
+  expect(ticks).toBe(1);
+  expect(document.activeElement.id).toBe("f");
+  document.removeEventListener("click", count, true); off(); ua.mockRestore(); jest.useRealTimers();
+});
