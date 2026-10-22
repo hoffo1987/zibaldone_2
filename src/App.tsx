@@ -8,7 +8,7 @@ import {
   getFirestore, collection, onSnapshot, doc, writeBatch, query, where, orderBy, limit, setDoc, getDoc, getDocs, deleteField, connectFirestoreEmulator
 } from "firebase/firestore";
 import {
-  Cpu, Bookmark, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
+  Bookmark, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
   Save, Search, Sun, Moon, Pencil, Minus, Square, Grid3x3, Rows3, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, Bell, ChevronDown, ArrowUpRight, ArrowRight, SlidersHorizontal, Clapperboard, Compass, BookOpen
 } from "lucide-react";
@@ -22,6 +22,7 @@ import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } fro
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt, RoomCard } from "./WritingSections";
 import { StatArt, type StatKind } from "./StatArt";
 import "./recent.css";
+import { EmptyDesk } from "./EmptyDesk";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
 import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
@@ -2625,12 +2626,7 @@ export default function App() {
           {isList && (loading ? (
             <Sheets />
           ) : shown.length === 0 ? (
-            <div className="pn p-12 text-center max-w-md mx-auto up">
-              <Cpu className="mx-auto mb-4 mu" size={36} />
-              <h3 className="hd text-xl font-bold mb-1">{search ? "Nessun risultato" : "Ancora nessuno scritto"}</h3>
-              <p className="mu text-sm mb-5">{search ? "Prova con un'altra parola." : "Crea il primo: puoi scrivere, aggiungere foto e disegnare."}</p>
-              {!search && <button className="bt pri" onClick={() => go("write")}><Plus size={15} />Nuovo scritto</button>}
-            </div>
+            <EmptyDesk search={search} onWrite={() => go("write")} />
           ) : (
             <><div ref={gridRef} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {shown.slice(0, visible).map((t, i) => {
