@@ -1,0 +1,156 @@
+/* ===== La sezione Scritti: percorso, selettore, titolo, filtri, introduzione, schede =====
+   Il percorso in cima è una pista: la sezione è un nodo acceso alla fine. Il selettore Diario / Scritti completi ha la
+   sua rotaia luminosa sotto la stanza scelta. Il conteggio della pagina sta su un righello. I filtri sono un pannello di
+   comandi incassato: i menu già impostati si colorano, gli interruttori hanno il loro LED. Nelle introduzioni una scena
+   disegnata: lo schedario degli scritti completi, il fascio di pagine del diario legato con lo spago. Sulle schede il
+   segnalibro diventa un nastro e lo stato della lettura un timbro d'inchiostro (oro per gli scelti); le pagine del
+   diario sono strappate da un quaderno ad anelli. Si carica prima di ui.css e theme.css: le regole partono da .root */
+
+/* ---------- il percorso ---------- */
+.sl-root{white-space:nowrap}
+.sl-trace{position:relative;flex:none;width:30px;height:2px;border-radius:2px;color:var(--ln2);transform-origin:0 50%;
+  background:linear-gradient(90deg,var(--ln2),var(--nav-color));animation:slDraw .6s var(--e-land) .1s backwards}
+.sl-trace:before,.sl-trace:after{content:"";position:absolute;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--bg)}
+.sl-trace:before{left:-3px;box-shadow:inset 0 0 0 1.5px var(--ln2)}
+.sl-trace:after{right:-3px;box-shadow:inset 0 0 0 1.5px var(--nav-color)}
+@keyframes slDraw{from{transform:scaleX(0)}}
+.root .shell-location>.sl-here{display:inline-flex;align-items:center;gap:.45rem;padding:.42rem .7rem .42rem .55rem;border-radius:999px;color:var(--nav-color);
+  background:color-mix(in srgb,var(--nav-color) 9%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--nav-color) 28%,transparent),0 4px 10px -8px var(--nav-color)}
+.sl-led{flex:none;width:6px;height:6px;border-radius:50%;background:var(--nav-color);box-shadow:0 0 0 2px color-mix(in srgb,var(--nav-color) 20%,transparent),0 0 7px var(--nav-color)}
+
+/* ---------- il selettore Diario / Scritti completi ---------- */
+/* sotto la stanza scelta una rotaia accesa, sopra un filo di luce; l'icona della stanza ha il suo alone */
+.root .scritti-switch-ind:before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(180deg,rgba(255,255,255,.55),transparent 45%);pointer-events:none}
+.root.dark .scritti-switch-ind:before{background:linear-gradient(180deg,rgba(255,255,255,.07),transparent 45%)}
+.root .scritti-switch-ind:after{content:"";position:absolute;left:16%;right:16%;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--nav-color);box-shadow:0 0 12px var(--nav-color)}
+.root .scritti-room.act .shell-icon{box-shadow:0 0 0 4px color-mix(in srgb,var(--nav-color) 14%,transparent),0 8px 16px -10px var(--nav-color)}
+@media (hover:hover){.root .scritti-room:not(.act):hover{background:color-mix(in srgb,var(--nav-color) 5%,transparent)}}
+
+/* ---------- il conteggio su un righello ---------- */
+.root .page-count{display:flex;align-items:center;gap:.55rem;margin-top:.75rem}
+.root .page-count .tick-n{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 6px;border-radius:7px;font:800 .74rem/1 var(--label);letter-spacing:0;color:#fff;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 80%,#fff),var(--ac));box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 10px -5px var(--ac)}
+.root.dark .page-count .tick-n{color:#062521}
+.root .page-count:after{content:"";flex:none;width:110px;height:9px;margin-left:.2rem;transform-origin:0 50%;animation:slDraw .8s var(--e-land) .25s backwards;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--ac) 55%,transparent) 1px,transparent 1px) 0 100%/24px 9px repeat-x,linear-gradient(90deg,color-mix(in srgb,var(--ac) 35%,transparent) 1px,transparent 1px) 0 100%/6px 4px repeat-x,linear-gradient(color-mix(in srgb,var(--ac) 35%,transparent),color-mix(in srgb,var(--ac) 35%,transparent)) 0 100%/100% 1px no-repeat;
+  -webkit-mask-image:linear-gradient(90deg,#000 40%,transparent);mask-image:linear-gradient(90deg,#000 40%,transparent)}
+
+/* ---------- i filtri: un pannello di comandi incassato ---------- */
+.root .filters{padding:6px;border:0;border-radius:18px;background:color-mix(in srgb,var(--ink) 4%,var(--sf));box-shadow:inset 0 0 0 1px var(--ln),inset 0 2px 5px rgba(12,29,26,.07)}
+.root.dark .filters{background:color-mix(in srgb,#000 28%,var(--sf));box-shadow:inset 0 0 0 1px var(--ln),inset 0 2px 6px rgba(0,0,0,.5)}
+.root .filters .inp{border-color:transparent;background-color:var(--pn);box-shadow:inset 0 0 0 1px var(--ln2),0 1px 0 rgba(12,29,26,.05);transition:box-shadow .2s,background-color .2s,color .2s}
+.root.dark .filters .inp{background-color:color-mix(in srgb,#fff 3%,var(--pn));box-shadow:inset 0 0 0 1px var(--ln2),0 1px 0 rgba(0,0,0,.4)}
+.root .filters .inp:hover{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 40%,var(--ln2))}
+.root .filters .inp:focus{box-shadow:inset 0 0 0 1.5px var(--ac),0 0 0 3px color-mix(in srgb,var(--ac) 18%,transparent)}
+/* un menu già impostato (non «tutti») si colora: si vede a colpo d'occhio che cosa sta filtrando */
+.root .filters select.inp.set{color:var(--ac);background-color:color-mix(in srgb,var(--ac) 9%,var(--pn));box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--ac) 50%,transparent)}
+/* gli interruttori: il LED si accende, il tasto prende la tinta del suo colore */
+.root .filters .bt.flt-tg{--led:var(--ac);gap:.5rem;color:var(--ink);background:var(--pn);background-image:none;box-shadow:inset 0 0 0 1px var(--ln2),0 1px 0 rgba(12,29,26,.05);text-shadow:none}
+.root.dark .filters .bt.flt-tg{background:color-mix(in srgb,#fff 3%,var(--pn));box-shadow:inset 0 0 0 1px var(--ln2),0 1px 0 rgba(0,0,0,.4)}
+.root .filters .bt.flt-tg.amber{--led:var(--am)}
+.flt-led{flex:none;width:7px;height:7px;border-radius:50%;background:color-mix(in srgb,var(--ink) 18%,transparent);box-shadow:inset 0 1px 1px rgba(0,0,0,.25);transition:background .25s,box-shadow .25s}
+.root .filters .bt.flt-tg.on,.root.dark .filters .bt.flt-tg.on{color:var(--ink);border-color:transparent;background:color-mix(in srgb,var(--led) 11%,var(--pn));box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--led) 55%,transparent)}
+.root .filters .bt.flt-tg.on svg{color:var(--led)}
+.flt-tg.on .flt-led{background:var(--led);box-shadow:0 0 0 2.5px color-mix(in srgb,var(--led) 22%,transparent),0 0 8px var(--led);animation:fltOn .5s var(--e-land)}
+@keyframes fltOn{0%{transform:scale(.4)}60%{transform:scale(1.35)}}
+
+/* ---------- le introduzioni: i bollini delle promesse e il pulsante nel colore della sezione ---------- */
+.root .writing-promises span{padding:.38rem .65rem;border-radius:999px;font-weight:600;color:color-mix(in srgb,var(--intro) 62%,var(--ink));
+  background:color-mix(in srgb,var(--intro) 8%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--intro) 22%,transparent)}
+.root.dark .writing-promises span{color:color-mix(in srgb,var(--intro) 70%,var(--ink))}
+.root .writing-promises svg{color:var(--intro)}
+.root .bt.wi-cta{color:var(--intro);border-color:color-mix(in srgb,var(--intro) 45%,var(--ln2));--trace-c:var(--intro)}
+.wi-cta svg{transition:transform .35s var(--spring)}
+@media (hover:hover){.root .bt.wi-cta:hover{background-color:color-mix(in srgb,var(--intro) 9%,var(--pn));border-color:var(--intro)}.wi-cta:hover svg:last-child{transform:translate(2px,-2px)}.wi-cta:hover svg:first-child{transform:rotate(-12deg)}}
+
+/* la scena a destra */
+.root .writing-intro>.wi-scene{position:absolute;right:clamp(1.5rem,5vw,3.6rem);top:50%;width:200px;height:150px;translate:0 -50%;pointer-events:none}
+.wi-scene i,.wi-scene>span{position:absolute;display:block}
+.wi-scene *{transition:translate .6s var(--e-land),rotate .6s var(--e-land),scale .6s var(--e-land)}
+@media (max-width:1179px){.wi-scene{display:none}}
+/* il testo lascia spazio alla scena */
+@media (min-width:1180px){.root .writing-intro>.relative{padding-right:250px}}
+
+/* lo schedario: tre schede con le linguette colorate che sporgono dal cassetto laccato, la targhetta e la maniglia di rame */
+.wc-card{width:122px;height:76px;border-radius:4px;box-shadow:0 1px 2px rgba(12,29,26,.2);
+  background:linear-gradient(rgba(200,70,70,.38),rgba(200,70,70,.38)) 0 15px/100% 1px no-repeat,repeating-linear-gradient(180deg,transparent 0 9px,rgba(24,46,56,.13) 9px 10px) 0 18px/100% 100% no-repeat,#FFFDF8}
+.wc-card:before{content:"";position:absolute;top:-8px;width:30px;height:10px;border-radius:4px 4px 0 0;background:var(--tab)}
+.wc-card.c1{--tab:var(--complete);left:30px;top:22px;rotate:-3deg}.wc-card.c1:before{left:12px}
+.wc-card.c2{--tab:var(--cu);left:44px;top:12px;rotate:2deg}.wc-card.c2:before{left:52px}
+.wc-card.c3{--tab:var(--ac);left:36px;top:30px;rotate:-1deg}.wc-card.c3:before{left:86px}
+.wc-drawer{left:8px;bottom:6px;width:184px;height:74px;border-radius:8px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--complete) 48%,#2A2038),color-mix(in srgb,var(--complete) 30%,#120D1C));
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.2),inset 0 -3px 0 rgba(0,0,0,.25),inset 0 0 0 1px rgba(0,0,0,.2),0 16px 24px -12px rgba(20,10,40,.6)}
+.root.dark .wc-drawer{background:linear-gradient(180deg,color-mix(in srgb,var(--complete) 34%,#2A2038),color-mix(in srgb,var(--complete) 20%,#120D1C));box-shadow:inset 0 2px 0 rgba(255,255,255,.14),inset 0 -3px 0 rgba(0,0,0,.3),0 18px 26px -12px rgba(0,0,0,.85)}
+.wc-label{left:76px;bottom:46px;width:48px;height:20px;border-radius:3px;background:#F6F1E6;border:2px solid var(--cu);box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.wc-label:after{content:"A — Z";position:absolute;inset:0;display:grid;place-items:center;font:700 7px/1 var(--label);letter-spacing:.08em;color:#3A2A18}
+.wc-pull{left:85px;bottom:22px;width:30px;height:12px;border:3px solid var(--cu);border-top:0;border-radius:0 0 14px 14px;box-shadow:0 2px 2px -1px rgba(0,0,0,.35)}
+@media (hover:hover){
+  .writing-intro:hover .wc-card.c1{translate:0 -8px}
+  .writing-intro:hover .wc-card.c2{translate:0 -14px;rotate:4deg}
+  .writing-intro:hover .wc-card.c3{translate:0 -5px}
+  .writing-intro:hover .wc-drawer,.writing-intro:hover .wc-label,.writing-intro:hover .wc-pull{translate:0 3px}
+}
+
+/* il fascio del diario: tre pagine color crema, legate in croce con lo spago rosa, il nodo e il cartellino col cuore */
+.wb-page{width:136px;height:100px;border-radius:3px;box-shadow:0 1px 2px rgba(70,45,20,.2),0 10px 18px -12px rgba(70,45,20,.5)}
+.wb-page.p3{left:34px;top:28px;background:#F1E8D6;rotate:8deg}
+.wb-page.p2{left:26px;top:24px;background:#F6EFE1;rotate:-6deg}
+.wb-top{left:30px;top:22px;width:136px;height:100px;rotate:-1deg}
+.wb-page.p1{left:0;top:0;background:linear-gradient(90deg,transparent 15px,color-mix(in srgb,var(--diary) 55%,transparent) 15px 16px,transparent 16px),repeating-linear-gradient(180deg,transparent 0 11px,rgba(120,95,65,.17) 11px 12px) 0 8px/100% 100%,#FBF6EB}
+.wb-twine{background:repeating-linear-gradient(45deg,#C98A9A 0 2.5px,#EBC2CC 2.5px 5px);box-shadow:0 1px 1px rgba(70,30,40,.3)}
+.wb-twine.h{left:-3px;right:-3px;top:47px;height:4px}
+.wb-twine.v{top:-3px;bottom:-3px;left:84px;width:4px;background:repeating-linear-gradient(-45deg,#C98A9A 0 2.5px,#EBC2CC 2.5px 5px)}
+.wb-knot{left:80px;top:43px;width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#E3A9B7,#B86B7F);box-shadow:0 1px 2px rgba(70,30,40,.4)}
+.wb-knot:before,.wb-knot:after{content:"";position:absolute;top:-5px;width:15px;height:10px;border:3px solid #C98A9A;border-radius:50%}
+.wb-knot:before{left:-14px;rotate:-24deg}
+.wb-knot:after{right:-14px;rotate:24deg}
+.wb-tag{left:90px;top:54px;width:36px;height:22px;transform-origin:0 50%;rotate:22deg;background:#FFFDF6;filter:drop-shadow(0 2px 2px rgba(70,45,20,.35));
+  clip-path:polygon(20% 0,100% 0,100% 100%,20% 100%,0 50%)}
+.wb-tag:after{content:"\2665";position:absolute;inset:0 0 0 8px;display:grid;place-items:center;font-size:11px;line-height:1;color:var(--diary)}
+@keyframes wbSwing{0%{rotate:22deg}30%{rotate:4deg}55%{rotate:30deg}75%{rotate:14deg}100%{rotate:22deg}}
+@media (hover:hover){
+  .writing-intro:hover .wb-tag{animation:wbSwing 1.1s ease-in-out}
+  .writing-intro:hover .wb-page.p2{rotate:-10deg;translate:-4px 2px}
+  .writing-intro:hover .wb-page.p3{rotate:12deg;translate:5px 2px}
+}
+
+/* ---------- le schede degli scritti ---------- */
+/* il bagliore al passaggio prende il colore del tipo */
+@media (hover:hover){.root .pn.card:has(> .paper):hover{box-shadow:0 26px 46px -24px color-mix(in srgb,var(--rule) 55%,transparent),0 4px 0 -1px color-mix(in srgb,var(--rule) 28%,var(--ln)),var(--sh2)}}
+/* il segnalibro: un tasto tondo; segnato, diventa un nastro verde acqua che scende dal bordo */
+.card-bm{position:absolute;top:8px;right:8px;width:30px;height:30px;display:grid;place-items:center;border-radius:50%;color:#64748B;background:rgba(255,255,255,.94);
+  box-shadow:0 1px 2px rgba(12,29,26,.15),0 4px 10px -6px rgba(12,29,26,.4);transition:transform .25s var(--spring),color .2s}
+@media (hover:hover){.card-bm:not(.on):hover{transform:scale(1.1);color:var(--ac)}}
+.card-bm.on{top:0;right:14px;width:24px;height:38px;padding-bottom:10px;border-radius:0;color:#fff;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--ac) 78%,#000),var(--ac) 40%,color-mix(in srgb,var(--ac) 82%,#fff) 60%,color-mix(in srgb,var(--ac) 78%,#000));
+  clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%);box-shadow:none;animation:bmDrop .5s var(--spring)}
+.card-bm.on svg{fill:currentColor}
+@keyframes bmDrop{from{transform:translateY(-100%)}}
+/* lo stato della lettura: un timbro d'inchiostro, inclinato, a doppio bordo; lo scelto è una lamina d'oro con la stella */
+.root .card .stato-pill{gap:.3rem;padding:.36rem .55rem;border-radius:6px;font:800 .58rem/1 var(--label);letter-spacing:.15em;color:#0B6F62;background:#FFFFFD;rotate:-4deg;
+  box-shadow:inset 0 0 0 1.5px currentColor,inset 0 0 0 3px #FFFFFD,inset 0 0 0 4px color-mix(in srgb,currentColor 45%,transparent),0 4px 10px -6px rgba(12,29,26,.45);animation:stamp .45s var(--spring) backwards}
+.root .card .stato-pill:before{display:none}
+.root .card .stato-pill.st-shortlist{color:#8A4A14}
+.root .card .stato-pill.scelto{color:#3B2A00;rotate:-3deg;background:linear-gradient(120deg,#FFE9A6,#F2B21C 42%,#FFE08A 58%,#D99000);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.65),inset 0 0 0 1px rgba(120,80,0,.35),0 6px 14px -8px rgba(160,100,0,.85)}
+.root .card .stato-pill.scelto:before{display:block;content:"\2605";width:auto;height:auto;border-radius:0;background:none;font-size:.7rem;line-height:1}
+@keyframes stamp{0%{opacity:0;scale:1.7}60%{opacity:1;scale:.94}100%{scale:1}}
+
+/* ---------- le pagine del diario: strappate da un quaderno ad anelli ---------- */
+.root .diary-card-top>svg:first-child{box-sizing:content-box;padding:7px;border-radius:50%;color:var(--mu);background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln)}
+.root .diary-card-top.signed>svg:first-child{color:#fff;background:linear-gradient(180deg,color-mix(in srgb,var(--diary) 80%,#fff),var(--diary));box-shadow:0 4px 10px -5px var(--diary)}
+.root.dark .diary-card-top.signed>svg:first-child{color:#3A0F1F}
+.diary-card-top>svg:last-child{color:var(--diary);transition:transform .35s var(--spring)}
+.diary-card:hover .diary-card-top>svg:last-child{transform:translate(2px,-2px)}
+.root .diary-card .paper.diary-paper{position:relative;transition:transform .5s var(--e-land);
+  clip-path:polygon(0 0,100% 0,100% calc(100% - 5px),97% 100%,94% calc(100% - 4px),90% calc(100% - 1px),86% calc(100% - 6px),82% calc(100% - 2px),78% 100%,74% calc(100% - 5px),70% calc(100% - 1px),66% calc(100% - 6px),61% calc(100% - 2px),57% 100%,53% calc(100% - 5px),49% calc(100% - 2px),45% calc(100% - 6px),41% 100%,37% calc(100% - 4px),33% calc(100% - 1px),29% calc(100% - 6px),25% calc(100% - 2px),21% 100%,17% calc(100% - 5px),13% calc(100% - 1px),9% calc(100% - 6px),5% calc(100% - 2px),2% 100%,0 calc(100% - 4px))}
+/* i fori degli anelli lungo il margine */
+.root .diary-card .paper.diary-paper:before{content:"";position:absolute;left:7px;top:10px;bottom:12px;width:9px;pointer-events:none;
+  background:radial-gradient(circle at 4.5px 4.5px,color-mix(in srgb,var(--pn) 45%,#E9DFCC) 0 2.8px,rgba(120,95,65,.32) 3.1px 3.9px,transparent 4.2px) 0 0/9px 22px repeat-y}
+.diary-card-foot{display:flex;align-items:center;gap:.45rem;margin-top:1rem;font-size:.75rem;color:var(--mu)}
+.diary-card-foot svg{color:var(--diary)}
+@media (hover:hover){.diary-card:hover .paper.diary-paper{transform:rotate(-.6deg) translateY(-2px)}}
+
+.root.nomotion .sl-trace,.root.nomotion .page-count:after,.root.nomotion .card-bm,.root.nomotion .stato-pill,.root.nomotion .flt-led{animation:none}
+@media (prefers-reduced-motion:reduce){.sl-trace,.page-count:after,.card-bm,.stato-pill,.flt-led,.wb-tag{animation:none!important}.wi-scene *{transition:none}}

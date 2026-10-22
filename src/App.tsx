@@ -23,6 +23,7 @@ import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt, Roo
 import { StatArt, type StatKind } from "./StatArt";
 import "./recent.css";
 import "./editor.css";
+import "./scritti.css";
 import { EmptyCircuit } from "./EmptyCircuit";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
@@ -2571,13 +2572,13 @@ export default function App() {
             {isList && (
               <div className="filters flex flex-wrap gap-2 items-center" data-tour="filters">
                 <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>
-                {tab === "my_pages" && <select className="inp !w-auto" aria-label="Tipo di scritto" value={kindFilter} onChange={e => setKindFilter(e.target.value)}><option value="all">Tutti i tipi</option><option value="complete">Scritti completi</option><option value="diary">Pensieri del diario</option></select>}
-                <select className="inp !w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>{Object.keys(SORTS).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}</select>
-                <select className="inp !w-auto" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}><option value="all">Tutti i mesi</option>{monthOpts.map((k) => <option key={k} value={k}>{mLabel(k)}</option>)}</select>
-                {isAdmin && tab === "read" && <select className="inp !w-auto" value={statoF} onChange={(e) => setStatoF(e.target.value)}><option value="all">Tutti gli stati</option>{STATI.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
-                {isAdmin && tab === "read" && <button className={`bt ${onlyMarked ? "on" : ""}`} onClick={() => setOnlyMarked(!onlyMarked)}><Bookmark size={15} style={onlyMarked ? { fill: "currentColor" } : {}} />Segnalati{items.some((t) => t.isStarred) ? ` (${items.filter((t) => t.isStarred).length})` : ""}</button>}
-                {isAdmin && tab === "read" && <button className={`bt ${unrated ? "on" : ""}`} onClick={() => setUnrated(!unrated)}><Star size={15} style={unrated ? { fill: "currentColor" } : {}} />Da valutare</button>}
-                {items.length > 0 && <button className={`bt ${selMode ? "on" : ""}`} onClick={() => { setSelMode(!selMode); setIds([]); }}><ListChecks size={15} />{selMode ? "Fine" : "Seleziona"}</button>}
+                {tab === "my_pages" && <select className={`inp !w-auto ${kindFilter !== "all" ? "set" : ""}`} aria-label="Tipo di scritto" value={kindFilter} onChange={e => setKindFilter(e.target.value)}><option value="all">Tutti i tipi</option><option value="complete">Scritti completi</option><option value="diary">Pensieri del diario</option></select>}
+                <select className={`inp !w-auto ${sortBy !== "newest" ? "set" : ""}`} aria-label="Ordine" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>{Object.keys(SORTS).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}</select>
+                <select className={`inp !w-auto ${monthFilter !== "all" ? "set" : ""}`} aria-label="Mese" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}><option value="all">Tutti i mesi</option>{monthOpts.map((k) => <option key={k} value={k}>{mLabel(k)}</option>)}</select>
+                {isAdmin && tab === "read" && <select className={`inp !w-auto ${statoF !== "all" ? "set" : ""}`} aria-label="Stato della lettura" value={statoF} onChange={(e) => setStatoF(e.target.value)}><option value="all">Tutti gli stati</option>{STATI.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
+                {isAdmin && tab === "read" && <button className={`bt flt-tg ${onlyMarked ? "on" : ""}`} aria-pressed={onlyMarked} onClick={() => setOnlyMarked(!onlyMarked)}><i className="flt-led" aria-hidden="true" /><Bookmark size={15} style={onlyMarked ? { fill: "currentColor" } : {}} />Segnalati{items.some((t) => t.isStarred) ? ` (${items.filter((t) => t.isStarred).length})` : ""}</button>}
+                {isAdmin && tab === "read" && <button className={`bt flt-tg amber ${unrated ? "on" : ""}`} aria-pressed={unrated} onClick={() => setUnrated(!unrated)}><i className="flt-led" aria-hidden="true" /><Star size={15} style={unrated ? { fill: "currentColor" } : {}} />Da valutare</button>}
+                {items.length > 0 && <button className={`bt flt-tg ${selMode ? "on" : ""}`} aria-pressed={selMode} onClick={() => { setSelMode(!selMode); setIds([]); }}><i className="flt-led" aria-hidden="true" /><ListChecks size={15} />{selMode ? "Fine" : "Seleziona"}</button>}
               </div>
             )}
           </div>
@@ -2643,10 +2644,10 @@ export default function App() {
                         <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{snippet(t._tx) || (t._img ? "Contenuto con immagini" : "")}</p>
                       </div>
                                             {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
-                      {isAdmin && canEvaluate(t) && !selMode && <button type="button" aria-label="Segnalibro" title={t.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={(e) => { e.stopPropagation(); star(t); }} className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110" style={{ background: "rgba(255,255,255,.92)", boxShadow: "var(--sh1)" }}><Bookmark size={16} style={t.isStarred ? { fill: "var(--ac)", color: "var(--ac)" } : { color: "#64748b" }} /></button>}
+                      {isAdmin && canEvaluate(t) && !selMode && <button type="button" aria-label="Segnalibro" title={t.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={(e) => { e.stopPropagation(); star(t); }} aria-pressed={!!t.isStarred} className={`card-bm ${t.isStarred ? "on" : ""}`}><Bookmark size={15} /></button>}
                     </div>
                     <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
-                      <span className={`kind-badge mb-2 ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span>{isAdmin && canEvaluate(t) && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span className={`stato-pill ${vals[t.id].stato === "scelto" ? "scelto" : ""}`}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}<h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
+                      <span className={`kind-badge mb-2 ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span>{isAdmin && canEvaluate(t) && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span key={vals[t.id].stato} className={`stato-pill st-${vals[t.id].stato} ${vals[t.id].stato === "scelto" ? "scelto" : ""}`}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}<h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
                       <div className="mt-2 flex items-center gap-2 mu text-xs">{who(t, 22)}<span className="truncate flex-1">{wn(t)}</span><span className="shrink-0 meta-date">{fmtDate(t.timestamp)}</span></div>
                       {isAdmin && canEvaluate(t) && <div className="mt-3"><Stars v={t.rating || 0} onSet={t.svelato ? undefined : (n: number) => rate(t, n)} size={15} /></div>}
                       {!isAdmin && !isDiary(t) && t.svelato && t.rating > 0 && <div className="mt-3 flex items-center gap-2"><Stars v={t.rating} size={15} /><span className="mu text-xs">voto ricevuto</span></div>}

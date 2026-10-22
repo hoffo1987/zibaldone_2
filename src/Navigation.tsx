@@ -175,7 +175,7 @@ export function SectionLocation({ tab, admin, editing }: Pick<Props, "tab" | "ad
   const room = item.rooms?.find(r => r.id === tab);
   return <div className="shell-location" data-tone={room?.tone || item.tone}>
     <span className="shell-location-icon" aria-hidden="true"><SectionMark section={room?.mark || item.mark} size={20} motion={false} /></span>
-    <span>Il Circuito</span><ChevronRight size={12} aria-hidden="true" />
-    <span>{room ? item.label : item.group || "Panoramica"}</span>
+    <span className="sl-root">Il Circuito</span><i className="sl-trace" aria-hidden="true" />
+    <span className="sl-here"><i className="sl-led" aria-hidden="true" />{room ? item.label : item.group || "Panoramica"}</span>
   </div>;
 }

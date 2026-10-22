@@ -65,13 +65,17 @@ function DiarySignature({ on, set, name }: Sign) {
 
 export function WritingIntro({ diary, onWrite }: { diary: boolean; onWrite: () => void }) {
   return <section className={`writing-intro pn ${diary ? "diary-intro" : "complete-intro"}`}>
-    <div className="writing-symbol" aria-hidden="true">{diary ? <BookOpen size={36} /> : <FileText size={36} />}</div>
+    {/* la scena a destra: lo schedario degli scritti completi (le schede con le linguette, la targhetta, la maniglia di rame),
+        il fascio di pagine del diario legato con lo spago e il cartellino; passandoci sopra il cassetto si apre e il cartellino oscilla */}
+    {diary
+      ? <span className="wi-scene wi-bundle" aria-hidden="true"><i className="wb-page p3" /><i className="wb-page p2" /><span className="wb-top"><i className="wb-page p1" /><i className="wb-twine h" /><i className="wb-twine v" /><i className="wb-knot" /><i className="wb-tag" /></span></span>
+      : <span className="wi-scene wi-catalog" aria-hidden="true"><i className="wc-card c1" /><i className="wc-card c2" /><i className="wc-card c3" /><i className="wc-drawer" /><i className="wc-label" /><i className="wc-pull" /></span>}
     <div className="relative"><p className="writing-eyebrow">{diary ? "Il quaderno del Circuito" : "La biblioteca del Circuito"}</p>
       <h2 className="hd text-2xl md:text-3xl font-bold mt-2">{diary ? "Una pausa, una pagina." : "Scritti che prendono forma."}</h2>
       <p className="mu mt-3 max-w-2xl">{diary ? "Le cose che passano per la testa, senza dover diventare un tema. Qui ogni pensiero ha spazio: lo leggiamo per intero, senza voti o classifiche. Chi scrive sceglie se firmarlo o restare anonimo."
         : "Temi, racconti e riflessioni a cui dedicare tempo. Qui trovi gli estratti; l’amministratore legge i testi integrali e seleziona gli scritti per il podio del mese."}</p>
       <div className="writing-promises"><span><EyeOff size={14} />{diary ? "Anonimo o firmato, scegli tu" : "Lettura anonima"}</span><span>{diary ? <BookOpen size={14} /> : <LockKeyhole size={14} />}{diary ? "Lettura integrale" : "Solo un estratto pubblico"}</span></div>
-      <button className="bt mt-5" onClick={onWrite}><Pen size={15} />{diary ? "Affida un pensiero al diario" : "Scrivi uno scritto completo"}<ArrowUpRight size={15} /></button>
+      <button className="bt wi-cta mt-5" onClick={onWrite}><Pen size={15} />{diary ? "Affida un pensiero al diario" : "Scrivi uno scritto completo"}<ArrowUpRight size={15} /></button>
     </div>
   </section>;
 }
@@ -85,7 +89,7 @@ export function DiaryCards({ items, onOpen, author, drawing }: { items: any[]; o
       {/* in alto il titolo e sotto la firma (o la voce anonima); sul foglio soltanto il pensiero */}
       <div className={`diary-card-top ${signatureOf(t) ? "signed" : ""}`}>{signatureOf(t) ? <Signature size={18} /> : <BookOpen size={18} />}<div className="min-w-0 flex-1"><h3 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title}</h3><span className="diary-card-by block truncate">{author(t)}</span></div><ArrowUpRight size={17} className="shrink-0 mt-1" /></div>
       <div className={`paper diary-paper ${paperClass(cartaOf(t))}`}><p className="whitespace-pre-line line-clamp-6">{preview(t.content) || "Un pensiero disegnato, oltre le parole."}</p>{drawing(t)}</div>
-      <p className="mu text-xs mt-4">Un pensiero da leggere, senza giudizi.</p>
+      <p className="diary-card-foot"><Feather size={13} aria-hidden="true" />Un pensiero da leggere, senza giudizi.</p>
     </article>)}
   </div>;
 }
