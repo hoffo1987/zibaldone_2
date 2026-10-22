@@ -26,6 +26,7 @@ import "./editor.css";
 import "./scritti.css";
 import "./reader.css";
 import "./authors.css";
+import "./podio.css";
 import { EmptyCircuit } from "./EmptyCircuit";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
@@ -2455,8 +2456,8 @@ export default function App() {
   const podiumLetters = tab === "podio" && !isAdmin ? revealLines(nextReveal()) : undefined;
   const podiumPlates = (tab === "podio" ? [0, 1, 2] : []).map((k) => { const t = top[k]; if (!t) return null;
             return (
-              <div data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className="pdm-card">
-                <div className="flex items-center justify-between gap-2"><span className="pdm-rank">{k + 1}° posto</span><Stars v={t.rating || 0} size={13} /></div>
+              <div data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className={`pdm-card p${k + 1}`}>
+                <div className="flex items-center justify-between gap-2"><span className="pdm-rank"><span className="pdm-medal sm hd" aria-hidden="true">{k + 1}</span>{k + 1}° posto</span><Stars v={t.rating || 0} size={13} /></div>
                 <div className="hd font-bold leading-snug mt-1 line-clamp-2">{t.title}</div>
                 <div className="pdm-who flex items-center gap-2 mt-1.5 min-w-0">{who(t, 18)}<span className="mu text-xs truncate">{wn(t)}</span></div>
               </div>
@@ -2472,17 +2473,30 @@ export default function App() {
     </div>
   ));
   const shiftM = (d: number) => { const [y, m] = month.split("-").map(Number); setMonth(mKey(new Date(y, m - 1 + d, 1).getTime())); };
+  // la pista dei giorni: piena per i mesi chiusi, a metà strada per quello in corso, vuota per quelli che verranno
+  const pdProg = (() => {
+    const [yy, mm] = month.split("-").map(Number), days = new Date(yy, mm, 0).getDate(), now = new Date();
+    const cur = now.getFullYear() === yy && now.getMonth() === mm - 1, past = new Date(yy, mm - 1, 1) < new Date(now.getFullYear(), now.getMonth(), 1);
+    return { y: yy, name: new Date(yy, mm - 1, 1).toLocaleDateString("it-IT", { month: "long" }), p: cur ? now.getDate() / days : past ? 1 : 0, l: cur ? `giorno ${now.getDate()} di ${days}` : past ? "mese chiuso" : "deve ancora cominciare" };
+  })();
+  const toRateM = mItems.filter((t) => !t.rating).length;
   const podioView = tab === "podio" && (!isAdmin ? (podium3d ? <PodiumSlot /> : <Reveal><PodiumCover sign={podiumSign} /></Reveal>) : (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-        <div className="flex items-center gap-2">
-          <button className="bt !p-2.5" onClick={() => shiftM(-1)} aria-label="Mese precedente"><ChevronLeft size={16} /></button>
-          <span className="hd text-xl font-bold capitalize min-w-[190px] text-center">{mLabel(month)}</span>
-          <button className="bt !p-2.5" onClick={() => shiftM(1)} aria-label="Mese successivo"><ChevronRight size={16} /></button>
+      <div className="pd-bar">
+        {/* il mese come un quadrante: le frecce ai lati, l'anno sopra il nome, e sotto la pista dei giorni già passati */}
+        <div className="pd-month">
+          <button className="pd-arrow" onClick={() => shiftM(-1)} aria-label="Mese precedente"><ChevronLeft size={17} /></button>
+          <div key={month} className={`pd-cal ${pdProg.p ? "" : "zero"}`} style={{ ["--p" as any]: pdProg.p }}>
+            <span className="pd-cal-y">{pdProg.y} · {pdProg.l}</span>
+            <span className="pd-cal-m hd">{pdProg.name}</span>
+            <i className="pd-track" aria-hidden="true"><b /></i>
+          </div>
+          <button className="pd-arrow" onClick={() => shiftM(1)} aria-label="Mese successivo"><ChevronRight size={17} /></button>
         </div>
-        <div className="flex items-center gap-3 text-sm mu">
-          <span>{mItems.length} {mItems.length === 1 ? "scritto" : "scritti"} · {mItems.filter((t) => !t.rating).length} da valutare</span>
-          <button className="bt" onClick={() => { setTab("read"); setMonthFilter(month); setSortBy("newest"); }}>Valuta ora</button>
+        <div className="pd-stats">
+          <span className="pd-chip"><b>{mItems.length}</b>{mItems.length === 1 ? "scritto" : "scritti"}</span>
+          <span className={`pd-chip ${toRateM ? "warn" : "ok"}`}><i aria-hidden="true" /><b>{toRateM}</b>da valutare</span>
+          <button className="bt pd-rate" onClick={() => { setTab("read"); setMonthFilter(month); setSortBy("newest"); }}><Star size={15} />Valuta ora</button>
         </div>
       </div>
       {loading ? <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
@@ -2497,9 +2511,9 @@ export default function App() {
             {[1, 0, 2].map((k) => { const t = top[k]; if (!t) return <div key={k} className="hidden md:block" />;
               return (
                 <Reveal key={t.id} delay={k * 120}>
-                  <div data-doc={t.id} onClick={(e) => openView(t, e)} className={`pn card cursor-pointer p-6 ${k === 0 ? "md:pt-10 md:pb-16 spin-b" : ""}`}>
+                  <div data-doc={t.id} onClick={(e) => openView(t, e)} className={`pn card pd-flat p${k + 1} cursor-pointer p-6 ${k === 0 ? "md:pt-10 md:pb-16 spin-b" : ""}`}>
                     <div className="flex items-center justify-between">
-                      <span className="hd w-11 h-11 rounded-full flex items-center justify-center text-lg font-bold" style={{ background: k === 0 ? "var(--am)" : "var(--sf)", color: k === 0 ? "#3b2a00" : "var(--ink)" }}>{k + 1}</span>
+                      <span className={`pdm-medal p${k + 1} hd`} aria-hidden="true">{k + 1}</span>
                       <Stars v={t.rating || 0} size={16} />
                     </div>
                     <h3 className="hd text-xl font-bold mt-5 line-clamp-2">{t.title}</h3>
