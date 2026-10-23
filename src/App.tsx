@@ -128,6 +128,13 @@ const dims = (t: any) => ({
   w: t.w || 900,
   h: t.h || (t.strokes || []).reduce((m: number, s: any) => s.points.reduce((mm: number, p: any) => Math.max(mm, p.y + 80), m), 400),
 });
+// Misura il testo con immagini e margini, senza lo spazio minimo aggiunto al foglio.
+const editorContentHeight = (ed: HTMLElement | null) => {
+  if (!ed) return 0;
+  const min = ed.style.minHeight;
+  try { ed.style.minHeight = "0px"; return ed.offsetHeight; }
+  finally { ed.style.minHeight = min; }
+};
 const fmtDate = (ts: number) => new Date(ts).toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" });
 const distSeg = (p: any, a: any, b: any) => {
   const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy || 1;
@@ -1256,6 +1263,10 @@ export default function App() {
   // il foglio scelto per questo scritto (null: quello del suo tipo)
   const [carta, setCarta] = useState<Carta | null>(null);
   const [height, setHeight] = useState(600);
+  const [textHeight, setTextHeight] = useState(0);
+  const drawingHeight = strokes.reduce((bottom, s) => s.points.reduce((b: number, p: any) => Math.max(b, p.y + (s.size || 3) / 2 + 24), bottom), 0);
+  const minPaperHeight = Math.max(600, textHeight, drawingHeight);
+  useEffect(() => { setHeight((h) => Math.max(h, drawingHeight)); }, [drawingHeight]); // anche dopo Annulla/Ripristina del disegno
   const [fmt, setFmt] = useState({ b: false, i: false, u: false, size: "n", color: "" });
   const [panel, setPanel] = useState<null | "size" | "color">(null);
   const savedRange = useRef<Range | null>(null);
@@ -1444,6 +1455,20 @@ export default function App() {
     return () => clearTimeout(t);
   }, [title, content, kind, signed, carta, strokes, height, editingId, draftKey]);
   useEffect(() => { if (tab === "write" && editorRef.current) editorRef.current.innerHTML = clean(content); }, [tab, loadTick]);
+  useEffect(() => {
+    const ed = editorRef.current; if (tab !== "write" || !ed) return;
+    const measure = () => setTextHeight(editorContentHeight(ed));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(ed);
+    ed.addEventListener("load", measure, true); // immagini caricate dopo il ripristino della bozza
+    return () => { observer.disconnect(); ed.removeEventListener("load", measure, true); };
+  }, [tab, content, loadTick]);
+  const removeSpace = () => {
+    // Rimisura al clic: anche un'immagine appena caricata deve restare sul foglio.
+    const minimum = Math.max(600, editorContentHeight(editorRef.current), drawingHeight);
+    setHeight((h) => Math.min(h, Math.max(minimum, h - 300)));
+  };
 
   // scorciatoie disegno
   useEffect(() => {
@@ -2774,7 +2799,10 @@ export default function App() {
                 <div className="editor-footer ed-foot">
                   <span className="editor-footer-status ed-status"><span className="ed-count"><b key={drawing ? strokes.length : words}>{drawing ? strokes.length : words}</b>{drawing ? (strokes.length === 1 ? "tratto" : "tratti") : (words === 1 ? "parola" : "parole")}</span>{!editingId && <span className="ed-auto"><i aria-hidden="true" />Bozza automatica</span>}</span>
                   <div className="paper-pick" role="radiogroup" aria-label="Foglio">{CARTE.map((c) => { const on = (carta || cartaOf({ kind })) === c, l = c === "quadretti" ? "A quadretti" : c === "righe" ? "A righe" : "Bianco"; return <button key={c} type="button" role="radio" aria-checked={on} title={`Foglio ${l.toLowerCase()}`} aria-label={`Foglio ${l.toLowerCase()}`} className={`bt !p-2 ${on ? "on" : ""}`} onClick={() => setCarta(c)}><i className={`pp-sw ${c}`} aria-hidden="true" /><span className="paper-pick-l">{l}</span></button>; })}</div>
-                  <button type="button" className="editor-add-space bt" title="Allunga il foglio" onClick={() => setHeight((h) => h + 300)}><Plus size={14} />Spazio</button>
+                  <div className="editor-space-controls" role="group" aria-label="Spazio del foglio">
+                    <button type="button" className="editor-add-space editor-remove-space bt" title="Riduci il foglio fino al contenuto" aria-label="Rimuovi spazio vuoto" disabled={height <= minPaperHeight} onClick={removeSpace}><Minus size={14} />Spazio</button>
+                    <button type="button" className="editor-add-space bt" title="Allunga il foglio" aria-label="Aggiungi spazio" onClick={() => setHeight((h) => h + 300)}><Plus size={14} />Spazio</button>
+                  </div>
                 </div>
               </div>
               <div className="ed-actions">

@@ -96,9 +96,10 @@
 
 /* «Spazio» aggiunge foglio: un tasto tratteggiato */
 .root .ed-shell .editor-add-space{font-size:.75rem;font-weight:650;color:var(--room);border:1px dashed color-mix(in srgb,var(--room) 50%,var(--ln2));background:transparent;box-shadow:none}
-@media (hover:hover){.root .ed-shell .editor-add-space:hover{background:color-mix(in srgb,var(--room) 9%,transparent);border-color:var(--room)}}
+@media (hover:hover){.root .ed-shell .editor-add-space:not(:disabled):hover{background:color-mix(in srgb,var(--room) 9%,transparent);border-color:var(--room)}}
+.root .ed-shell .editor-add-space:disabled{opacity:.4;cursor:not-allowed}
 .editor-add-space svg{transition:transform .35s var(--spring)}
-.editor-add-space:hover svg{transform:rotate(90deg)}
+.editor-add-space:not(.editor-remove-space):hover svg{transform:rotate(90deg)}
 
 /* ---------- l'invio ---------- */
 .ed-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:.6rem}
