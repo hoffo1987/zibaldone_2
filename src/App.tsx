@@ -17,6 +17,7 @@ import Stars from "./Stars";
 import { clean, plain, readingHtml } from "./sanitize";
 import { pubOf, pubSig, readPublic, isDiary, signatureOf, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, cartaOf, paperClass, isCarta, CARTE, type WritingKind, type Carta } from "./testi";
 import { snapshotReader } from "./snapshot";
+import { measure, measureAt, relayout, anchorInk, inkBottom, inkBounds, inkPreviewOf } from "./ink";
 import NotificationPanel, { BellMark } from "./NotificationPanel";
 import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
 import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt, RoomCard } from "./WritingSections";
@@ -124,10 +125,6 @@ const tidyName = (s: string) => s.trim().replace(/\s+/g, " ").split(" ").filter(
 const okName = (s: string) => s.length >= 2 && s.length <= 30 && !/[\d_@#$%^&*()+=<>[\]{}|\\/!?~`":;,]/.test(s) && (s.match(RE_LETTER) || []).length >= 2;
 // handle di partenza ricavato dal nome ("Mario Rossi" → "mario.rossi"), poi modificabile dal profilo
 const toHandle = (s: string) => s.normalize("NFD").replace(RE_MARK, "").toLowerCase().trim().split(/\s+/).join(".").replace(/[^a-z0-9_.]/g, "").slice(0, 20).replace(/\.+$/, "");
-const dims = (t: any) => ({
-  w: t.w || 900,
-  h: t.h || (t.strokes || []).reduce((m: number, s: any) => s.points.reduce((mm: number, p: any) => Math.max(mm, p.y + 80), m), 400),
-});
 // Misura il testo con immagini e margini, senza lo spazio minimo aggiunto al foglio.
 const editorContentHeight = (ed: HTMLElement | null) => {
   if (!ed) return 0;
@@ -638,11 +635,43 @@ const Shape = React.memo(({ s }: any) => {
   const pts = p.map((q: any) => `${q.x},${q.y}`).join(" ");
   return s.tool === "fill" ? <polygon points={pts} {...c} fill={s.color} fillOpacity={s.opacity ?? 1} /> : <polyline points={pts} {...c} />;
 });
-const Drawing = React.memo(({ strokes, w, h, className = "" }: any) => (
-  <svg className={className} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMinYMin meet">
-    {(strokes || []).map((s: any, i: number) => <Shape key={i} s={s} />)}
-  </svg>
-));
+// anteprima nelle schede: solo la parte disegnata, senza il foglio vuoto attorno (i disegni piccoli non si ingrandiscono troppo)
+const InkPreview = React.memo(({ strokes: all, className = "", align = "xMinYMin" }: any) => {
+  const strokes = useMemo(() => inkPreviewOf(all || []), [all]), b = inkBounds(strokes);
+  if (!b) return null;
+  const w = Math.max(b.x1 - b.x0 + 12, 200), h = Math.max(b.y1 - b.y0 + 12, 120), x = (b.x0 + b.x1 - w) / 2, y = (b.y0 + b.y1 - h) / 2;
+  return <svg className={className} viewBox={`${x} ${y} ${w} ${h}`} preserveAspectRatio={`${align} meet`} aria-hidden="true">{strokes.map((s: any, i: number) => <Shape key={i} s={s} />)}</svg>;
+});
+// Lo scritto da leggere con il suo disegno: i tratti tornano accanto alle parole per la larghezza di questo schermo
+// (vedi ink.ts) e il foglio si allunga solo quanto serve al disegno, non quanto era alto sul foglio di chi l'ha scritto.
+const InkText = ({ html, source, strokes, w, className }: any) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [ink, setInk] = useState<{ s: any[]; b: number } | null>(null);
+  useLayoutEffect(() => {
+    const rt = ref.current, host = rt?.parentElement;
+    if (!rt || !host || !strokes?.length) { setInk(null); return; }
+    let raf = 0, lastW = -1, off = false;
+    const run = () => {
+      raf = 0; if (off) return;
+      lastW = rt.clientWidth;
+      const s = relayout(strokes, measureAt(host, clean(source || ""), w || 900, rt), measure(rt));
+      setInk({ s, b: inkBottom(s) });
+    };
+    const later = () => { if (!raf) raf = requestAnimationFrame(run); };
+    run();
+    const ro = new ResizeObserver(() => { if (rt.clientWidth !== lastW) later(); });
+    ro.observe(rt);
+    rt.addEventListener("load", later, true); // le foto cambiano l'impaginazione quando arrivano
+    (document as any).fonts?.ready?.then(later);
+    return () => { off = true; ro.disconnect(); rt.removeEventListener("load", later, true); cancelAnimationFrame(raf); };
+  }, [html, source, strokes, w]);
+  return (
+    <div className="ink-host">
+      {ink && <svg className="ink-layer" aria-hidden="true">{ink.s.map((s, i) => <Shape key={i} s={s} />)}</svg>}
+      <div ref={ref} className={className} style={ink ? { minHeight: Math.ceil(ink.b + 24) } : undefined} dangerouslySetInnerHTML={{ __html: html }} />
+    </div>
+  );
+};
 
 // --- APP ANDROID (APK) ---
 // Il link all'APK si trova su Firestore, nel documento  app_config/android  con i campi:
@@ -1285,6 +1314,8 @@ export default function App() {
   const [spLast, setSpLast] = useState<{ s: Spunto; before: string; after: string } | null>(null);
   const spLine = useRef<HTMLElement | null>(null);
   const down = useRef(false);
+  // la larghezza del foglio per cui sono impaginati i tratti (0: quella di adesso)
+  const inkW = useRef(0);
   const draftKey = user ? `circuito:bozza:${user.uid}` : "";
 
   // un avviso nuovo riparte da capo: il timer di quello prima non deve chiuderlo in anticipo
@@ -1442,16 +1473,16 @@ export default function App() {
   // bozza: ripristino + salvataggio automatico
   useEffect(() => {
     // a ogni cambio di account riparto da un foglio vuoto: altrimenti il testo di chi è uscito finirebbe nella bozza di chi entra
-    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setSpLast(null); setLoadTick((n) => n + 1);
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setSpLast(null); setLoadTick((n) => n + 1); inkW.current = 0;
     if (!draftKey) return;
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) || "null");
-      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setKind(writingKind(d)); setSigned(d.firmato === true); setCarta(isCarta(d.carta) ? d.carta : null); setStrokes(d.strokes || []); setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
+      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setKind(writingKind(d)); setSigned(d.firmato === true); setCarta(isCarta(d.carta) ? d.carta : null); setStrokes(d.strokes || []); inkW.current = d.w || 0; setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
     } catch {}
   }, [draftKey]);
   useEffect(() => {
     if (!draftKey || editingId || (!title && !plain(content).trim() && !strokes.length)) return;
-    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, kind, firmato: signed, carta, strokes, height })); } catch {} }, 800);
+    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, kind, firmato: signed, carta, strokes, height, w: inkW.current })); } catch {} }, 800);
     return () => clearTimeout(t);
   }, [title, content, kind, signed, carta, strokes, height, editingId, draftKey]);
   useEffect(() => { if (tab === "write" && editorRef.current) editorRef.current.innerHTML = clean(content); }, [tab, loadTick]);
@@ -1469,6 +1500,30 @@ export default function App() {
     const minimum = Math.max(600, editorContentHeight(editorRef.current), drawingHeight);
     setHeight((h) => Math.min(h, Math.max(minimum, h - 300)));
   };
+  // Il disegno caricato su un foglio di larghezza diversa (scritto da telefono e aperto su PC, o viceversa) e il foglio che
+  // cambia larghezza mentre si scrive: i tratti tornano accanto alle loro parole (vedi ink.ts)
+  const strokesNow = useRef(strokes); strokesNow.current = strokes;
+  useEffect(() => {
+    const paper = canvasRef.current, ed = editorRef.current;
+    if (tab !== "write" || !paper || !ed) return;
+    let raf = 0, off = false;
+    const run = () => {
+      raf = 0; if (off) return;
+      const W = paper.clientWidth, from = inkW.current, ss = strokesNow.current;
+      if (!W) return;
+      inkW.current = W;
+      if (!ss.length || !from || Math.abs(from - W) < 1) return;
+      const next = relayout(ss, measureAt(paper, clean(ed.innerHTML), from, ed), measure(ed));
+      setStrokes(next); setHist([]); setFut([]); setCur(null);
+      setHeight(Math.max(600, Math.ceil(inkBottom(next) + 24)));
+    };
+    const later = () => { if (!raf) raf = requestAnimationFrame(run); };
+    // prima le foto devono avere la loro misura, altrimenti il testo sotto risulterebbe più in alto
+    Promise.all(Array.from(ed.querySelectorAll("img")).map((im: any) => (im.complete ? 0 : im.decode?.().catch(() => 0))))
+      .then(() => (document as any).fonts?.ready).then(later, later);
+    const ro = new ResizeObserver(later); ro.observe(paper);
+    return () => { off = true; ro.disconnect(); cancelAnimationFrame(raf); };
+  }, [tab, loadTick]);
 
   // scorciatoie disegno
   useEffect(() => {
@@ -1814,12 +1869,12 @@ export default function App() {
   };
 
   const resetForm = () => {
-    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600);
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); inkW.current = 0;
     setDrawing(false); setImg(null); setSpLast(null); setLoadTick((n) => n + 1);
     try { localStorage.removeItem(draftKey); } catch {}
   };
   const startEdit = (t: any) => {
-    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setSigned(t.firmato === true); setCarta(isCarta(t.carta) ? t.carta : null); setStrokes(t.strokes || []);
+    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setSigned(t.firmato === true); setCarta(isCarta(t.carta) ? t.carta : null); setStrokes(t.strokes || []); inkW.current = t.w || 900;
     setHist([]); setFut([]); setHeight(t.h || 600); setSel(null); setDrawing(false); setSpLast(null); setTab("write"); setLoadTick((n) => n + 1);
   };
   // «Scrivi da qui»: lo spunto va in fondo al foglio (al posto di quello di prima, se nessuno l'ha ancora toccato), vola
@@ -1849,9 +1904,9 @@ export default function App() {
     e.preventDefault();
     const html = clean(editorRef.current?.innerHTML || "");
     if (!user || !(plain(html).trim() || /<img/.test(html) || strokes.length)) return;
-    const st = strokes.map((s) => ({ ...s, points: s.points.map((p: any) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 })) }));
+    const st = (editorRef.current ? anchorInk(strokes, measure(editorRef.current)) : strokes).map((s) => ({ ...s, points: s.points.map((p: any) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 })) }));
     const orig = editingId ? rawItems.find((x) => x.id === editingId) : null;
-    const data: any = { title: title.trim() || "Senza titolo", kind, excerpt: kind === "complete" ? excerptOf(html) : "", content: html, strokes: st, w: Math.round(canvasRef.current?.clientWidth || 900), h: Math.round(height) };
+    const data: any = { title: title.trim() || "Senza titolo", kind, excerpt: kind === "complete" ? excerptOf(html) : "", content: html, strokes: st, w: Math.round(inkW.current || canvasRef.current?.clientWidth || 900), h: Math.round(height) };
     // la firma si scrive solo se serve: i pensieri anonimi restano identici a prima
     if (kind === "diary" && (signed || orig?.firmato !== undefined)) data.firmato = signed;
     // il foglio si scrive solo se è stato scelto (o se lo scritto ne aveva già uno)
@@ -2649,7 +2704,7 @@ export default function App() {
           {["altri", "read", "diario"].includes(tab) && <WritingIntro diary={tab === "diario"} onWrite={() => newWriting(tab === "diario" ? "diary" : "complete")} />}
           {tab === "diario" && (pubLoading || loading ? <Sheets /> : diaryShown.length === 0
             ? <div className="pn p-10 text-center"><BookOpen size={34} className="mx-auto mu mb-4" /><h3 className="hd text-xl font-bold">{search ? "Nessun pensiero trovato" : "Il diario aspetta la prima pagina"}</h3><p className="mu text-sm mt-2">{search ? "Prova un’altra parola." : "Non serve avere tutto chiaro per cominciare a scrivere."}</p></div>
-            : <><DiaryCards items={diaryShown.slice(0, visible)} onOpen={openView} author={diaryAuthor} drawing={t => t.strokes?.length ? <Drawing strokes={t.strokes} {...dims(t)} className="w-full mt-3" /> : null} />{diaryShown.length > visible && <button className="bt mt-6" onClick={() => setVisible(v => v + 18)}>Altri pensieri</button>}</>)}
+            : <><DiaryCards items={diaryShown.slice(0, visible)} onOpen={openView} author={diaryAuthor} drawing={t => t.strokes?.length ? <InkPreview strokes={t.strokes} className="ink-preview mt-3" /> : null} />{diaryShown.length > visible && <button className="bt mt-6" onClick={() => setVisible(v => v + 18)}>Altri pensieri</button>}</>)}
           {/* SCRITTI DEGLI ALTRI (non admin): solo titolo, testo e disegno, da leggere */}
           {tab === "altri" && (pubLoading || loading ? (
             <Sheets />
@@ -2662,13 +2717,13 @@ export default function App() {
           ) : (
             <><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {pubShown.slice(0, visible).map((t, i) => {
-                const { w, h } = dims(t), j = i % 18, wave = (j % 3) * 65 + (j < 6 ? Math.floor(j / 3) * 65 : 0);
+                const j = i % 18, wave = (j % 3) * 65 + (j < 6 ? Math.floor(j / 3) * 65 : 0);
                 return (
                   <Reveal key={t.id} flip={t.id} delay={wave} fx="sheet" className="h-full"><article data-doc={t.id} role="button" tabIndex={0} aria-label={`Leggi ${t.title || "lo scritto"}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }}
                     className="pn card h-full overflow-hidden cursor-pointer">
                     <div className={`paper ${paperClass(cartaOf(t))} sm relative h-40 overflow-hidden`}>
                       <div className="thumb absolute inset-0">
-                        {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
+                        {t.strokes?.length > 0 && <InkPreview strokes={t.strokes} align="xMaxYMax" className="ink-thumb" />}
                         <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{snippet(t._tx) || (t._img ? "Contenuto con immagini" : "")}</p>
                       </div>
                     </div>
@@ -2690,7 +2745,7 @@ export default function App() {
           ) : (
             <><div ref={gridRef} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {shown.slice(0, visible).map((t, i) => {
-                const picked = ids.includes(t.id), { w, h } = dims(t);
+                const picked = ids.includes(t.id);
                 // ritmo d'ingresso: onda diagonale (riga + colonna) sulle prime due righe; più giù, mentre scorri, solo lo sfasamento di colonna
                 const j = i % 18, wave = (j % 3) * 65 + (j < 6 ? Math.floor(j / 3) * 65 : 0);
                 return (
@@ -2698,7 +2753,7 @@ export default function App() {
                     className={`pn card h-full overflow-hidden cursor-pointer ${isDiary(t) ? "is-diary" : ""} ${gone.includes(t.id) ? "gone" : ""} ${picked ? "!border-[var(--ac)] ring-2 ring-[var(--ac)]" : ""}`}>
                     <div className={`paper ${paperClass(cartaOf(t))} sm relative h-40 overflow-hidden`}>
                       <div className="thumb absolute inset-0">
-                        {t.strokes?.length > 0 && <Drawing strokes={t.strokes} w={w} h={h} className="absolute inset-0 w-full" />}
+                        {t.strokes?.length > 0 && <InkPreview strokes={t.strokes} align="xMaxYMax" className="ink-thumb" />}
                         <p className="relative p-3 text-[13px] leading-[22px] line-clamp-5" style={{ overflowWrap: "anywhere" }}>{snippet(t._tx) || (t._img ? "Contenuto con immagini" : "")}</p>
                       </div>
                                             {selMode && <div className="absolute top-2 right-2">{picked ? <CheckCircle2 className="fill-white" style={{ color: "var(--ac)" }} /> : <Circle className="text-slate-400" />}</div>}
@@ -2828,7 +2883,6 @@ export default function App() {
       {/* lettura */}
       {view && (() => {
         const sel = view; // durante l'uscita resta visibile l'ultimo scritto aperto
-        const { w, h } = dims(sel);
         // scritto di un altro letto da chi non è admin: c'è solo la copia anonima, e il foglio mostra solo titolo e contenuto
         const anon = !!sel._anon, diary = isDiary(sel), list = tab === "diario" ? diaryShown : anon ? pubShown : shown;
         const si = list.findIndex((x) => x.id === sel.id);
@@ -2884,8 +2938,7 @@ export default function App() {
               </>}
                 {(diary || anon) && <ReadingNotice item={sel} />}
                 {anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`reader-paper paper ${diary ? "diary-paper" : ""} ${paperClass(cartaOf(sel))} relative`} data-sheet-paper="">
-                  {sel.strokes?.length > 0 && <div className="reader-drawing" style={{ aspectRatio: `${w}/${h}` }}><Drawing strokes={sel.strokes} w={w} h={h} className="absolute inset-0 w-full h-full" /></div>}
-                  <div className="rt relative p-6" dangerouslySetInnerHTML={{ __html: readingHtml(sel.content) }} />
+                  <InkText className="rt relative p-6" html={readingHtml(sel.content)} source={sel.content} strokes={sel.strokes} w={sel.w} />
                 </div>}
                 {/* la fine del foglio: un nodo del circuito tra due piste, le parole e il tempo di lettura */}
                 <div className="rd-end"><i className="rd-end-l" /><span className="rd-end-n"><i />{nw ? <>Fine · {nw.toLocaleString("it-IT")} {nw === 1 ? "parola" : "parole"} · {Math.max(1, Math.round(nw / 200))} min di lettura</> : "Fine dell’estratto"}</span><i className="rd-end-l" /></div>

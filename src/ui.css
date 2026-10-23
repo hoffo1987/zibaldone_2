@@ -45,8 +45,11 @@ transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s cubic-bezier(.1
 .reader-scroll-content{display:flex;flex-direction:column;min-height:100%}
 .reader-scroll-content>*{flex-shrink:0}
 .reader-scroll-content>.reader-paper{flex:1 0 auto}
-.reader-paper>.rt,.reader-paper>.reader-drawing{grid-area:1/1;min-width:0}
-.reader-drawing{position:relative;align-self:start;pointer-events:none}
+.reader-paper>.ink-host{grid-area:1/1;min-width:0}
+.ink-host{position:relative}
+.ink-layer{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.ink-preview{display:block;width:100%;height:auto;max-height:8rem}
+.ink-thumb{position:absolute;right:10px;bottom:10px;width:45%;height:70%;pointer-events:none}
 .writing-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px 16px}
 .writing-row-avatar{display:flex;align-items:center;gap:8px}
 .writing-row-copy{min-width:0}
