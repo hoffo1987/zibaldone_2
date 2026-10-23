@@ -2534,7 +2534,8 @@ export default function App() {
   const podium3d = scene3d && (isAdmin ? !loading && ranked.length > 0 : true);
   const podiumSign = tab === "podio" && !isAdmin ? <PodiumSign {...revealCopy(nextReveal())} /> : null;
   const podiumLetters = tab === "podio" && !isAdmin ? revealLines(nextReveal()) : undefined;
-  const podiumPlates = (tab === "podio" ? [0, 1, 2] : []).map((k) => { const t = top[k]; if (!t) return null;
+  // sotto il telo niente targhette: chi non amministra non deve vedere chi c'è sul podio (nemmeno i propri scritti)
+  const podiumPlates = (tab === "podio" && isAdmin ? [0, 1, 2] : []).map((k) => { const t = top[k]; if (!t) return null;
             return (
               <div data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className={`pdm-card p${k + 1}`}>
                 <div className="flex items-center justify-between gap-2"><span className="pdm-rank"><span className="pdm-medal sm hd" aria-hidden="true">{k + 1}</span>{k + 1}° posto</span><Stars v={t.rating || 0} size={13} /></div>
@@ -2543,7 +2544,7 @@ export default function App() {
               </div>
             ); });
   // telefoni: i vincitori in schede sotto il palco 3D (le targhette sopra le coppe sarebbero troppo piccole)
-  const podiumList = (tab === "podio" ? top : []).map((t, k) => (
+  const podiumList = (tab === "podio" && isAdmin ? top : []).map((t, k) => (
     <div key={t.id} data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className={`pdm-row r${k + 1}`}>
       <span className="pdm-medal hd" aria-hidden="true">{k + 1}</span>
       <div className="min-w-0 flex-1">

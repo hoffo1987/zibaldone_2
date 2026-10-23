@@ -392,7 +392,7 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
       <div ref={host} className={`podium-scene ${shown ? "on" : ""}`} aria-hidden="true"><div className="podium-scene-bg" /><i className="podium-scene-scrim" /></div>
       {root && createPortal(
         <div ref={over} className={`podium-over ${shown ? "on" : ""}`}>
-          {order.map((i) => plates[i] ? <div key={`p${i}`} ref={(p) => { plateEls.current[i] = p; }} className={`podium3d-plate r${i + 1}`} onPointerEnter={() => { hoverPlate.current = i; }} onPointerLeave={() => { hoverPlate.current = -1; }}>{plates[i]}</div> : null)}
+          {!covered && order.map((i) => plates[i] ? <div key={`p${i}`} ref={(p) => { plateEls.current[i] = p; }} className={`podium3d-plate r${i + 1}`} onPointerEnter={() => { hoverPlate.current = i; }} onPointerLeave={() => { hoverPlate.current = -1; }}>{plates[i]}</div> : null)}
         </div>, root)}
       {signNode}
       {hudEl && root ? createPortal(hudEl, root) : null}
