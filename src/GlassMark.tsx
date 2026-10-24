@@ -67,6 +67,12 @@ export function GlassMark({ section }: { section: string }) {
         <rect className="gm-acc" x="13" y="21.8" width="6" height="2.4" rx="1.2" {...acc} />
       </>;
       break;
+    case "more": // the mobile bar's «Altro»: three drops of glass on a pale bar
+      parts = <>
+        <rect className="gm-back" x="3" y="11.5" width="26" height="9" rx="4.5" {...back} />
+        <g className="gm-front"><circle {...front} cx="8.5" cy="16" r="3.1" /><circle {...front} cx="16" cy="16" r="3.1" /><circle {...front} cx="23.5" cy="16" r="3.1" /></g>
+      </>;
+      break;
     default: // scritti: the books of both rooms
       parts = <>
         <rect className="gm-back" x="3.5" y="8" width="6.4" height="19.5" rx="1.8" {...back} />

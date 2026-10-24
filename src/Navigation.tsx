@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronRight, MoreHorizontal, X } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import { useRail } from "./motion";
 import { SectionMark } from "./SectionMark";
 import { GlassMark } from "./GlassMark";
@@ -45,6 +45,20 @@ export const navigationItems = (admin: boolean, editing: boolean): Item[] => [
 // the navigation entry that owns a tab
 const ownerOf = (tab: string) => inHub(tab) ? "scritti" : tab;
 
+// The selection is a drop of glass: it stretches on the way (useRail delays its trailing edge) and, when that edge
+// arrives, squashes along the way it came and settles.
+const useLanding = (ref: React.RefObject<HTMLElement>, axis: "v" | "h") => useEffect(() => {
+  const ind = ref.current?.querySelector<HTMLElement>(":scope > .nind"); if (!ind?.animate) return;
+  const land = (e: TransitionEvent) => {
+    const d = ind.style.transitionDelay.split(",").map(parseFloat);
+    if (e.target !== ind || e.propertyName !== (axis === "v" ? (d[0] > 0 ? "top" : "bottom") : (d[2] > 0 ? "left" : "right"))) return;
+    const squash = axis === "v" ? ["scale(1.03, .9)", "scale(.99, 1.03)"] : ["scale(.9, 1.05)", "scale(1.03, .99)"];
+    ind.animate([{ transform: squash[0] }, { transform: squash[1] }, { transform: "none" }], { duration: 480, easing: "cubic-bezier(.3,.7,.3,1)" });
+  };
+  ind.addEventListener("transitionend", land);
+  return () => ind.removeEventListener("transitionend", land);
+}, [ref, axis]);
+
 // The section's glass tile. When the section opens, its colour rises inside the glass like a liquid, with a few bubbles,
 // and the mark turns to white glass; when you leave, the colour drains back down.
 function GlassIcon({ mark }: { mark: string }) {
@@ -83,16 +97,8 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
     el.addEventListener("pointermove", move, { passive: true });
     return () => { el.removeEventListener("pointermove", move); cancelAnimationFrame(raf); };
   }, []);
-  // the selection is a drop of glass: it stretches on the way (useRail) and wobbles once when it lands
-  useEffect(() => {
-    const ind = vertical.current?.querySelector<HTMLElement>(":scope > .nind"); if (!ind?.animate) return;
-    const land = (e: TransitionEvent) => {
-      if (e.target !== ind || e.propertyName !== (parseFloat(ind.style.transitionDelay) > 0 ? "top" : "bottom")) return;
-      ind.animate([{ transform: "scale(1.03, .9)" }, { transform: "scale(.99, 1.03)" }, { transform: "none" }], { duration: 480, easing: "cubic-bezier(.3,.7,.3,1)" });
-    };
-    ind.addEventListener("transitionend", land);
-    return () => ind.removeEventListener("transitionend", land);
-  }, []);
+  useLanding(vertical, "v");
+  useLanding(horizontal, "h");
   rememberRoom(tab);
   const owner = ownerOf(tab);
   // the rail follows the section, not the room: moving between Diario and Scritti completi keeps it still
@@ -114,7 +120,7 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
       data-tour={mobile || item.id !== "scritti" ? tour : "nav-scritti"} data-snd="nav" data-tone={tone(item)}
       aria-current={on && (mobile || !item.rooms) ? "page" : undefined} aria-label={item.label} style={{ "--i": items.indexOf(item) } as React.CSSProperties}
       onClick={() => navigate(item.id)} className={`bt nb shell-link ${on ? "act" : ""}`}>
-      {mobile ? <span className="shell-icon" aria-hidden="true"><span className="shell-icon-orbit" /><SectionMark key={`${item.id}:${on}`} section={item.mark} /></span> : <GlassIcon mark={item.mark} />}
+      <GlassIcon mark={item.mark} />
       <span className="shell-link-copy"><span className="shell-link-title">{mobile ? item.short : item.label}</span>
         {!mobile && <span className="shell-link-detail">{on && room ? room.label : item.detail}</span>}
       </span>
@@ -158,7 +164,7 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
       <button type="button" data-act={secondaryActive ? "1" : undefined} data-tour={`nav-${secondaryActive?.id || "more"}`} data-snd="nav"
         data-tone={secondaryActive?.tone || "cyan"} aria-label="Altre sezioni" aria-haspopup="dialog" aria-expanded={more} aria-current={secondaryActive ? "page" : undefined}
         onClick={() => setMore(true)} className={`bt nb shell-link ${secondaryActive ? "act" : ""}`}>
-        <span className="shell-icon" aria-hidden="true">{secondaryActive ? <SectionMark section={secondaryActive.mark} /> : <MoreHorizontal size={22} />}</span>
+        <GlassIcon mark={secondaryActive?.mark || "more"} />
         <span className="shell-link-title">Altro</span>
       </button>
     </nav>

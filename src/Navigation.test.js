@@ -87,7 +87,7 @@ test('members find the covered podium under More, but not the authors', () => {
   expect(host.querySelector('.shell-rail [aria-label="Autori"]')).toBeNull();
 });
 
-test('on the desktop panel every section has a glass tile, and the rooms switch follows the open room', () => {
+test('every section has a glass tile, and the rooms switch follows the open room', () => {
   localStorage.clear();
   act(() => root.render(<Preview />));
   const rail = host.querySelector('.shell-rail');
@@ -101,6 +101,9 @@ test('on the desktop panel every section has a glass tile, and the rooms switch 
   act(() => rail.querySelector('.shell-room[aria-label="Scritti completi"]').click());
   expect(rooms.getAttribute('data-i')).toBe('1');
   expect(rooms.getAttribute('data-tone')).toBe('violet');
-  // the mobile dock keeps its own icons
-  expect(host.querySelector('.shell-dock .gi')).toBeNull();
+  // the mobile bar has the same glass tiles; «Altro» shows the section it holds when that one is open
+  const dock = () => Array.from(host.querySelectorAll('.shell-dock .gi [data-mark]')).map(m => m.getAttribute('data-mark'));
+  expect(dock()).toEqual(['home', 'write', 'scritti', 'more']);
+  act(() => rail.querySelector('[aria-label="Autori"]').click());
+  expect(dock()).toEqual(['home', 'write', 'scritti', 'authors']);
 });
