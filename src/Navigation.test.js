@@ -86,3 +86,18 @@ test('members find the covered podium under More, but not the authors', () => {
   expect(host.querySelector('.shell-rail [aria-current="page"]').getAttribute('aria-label')).toBe('Podio del mese');
   expect(host.querySelector('.shell-rail [aria-label="Autori"]')).toBeNull();
 });
+
+test('on the desktop panel every section is a tube, and only the open one strikes through other cathodes', () => {
+  act(() => root.render(<Preview />));
+  const rail = host.querySelector('.shell-rail');
+  expect(rail.querySelectorAll('.shell-link .tube')).toHaveLength(6);
+  const lit = () => Array.from(rail.querySelectorAll('.shell-link')).filter(b => b.querySelector('.tube-flash')).map(b => b.getAttribute('aria-label'));
+  expect(lit()).toEqual(['Panoramica']);
+  const flashes = rail.querySelectorAll('.shell-link.act .tube-flash [data-mark]');
+  expect(Array.from(flashes).map(m => m.getAttribute('data-mark'))).not.toContain('home');
+  expect(flashes).toHaveLength(3);
+  act(() => rail.querySelector('[aria-label="Autori"]').click());
+  expect(lit()).toEqual(['Autori']);
+  // the mobile dock keeps its own icons
+  expect(host.querySelector('.shell-dock .tube')).toBeNull();
+});

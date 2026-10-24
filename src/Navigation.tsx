@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight, MoreHorizontal, X } from "lucide-react";
 import { useRail } from "./motion";
 import { SectionMark } from "./SectionMark";
@@ -44,6 +44,23 @@ export const navigationItems = (admin: boolean, editing: boolean): Item[] => [
 // the navigation entry that owns a tab
 const ownerOf = (tab: string) => inHub(tab) ? "scritti" : tab;
 
+// Each section is a Nixie tube: smoked glass, the hexagonal anode mesh in front, a bakelite base. The section's mark
+// is the cathode. When the section opens the tube strikes like a Nixie clock: three other cathodes flash in turn,
+// then its own catches with a flicker and glows in the section's colour. The tube you leave cools down slowly.
+const CATHODES = ["home", "my_pages", "write", "scritti", "podio", "authors", "diario", "complete"];
+function Tube({ mark, on }: { mark: string; on: boolean }) {
+  const at = CATHODES.indexOf(mark), others = CATHODES.filter(m => m !== mark);
+  const flash = on ? [0, 2, 4].map(k => others[(Math.max(0, at) + k) % others.length]) : [];
+  return <span className="tube" aria-hidden="true">
+    <span className="tube-glass">
+      <span className="tube-cathode"><SectionMark section={mark} size={26} motion={false} /></span>
+      {flash.map((m, k) => <span key={m} className="tube-cathode tube-flash" style={{ "--k": k } as React.CSSProperties}><SectionMark section={m} size={26} motion={false} /></span>)}
+      <span className="tube-mesh" />
+    </span>
+    <span className="tube-base" />
+  </span>;
+}
+
 type Props = {
   tab: string;
   admin: boolean;
@@ -59,6 +76,9 @@ type Props = {
 export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, brand, footer, mobileHeader }: Props) {
   const vertical = useRef<HTMLDivElement>(null), horizontal = useRef<HTMLElement>(null);
   const [more, setMore] = useState(false);
+  // switching the panel on: every tube lights its cathode once, top to bottom, then only the open section stays lit
+  const [boot, setBoot] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setBoot(false), 1600); return () => clearTimeout(t); }, []);
   rememberRoom(tab);
   const owner = ownerOf(tab);
   // the rail follows the section, not the room: moving between Diario and Scritti completi keeps it still
@@ -78,9 +98,9 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
     const tour = item.id === "scritti" ? `nav-${on ? tab : "scritti"}` : `nav-${item.id}`;
     return <button key={item.id} type="button" data-act={on ? "1" : undefined}
       data-tour={mobile || item.id !== "scritti" ? tour : "nav-scritti"} data-snd="nav" data-tone={tone(item)}
-      aria-current={on && (mobile || !item.rooms) ? "page" : undefined} aria-label={item.label}
+      aria-current={on && (mobile || !item.rooms) ? "page" : undefined} aria-label={item.label} style={{ "--i": items.indexOf(item) } as React.CSSProperties}
       onClick={() => navigate(item.id)} className={`bt nb shell-link ${on ? "act" : ""}`}>
-      <span className="shell-icon" aria-hidden="true"><span className="shell-icon-orbit" /><SectionMark key={`${item.id}:${on}`} section={item.mark} /></span>
+      {mobile ? <span className="shell-icon" aria-hidden="true"><span className="shell-icon-orbit" /><SectionMark key={`${item.id}:${on}`} section={item.mark} /></span> : <Tube mark={item.mark} on={on} />}
       <span className="shell-link-copy"><span className="shell-link-title">{mobile ? item.short : item.label}</span>
         {!mobile && <span className="shell-link-detail">{on && room ? room.label : item.detail}</span>}
       </span>
@@ -92,11 +112,11 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
     {item.rooms!.map(r => <button key={r.id} type="button" data-tour={`nav-${r.id}`} data-snd="nav" data-tone={r.tone}
       aria-current={tab === r.id ? "page" : undefined} aria-label={r.label} onClick={() => navigate(r.id)}
       className={`shell-room ${tab === r.id ? "act" : ""}`}>
-      <span className="shell-room-node" aria-hidden="true" /><span className="shell-room-label">{r.label}</span>
+      <span className="shell-room-lamp" aria-hidden="true" /><span className="shell-room-label">{r.label}</span>
     </button>)}
   </div>;
   return <>
-    <aside className="shell-sidebar pn hidden md:flex fixed inset-y-0 left-0 flex-col z-20">
+    <aside className={`shell-sidebar pn hidden md:flex fixed inset-y-0 left-0 flex-col z-20 ${boot ? "boot" : ""}`}>
       <div className="shell-brand">{brand}</div>
       <nav aria-label="Navigazione principale" className="shell-navigation">
         <div ref={vertical} className="shell-rail" data-tone={active && tone(active)}>
