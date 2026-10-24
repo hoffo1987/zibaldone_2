@@ -92,7 +92,8 @@ struct VO { @builtin(position) pos: vec4f, @location(0) uv: vec2f, @location(1) 
   let mixv = smoothstep(-.35, .35, phi * f.r0.x);
   let s = mix(A.w, Bp.w, corner.x);
   // spenta vicino alle cariche e sulle linee che scappano lontano
-  let env = smoothstep(f.r0.x * 1.2, f.r0.x * 4., dmin) * (1. - smoothstep(f.r0.w * .55, f.r0.w, s));
+  let near = select(1., 2.8, f.misc.z > .5); // in 3D le linee si vedono di scorcio: si spengono più lontano dalle sfere
+  let env = smoothstep(f.r0.x * 1.2 * near, f.r0.x * 4. * near, dmin) * (1. - smoothstep(f.r0.w * .55, f.r0.w, s));
   o.col = vec4f(mix(f.colB.rgb, f.colA.rgb, mixv), env * f.res.w);
   o.s = s; o.seed = fract(f32(line) * .618034);
   return o;

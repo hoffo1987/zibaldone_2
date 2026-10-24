@@ -174,11 +174,17 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;transform:none;back
    e sotto la velatura in fondo alla pagina, come le luci di prima. Entra piano per non accendersi di colpo */
 .bd-field{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;animation:fd 1.6s ease-out backwards}
 .bd .bd-w{inset:-12%}
-/* preset Cinema (field/Backdrop3D.tsx): la scheda 3D copre il fondo; sopra le card, un vetro che ne accende i bordi.
-   Il disegno piatto resta nel DOM solo come texture */
+/* preset Cinema (field/Backdrop3D.tsx): la scheda 3D copre il fondo; il disegno piatto resta nel DOM solo come texture */
 .bd-3d{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;animation:fd 1.2s ease-out backwards}
-.bd-glass{position:fixed;inset:0;z-index:5;width:100%;height:100%;pointer-events:none}
 .bd.bd3d{visibility:hidden}
+/* luce della scena sulle card (field/cardLight.ts): filo di luce sul bordo rivolto alle cariche e agli impulsi, riflesso
+   sulla superficie, alone attorno. Vive dentro la card, quindi scorre e si inclina insieme a lei */
+.root .lit{position:absolute;inset:0;z-index:6;border-radius:inherit;pointer-events:none;--la:0;
+  background:radial-gradient(300px circle at var(--lx,50%) var(--ly,0),rgb(var(--lc,0 0 0) / calc(var(--la) * .13)),transparent 70%);
+  box-shadow:inset calc(var(--dx,0) * -1.5px) calc(var(--dy,0) * -1.5px) 0 rgb(var(--lc,0 0 0) / calc(var(--la) * .9)),inset calc(var(--dx,0) * -16px) calc(var(--dy,0) * -16px) 28px -20px rgb(var(--lc,0 0 0) / calc(var(--la) * .45))}
+.root:not(.dark) .lit{background:radial-gradient(260px circle at var(--lx,50%) var(--ly,0),rgb(var(--lc,0 0 0) / calc(var(--la) * .06)),transparent 70%)}
+.root .lit-on{box-shadow:0 0 56px -14px rgb(var(--hc,0 0 0) / var(--ha,0)),0 26px 48px -28px rgb(0 0 0 / .6)}
+.root:not(.dark) .lit-on{box-shadow:0 0 46px -16px rgb(var(--hc,0 0 0) / calc(var(--ha,0) * .75)),0 18px 36px -24px rgb(20 44 40 / .26)}
 .bd-art{position:absolute;left:0;top:-25vh;width:100%;height:150vh;opacity:calc(.34*var(--ao,1));transform:translateY(calc(var(--sy,0)*-.12px))}
 .root.dark .bd-art{opacity:calc(.32*var(--ao,1))}
 .bd-p{inset:-25vh 0;transform:translateY(calc(var(--sy,0)*-.12px))}

@@ -347,7 +347,8 @@ const BgArt = ({ kind, dark, show = true, board = false }: { kind: string; dark:
       const W = Math.round(window.innerWidth * (board ? 1.5 : 1)), H = Math.round(window.innerHeight * (board ? 2.4 : 1.5));
       if (w0 && Math.abs(W - w0) < 40 && H < h0 * 1.3 && H > h0 * 0.7) return; // la barra del browser su telefono non deve rigenerare il disegno
       w0 = W; h0 = H;
-      const dpr = board || W > 1400 ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
+      // la texture della scheda 3D è più fitta dello schermo: da vicino, in basso, un pixel copre meno di un'unità
+      const dpr = board ? Math.min(1.75, 8192 / W, 8192 / H) : W > 1400 ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
       g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
       const pen = netBuilder(W, H);
@@ -362,10 +363,10 @@ const BgArt = ({ kind, dark, show = true, board = false }: { kind: string; dark:
   return <canvas ref={ref} className="bd-art" style={show ? undefined : { visibility: "hidden" }} aria-hidden="true" />;
 };
 // board: preset Cinema, la scheda in 3D prende il posto di disegno, campo e impulsi piatti (restano le scintille al tocco)
-const Backdrop = ({ tab, fx, dark, art = true, g, board = false }: { tab: string; fx: boolean; dark: boolean; art?: boolean; g: any; board?: boolean }) => {
+const Backdrop = ({ tab, fx, dark, art = true, g, board = false, quality }: { tab: string; fx: boolean; dark: boolean; art?: boolean; g: any; board?: boolean; quality?: string }) => {
   const k = tab === "profile" ? "authors" : ["home", "write", "podio", "authors"].includes(tab) ? tab : "archive";
   return (<>
-    {board ? <React.Suspense fallback={null}><Backdrop3D kind={k} dark={dark} g={g} /></React.Suspense> : g.aurora && <FieldGlow kind={k} dark={dark} g={g} />}
+    {board ? <React.Suspense fallback={null}><Backdrop3D kind={k} dark={dark} g={g} quality={quality} /></React.Suspense> : g.aurora && <FieldGlow kind={k} dark={dark} g={g} />}
     <div key={k} className={`bd bd-${k} bdin fixed inset-0 z-0 pointer-events-none ${board ? "bd3d" : ""}`}><div className="bd-w" />{k === "podio" && <div className="bd-p" />}{(art || g.pulses || board) && <BgArt kind={k} dark={dark} show={art && !board} board={board} />}</div>
     {fx && <FX dark={dark} g={g} board={board} />}
   </>);
@@ -852,7 +853,7 @@ const bannerFrom = (file: File): Promise<string> => new Promise((res, rej) => {
 });
 
 // sfx: tick al passaggio, suono del cambio di sezione, caricamento del gioco e jingle della presentazione (sound.ts)
-const DEF = { level: "full", fx: true, glow: true, aurora: true, intro: true, d3: true, sfx: true, sfxVol: 1, music: false, musicVol: 0.35, vibrate: true, text: 1, vib: 1 };
+const DEF = { q3d: "alta", level: "full", fx: true, glow: true, aurora: true, intro: true, d3: true, sfx: true, sfxVol: 1, music: false, musicVol: 0.35, vibrate: true, text: 1, vib: 1 };
 
 // Modalità "Personalizzato": ogni effetto si accende o spegne da solo e ogni intensità si regola a piacere.
 // I valori qui sotto sono quelli del preset "Spettacolo".
@@ -2166,6 +2167,13 @@ export default function App() {
             <h4 className="text-xs mu mt-6 mb-2">Effetti e animazioni</h4>
             <Seg cols={CINEMA_OK ? 3 : 2} v={opts.level} set={(v: string) => setLevel(v)} items={[...(CINEMA_OK ? [["cinema", <><Box size={13} />Cinema 3D</>]] : []), ["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"], ["custom", <><SlidersHorizontal size={13} />Personalizzato</>]]} />
             <p className="text-xs mu mt-2">{({ cinema: "Come Spettacolo, con lo sfondo in 3D: la scheda in prospettiva, le cariche sospese che la illuminano e le card che ne riflettono la luce. Solo su computer, chiede di più alla scheda video.", full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, campo elettrico e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria.", custom: `Scegli tu ogni effetto e quanto deve essere intenso · ${CBOOL.filter((k) => G[k]).length} di ${CBOOL.length} attivi.` } as any)[opts.level]}</p>
+            {CINEMA_OK && G.bg3d && (
+              <div className="mt-3">
+                <span className="block text-sm font-semibold mb-1.5">Qualità dello sfondo 3D</span>
+                <Seg soft v={opts.q3d || "alta"} set={(v: string) => setOpt("q3d", v)} items={[["bilanciata", "Bilanciata"], ["alta", "Alta"], ["massima", "Massima"]]} />
+                <p className="text-xs mu mt-1.5">{({ bilanciata: "Tre quarti dei pixel, più leggera per la scheda video.", alta: "Tutti i pixel dello schermo, con texture filtrate e senza scalettature.", massima: "Ogni pixel calcolato quattro volte e poi mediato: bordi e piste perfettamente lisci. Chiede una scheda video potente." } as any)[opts.q3d || "alta"]}</p>
+              </div>
+            )}
             {opts.level !== "custom" ? (
               <div className="mt-2">
                 <Sw on={opts.fx} off={!FX_LEVELS.includes(opts.level)} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="La corrente corre sulle piste disegnate sullo sfondo, scintille al tocco e pioggia di codice nel riquadro iniziale" />
@@ -2287,7 +2295,7 @@ export default function App() {
     const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
     const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
     return shell(<>
-      <Backdrop tab="home" fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} board={G.bg3d && CINEMA_OK} />
+      <Backdrop tab="home" fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} board={G.bg3d && CINEMA_OK} quality={opts.q3d} />
       <div className="relative z-10 min-h-screen grid md:grid-cols-2">
         <div className={`brandpanel hidden md:flex flex-col justify-between p-12 ${G.reveal ? "boot" : ""}`} onPointerMove={stageMove} onPointerLeave={stageLeave}>{G.reveal && <i className="boot-run" aria-hidden="true" />}<PanelArt art={G.art} anim={G.pulses} speed={G.spd} fps={G.fps} />
           {d3live ? (
@@ -2679,7 +2687,7 @@ export default function App() {
 
   return shell(
     <>
-      <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} board={G.bg3d && CINEMA_OK && !(tab === "podio" && podium3d)} />
+      <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} board={G.bg3d && CINEMA_OK && !(tab === "podio" && podium3d)} quality={opts.q3d} />
       {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} covered={!isAdmin} sign={podiumLetters} tune={{ tier: opts.podioTier || "auto", scale: opts.podioScale || 0, fps: opts.podioFps || 60 }} onFail={() => setPodiumFail(true)} />}
       <Navigation tab={tab} admin={isAdmin} editing={!!editingId} railKey={railKey}
         hidden={kbOpen || (tab === "write" && drawing)} onNavigate={go}
