@@ -73,22 +73,26 @@ type Pulse = { t: number; s0: number; dir: number; run: number; d: number; v: nu
 type Flash = { x: number; y: number; t0: number; life: number; n: number; am: boolean };
 type Cfg = { pulses: boolean; dens: number; spd: number };
 
-// sprite del bagliore, disegnato una volta: drawImage costa molto meno di un gradiente a ogni frame
+// sprite del bagliore, disegnato una volta: drawImage costa molto meno di un gradiente a ogni frame.
+// Sul fondo scuro la luce è bianca al centro; sulla carta è inchiostro pieno con un alone colorato attorno
 const glowSprite = (rgb: string, dark: boolean) => {
   const c = document.createElement("canvas"); c.width = c.height = 64;
   const g = c.getContext("2d")!, gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gr.addColorStop(0, `rgba(${dark ? "255,255,255" : rgb},${dark ? 0.95 : 0.3})`); gr.addColorStop(0.12, `rgba(${rgb},${dark ? 0.8 : 0.22})`);
-  gr.addColorStop(0.4, `rgba(${rgb},${dark ? 0.22 : 0.08})`); gr.addColorStop(1, `rgba(${rgb},0)`);
+  gr.addColorStop(0, `rgba(${dark ? "255,255,255" : rgb},${dark ? 0.95 : 0.7})`); gr.addColorStop(0.12, `rgba(${rgb},${dark ? 0.8 : 0.5})`);
+  gr.addColorStop(0.4, `rgba(${rgb},${dark ? 0.22 : 0.16})`); gr.addColorStop(1, `rgba(${rgb},0)`);
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
   return c;
 };
 
-// motore degli impulsi: frame() disegna su ctx (in pixel CSS della finestra) e restituisce il rettangolo sporcato
-export const makeCurrent = (dark: boolean) => {
-  const TEAL = dark ? "51,209,186" : "11,127,112", AMB = dark ? "244,183,63" : "217,144,0";
-  const spr = { t: glowSprite(TEAL, dark), a: glowSprite(AMB, dark) };
+// motore degli impulsi: frame() disegna su ctx (in pixel CSS della finestra) e restituisce il rettangolo sporcato.
+// emissive: per lo sfondo 3D si disegna la sola luce su nero, in coordinate del disegno; lo shader la posa sul rame
+export const makeCurrent = (dark: boolean, emissive = false) => {
+  const lit = dark || emissive;
+  const TEAL = lit ? "51,209,186" : "6,112,98", AMB = lit ? "244,183,63" : "201,124,0";
+  const spr = { t: glowSprite(TEAL, lit), a: glowSprite(AMB, lit) };
   let pulses: Pulse[] = [], flashes: Flash[] = [], ver = -1, last = 0, twinkleAt = 0;
   const pts: number[][] = [], P = [0, 0];
+  const K = emissive ? 0.45 : 1; // sul canvas emissivo (metà risoluzione) le luci restano della stessa misura sulla scheda
 
   const start = (net: Net, ti: number, s0: number, dir: number, run: number, hop = 0) => {
     const t = net.traces[ti];
@@ -117,7 +121,7 @@ export const makeCurrent = (dark: boolean) => {
   };
 
   // map: dal disegno alla finestra (scala e spostamento verticale della parallasse); fade: velatura in basso come lo sfondo
-  const frame = (g: CanvasRenderingContext2D, now: number, cfg: Cfg, map: { sx: number; sy: number; oy: number; vw: number; vh: number }) => {
+  const frame = (g: CanvasRenderingContext2D, now: number, cfg: Cfg, map: { sx: number; sy: number; oy: number; vw: number; vh: number; y0?: number; y1?: number }) => {
     const net = live.net;
     if (live.ver !== ver) { ver = live.ver; pulses = []; flashes = []; }
     const dt = Math.min(0.05, last ? (now - last) / 1000 : 0) * (cfg.spd || 1); last = now;
@@ -125,8 +129,8 @@ export const makeCurrent = (dark: boolean) => {
     if (!net) return null;
     const X = (x: number) => x * map.sx, Y = (y: number) => y * map.sy + map.oy;
     const grow = (x: number, y: number, r: number) => { box[0] = Math.min(box[0], x - r); box[1] = Math.min(box[1], y - r); box[2] = Math.max(box[2], x + r); box[3] = Math.max(box[3], y + r); };
-    const fade = (y: number) => 1 - 0.55 * Math.max(0, Math.min(1, (y / map.vh - 0.3) / 0.7));
-    const vy0 = (0 - map.oy) / map.sy, vy1 = (map.vh - map.oy) / map.sy;
+    const fade = (y: number) => (emissive ? 1 : 1 - 0.55 * Math.max(0, Math.min(1, (y / map.vh - 0.3) / 0.7)));
+    const vy0 = map.y0 ?? (0 - map.oy) / map.sy, vy1 = map.y1 ?? (map.vh - map.oy) / map.sy;
     const small = map.vw < 600, want = cfg.pulses ? Math.max(1, Math.round(cfg.dens * (small ? 0.5 : 1))) : 0;
 
     // stelle del podio: niente piste, la luce si accende sulle stelle più grandi
@@ -137,7 +141,7 @@ export const makeCurrent = (dark: boolean) => {
       let moving = 0; for (const p of pulses) if (!p.arrived) moving++;
       for (; moving < want; moving++) spawn(net, vy0, vy1);
     }
-    if (dark) g.globalCompositeOperation = "lighter";
+    if (lit) g.globalCompositeOperation = "lighter";
     g.lineCap = "round"; g.lineJoin = "round";
 
     for (let i = pulses.length - 1; i >= 0; i--) {
@@ -169,12 +173,12 @@ export const makeCurrent = (dark: boolean) => {
         let acc = 0; const seg: number[] = [0];
         for (let j = 1; j < n; j++) seg.push((acc += Math.hypot(pts[j][0] - pts[j - 1][0], pts[j][1] - pts[j - 1][1])));
         const yF = fade(Y(pts[n - 1][1]));
-        g.strokeStyle = `rgba(${col},${(0.1 * yF * life).toFixed(3)})`; g.lineWidth = 6;
+        g.strokeStyle = `rgba(${col},${((lit ? 0.1 : 0.16) * yF * life).toFixed(3)})`; g.lineWidth = emissive ? 3 : lit ? 6 : 8;
         g.beginPath(); g.moveTo(X(pts[0][0]), Y(pts[0][1])); for (let j = 1; j < n; j++) g.lineTo(X(pts[j][0]), Y(pts[j][1])); g.stroke();
         let j = 0;
         for (let c = 0; c < k6; c++) {
           const a0 = (acc * c) / k6, a1 = (acc * (c + 1)) / k6, f = (c + 1) / k6;
-          g.strokeStyle = `rgba(${col},${(f * f * (dark ? 0.9 : 0.75) * yF).toFixed(3)})`; g.lineWidth = 1.1 + f * 1.3;
+          g.strokeStyle = `rgba(${col},${(f * f * (lit ? 0.9 : 1) * yF).toFixed(3)})`; g.lineWidth = emissive ? 0.7 + f * 0.6 : lit ? 1.1 + f * 1.3 : 1.4 + f * 1.6;
           g.beginPath();
           while (j < n - 1 && seg[j + 1] <= a0) j++;
           const lerp = (a: number, jj: number) => { const u = (a - seg[jj]) / (seg[jj + 1] - seg[jj] || 1); return [pts[jj][0] + (pts[jj + 1][0] - pts[jj][0]) * u, pts[jj][1] + (pts[jj + 1][1] - pts[jj][1]) * u]; };
@@ -187,10 +191,10 @@ export const makeCurrent = (dark: boolean) => {
       }
       if (!q.arrived) {
         pointAt(t, q.s0 + q.dir * head, P);
-        const x = X(P[0]), y = Y(P[1]), r = 13, a = fade(y);
+        const x = X(P[0]), y = Y(P[1]), r = 13 * K, a = fade(y);
         g.globalAlpha = a; g.drawImage(q.am ? spr.a : spr.t, x - r, y - r, r * 2, r * 2);
         // nucleo nitido: sulla carta il bagliore da solo sembrerebbe una macchia
-        if (!dark) { g.fillStyle = `rgb(${q.am ? AMB : TEAL})`; g.beginPath(); g.arc(x, y, 2.1, 0, 7); g.fill(); }
+        if (!lit) { g.fillStyle = `rgb(${q.am ? AMB : TEAL})`; g.beginPath(); g.arc(x, y, 2.6, 0, 7); g.fill(); }
         g.globalAlpha = 1;
         grow(x, y, r);
       }
@@ -204,30 +208,48 @@ export const makeCurrent = (dark: boolean) => {
       const env = n.kind === "star" ? Math.sin(Math.PI * k) : (1 - k) * (1 - k);
       if (n.kind === "chip" && n.box) {
         const [bx, by, bw, bh] = n.box;
-        g.strokeStyle = `rgba(${TEAL},${(0.45 * env * a).toFixed(3)})`; g.lineWidth = 1.8;
+        g.strokeStyle = `rgba(${TEAL},${(0.45 * env * a).toFixed(3)})`; g.lineWidth = 1.8 * K;
         g.strokeRect(X(bx), Y(by), bw * map.sx, bh * map.sy);
         grow(X(bx + bw / 2), Y(by + bh / 2), Math.max(bw * map.sx, bh * map.sy) / 2 + 4);
-        g.globalAlpha = env * a; g.drawImage(spr.a, x - 10, y - 10, 20, 20); g.globalAlpha = 1;
+        g.globalAlpha = env * a; g.drawImage(spr.a, x - 10 * K, y - 10 * K, 20 * K, 20 * K); g.globalAlpha = 1;
         grow(x, y, 10);
         continue;
       }
       if (n.kind === "star") {
-        const r = 10 + n.r * 5, l = (8 + n.r * 6) * env;
+        const r = (10 + n.r * 5) * K, l = (8 + n.r * 6) * env * K;
         g.globalAlpha = env * a; g.drawImage(f.am ? spr.a : spr.t, x - r, y - r, r * 2, r * 2); g.globalAlpha = 1;
-        g.strokeStyle = `rgba(${col},${(0.7 * env * a).toFixed(3)})`; g.lineWidth = 1;
+        g.strokeStyle = `rgba(${col},${(0.7 * env * a).toFixed(3)})`; g.lineWidth = K;
         g.beginPath(); g.moveTo(x - l, y); g.lineTo(x + l, y); g.moveTo(x, y - l); g.lineTo(x, y + l); g.stroke();
         grow(x, y, Math.max(r, l));
         continue;
       }
-      const ring = n.r + 3 + 16 * (1 - (1 - k) * (1 - k) * (1 - k));
-      g.strokeStyle = `rgba(${col},${(0.6 * env * a).toFixed(3)})`; g.lineWidth = 1.4;
+      const ring = (n.r + 3 + 16 * (1 - (1 - k) * (1 - k) * (1 - k))) * K;
+      g.strokeStyle = `rgba(${col},${(0.6 * env * a).toFixed(3)})`; g.lineWidth = 1.4 * K;
       g.beginPath(); g.arc(x, y, ring, 0, 7); g.stroke();
-      const r = 9 + n.r * 2;
+      const r = (9 + n.r * 2) * K;
       g.globalAlpha = env * a; g.drawImage(f.am ? spr.a : spr.t, x - r, y - r, r * 2, r * 2); g.globalAlpha = 1;
       grow(x, y, Math.max(ring + 2, r));
     }
     g.globalCompositeOperation = "source-over";
     return box[0] === Infinity ? null : box;
   };
-  return { frame, inject, clear: () => { pulses = []; flashes = []; } };
+  // teste degli impulsi e lampi in corso, come luci per lo sfondo 3D: x, y (disegno), intensità, ambra
+  const lights = (out: Float32Array, max: number) => {
+    const net = live.net; if (!net) return 0;
+    let n = 0;
+    for (const q of pulses) {
+      if (n >= max) break;
+      if (q.arrived) continue;
+      pointAt(net.traces[q.t], q.s0 + q.dir * Math.min(q.d, q.run), P);
+      out.set([P[0], P[1], 1, q.am ? 1 : 0], n++ * 4);
+    }
+    const now = performance.now();
+    for (const f of flashes) {
+      if (n >= max) break;
+      const k = (now - f.t0) / f.life; if (k < 0 || k >= 1) continue;
+      out.set([f.x, f.y, 1.6 * (1 - k) * (1 - k), f.am ? 1 : 0], n++ * 4);
+    }
+    return n;
+  };
+  return { frame, inject, lights, clear: () => { pulses = []; flashes = []; } };
 };

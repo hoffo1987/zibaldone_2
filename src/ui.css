@@ -174,7 +174,12 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;transform:none;back
    e sotto la velatura in fondo alla pagina, come le luci di prima. Entra piano per non accendersi di colpo */
 .bd-field{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;animation:fd 1.6s ease-out backwards}
 .bd .bd-w{inset:-12%}
-.bd-art{position:absolute;left:0;top:-25vh;width:100%;height:150vh;opacity:calc(.24*var(--ao,1));transform:translateY(calc(var(--sy,0)*-.12px))}
+/* preset Cinema (field/Backdrop3D.tsx): la scheda 3D copre il fondo; sopra le card, un vetro che ne accende i bordi.
+   Il disegno piatto resta nel DOM solo come texture */
+.bd-3d{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;animation:fd 1.2s ease-out backwards}
+.bd-glass{position:fixed;inset:0;z-index:5;width:100%;height:100%;pointer-events:none}
+.bd.bd3d{visibility:hidden}
+.bd-art{position:absolute;left:0;top:-25vh;width:100%;height:150vh;opacity:calc(.34*var(--ao,1));transform:translateY(calc(var(--sy,0)*-.12px))}
 .root.dark .bd-art{opacity:calc(.32*var(--ao,1))}
 .bd-p{inset:-25vh 0;transform:translateY(calc(var(--sy,0)*-.12px))}
 .bd-podio .bd-p{inset:0;transform:none}

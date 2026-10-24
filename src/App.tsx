@@ -10,7 +10,7 @@ import {
 import {
   Bookmark, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
-  Save, Search, Sun, Moon, Pencil, Minus, Square, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, ChevronDown, ArrowUpRight, ArrowRight, SendHorizontal, LockKeyhole, SlidersHorizontal, Clapperboard, Compass, BookOpen
+  Save, Box, Search, Sun, Moon, Pencil, Minus, Square, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, ChevronDown, ArrowUpRight, ArrowRight, SendHorizontal, LockKeyhole, SlidersHorizontal, Clapperboard, Compass, BookOpen
 } from "lucide-react";
 import { PannelloAdmin, STATI } from "./Valutazione";
 import Stars from "./Stars";
@@ -36,7 +36,8 @@ import { Navigation, SectionLocation, ScrittiSwitch, NAV_ORDER, inHub } from "./
 import { Text3D, Terminal3D } from "./d3";
 import { renderLoop, holdLoops } from "./renderLoop";
 import { netBuilder, publishNet, live, makeCurrent, type NetPen } from "./current";
-import FieldGlow from "./FieldGlow";
+import FieldGlow from "./field/FieldGlow";
+import { webgpuReady } from "./field/common";
 import { useMediaQuery } from "./useMediaQuery";
 import { useKeyboardOpen } from "./useKeyboardOpen";
 import { useMusic } from "./useMusic";
@@ -55,6 +56,9 @@ import EggPortal from "./EggPortal";
 // presentazione del primo accesso (film + tour guidato): si scarica solo per chi deve vederla
 const loadTour = () => import("./tour/Tour");
 const Tour = React.lazy(loadTour);
+const Backdrop3D = React.lazy(() => import("./field/Backdrop3D"));
+// preset Cinema: sfondo 3D in WebGPU, solo su computer (schermo largo, mouse) e con una GPU vera
+const CINEMA_OK = (() => { try { return webgpuReady() && !!window.matchMedia?.("(min-width:1024px) and (pointer:fine)").matches; } catch { return false; } })();
 const TOUR = "circuito:tour:";
 const tourSeen = (uid: string) => { try { return localStorage.getItem(TOUR + uid) === "1"; } catch { return true; } };
 const tourMark = (uid: string) => { try { localStorage.setItem(TOUR + uid, "1"); } catch {} };
@@ -330,8 +334,9 @@ const artStars: ArtFn = (g, W, H, R, c, am, net) => {
   }
 };
 const ART: Record<string, ArtFn> = { home: artCircuit, write: artBlueprint, archive: artContour, authors: artNetwork, podio: artStars };
-// show=false: il disegno resta nascosto ma registra comunque le piste, così la corrente ha dove correre
-const BgArt = ({ kind, dark, show = true }: { kind: string; dark: boolean; show?: boolean }) => {
+// show=false: il disegno resta nascosto ma registra comunque le piste, così la corrente ha dove correre.
+// board: per lo sfondo 3D il disegno è la texture della scheda, più ampio della finestra e sempre nei colori luminosi
+const BgArt = ({ kind, dark, show = true, board = false }: { kind: string; dark: boolean; show?: boolean; board?: boolean }) => {
   const ref = useRef<HTMLCanvasElement>(null);
   const seed = useRef(Math.floor(Math.random() * 2147483647));
   useEffect(() => {
@@ -339,29 +344,30 @@ const BgArt = ({ kind, dark, show = true }: { kind: string; dark: boolean; show?
     const g = cv.getContext("2d"); if (!g) return;
     let w0 = 0, h0 = 0, timer = 0;
     const draw = () => {
-      const W = window.innerWidth, H = Math.round(window.innerHeight * 1.5);
+      const W = Math.round(window.innerWidth * (board ? 1.5 : 1)), H = Math.round(window.innerHeight * (board ? 2.4 : 1.5));
       if (w0 && Math.abs(W - w0) < 40 && H < h0 * 1.3 && H > h0 * 0.7) return; // la barra del browser su telefono non deve rigenerare il disegno
       w0 = W; h0 = H;
-      const dpr = W > 1400 ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
+      const dpr = board || W > 1400 ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
       g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
       const pen = netBuilder(W, H);
-      ART[kind]?.(g, W, H, mulberry(seed.current), dark ? "45,212,191" : "15,139,122", dark ? "251,191,36" : "202,138,4", pen);
+      ART[kind]?.(g, W, H, mulberry(seed.current), dark || board ? "45,212,191" : "15,139,122", dark || board ? "251,191,36" : "202,138,4", pen);
       publishNet(pen.net, cv);
     };
     draw();
     const on = () => { clearTimeout(timer); timer = window.setTimeout(draw, 200); };
     window.addEventListener("resize", on);
     return () => { clearTimeout(timer); window.removeEventListener("resize", on); if (live.el === cv) publishNet(null, null); };
-  }, [kind, dark]);
+  }, [kind, dark, board]);
   return <canvas ref={ref} className="bd-art" style={show ? undefined : { visibility: "hidden" }} aria-hidden="true" />;
 };
-const Backdrop = ({ tab, fx, dark, art = true, g }: { tab: string; fx: boolean; dark: boolean; art?: boolean; g: any }) => {
+// board: preset Cinema, la scheda in 3D prende il posto di disegno, campo e impulsi piatti (restano le scintille al tocco)
+const Backdrop = ({ tab, fx, dark, art = true, g, board = false }: { tab: string; fx: boolean; dark: boolean; art?: boolean; g: any; board?: boolean }) => {
   const k = tab === "profile" ? "authors" : ["home", "write", "podio", "authors"].includes(tab) ? tab : "archive";
   return (<>
-    {g.aurora && <FieldGlow kind={k} dark={dark} g={g} />}
-    <div key={k} className={`bd bd-${k} bdin fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" />{k === "podio" && <div className="bd-p" />}{(art || g.pulses) && <BgArt kind={k} dark={dark} show={art} />}</div>
-    {fx && <FX dark={dark} g={g} />}
+    {board ? <React.Suspense fallback={null}><Backdrop3D kind={k} dark={dark} g={g} /></React.Suspense> : g.aurora && <FieldGlow kind={k} dark={dark} g={g} />}
+    <div key={k} className={`bd bd-${k} bdin fixed inset-0 z-0 pointer-events-none ${board ? "bd3d" : ""}`}><div className="bd-w" />{k === "podio" && <div className="bd-p" />}{(art || g.pulses || board) && <BgArt kind={k} dark={dark} show={art && !board} board={board} />}</div>
+    {fx && <FX dark={dark} g={g} board={board} />}
   </>);
 };
 
@@ -857,14 +863,17 @@ const CDEF: any = {
   glow: true, tilt: true, ripple: true, lift: true,                    // pulsanti e card
   titles: true, logo: true, reveal: true, pages: true, theme: true, blur: true,    // ingressi e transizioni
   d3: true,                                                            // logo, titoli e terminale in 3D
+  bg3d: false,                                                         // sfondo 3D (preset Cinema, solo computer)
   spd: 1, dens: 14, rainD: 1, auroraI: 1, artI: 1, glowI: 1, tiltI: 1, fps: 30,    // intensità
 };
-const OFF: any = { motion: false, pulses: false, sparks: false, aurora: false, art: false, parallax: false, prog: false, rain: false, scan: false, glow: false, tilt: false, ripple: false, lift: false, titles: false, logo: false, reveal: false, pages: false, theme: false, blur: false, d3: false };
+const OFF: any = { bg3d: false, motion: false, pulses: false, sparks: false, aurora: false, art: false, parallax: false, prog: false, rain: false, scan: false, glow: false, tilt: false, ripple: false, lift: false, titles: false, logo: false, reveal: false, pages: false, theme: false, blur: false, d3: false };
 const CBASE: any = {
+  cinema: { ...CDEF, bg3d: true },
   full: { ...CDEF },
   mid: { ...CDEF, pulses: false, sparks: false, rain: false, glow: false, tilt: false, ripple: false, aurora: false },
   lite: { ...CDEF, ...OFF },
 };
+const FX_LEVELS = ["full", "cinema"];
 const CBOOL = Object.keys(CDEF).filter((k) => typeof CDEF[k] === "boolean");
 // configurazione grafica effettiva: i preset vengono tradotti negli stessi interruttori del "Personalizzato"
 const resolveG = (o: any): any => {
@@ -874,7 +883,7 @@ const resolveG = (o: any): any => {
   }
   const lite = o.level === "lite", on = o.level !== "lite" && o.level !== "mid";
   return {
-    ...CDEF, lite, nomotion: lite, motion: !lite,
+    ...CDEF, lite, nomotion: lite, motion: !lite, bg3d: o.level === "cinema",
     pulses: on && !!o.fx, sparks: on && !!o.fx, rain: on && !!o.fx,
     glow: on && !!o.glow, tilt: on && !!o.glow, ripple: on && !!o.glow,
     aurora: on && !!o.aurora,
@@ -898,7 +907,7 @@ const Scramble = ({ text, on }: any) => {
   return <>{t}</>;
 };
 
-const FX = ({ dark, g }: { dark: boolean; g: any }) => {
+const FX = ({ dark, g, board = false }: { dark: boolean; g: any; board?: boolean }) => {
   const bg = useRef<HTMLCanvasElement>(null);
   const fg = useRef<HTMLCanvasElement>(null);
   const gr = useRef(g); gr.current = g; // le impostazioni si leggono a ogni frame: cambiarle non riavvia l'animazione
@@ -936,7 +945,7 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
           sparks.push({ x: e.clientX, y: e.clientY, dx: d[0], dy: d[1], v: 3.4 + Math.random() * 1.6, bend: 10 + Math.random() * 18, turn, tr: [] as number[][], t0: now, life: 520 + Math.random() * 160, am: i % 3 === 0 });
         }
       }
-      if (gr.current.pulses) { place(); cur.inject(e.clientX / map.sx, (e.clientY - map.oy) / map.sy); } // il tocco manda corrente nella pista più vicina
+      if (gr.current.pulses && !board) { place(); cur.inject(e.clientX / map.sx, (e.clientY - map.oy) / map.sy); } // il tocco manda corrente nella pista più vicina
     };
     window.addEventListener("pointerdown", down, { passive: true });
     const frame = (ts: number) => {
@@ -945,7 +954,7 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
       // si cancella solo il rettangolo toccato al frame prima: senza impulsi in giro il canvas non costa nulla
       if (dirty) ca.clearRect(dirty[0] - 2, dirty[1] - 2, dirty[2] - dirty[0] + 4, dirty[3] - dirty[1] + 4);
       place();
-      dirty = cur.frame(ca, ts, cfg, map);
+      dirty = cur.frame(ca, ts, board ? { ...cfg, pulses: false } : cfg, map);
       if (sparked) cb.clearRect(0, 0, W, H);
       sparked = sparks.length > 0;
       const now = performance.now(), easeOut = (k: number) => 1 - Math.pow(1 - k, 3);
@@ -976,7 +985,7 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
     };
     const stop = renderLoop(frame, () => gr.current.fps || 30);
     return () => { stop(); window.removeEventListener("resize", fit); window.removeEventListener("pointerdown", down); };
-  }, [dark]);
+  }, [dark, board]);
   return (<>
     <canvas ref={bg} className="fixed inset-0 pointer-events-none" aria-hidden="true" />
     <canvas ref={fg} className="fixed inset-0 pointer-events-none z-[95]" aria-hidden="true" />
@@ -2155,13 +2164,13 @@ export default function App() {
             <div className="h-2" />
             <Seg v={opts.text} set={(v: number) => setOpt("text", v)} items={[[0.9, "Testo piccolo"], [1, "Normale"], [1.12, "Grande"]]} />
             <h4 className="text-xs mu mt-6 mb-2">Effetti e animazioni</h4>
-            <Seg cols={2} v={opts.level} set={(v: string) => setLevel(v)} items={[["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"], ["custom", <><SlidersHorizontal size={13} />Personalizzato</>]]} />
-            <p className="text-xs mu mt-2">{({ full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, campo elettrico e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria.", custom: `Scegli tu ogni effetto e quanto deve essere intenso · ${CBOOL.filter((k) => G[k]).length} di ${CBOOL.length} attivi.` } as any)[opts.level]}</p>
+            <Seg cols={CINEMA_OK ? 3 : 2} v={opts.level} set={(v: string) => setLevel(v)} items={[...(CINEMA_OK ? [["cinema", <><Box size={13} />Cinema 3D</>]] : []), ["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"], ["custom", <><SlidersHorizontal size={13} />Personalizzato</>]]} />
+            <p className="text-xs mu mt-2">{({ cinema: "Come Spettacolo, con lo sfondo in 3D: la scheda in prospettiva, le cariche sospese che la illuminano e le card che ne riflettono la luce. Solo su computer, chiede di più alla scheda video.", full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, campo elettrico e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria.", custom: `Scegli tu ogni effetto e quanto deve essere intenso · ${CBOOL.filter((k) => G[k]).length} di ${CBOOL.length} attivi.` } as any)[opts.level]}</p>
             {opts.level !== "custom" ? (
               <div className="mt-2">
-                <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="La corrente corre sulle piste disegnate sullo sfondo, scintille al tocco e pioggia di codice nel riquadro iniziale" />
-                <Sw on={opts.glow} off={opts.level !== "full"} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
-                <Sw on={opts.aurora} off={opts.level !== "full"} set={(v: boolean) => setOpt("aurora", v)} label="Campo elettrico" hint="Cariche di luce che vagano dietro le pagine, con le linee di campo percorse dalla corrente" />
+                <Sw on={opts.fx} off={!FX_LEVELS.includes(opts.level)} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="La corrente corre sulle piste disegnate sullo sfondo, scintille al tocco e pioggia di codice nel riquadro iniziale" />
+                <Sw on={opts.glow} off={!FX_LEVELS.includes(opts.level)} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
+                <Sw on={opts.aurora} off={!FX_LEVELS.includes(opts.level)} set={(v: boolean) => setOpt("aurora", v)} label="Campo elettrico" hint="Cariche di luce che vagano dietro le pagine, con le linee di campo percorse dalla corrente" />
                 <Sw on={opts.intro} off={lite} set={(v: boolean) => setOpt("intro", v)} label="Titoli, logo e fogli animati" hint="Titoli che emergono dalla riga, fogli dell'archivio che si stampano" />
                 <Sw on={opts.d3 !== false} off={lite} set={(v: boolean) => setOpt("d3", v)} label="Logo e titoli in 3D" hint="Logo tridimensionale che segue il mouse (cliccalo), titoli in rilievo, terminale fluttuante" />
                 <button type="button" className="bt w-full mt-2" onClick={() => setLevel("custom")}><SlidersHorizontal size={15} />Regola ogni dettaglio</button>
@@ -2171,7 +2180,7 @@ export default function App() {
                 <div className="flex items-center gap-2 mt-2 mb-1">
                   <span className="text-xs mu shrink-0">Parti da</span>
                   <div className="flex gap-1.5 flex-1">
-                    {([["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"]] as any).map(([id, l]: any) => <button type="button" key={id} className="bt flex-1 !text-xs !px-1 !py-1.5" onClick={() => baseOn(id)}>{l}</button>)}
+                    {([...(CINEMA_OK ? [["cinema", "Cinema"]] : []), ["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"]] as any).map(([id, l]: any) => <button type="button" key={id} className="bt flex-1 !text-xs !px-1 !py-1.5" onClick={() => baseOn(id)}>{l}</button>)}
                   </div>
                 </div>
                 <Sw on={G.motion} set={(v: boolean) => setC("motion", v)} label="Animazioni dell'interfaccia" hint="Se lo spegni nessun elemento si muove: tutto compare subito" />
@@ -2181,6 +2190,7 @@ export default function App() {
                 {G.pulses && <Rng label="Quantità di impulsi" hint="Sugli schermi piccoli sono la metà" v={G.dens} set={(v: number) => setC("dens", v)} min={2} max={40} step={1} />}
                 <Sw on={G.sparks} set={(v: boolean) => setC("sparks", v)} label="Scintille al tocco" hint="Una raggiera di scintille dove clicchi o tocchi" />
                 <Sw on={G.aurora} set={(v: boolean) => setC("aurora", v)} label="Campo elettrico" hint="Cariche di luce che vagano dietro le pagine, con le linee di campo percorse dalla corrente" />
+                {CINEMA_OK && <Sw on={G.bg3d} set={(v: boolean) => setC("bg3d", v)} label="Sfondo 3D" hint="La scheda in prospettiva con le cariche sospese, le card fanno ombra e riflettono la luce. Solo su computer" />}
                 {G.aurora && <Rng label="Intensità del campo" v={G.auroraI} set={(v: number) => setC("auroraI", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
                 <Sw on={G.art} set={(v: boolean) => setC("art", v)} label="Disegno di circuiti" hint="Schema elettronico che cambia a ogni sezione" />
                 {G.art && <Rng label="Visibilità del disegno" v={G.artI} set={(v: number) => setC("artI", v)} min={0.2} max={2.5} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
@@ -2277,7 +2287,7 @@ export default function App() {
     const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
     const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
     return shell(<>
-      <Backdrop tab="home" fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
+      <Backdrop tab="home" fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} board={G.bg3d && CINEMA_OK} />
       <div className="relative z-10 min-h-screen grid md:grid-cols-2">
         <div className={`brandpanel hidden md:flex flex-col justify-between p-12 ${G.reveal ? "boot" : ""}`} onPointerMove={stageMove} onPointerLeave={stageLeave}>{G.reveal && <i className="boot-run" aria-hidden="true" />}<PanelArt art={G.art} anim={G.pulses} speed={G.spd} fps={G.fps} />
           {d3live ? (
@@ -2669,7 +2679,7 @@ export default function App() {
 
   return shell(
     <>
-      <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} />
+      <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} board={G.bg3d && CINEMA_OK && !(tab === "podio" && podium3d)} />
       {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} covered={!isAdmin} sign={podiumLetters} tune={{ tier: opts.podioTier || "auto", scale: opts.podioScale || 0, fps: opts.podioFps || 60 }} onFail={() => setPodiumFail(true)} />}
       <Navigation tab={tab} admin={isAdmin} editing={!!editingId} railKey={railKey}
         hidden={kbOpen || (tab === "write" && drawing)} onNavigate={go}
