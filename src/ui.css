@@ -170,16 +170,10 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;transform:none;back
 @media (hover:hover){.bt:hover:before{opacity:var(--gi,1)}}
 .bt.rip:after{content:"";position:absolute;left:var(--px,50%);top:var(--py,50%);width:8px;height:8px;margin:-4px;border-radius:50%;background:color-mix(in srgb,currentColor 40%,transparent);pointer-events:none;animation:ripl .65s var(--ez) forwards}
 @keyframes ripl{to{transform:scale(32);opacity:0}}
-.au{position:absolute;width:62vmax;height:62vmax;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 44%,transparent),transparent);will-change:transform;opacity:var(--ai,1)}
-.a1{--c:var(--ac);left:-18vmax;top:-24vmax;animation:aur1 21s ease-in-out infinite}
-.a2{--c:var(--am);right:-24vmax;top:14vh;animation:aur2 27s ease-in-out infinite}
-.a3{--c:#6366F1;left:18vw;bottom:-34vmax;opacity:calc(.75*var(--ai,1));animation:aur3 33s ease-in-out infinite}
-@keyframes aur1{0%,100%{transform:translate(0,0) scale(1)}25%{transform:translate(36vw,16vh) scale(1.2)}50%{transform:translate(20vw,40vh) scale(.88)}75%{transform:translate(-6vw,22vh) scale(1.14)}}
-@keyframes aur2{0%,100%{transform:translate(0,0) scale(1)}30%{transform:translate(-40vw,20vh) scale(1.16)}60%{transform:translate(-20vw,-14vh) scale(.86)}80%{transform:translate(-34vw,34vh) scale(1.1)}}
-@keyframes aur3{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30vw,-22vh) scale(1.18)}66%{transform:translate(-18vw,-34vh) scale(.9)}}
-.bd .bd-w{inset:-12%;animation:bdw 24s ease-in-out infinite alternate}
-@keyframes bdw{from{transform:translate(-4%,3%) scale(1)}to{transform:translate(4%,-4%) scale(1.1)}}
-.root.noaurora .bd-w{animation:none}
+/* il campo elettrico (FieldGlow.tsx): disegnato a metà risoluzione, lo schermo lo allarga morbido; sta sotto il disegno
+   e sotto la velatura in fondo alla pagina, come le luci di prima. Entra piano per non accendersi di colpo */
+.bd-field{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;animation:fd 1.6s ease-out backwards}
+.bd .bd-w{inset:-12%}
 .bd-art{position:absolute;left:0;top:-25vh;width:100%;height:150vh;opacity:calc(.24*var(--ao,1));transform:translateY(calc(var(--sy,0)*-.12px))}
 .root.dark .bd-art{opacity:calc(.32*var(--ao,1))}
 .bd-p{inset:-25vh 0;transform:translateY(calc(var(--sy,0)*-.12px))}
@@ -194,7 +188,6 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;transform:none;back
 .root.noreveal .rv{opacity:1;transform:none}.root.noreveal .rv.in{animation:none}
 .root.notitles .wl{animation:none;opacity:1}
 .root.nologo .lg-n,.root.nologo .lg-amber{animation:none;opacity:1}.root.nologo .lg-arc,.root.nologo .lg-line{animation:none;stroke-dashoffset:0}.root.nologo .lg-flow{animation:none;opacity:0}
-.root.noaurora .au{display:none}
 .noglow .bt:before,.noglow .card:before,.noglow .bt.rip:after,.noripple .bt.rip:after{display:none}
 .root.noscan .hero:after{display:none}
 .root.noprog .prog{display:none}

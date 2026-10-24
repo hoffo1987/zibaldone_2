@@ -35,6 +35,8 @@ import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf,
 import { Navigation, SectionLocation, ScrittiSwitch, NAV_ORDER, inHub } from "./Navigation";
 import { Text3D, Terminal3D } from "./d3";
 import { renderLoop, holdLoops } from "./renderLoop";
+import { netBuilder, publishNet, live, makeCurrent, type NetPen } from "./current";
+import FieldGlow from "./FieldGlow";
 import { useMediaQuery } from "./useMediaQuery";
 import { useKeyboardOpen } from "./useKeyboardOpen";
 import { useMusic } from "./useMusic";
@@ -195,14 +197,15 @@ const Wordmark = ({ size = 38, fs, light, center, stack, tag = true, onLogo }: a
   </div>
 );
 // --- SFONDI GENERATIVI: ogni pagina ha un disegno diverso, mai a tessere ripetute, ricalcolato a ogni apertura ---
-type ArtFn = (g: CanvasRenderingContext2D, W: number, H: number, R: () => number, c: string, am: string) => void;
+// ognuno registra in "net" le linee su cui può correre la corrente (current.ts) senza consumare numeri casuali in più
+type ArtFn = (g: CanvasRenderingContext2D, W: number, H: number, R: () => number, c: string, am: string, net: NetPen) => void;
 const mulberry = (a: number) => () => { let t = (a += 0x6d2b79f5); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const DIR8 = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 // scheda elettronica: piste a 45°, piazzole, chip con piedini e piste che ne escono
-const artCircuit: ArtFn = (g, W, H, R, c, am) => {
+const artCircuit: ArtFn = (g, W, H, R, c, am, net) => {
   const G = 22, pick = () => (R() < 0.13 ? `rgb(${am})` : `rgb(${c})`);
   g.lineJoin = "round"; g.lineCap = "round";
-  const pad = (x: number, y: number) => { g.beginPath(); g.arc(x, y, R() < 0.3 ? 5 : 3.4, 0, 7); g.stroke(); if (R() < 0.4) { g.beginPath(); g.arc(x, y, 1.5, 0, 7); g.fill(); } };
+  const pad = (x: number, y: number) => { const r = R() < 0.3 ? 5 : 3.4; g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke(); if (R() < 0.4) { g.beginPath(); g.arc(x, y, 1.5, 0, 7); g.fill(); } return net.node(x, y, "pad", r); };
   const walk = (x: number, y: number, d: number, segs: number) => {
     const pts = [[x, y]];
     for (let i = 0; i < segs; i++) {
@@ -217,15 +220,17 @@ const artCircuit: ArtFn = (g, W, H, R, c, am) => {
   g.lineWidth = 1.4;
   const nT = Math.floor((W * H) / 36000);
   for (let i = 0; i < nT; i++) {
-    g.strokeStyle = g.fillStyle = pick();
+    const col = pick(); g.strokeStyle = g.fillStyle = col;
     const pts = walk(Math.round((R() * W) / G) * G, Math.round((R() * H) / G) * G, Math.floor(R() * 8), 2 + Math.floor(R() * 5));
-    pad(pts[0][0], pts[0][1]); if (R() < 0.8) pad(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+    const a = pad(pts[0][0], pts[0][1]), b = R() < 0.8 ? pad(pts[pts.length - 1][0], pts[pts.length - 1][1]) : -1;
+    net.trace(pts, { a, b, am: col !== `rgb(${c})` });
   }
   const nC = Math.max(2, Math.floor((W * H) / 420000));
   for (let i = 0; i < nC; i++) {
-    g.strokeStyle = g.fillStyle = pick();
+    const col = pick(); g.strokeStyle = g.fillStyle = col;
     const w = G * (4 + Math.floor(R() * 5)), h = G * (3 + Math.floor(R() * 4)), x = Math.round((R() * (W - w)) / G) * G, y = Math.round((R() * (H - h)) / G) * G;
     g.lineWidth = 1.6; g.strokeRect(x, y, w, h);
+    const chip = net.node(x + 9, y + 9, "chip", 3, [x, y, w, h]);
     g.beginPath(); g.arc(x + 9, y + 9, 3, 0, 7); g.stroke();
     g.lineWidth = 1.2;
     const pin = (px: number, py: number, dx: number, dy: number) => { g.beginPath(); g.moveTo(px, py); g.lineTo(px + dx * 8, py + dy * 8); g.stroke(); };
@@ -237,12 +242,13 @@ const artCircuit: ArtFn = (g, W, H, R, c, am) => {
       const side = Math.floor(R() * 4), nx = Math.max(1, Math.floor((w - 20) / 11)), ny = Math.max(1, Math.floor((h - 20) / 11));
       const ox = x + 14 + 11 * Math.floor(R() * nx), oy = y + 14 + 11 * Math.floor(R() * ny);
       const st = [[ox, y - 8, 6], [x + w + 8, oy, 0], [ox, y + h + 8, 2], [x - 8, oy, 4]][side];
-      const pts = walk(st[0], st[1], st[2], 2 + Math.floor(R() * 3)); pad(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+      const pts = walk(st[0], st[1], st[2], 2 + Math.floor(R() * 3)), b = pad(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+      net.trace(pts, { a: chip, b, am: col !== `rgb(${c})` });
     }
   }
 };
 // cartiglio da disegno tecnico: crocette sparse, cerchi tratteggiati e quote
-const artBlueprint: ArtFn = (g, W, H, R, c, am) => {
+const artBlueprint: ArtFn = (g, W, H, R, c, am, net) => {
   g.lineCap = "round"; g.lineWidth = 1.2;
   const cross = (x: number, y: number, s: number) => { g.beginPath(); g.moveTo(x - s, y); g.lineTo(x + s, y); g.moveTo(x, y - s); g.lineTo(x, y + s); g.stroke(); };
   for (let gx = 0; gx < W; gx += 46) for (let gy = 0; gy < H; gy += 46) {
@@ -254,6 +260,7 @@ const artBlueprint: ArtFn = (g, W, H, R, c, am) => {
   for (let i = 0; i < nCi; i++) {
     const x = R() * W, y = R() * H, r = 40 + R() * 150;
     g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
+    net.trace(Array.from({ length: 72 }, (_, k) => [x + Math.cos((k / 72) * Math.PI * 2) * r, y + Math.sin((k / 72) * Math.PI * 2) * r]), { closed: true });
     g.setLineDash([]); cross(x, y, 9); g.setLineDash([6, 9]);
   }
   g.setLineDash([]);
@@ -264,37 +271,46 @@ const artBlueprint: ArtFn = (g, W, H, R, c, am) => {
     g.save(); g.translate(x, y); if (vert) g.rotate(Math.PI / 2);
     g.beginPath(); g.moveTo(0, 0); g.lineTo(len, 0); g.moveTo(0, -6); g.lineTo(0, 6); g.moveTo(len, -6); g.lineTo(len, 6); g.stroke();
     g.fillText(`${Math.round(len)} mm`, len / 2, -7); g.restore();
+    const ex = vert ? x : x + len, ey = vert ? y + len : y;
+    net.trace([[x, y], [ex, ey]], { a: net.node(x, y, "tick", 2), b: net.node(ex, ey, "tick", 2) });
   }
 };
 // curve di livello: archivio come una mappa topografica
-const artContour: ArtFn = (g, W, H, R, c, am) => {
+const artContour: ArtFn = (g, W, H, R, c, am, net) => {
   g.lineWidth = 1.2; g.lineJoin = "round";
   const nB = Math.max(3, Math.floor((W * H) / 380000));
   for (let b = 0; b < nB; b++) {
     const cx = R() * W, cy = R() * H, base = 30 + R() * 50, step = 14 + R() * 10, rings = 6 + Math.floor(R() * 9), sx = 0.8 + R() * 0.8;
     const a1 = 0.12 + R() * 0.14, a2 = 0.08 + R() * 0.1, a3 = 0.04 + R() * 0.06, p1 = R() * 6.28, p2 = R() * 6.28, p3 = R() * 6.28;
-    g.strokeStyle = `rgb(${R() < 0.12 ? am : c})`;
+    const isAm = R() < 0.12; g.strokeStyle = `rgb(${isAm ? am : c})`;
     for (let r = 0; r < rings; r++) {
-      const rad = base + r * step;
+      const rad = base + r * step, ring: number[][] = [];
       g.beginPath();
       for (let k = 0; k <= 90; k++) {
         const t = (k / 90) * Math.PI * 2, rr = rad * (1 + a1 * Math.sin(2 * t + p1 + r * 0.15) + a2 * Math.sin(3 * t + p2) + a3 * Math.sin(5 * t + p3 + r * 0.2));
         const x = cx + Math.cos(t) * rr * sx, y = cy + Math.sin(t) * rr;
         if (k) g.lineTo(x, y); else g.moveTo(x, y);
+        if (k < 90) ring.push([x, y]);
       }
       g.closePath(); g.stroke();
+      net.trace(ring, { closed: true, am: isAm });
     }
   }
 };
 // rete di nodi collegati ai vicini più prossimi
-const artNetwork: ArtFn = (g, W, H, R, c, am) => {
+const artNetwork: ArtFn = (g, W, H, R, c, am, net) => {
   const n = Math.max(14, Math.floor((W * H) / 42000)), P: number[][] = [];
   for (let i = 0; i < n; i++) P.push([R() * W, R() * H, R()]);
   const maxD = Math.max(160, Math.sqrt((W * H) / n) * 1.9);
   g.lineWidth = 1.1; g.strokeStyle = `rgb(${c})`;
+  const hub = P.map((p) => net.node(p[0], p[1], "hub", p[2] > 0.88 ? 8 : 2.6 + p[2] * 2)), seen = new Set<string>();
   P.forEach((p, i) => {
     const near = P.map((q, j) => [j, Math.hypot(p[0] - q[0], p[1] - q[1])]).filter((x) => x[0] !== i && x[1] < maxD).sort((a, b) => a[1] - b[1]).slice(0, 2 + Math.floor(R() * 2));
-    near.forEach((x) => { g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(P[x[0]][0], P[x[0]][1]); g.stroke(); });
+    near.forEach((x) => {
+      g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(P[x[0]][0], P[x[0]][1]); g.stroke();
+      const k = i < x[0] ? `${i}-${x[0]}` : `${x[0]}-${i}`;
+      if (!seen.has(k)) { seen.add(k); net.trace([p, P[x[0]]], { a: hub[i], b: hub[x[0]] }); }
+    });
   });
   P.forEach((p) => {
     const big = p[2] > 0.88; g.fillStyle = g.strokeStyle = `rgb(${p[2] < 0.1 ? am : c})`;
@@ -303,17 +319,19 @@ const artNetwork: ArtFn = (g, W, H, R, c, am) => {
   });
 };
 // cielo di puntini e scintille per il podio
-const artStars: ArtFn = (g, W, H, R, c, am) => {
+const artStars: ArtFn = (g, W, H, R, c, am, net) => {
   const n = Math.floor((W * H) / 7000);
   for (let i = 0; i < n; i++) {
     const x = R() * W, y = R() * H, s = R();
     g.fillStyle = `rgba(${s < 0.2 ? am : c},${0.35 + R() * 0.65})`;
     g.beginPath(); g.arc(x, y, 0.7 + s * 1.7, 0, 7); g.fill();
+    if (s > 0.86) net.node(x, y, "star", 0.7 + s * 1.7);
     if (s > 0.96) { g.strokeStyle = g.fillStyle; g.lineWidth = 1.2; const l = 6 + R() * 8; g.beginPath(); g.moveTo(x - l, y); g.lineTo(x + l, y); g.moveTo(x, y - l); g.lineTo(x, y + l); g.stroke(); }
   }
 };
 const ART: Record<string, ArtFn> = { home: artCircuit, write: artBlueprint, archive: artContour, authors: artNetwork, podio: artStars };
-const BgArt = ({ kind, dark }: { kind: string; dark: boolean }) => {
+// show=false: il disegno resta nascosto ma registra comunque le piste, così la corrente ha dove correre
+const BgArt = ({ kind, dark, show = true }: { kind: string; dark: boolean; show?: boolean }) => {
   const ref = useRef<HTMLCanvasElement>(null);
   const seed = useRef(Math.floor(Math.random() * 2147483647));
   useEffect(() => {
@@ -327,19 +345,22 @@ const BgArt = ({ kind, dark }: { kind: string; dark: boolean }) => {
       const dpr = W > 1400 ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
       g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
-      ART[kind]?.(g, W, H, mulberry(seed.current), dark ? "45,212,191" : "15,139,122", dark ? "251,191,36" : "202,138,4");
+      const pen = netBuilder(W, H);
+      ART[kind]?.(g, W, H, mulberry(seed.current), dark ? "45,212,191" : "15,139,122", dark ? "251,191,36" : "202,138,4", pen);
+      publishNet(pen.net, cv);
     };
     draw();
     const on = () => { clearTimeout(timer); timer = window.setTimeout(draw, 200); };
     window.addEventListener("resize", on);
-    return () => { clearTimeout(timer); window.removeEventListener("resize", on); };
+    return () => { clearTimeout(timer); window.removeEventListener("resize", on); if (live.el === cv) publishNet(null, null); };
   }, [kind, dark]);
-  return <canvas ref={ref} className="bd-art" aria-hidden="true" />;
+  return <canvas ref={ref} className="bd-art" style={show ? undefined : { visibility: "hidden" }} aria-hidden="true" />;
 };
 const Backdrop = ({ tab, fx, dark, art = true, g }: { tab: string; fx: boolean; dark: boolean; art?: boolean; g: any }) => {
   const k = tab === "profile" ? "authors" : ["home", "write", "podio", "authors"].includes(tab) ? tab : "archive";
   return (<>
-    <div key={k} className={`bd bd-${k} bdin fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" /><div className="au a1" /><div className="au a2" /><div className="au a3" />{k === "podio" && <div className="bd-p" />}{art && <BgArt kind={k} dark={dark} />}</div>
+    {g.aurora && <FieldGlow kind={k} dark={dark} g={g} />}
+    <div key={k} className={`bd bd-${k} bdin fixed inset-0 z-0 pointer-events-none`}><div className="bd-w" />{k === "podio" && <div className="bd-p" />}{(art || g.pulses) && <BgArt kind={k} dark={dark} show={art} />}</div>
     {fx && <FX dark={dark} g={g} />}
   </>);
 };
@@ -884,12 +905,20 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
   useEffect(() => {
     const a = bg.current, b = fg.current; if (!a || !b) return;
     const ca = a.getContext("2d")!, cb = b.getContext("2d")!;
-    const G = 48, dpr = Math.min(window.devicePixelRatio || 1, window.innerWidth < 768 ? 1.25 : 1.5);
-    let W = 0, H = 0;
-    const fit = () => { W = window.innerWidth; H = window.innerHeight; [a, b].forEach((c) => { c.width = W * dpr; c.height = H * dpr; c.style.width = W + "px"; c.style.height = H + "px"; c.getContext("2d")!.setTransform(dpr, 0, 0, dpr, 0, 0); }); };
+    const dpr = Math.min(window.devicePixelRatio || 1, window.innerWidth < 768 ? 1.25 : 1.5);
+    let W = 0, H = 0, geo = { ver: -1, top: 0, w: 1, h: 1 };
+    const fit = () => { W = window.innerWidth; H = window.innerHeight; geo.ver = -1; [a, b].forEach((c) => { c.width = W * dpr; c.height = H * dpr; c.style.width = W + "px"; c.style.height = H + "px"; c.getContext("2d")!.setTransform(dpr, 0, 0, dpr, 0, 0); }); };
     fit(); window.addEventListener("resize", fit);
-    const pulses: any[] = [], sparks: any[] = [];
-    const spawn = (x = Math.random() * W, y = Math.random() * H, once = false) => { const h = Math.random() < 0.5, s = Math.random() < 0.5 ? 1 : -1; pulses.push({ x: Math.round(x / G) * G, y: Math.round(y / G) * G, dx: h ? s : 0, dy: h ? 0 : s, t: [], n: 0, max: 160 + Math.random() * 240, am: Math.random() < 0.25, once }); };
+    // la corrente corre sulle piste del disegno di sfondo: serve sapere dove sta quel disegno sullo schermo
+    // (è più alto della finestra e scorre con la parallasse); le misure si rileggono solo quando cambia il disegno
+    const cur = makeCurrent(dark), map = { sx: 1, sy: 1, oy: 0, vw: 0, vh: 0 };
+    const place = () => {
+      const el = live.el, net = live.net;
+      if (geo.ver !== live.ver && el && net) geo = { ver: live.ver, top: el.offsetTop, w: el.offsetWidth / net.W, h: el.offsetHeight / net.H };
+      map.sx = geo.w; map.sy = geo.h; map.oy = geo.top - (parseFloat(document.documentElement.style.getPropertyValue("--sy")) || 0) * 0.12; map.vw = W; map.vh = H;
+    };
+    let dirty: number[] | null = null, sparked = false;
+    const sparks: any[] = [];
     // al tocco: un'onda di luce (due anelli sottili che rallentano allargandosi) e qualche elettrone che parte lungo le
     // direzioni della griglia, fa una curva a 90° come su una scheda e si spegne lasciando la scia. Mai mentre si scrive,
     // si disegna o si trascina un cursore
@@ -907,32 +936,18 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
           sparks.push({ x: e.clientX, y: e.clientY, dx: d[0], dy: d[1], v: 3.4 + Math.random() * 1.6, bend: 10 + Math.random() * 18, turn, tr: [] as number[][], t0: now, life: 520 + Math.random() * 160, am: i % 3 === 0 });
         }
       }
-      if (gr.current.pulses) spawn(e.clientX, e.clientY, true); // l'impulso nato dal tocco si spegne da solo
+      if (gr.current.pulses) { place(); cur.inject(e.clientX / map.sx, (e.clientY - map.oy) / map.sy); } // il tocco manda corrente nella pista più vicina
     };
     window.addEventListener("pointerdown", down, { passive: true });
     const frame = (ts: number) => {
       const cfg = gr.current;
       const c = dark ? "45,212,191" : "15,139,122";
-      ca.clearRect(0, 0, W, H); cb.clearRect(0, 0, W, H); ca.lineWidth = 1.6; ca.lineCap = "round";
-      // numero di impulsi voluto (su schermi piccoli la metà): si aggiunge o si toglie senza riavviare nulla
-      const want = cfg.pulses ? Math.max(1, Math.round(cfg.dens * (W < 600 ? 0.5 : 1))) : 0;
-      let nb = 0; for (const q of pulses) if (!q.once) nb++;
-      for (; nb < want; nb++) spawn();
-      for (; nb > want; nb--) { const k = pulses.findIndex((q) => !q.once); if (k >= 0) pulses.splice(k, 1); }
-      if (!cfg.pulses) pulses.length = 0;
-      const steps = Math.max(1, Math.round(2 * (cfg.spd || 1)));
-      for (let i = pulses.length - 1; i >= 0; i--) {
-        const p = pulses[i];
-        for (let k = 0; k < steps; k++) {
-          p.x += p.dx * 2; p.y += p.dy * 2;
-          if (p.x % G === 0 && p.y % G === 0 && Math.random() < 0.3) { if (p.dx) { p.dx = 0; p.dy = Math.random() < 0.5 ? 1 : -1; } else { p.dy = 0; p.dx = Math.random() < 0.5 ? 1 : -1; } }
-        }
-        p.t.push([p.x, p.y]); if (p.t.length > 22) p.t.shift(); p.n++;
-        const col = p.am ? "251,191,36" : c;
-        for (let k = 1; k < p.t.length; k++) { ca.strokeStyle = `rgba(${col},${(k / p.t.length) * 0.55})`; ca.beginPath(); ca.moveTo(p.t[k - 1][0], p.t[k - 1][1]); ca.lineTo(p.t[k][0], p.t[k][1]); ca.stroke(); }
-        ca.fillStyle = `rgba(${col},.9)`; ca.beginPath(); ca.arc(p.x, p.y, 2.6, 0, 7); ca.fill();
-        if (p.n > p.max || p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50) { pulses.splice(i, 1); if (!p.once) spawn(); }
-      }
+      // si cancella solo il rettangolo toccato al frame prima: senza impulsi in giro il canvas non costa nulla
+      if (dirty) ca.clearRect(dirty[0] - 2, dirty[1] - 2, dirty[2] - dirty[0] + 4, dirty[3] - dirty[1] + 4);
+      place();
+      dirty = cur.frame(ca, ts, cfg, map);
+      if (sparked) cb.clearRect(0, 0, W, H);
+      sparked = sparks.length > 0;
       const now = performance.now(), easeOut = (k: number) => 1 - Math.pow(1 - k, 3);
       if (sparks.length && dark) cb.globalCompositeOperation = "lighter";
       for (let i = sparks.length - 1; i >= 0; i--) {
@@ -963,7 +978,7 @@ const FX = ({ dark, g }: { dark: boolean; g: any }) => {
     return () => { stop(); window.removeEventListener("resize", fit); window.removeEventListener("pointerdown", down); };
   }, [dark]);
   return (<>
-    <canvas ref={bg} className="fixed inset-0 pointer-events-none" style={{ opacity: 0.8 }} aria-hidden="true" />
+    <canvas ref={bg} className="fixed inset-0 pointer-events-none" aria-hidden="true" />
     <canvas ref={fg} className="fixed inset-0 pointer-events-none z-[95]" aria-hidden="true" />
   </>);
 };
@@ -2131,7 +2146,7 @@ export default function App() {
 
   // ================= RENDER =================
   const no = (k: string, cls: string) => (G[k] ? "" : cls);
-  const gStyle: any = { "--gi": G.glowI, "--ai": G.auroraI, "--ao": G.artI };
+  const gStyle: any = { "--gi": G.glowI, "--ao": G.artI };
   const settingsDialog = optOpen && (
         <SettingsDialog onClose={() => setOptOpen(false)}>
             <div className="flex items-center justify-between mb-5"><h3 id="settings-title" className="hd text-2xl font-bold">Opzioni</h3><button className="bt !p-2" onClick={() => setOptOpen(false)} aria-label="Chiudi"><X size={16} /></button></div>
@@ -2141,12 +2156,12 @@ export default function App() {
             <Seg v={opts.text} set={(v: number) => setOpt("text", v)} items={[[0.9, "Testo piccolo"], [1, "Normale"], [1.12, "Grande"]]} />
             <h4 className="text-xs mu mt-6 mb-2">Effetti e animazioni</h4>
             <Seg cols={2} v={opts.level} set={(v: string) => setLevel(v)} items={[["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"], ["custom", <><SlidersHorizontal size={13} />Personalizzato</>]]} />
-            <p className="text-xs mu mt-2">{({ full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, aurora e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria.", custom: `Scegli tu ogni effetto e quanto deve essere intenso · ${CBOOL.filter((k) => G[k]).length} di ${CBOOL.length} attivi.` } as any)[opts.level]}</p>
+            <p className="text-xs mu mt-2">{({ full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, campo elettrico e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria.", custom: `Scegli tu ogni effetto e quanto deve essere intenso · ${CBOOL.filter((k) => G[k]).length} di ${CBOOL.length} attivi.` } as any)[opts.level]}</p>
             {opts.level !== "custom" ? (
               <div className="mt-2">
-                <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="Impulsi di corrente sullo sfondo, scintille al tocco e pioggia di codice nel riquadro iniziale" />
+                <Sw on={opts.fx} off={opts.level !== "full"} set={(v: boolean) => setOpt("fx", v)} label="Circuito vivo" hint="La corrente corre sulle piste disegnate sullo sfondo, scintille al tocco e pioggia di codice nel riquadro iniziale" />
                 <Sw on={opts.glow} off={opts.level !== "full"} set={(v: boolean) => setOpt("glow", v)} label="Bagliore, 3D e onde" hint="Luce che segue il dito, card che si inclinano, onde sui pulsanti" />
-                <Sw on={opts.aurora} off={opts.level !== "full"} set={(v: boolean) => setOpt("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
+                <Sw on={opts.aurora} off={opts.level !== "full"} set={(v: boolean) => setOpt("aurora", v)} label="Campo elettrico" hint="Cariche di luce che vagano dietro le pagine, con le linee di campo percorse dalla corrente" />
                 <Sw on={opts.intro} off={lite} set={(v: boolean) => setOpt("intro", v)} label="Titoli, logo e fogli animati" hint="Titoli che emergono dalla riga, fogli dell'archivio che si stampano" />
                 <Sw on={opts.d3 !== false} off={lite} set={(v: boolean) => setOpt("d3", v)} label="Logo e titoli in 3D" hint="Logo tridimensionale che segue il mouse (cliccalo), titoli in rilievo, terminale fluttuante" />
                 <button type="button" className="bt w-full mt-2" onClick={() => setLevel("custom")}><SlidersHorizontal size={15} />Regola ogni dettaglio</button>
@@ -2162,11 +2177,11 @@ export default function App() {
                 <Sw on={G.motion} set={(v: boolean) => setC("motion", v)} label="Animazioni dell'interfaccia" hint="Se lo spegni nessun elemento si muove: tutto compare subito" />
 
                 <Sub>Sfondo</Sub>
-                <Sw on={G.pulses} set={(v: boolean) => setC("pulses", v)} label="Impulsi di corrente" hint="Scintille di luce che corrono lungo le piste del circuito" />
+                <Sw on={G.pulses} set={(v: boolean) => setC("pulses", v)} label="Impulsi di corrente" hint="La corrente percorre le piste del disegno di sfondo, accende piazzole e chip e passa da una pista all'altra" />
                 {G.pulses && <Rng label="Quantità di impulsi" hint="Sugli schermi piccoli sono la metà" v={G.dens} set={(v: number) => setC("dens", v)} min={2} max={40} step={1} />}
                 <Sw on={G.sparks} set={(v: boolean) => setC("sparks", v)} label="Scintille al tocco" hint="Una raggiera di scintille dove clicchi o tocchi" />
-                <Sw on={G.aurora} set={(v: boolean) => setC("aurora", v)} label="Aurora animata" hint="Luci in movimento dietro le pagine" />
-                {G.aurora && <Rng label="Intensità aurora" v={G.auroraI} set={(v: number) => setC("auroraI", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
+                <Sw on={G.aurora} set={(v: boolean) => setC("aurora", v)} label="Campo elettrico" hint="Cariche di luce che vagano dietro le pagine, con le linee di campo percorse dalla corrente" />
+                {G.aurora && <Rng label="Intensità del campo" v={G.auroraI} set={(v: number) => setC("auroraI", v)} min={0.1} max={1} step={0.05} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
                 <Sw on={G.art} set={(v: boolean) => setC("art", v)} label="Disegno di circuiti" hint="Schema elettronico che cambia a ogni sezione" />
                 {G.art && <Rng label="Visibilità del disegno" v={G.artI} set={(v: number) => setC("artI", v)} min={0.2} max={2.5} step={0.1} fmt={(v: number) => `${Math.round(v * 100)}%`} />}
                 <Sw on={G.parallax} set={(v: boolean) => setC("parallax", v)} label="Parallasse" hint="Lo sfondo scorre più piano della pagina" />
