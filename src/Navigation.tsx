@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight, MoreHorizontal, X } from "lucide-react";
 import { useRail } from "./motion";
 import { SectionMark } from "./SectionMark";
+import { GlassMark } from "./GlassMark";
 import "./navigation.css";
 
 // The same order drives both menus and the existing directional page transitions.
@@ -44,20 +45,14 @@ export const navigationItems = (admin: boolean, editing: boolean): Item[] => [
 // the navigation entry that owns a tab
 const ownerOf = (tab: string) => inHub(tab) ? "scritti" : tab;
 
-// Each section is a Nixie tube: smoked glass, the hexagonal anode mesh in front, a bakelite base. The section's mark
-// is the cathode. When the section opens the tube strikes like a Nixie clock: three other cathodes flash in turn,
-// then its own catches with a flicker and glows in the section's colour. The tube you leave cools down slowly.
-const CATHODES = ["home", "my_pages", "write", "scritti", "podio", "authors", "diario", "complete"];
-function Tube({ mark, on }: { mark: string; on: boolean }) {
-  const at = CATHODES.indexOf(mark), others = CATHODES.filter(m => m !== mark);
-  const flash = on ? [0, 2, 4].map(k => others[(Math.max(0, at) + k) % others.length]) : [];
-  return <span className="tube" aria-hidden="true">
-    <span className="tube-glass">
-      <span className="tube-cathode"><SectionMark section={mark} size={26} motion={false} /></span>
-      {flash.map((m, k) => <span key={m} className="tube-cathode tube-flash" style={{ "--k": k } as React.CSSProperties}><SectionMark section={m} size={26} motion={false} /></span>)}
-      <span className="tube-mesh" />
-    </span>
-    <span className="tube-base" />
+// The section's glass tile. When the section opens, its colour rises inside the glass like a liquid, with a few bubbles,
+// and the mark turns to white glass; when you leave, the colour drains back down.
+function GlassIcon({ mark }: { mark: string }) {
+  return <span className="gi" aria-hidden="true">
+    <span className="gi-liquid" />
+    <span className="gi-bubbles"><i /><i /><i /></span>
+    <GlassMark section={mark} />
+    <span className="gi-sheen" />
   </span>;
 }
 
@@ -74,11 +69,30 @@ type Props = {
 };
 
 export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, brand, footer, mobileHeader }: Props) {
-  const vertical = useRef<HTMLDivElement>(null), horizontal = useRef<HTMLElement>(null);
+  const vertical = useRef<HTMLDivElement>(null), horizontal = useRef<HTMLElement>(null), side = useRef<HTMLElement>(null);
   const [more, setMore] = useState(false);
-  // switching the panel on: every tube lights its cathode once, top to bottom, then only the open section stays lit
+  // when the panel appears, a gleam runs down the glass tiles once
   const [boot, setBoot] = useState(true);
   useEffect(() => { const t = setTimeout(() => setBoot(false), 1600); return () => clearTimeout(t); }, []);
+  // the rim of the glass panel catches the light where the pointer is
+  useEffect(() => {
+    const el = side.current; if (!el) return;
+    let raf = 0, x = 0, y = 0;
+    const put = () => { raf = 0; el.style.setProperty("--gx", `${x}px`); el.style.setProperty("--gy", `${y}px`); };
+    const move = (e: PointerEvent) => { const r = el.getBoundingClientRect(); x = Math.round(e.clientX - r.left); y = Math.round(e.clientY - r.top); if (!raf) raf = requestAnimationFrame(put); };
+    el.addEventListener("pointermove", move, { passive: true });
+    return () => { el.removeEventListener("pointermove", move); cancelAnimationFrame(raf); };
+  }, []);
+  // the selection is a drop of glass: it stretches on the way (useRail) and wobbles once when it lands
+  useEffect(() => {
+    const ind = vertical.current?.querySelector<HTMLElement>(":scope > .nind"); if (!ind?.animate) return;
+    const land = (e: TransitionEvent) => {
+      if (e.target !== ind || e.propertyName !== (parseFloat(ind.style.transitionDelay) > 0 ? "top" : "bottom")) return;
+      ind.animate([{ transform: "scale(1.03, .9)" }, { transform: "scale(.99, 1.03)" }, { transform: "none" }], { duration: 480, easing: "cubic-bezier(.3,.7,.3,1)" });
+    };
+    ind.addEventListener("transitionend", land);
+    return () => ind.removeEventListener("transitionend", land);
+  }, []);
   rememberRoom(tab);
   const owner = ownerOf(tab);
   // the rail follows the section, not the room: moving between Diario and Scritti completi keeps it still
@@ -100,23 +114,28 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
       data-tour={mobile || item.id !== "scritti" ? tour : "nav-scritti"} data-snd="nav" data-tone={tone(item)}
       aria-current={on && (mobile || !item.rooms) ? "page" : undefined} aria-label={item.label} style={{ "--i": items.indexOf(item) } as React.CSSProperties}
       onClick={() => navigate(item.id)} className={`bt nb shell-link ${on ? "act" : ""}`}>
-      {mobile ? <span className="shell-icon" aria-hidden="true"><span className="shell-icon-orbit" /><SectionMark key={`${item.id}:${on}`} section={item.mark} /></span> : <Tube mark={item.mark} on={on} />}
+      {mobile ? <span className="shell-icon" aria-hidden="true"><span className="shell-icon-orbit" /><SectionMark key={`${item.id}:${on}`} section={item.mark} /></span> : <GlassIcon mark={item.mark} />}
       <span className="shell-link-copy"><span className="shell-link-title">{mobile ? item.short : item.label}</span>
         {!mobile && <span className="shell-link-detail">{on && room ? room.label : item.detail}</span>}
       </span>
       {!mobile && <ChevronRight className="shell-link-arrow" size={14} aria-hidden="true" />}
     </button>;
   };
-  // desktop: the two rooms hang from the section on a short circuit trace, always reachable in one click
-  const rooms = (item: Item) => <div key={`${item.id}-rooms`} className={`shell-rooms ${owner === item.id ? "open" : ""}`} data-tone={tone(item)}>
-    {item.rooms!.map(r => <button key={r.id} type="button" data-tour={`nav-${r.id}`} data-snd="nav" data-tone={r.tone}
-      aria-current={tab === r.id ? "page" : undefined} aria-label={r.label} onClick={() => navigate(r.id)}
-      className={`shell-room ${tab === r.id ? "act" : ""}`}>
-      <span className="shell-room-lamp" aria-hidden="true" /><span className="shell-room-label">{r.label}</span>
-    </button>)}
-  </div>;
+  // desktop: the two rooms sit under the section in a glass switch, always reachable in one click; a smaller drop of
+  // glass marks the open one
+  const rooms = (item: Item) => {
+    const at = item.rooms!.findIndex(r => r.id === tab);
+    return <div key={`${item.id}-rooms`} className={`shell-rooms ${owner === item.id ? "open" : ""}`} data-tone={tone(item)} data-i={at < 0 ? undefined : at}>
+      <span className="shell-rooms-thumb" aria-hidden="true" />
+      {item.rooms!.map(r => <button key={r.id} type="button" data-tour={`nav-${r.id}`} data-snd="nav" data-tone={r.tone}
+        aria-current={tab === r.id ? "page" : undefined} aria-label={r.label} onClick={() => navigate(r.id)}
+        className={`shell-room ${tab === r.id ? "act" : ""}`}>
+        <span className="shell-room-dot" aria-hidden="true" /><span className="shell-room-label">{r.label}</span>
+      </button>)}
+    </div>;
+  };
   return <>
-    <aside className={`shell-sidebar pn hidden md:flex fixed inset-y-0 left-0 flex-col z-20 ${boot ? "boot" : ""}`}>
+    <aside ref={side} className={`shell-sidebar pn hidden md:flex fixed inset-y-0 left-0 flex-col z-20 ${boot ? "boot" : ""}`}>
       <div className="shell-brand">{brand}</div>
       <nav aria-label="Navigazione principale" className="shell-navigation">
         <div ref={vertical} className="shell-rail" data-tone={active && tone(active)}>

@@ -87,17 +87,20 @@ test('members find the covered podium under More, but not the authors', () => {
   expect(host.querySelector('.shell-rail [aria-label="Autori"]')).toBeNull();
 });
 
-test('on the desktop panel every section is a tube, and only the open one strikes through other cathodes', () => {
+test('on the desktop panel every section has a glass tile, and the rooms switch follows the open room', () => {
+  localStorage.clear();
   act(() => root.render(<Preview />));
   const rail = host.querySelector('.shell-rail');
-  expect(rail.querySelectorAll('.shell-link .tube')).toHaveLength(6);
-  const lit = () => Array.from(rail.querySelectorAll('.shell-link')).filter(b => b.querySelector('.tube-flash')).map(b => b.getAttribute('aria-label'));
-  expect(lit()).toEqual(['Panoramica']);
-  const flashes = rail.querySelectorAll('.shell-link.act .tube-flash [data-mark]');
-  expect(Array.from(flashes).map(m => m.getAttribute('data-mark'))).not.toContain('home');
-  expect(flashes).toHaveLength(3);
-  act(() => rail.querySelector('[aria-label="Autori"]').click());
-  expect(lit()).toEqual(['Autori']);
+  expect(Array.from(rail.querySelectorAll('.shell-link .gi [data-mark]')).map(m => m.getAttribute('data-mark')))
+    .toEqual(['home', 'my_pages', 'write', 'scritti', 'podio', 'authors']);
+  const rooms = rail.querySelector('.shell-rooms');
+  expect(rooms.hasAttribute('data-i')).toBe(false);
+  act(() => rail.querySelector('.shell-room[aria-label="Diario"]').click());
+  expect(rooms.getAttribute('data-i')).toBe('0');
+  expect(rooms.getAttribute('data-tone')).toBe('rose');
+  act(() => rail.querySelector('.shell-room[aria-label="Scritti completi"]').click());
+  expect(rooms.getAttribute('data-i')).toBe('1');
+  expect(rooms.getAttribute('data-tone')).toBe('violet');
   // the mobile dock keeps its own icons
-  expect(host.querySelector('.shell-dock .tube')).toBeNull();
+  expect(host.querySelector('.shell-dock .gi')).toBeNull();
 });

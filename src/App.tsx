@@ -2697,7 +2697,7 @@ export default function App() {
         </div>}
         footer={<div className="space-y-2">
           <ApkDownload compact />
-          <div className="flex items-center gap-2">
+          <div className="shell-user flex items-center gap-2">
             <button onClick={() => go("profile")} data-snd="nav" className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{user.email}</span></span></button>
             <button className="bt !p-2" onClick={() => setOptOpen(true)} title="Opzioni" aria-label="Opzioni" data-tour="options"><Settings size={18} /></button>
             <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
