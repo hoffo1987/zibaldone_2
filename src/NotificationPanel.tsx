@@ -23,10 +23,12 @@ const FILTERS: { id: Filter; label: string; test: (n: any) => boolean }[] = [
 ];
 
 // Il pannello delle notifiche. Due tipi ben distinti: i voti ai propri scritti (una scheda dorata col voto in medaglia,
-// che apre lo scritto) e le novità del Circuito (la nota dell'aggiornamento con la sua versione). Una notifica si
-// considera letta quando è rimasta in vista per un momento: il suo LED si riempie come un timer e diventa una spunta.
-// Si può anche segnare tutto come letto, o leggerne una toccandola. Dove manca IntersectionObserver (test, browser
-// vecchi) vale la regola di prima: dopo un momento si leggono tutte quelle aperte.
+// che apre lo scritto) e le novità del Circuito (la nota dell'aggiornamento con la sua versione). Quelle da leggere
+// stanno tutte insieme in cima, prima delle già lette divise per giorno, e ci restano finché il pannello è aperto
+// (anche dopo averle lette), così l'elenco non salta sotto il dito. Una notifica si considera letta quando è rimasta
+// in vista per un momento: il suo LED si riempie come un timer e diventa una spunta. Si può anche segnare tutto come
+// letto, o leggerne una toccandola. Dove manca IntersectionObserver (test, browser vecchi) vale la regola di prima:
+// dopo un momento si leggono tutte quelle aperte.
 export default function NotificationPanel({ list, onRead, onOpen, stars }: {
   list: any[]; onRead: (ids: string[]) => void; onOpen: (n: any) => void; stars: (v: number) => React.ReactNode;
 }) {
@@ -50,21 +52,29 @@ export default function NotificationPanel({ list, onRead, onOpen, stars }: {
   };
   const commitRef = useRef(commit); commitRef.current = commit;
 
+  // fresh: da leggere quando il pannello si è aperto (o arrivate dopo). Restano nel gruppo in cima fino alla chiusura
+  const fresh = useRef(new Set<string>());
+  list.forEach((n) => { if (unreadOf(n)) fresh.current.add(n.id); });
   const shown = list.filter(FILTERS.find((f) => f.id === filter)!.test);
+  const top = shown.filter((n) => fresh.current.has(n.id)), past = shown.filter((n) => !fresh.current.has(n.id));
   const unread = list.filter(unreadOf);
-  const unreadKey = shown.filter(unreadOf).map((n) => n.id).join("|");
+  const unreadKey = top.filter(unreadOf).map((n) => n.id).join("|");
   const box = useRef<HTMLDivElement>(null);
 
   // in vista per READ_MS → letta. Senza IntersectionObserver, tutte quelle mostrate insieme
+  useEffect(() => () => { timers.current.forEach(clearTimeout); timers.current.clear(); }, []);
   useEffect(() => {
-    if (!unreadKey) return;
-    const ids = unreadKey.split("|");
+    const ids = unreadKey ? unreadKey.split("|") : [];
+    // i timer di quelle ancora da leggere continuano: quando un'altra viene letta l'elenco cambia, ma non si riparte da zero
+    const map = timers.current;
+    map.forEach((t, id) => { if (!ids.includes(id)) { clearTimeout(t); map.delete(id); } });
+    setReading((s) => { const x = new Set(Array.from(s).filter((id) => ids.includes(id))); return x.size === s.size ? s : x; });
+    if (!ids.length) return;
     if (typeof IntersectionObserver === "undefined" || !box.current) {
       setReading(new Set(ids));
       const t = setTimeout(() => commitRef.current(ids), READ_MS);
       return () => clearTimeout(t);
     }
-    const map = timers.current;
     const io = new IntersectionObserver((entries) => {
       entries.forEach((e) => {
         const id = (e.target as HTMLElement).dataset.nid!;
@@ -80,13 +90,38 @@ export default function NotificationPanel({ list, onRead, onOpen, stars }: {
       });
     // si misura sul contenitore che scorre davvero: l'elenco sul computer, il foglio che sale dal basso sul telefono
     }, { root: getComputedStyle(box.current).overflowY === "visible" ? box.current.closest<HTMLElement>(".cp") : box.current, threshold: [0, 0.6, 1] });
-    ids.forEach((id) => { const el = box.current?.querySelector(`[data-nid="${CSS.escape(id)}"]`); if (el) io.observe(el); });
-    return () => { io.disconnect(); map.forEach(clearTimeout); map.clear(); };
+    box.current.querySelectorAll<HTMLElement>("[data-nid]").forEach((el) => { if (ids.includes(el.dataset.nid!)) io.observe(el); });
+    return () => io.disconnect();
   }, [unreadKey]);
 
   if (!list.length) return <div className="nt-empty"><span className="nt-empty-art" aria-hidden="true"><Bell size={22} /><i /></span><b>Nessuna notifica per ora</b><span>Qui trovi i voti ai tuoi scritti e le novità dell’applicazione.</span></div>;
 
   const count = (f: typeof FILTERS[number]) => ({ all: list.filter(f.test).length, new: list.filter((n) => f.test(n) && unreadOf(n)).length });
+  const card = (n: any, i: number) => {
+    const st = unreadOf(n) ? reading.has(n.id) ? "unread reading" : "unread" : lit.has(n.id) ? "just-read" : "read";
+    const led = <span className="nt-led" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" pathLength={1} /></svg><Check size={10} strokeWidth={3.5} /></span>;
+    return isUpdate(n)
+      ? <article key={n.id} data-nid={n.id} aria-label={`Aggiornamento ${n.versione}`} className={`nt-card upd ${st}`} style={{ ["--i" as any]: i }} onClick={() => commit([n.id])}>
+        <span className="nt-key" aria-hidden="true"><Sparkles size={17} /></span>
+        <div className="nt-body">
+          <div className="nt-top"><span className="nt-kind">Novità del Circuito</span><span className="nt-ver">v{n.versione}</span>{led}</div>
+          <p className="nt-title">{n.titolo}</p>
+          <p className={`nt-msg ${open[n.id] ? "open" : ""}`}>{n.messaggio}</p>
+          <div className="nt-foot"><span className="nt-when">{date(n.timestamp)}</span>
+            {(n.messaggio || "").length > 150 && <button type="button" className="nt-more" aria-expanded={!!open[n.id]} onClick={(e) => { e.stopPropagation(); commit([n.id]); setOpen((o) => ({ ...o, [n.id]: !o[n.id] })); }}>{open[n.id] ? "Riduci" : "Leggi tutto"}<ChevronDown size={13} /></button>}</div>
+        </div>
+      </article>
+      : <button key={n.id} type="button" data-nid={n.id} className={`nt-card vote ${st}`} style={{ ["--i" as any]: i }} onClick={() => { commit([n.id]); onOpen(n); }}>
+        <span className="nt-medal" aria-hidden="true"><b>{String(n.voto ?? "").replace(".", ",")}</b><small>/5</small></span>
+        <span className="nt-body">
+          <span className="nt-top"><span className="nt-kind"><Star size={11} />Hai ricevuto un voto</span>{led}</span>
+          <span className="nt-title">«{n.titolo}»</span>
+          <span className="nt-stars">{stars(n.voto)}</span>
+          <span className="nt-foot"><span className="nt-when">{date(n.timestamp)} · {time(n.timestamp)}</span><span className="nt-go">Apri lo scritto<ArrowUpRight size={13} /></span></span>
+        </span>
+      </button>;
+  };
+  const topLeft = top.filter(unreadOf).length;
   let last = "";
   return <div className="nt">
     <div className="nt-head">
@@ -104,32 +139,15 @@ export default function NotificationPanel({ list, onRead, onOpen, stars }: {
     </div>
     <div ref={box} className="nt-list" aria-label="Elenco notifiche">
       {!shown.length && <p className="nt-none">{filter === "voti" ? "Ancora nessun voto: arriverà quando un tuo scritto completo sarà valutato e svelato." : "Nessuna novità da mostrare."}</p>}
-      {shown.map((n, i) => {
+      {top.length > 0 && <>
+        <p className={`nt-day nt-fresh ${topLeft ? "" : "done"}`}><span>{topLeft ? "Da leggere" : "Appena lette"}</span><b>{topLeft || top.length}</b></p>
+        {top.map(card)}
+      </>}
+      {past.map((n, i) => {
         const g = groupOf(n.timestamp), head = g !== last; last = g;
-        const st = unreadOf(n) ? reading.has(n.id) ? "unread reading" : "unread" : lit.has(n.id) ? "just-read" : "read";
-        const led = <span className="nt-led" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" pathLength={1} /></svg><Check size={10} strokeWidth={3.5} /></span>;
         return <React.Fragment key={n.id}>
-          {head && <p className="nt-day"><span>{g}</span></p>}
-          {isUpdate(n)
-            ? <article data-nid={n.id} aria-label={`Aggiornamento ${n.versione}`} className={`nt-card upd ${st}`} style={{ ["--i" as any]: i }} onClick={() => commit([n.id])}>
-              <span className="nt-key" aria-hidden="true"><Sparkles size={17} /></span>
-              <div className="nt-body">
-                <div className="nt-top"><span className="nt-kind">Novità del Circuito</span><span className="nt-ver">v{n.versione}</span>{led}</div>
-                <p className="nt-title">{n.titolo}</p>
-                <p className={`nt-msg ${open[n.id] ? "open" : ""}`}>{n.messaggio}</p>
-                <div className="nt-foot"><span className="nt-when">{date(n.timestamp)}</span>
-                  {(n.messaggio || "").length > 150 && <button type="button" className="nt-more" aria-expanded={!!open[n.id]} onClick={(e) => { e.stopPropagation(); commit([n.id]); setOpen((o) => ({ ...o, [n.id]: !o[n.id] })); }}>{open[n.id] ? "Riduci" : "Leggi tutto"}<ChevronDown size={13} /></button>}</div>
-              </div>
-            </article>
-            : <button type="button" data-nid={n.id} className={`nt-card vote ${st}`} style={{ ["--i" as any]: i }} onClick={() => { commit([n.id]); onOpen(n); }}>
-              <span className="nt-medal" aria-hidden="true"><b>{String(n.voto ?? "").replace(".", ",")}</b><small>/5</small></span>
-              <span className="nt-body">
-                <span className="nt-top"><span className="nt-kind"><Star size={11} />Hai ricevuto un voto</span>{led}</span>
-                <span className="nt-title">«{n.titolo}»</span>
-                <span className="nt-stars">{stars(n.voto)}</span>
-                <span className="nt-foot"><span className="nt-when">{date(n.timestamp)} · {time(n.timestamp)}</span><span className="nt-go">Apri lo scritto<ArrowUpRight size={13} /></span></span>
-              </span>
-            </button>}
+          {head && <p className="nt-day"><span>{top.length > 0 && i === 0 ?`Già lette · ${g}` : g}</span></p>}
+          {card(n, top.length + i)}
         </React.Fragment>;
       })}
     </div>

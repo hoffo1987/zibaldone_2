@@ -48,6 +48,35 @@ test('i filtri separano voti e novità, e leggono solo quello che si vede', () =
   act(()=>tabs()[2].click());
   expect(host.querySelector('.nt-card.upd')).not.toBeNull();
 });
+test('le da leggere stanno tutte in cima e ci restano anche dopo averle lette', () => {
+  const onRead=jest.fn(), old={...vote,id:'old',timestamp:0};
+  const list=[{...update('update:a'),timestamp:5,letta:true},{...vote,timestamp:4,letta:true},{...update('update:b'),timestamp:3},old];
+  act(()=>root.render(<Panel list={list} onRead={onRead} onOpen={()=>{}} stars={()=>null} />));
+  const order=()=>Array.from(host.querySelectorAll('.nt-card')).map(c=>c.dataset.nid);
+  expect(order()).toEqual(['update:b','old','update:a','vote']);
+  expect(host.querySelector('.nt-fresh').textContent).toBe('Da leggere2');
+  act(()=>jest.advanceTimersByTime(1400));
+  expect(onRead).toHaveBeenCalledWith(['update:b','old']);
+  act(()=>root.render(<Panel list={list.map(n=>({...n,letta:true}))} onRead={onRead} onOpen={()=>{}} stars={()=>null} />));
+  expect(order()).toEqual(['update:b','old','update:a','vote']);
+  expect(host.querySelector('.nt-fresh').textContent).toBe('Appena lette2');
+  expect(host.querySelectorAll('.nt-card.just-read')).toHaveLength(2);
+});
+test('quando una viene letta, il timer delle altre in vista non riparte da zero', () => {
+  const ios=[]; global.IntersectionObserver=class { constructor(cb){ this.cb=cb; this.els=new Set(); ios.push(this); } observe(el){ this.els.add(el); } disconnect(){ this.els.clear(); } };
+  const see=id=>{ const io=ios[ios.length-1], el=Array.from(io.els).find(e=>e.dataset.nid===id); io.cb([{ target:el, isIntersecting:true, intersectionRatio:1 }]); };
+  try {
+    const onRead=jest.fn(), render=list=>act(()=>root.render(<Panel list={list} onRead={onRead} onOpen={()=>{}} stars={()=>null} />));
+    const a=update('update:a'), b={...update('update:b'),timestamp:0};
+    render([a,b]);
+    act(()=>see('update:a')); act(()=>jest.advanceTimersByTime(700)); act(()=>see('update:b'));
+    act(()=>jest.advanceTimersByTime(700));
+    expect(onRead.mock.calls).toEqual([[['update:a']]]);
+    render([{...a,letta:true},b]);
+    act(()=>jest.advanceTimersByTime(700));
+    expect(onRead.mock.calls).toEqual([[['update:a']],[['update:b']]]);
+  } finally { delete global.IntersectionObserver; }
+});
 test('la campanella fa sparire il numero con la spunta quando arriva a zero', () => {
   act(()=>root.render(<button><BellMark count={2} /></button>));
   expect(host.querySelector('.bm-badge').textContent).toBe('2');
