@@ -276,24 +276,6 @@ export const makeCurrent = (dark: boolean) => {
     return n;
   };
 
-  // teste degli impulsi e lampi in corso, come luci per le card: x, y (disegno), intensità, ambra
-  const lights = (out: Float32Array, max: number) => {
-    const net = live.net; if (!net) return 0;
-    let n = 0;
-    for (const q of pulses) {
-      if (n >= max) break;
-      if (q.arrived) continue;
-      pointAt(net.traces[q.t], q.s0 + q.dir * Math.min(q.d, q.run), P);
-      out.set([P[0], P[1], 1, q.am ? 1 : 0], n++ * 4);
-    }
-    const now = performance.now();
-    for (const f of flashes) {
-      if (n >= max) break;
-      const k = (now - f.t0) / f.life; if (k < 0 || k >= 1) continue;
-      out.set([f.x, f.y, 1.6 * (1 - k) * (1 - k), f.am ? 1 : 0], n++ * 4);
-    }
-    return n;
-  };
-  return { frame, emit, inject, lights, clear: () => { pulses = []; flashes = []; } };
+  return { frame, emit, inject, clear: () => { pulses = []; flashes = []; } };
 };
 export const EMIT_STRIDE = 12;

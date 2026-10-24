@@ -66,7 +66,7 @@ fn orbCol(i: i32) -> vec3f { return select(u.colB.rgb, u.colA.rgb, u.orbs[i].w >
   let grain = hash2(floor(P.xy * .8));
   var sub = vec3f(.02, .058, .053) * (.9 + .12 * weave + .05 * grain);
   var ink = mix(vec3f(.22, .68, .6), vec3f(.92, .64, .28), am) * .5;
-  if (!dark) { sub = vec3f(.925, .935, .905) * (.985 + .012 * weave + .008 * grain); ink = mix(vec3f(.05, .47, .41), vec3f(.78, .5, .06), am); }
+  if (!dark) { sub = vec3f(.87, .895, .845) * (.985 + .012 * weave + .008 * grain); ink = mix(vec3f(.05, .47, .41), vec3f(.78, .5, .06), am); }
   let alb = mix(sub, ink, mask);
   let shin = mix(30., 90., mask);
   // riflessi: il supporto lucido ha il Fresnel dei dielettrici, il rame riflette tinto del suo colore
@@ -77,6 +77,8 @@ fn orbCol(i: i32) -> vec3f { return select(u.colB.rgb, u.colA.rgb, u.orbs[i].w >
   let key = normalize(vec3f(-.3, -.5, 1.));
   var diff = vec3f(select(.9, .32, dark)) * max(dot(N, key), 0.);
   var spec = vec3f(select(.22, .14, dark)) * pow(max(dot(N, normalize(key + V)), 0.), shin) * metal;
+  // sulla carta la luce delle cariche non si somma (schiarirebbe tutto verso il bianco): tinge, come inchiostro
+  let diffK = diff;
   var refl = vec3f(0.); var tint = vec3f(0.); var tintA = 0.; var shadow = 0.;
   let R = u.res.w * .5;
   let Rv = reflect(dir, N);
@@ -101,9 +103,9 @@ fn orbCol(i: i32) -> vec3f { return select(u.colB.rgb, u.colA.rgb, u.orbs[i].w >
     diff += lightE * (.35 + 2.2 * mask);
     col = alb * (vec3f(.5) + diff) + spec + refl * F * gloss * metal + glowN * 1.6 + glowF * 2.2;
   } else {
-    col = alb * (vec3f(.84) + diff * .2);
-    col = mix(col, tint / max(tintA, 1e-4), clamp(tintA * .12, 0., .15));
-    col += spec * .45 + refl * F * gloss * .5;
+    col = alb * (vec3f(.84) + diffK * .2);
+    col = mix(col, tint / max(tintA, 1e-4), clamp(tintA * .12, 0., .12));
+    col += min(spec * .45, vec3f(.12)) + refl * F * gloss * .2;
     // sulla carta gli impulsi (disegnati sopra come inchiostro) hanno un alone del loro colore
     let gl = glowN * 2.4 + glowF * 3.5; let gm = clamp(max(gl.r, max(gl.g, gl.b)), 0., 1.);
     col = mix(col, gl / max(gm, 1e-4) * .75, gm * .4);
@@ -115,7 +117,7 @@ fn orbCol(i: i32) -> vec3f { return select(u.colB.rgb, u.colA.rgb, u.orbs[i].w >
       let o = u.orbs[i].xyz; let c = orbCol(i); let rad = 15.;
       let b = dot(o - eye, dir); let cp = eye + dir * b; let dp = distance(o, cp);
       let g = (exp(-dp / (rad * 1.2)) * .8 + exp(-dp / (rad * 5.)) * .28) * u.misc.y;
-      if (dark) { col += c * g; } else { col = mix(col, c, clamp(g * .42, 0., .48)); }
+      if (dark) { col += c * g; } else { col = mix(col, c, clamp(g * .3, 0., .3)); }
       // bordo della sfera sfumato su un pixel e mezzo dello schermo: niente scalini
       let aa = 1.5 * b * u.fwd.w * 2. / u.res.y;
       if (dp < rad + aa) {
@@ -123,16 +125,16 @@ fn orbCol(i: i32) -> vec3f { return select(u.colB.rgb, u.colA.rgb, u.orbs[i].w >
         let fr = pow(1. - max(dot(n, V), 0.), 2.5);
         let swirl = .5 + .5 * sin(n.x * 9. + u.misc.x * 1.7 * u.orbs[i].w) * sin(n.y * 7. - u.misc.x * 1.3);
         let glint = pow(max(dot(n, normalize(key + V)), 0.), 40.);
-        let body = select(mix(c, vec3f(1.), .5 + .25 * swirl) * (.85 + .35 * fr), mix(c, vec3f(1.), .35 + .4 * swirl) * (1. + 1.2 * fr), dark);
+        let body = select(mix(c, vec3f(1.), .3 + .25 * swirl) * (.85 + .35 * fr), mix(c, vec3f(1.), .35 + .4 * swirl) * (1. + 1.2 * fr), dark);
         col = mix(col, body + glint, 1. - smoothstep(rad - aa, rad + aa, dp));
       }
     }
   }
   // nebbia: la scheda si perde verso l'alto nel colore della pagina
-  let fogC = select(vec3f(.93, .937, .91), vec3f(.024, .055, .051), dark);
+  let fogC = select(vec3f(.863, .886, .835), vec3f(.024, .055, .051), dark);
   col = mix(col, fogC, smoothstep(u.eye.w * 1.05, u.eye.w * 2.3, t) * .9);
   let vg = length((fc.xy / u.res.xy - .5) * vec2f(1., .8));
-  col *= select(1. - vg * vg * .08, 1. - vg * vg * .5, dark);
+  col *= select(1. - vg * vg * .2, 1. - vg * vg * .5, dark);
   // un filo di rumore per non avere bande nei gradienti
   col += (hash2(fc.xy + u.misc.x) - .5) / 255.;
   return vec4f(col, 1.);
@@ -165,7 +167,6 @@ struct VO { @builtin(position) p: vec4f, @location(0) uv: vec2f };
 @fragment fn fs(i: VO) -> @location(0) vec4f { return textureSampleLevel(t, s, i.uv, 0.); }`;
 
 const BU = { eye: 0, right: 4, up: 8, fwd: 12, res: 16, art: 20, misc: 24, colA: 28, colB: 32, orbs: 36, size: 52 };
-const MAXH = 24;
 const QUIET = "input,textarea,select,[contenteditable],canvas,.inp,.rng,[data-fx=off],button,.bt,a[href],[role=switch],[role=button]:not(.card)";
 export const Q3D: Record<string, { scale: number; ss: number }> = { bilanciata: { scale: 0.75, ss: 1 }, alta: { scale: 1, ss: 1 }, massima: { scale: 1, ss: 2 } };
 
@@ -289,8 +290,8 @@ const Backdrop3D = ({ kind, dark, g, quality = "alta" }: { kind: string; dark: b
       const ph = orbPhases(), colors = want.current.map((c) => c.slice());
       const att: GPURenderPassColorAttachment = { view: null as unknown as GPUTextureView, clearValue: [0, 0, 0, 1], loadOp: "clear", storeOp: "store" };
       const out: GPURenderPassColorAttachment = { view: null as unknown as GPUTextureView, clearValue: [0, 0, 0, 1], loadOp: "clear", storeOp: "store" };
-      const heads = new Float32Array(MAXH * 4), tmp = [0, 0];
-      const lights = { orbs: [] as number[][], heads: [] as number[][] };
+      const tmp = [0, 0];
+      const lights = { orbs: [] as number[][] };
       let t = 0, last = 0;
       const draw = (now: number) => {
         const cfg = gr.current, raw = Math.min(0.1, last ? (now - last) / 1000 : 0), dt = raw * (cfg.spd || 1);
@@ -309,7 +310,7 @@ const Backdrop3D = ({ kind, dark, g, quality = "alta" }: { kind: string; dark: b
 
         // cariche sospese sopra la scheda, attorno al punto inquadrato
         const on = !!cfg.aurora, I = cfg.auroraI ?? 1;
-        lights.orbs.length = 0; lights.heads.length = 0;
+        lights.orbs.length = 0;
         ORB.forEach((o, i) => {
           const [fx, fy] = orbAt(i, t, ph);
           const p = [T[0] + (fx - 0.5) * W * 1.05, T[1] + (fy - 0.55) * H * 1.1, 120 + 40 * Math.sin(t * 0.21 + i * 1.7)];
@@ -317,11 +318,6 @@ const Backdrop3D = ({ kind, dark, g, quality = "alta" }: { kind: string; dark: b
           const s = on && project(p, tmp);
           if (s) lights.orbs.push([s[0], s[1], ...(o.q > 0 ? colors[0] : colors[1]).map((v) => v * I)]);
         });
-        const nh = cfg.pulses ? cur.lights(heads, MAXH) : 0;
-        for (let k = 0; k < nh; k++) {
-          const s = project([heads[k * 4], heads[k * 4 + 1], 4], tmp);
-          if (s) lights.heads.push([s[0], s[1], heads[k * 4 + 2], heads[k * 4 + 3]]);
-        }
         lightCards(lights, dark, W, H, now);
 
         data.set([...cam.eye, cam.D], BU.eye); data.set([...cam.right, W / H], BU.right); data.set([...cam.up, 0], BU.up); data.set([...cam.fwd, tanH], BU.fwd);
