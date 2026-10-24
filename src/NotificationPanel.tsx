@@ -43,7 +43,8 @@ export default function NotificationPanel({ list, onRead, onOpen, stars }: {
   const unreadOf = (n: any) => !n.letta && !done.current.has(n.id);
 
   const commit = (ids: string[]) => {
-    const fresh = ids.filter((id) => !done.current.has(id));
+    // quelle già lette (anche in un'altra apertura) non si riscrivono: tenerle o toccarle non cambia nulla
+    const fresh = ids.filter((id) => !done.current.has(id) && !list.find((n) => n.id === id)?.letta);
     if (!fresh.length) return;
     fresh.forEach((id) => { done.current.add(id); const t = timers.current.get(id); if (t) clearTimeout(t); timers.current.delete(id); });
     setLit((s) => { const x = new Set(s); fresh.forEach((id) => x.add(id)); return x; });

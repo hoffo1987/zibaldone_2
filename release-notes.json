@@ -1,4 +1,4 @@
 {
-  "titolo": "Le notifiche da leggere ora stanno tutte in cima",
-  "messaggio": "Nel pannello delle notifiche quelle non ancora lette sono raccolte in alto sotto «Da leggere», col loro numero, e le già lette seguono divise per giorno. Mentre leggi restano al loro posto con la spunta, senza far saltare l'elenco."
+  "titolo": "La spunta delle notifiche lette ora resta",
+  "messaggio": "Riaprendo il pannello, le notifiche già lette perdevano la spunta e sembravano ancora da leggere. Ora ogni notifica letta tiene la sua spunta, voti e novità, e toccarla di nuovo non cambia nulla."
 }

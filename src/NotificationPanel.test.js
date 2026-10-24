@@ -62,6 +62,17 @@ test('le da leggere stanno tutte in cima e ci restano anche dopo averle lette', 
   expect(host.querySelector('.nt-fresh').textContent).toBe('Appena lette2');
   expect(host.querySelectorAll('.nt-card.just-read')).toHaveLength(2);
 });
+test('una notifica già letta tiene la spunta anche riaprendo il pannello, e toccarla non la riscrive', () => {
+  const onRead=jest.fn(), onOpen=jest.fn();
+  act(()=>root.render(<Panel list={[{...update('update:a'),letta:true},{...vote,letta:true}]} onRead={onRead} onOpen={onOpen} stars={()=>null} />));
+  expect(host.textContent).toContain('Tutto letto');
+  act(()=>host.querySelector('.nt-card.upd').click());
+  act(()=>host.querySelector('.nt-card.vote').click());
+  act(()=>jest.advanceTimersByTime(1400));
+  expect(onRead).not.toHaveBeenCalled();
+  expect(onOpen).toHaveBeenCalledTimes(1);
+  expect(host.querySelectorAll('.nt-card.read')).toHaveLength(2);
+});
 test('quando una viene letta, il timer delle altre in vista non riparte da zero', () => {
   const ios=[]; global.IntersectionObserver=class { constructor(cb){ this.cb=cb; this.els=new Set(); ios.push(this); } observe(el){ this.els.add(el); } disconnect(){ this.els.clear(); } };
   const see=id=>{ const io=ios[ios.length-1], el=Array.from(io.els).find(e=>e.dataset.nid===id); io.cb([{ target:el, isIntersecting:true, intersectionRatio:1 }]); };

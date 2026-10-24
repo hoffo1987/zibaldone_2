@@ -95,7 +95,8 @@ button.nt-card{cursor:pointer}
 .nt-medal b{font:800 .95rem/1 'Bricolage Grotesque','Instrument Sans',sans-serif;letter-spacing:-.03em}
 .nt-medal small{font:700 .5rem/1 var(--label);opacity:.7}
 
-/* il LED: acceso se è nuova, il timer che si riempie mentre è in vista, la spunta quando è letta */
+/* il LED: acceso se è nuova, il timer che si riempie mentre è in vista, la spunta quando è letta. La spunta resta:
+   una notifica già letta la mostra sempre, anche riaprendo il pannello; solo quella appena letta fa il salto */
 .nt-led{position:relative;flex:none;margin-left:auto;display:grid;place-items:center;width:18px;height:18px}
 .nt-led svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);fill:none;stroke:var(--k);stroke-width:2.4;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1}
 .nt-led:before{content:"";width:7px;height:7px;border-radius:50%;background:transparent;transition:background .3s,box-shadow .3s}
@@ -103,12 +104,11 @@ button.nt-card{cursor:pointer}
 .unread .nt-led:before{background:var(--k);box-shadow:0 0 0 2px color-mix(in srgb,var(--k) 22%,transparent),0 0 8px var(--k)}
 .reading .nt-led svg:first-child{animation:ntFill 1.4s linear forwards}
 @keyframes ntFill{to{stroke-dashoffset:0}}
-.just-read .nt-led,.read .nt-led{border-radius:50%}
-.just-read .nt-led{background:var(--k);animation:ntPop .45s var(--spring)}
-.just-read .nt-led:before{display:none}
-.just-read .nt-led>svg+svg{position:absolute;inset:4px;width:10px;height:10px;opacity:1;stroke:#fff}
-.root.dark .just-read .nt-led>svg+svg{stroke:#062521}
-.read .nt-led{display:none}
+.just-read .nt-led,.read .nt-led{border-radius:50%;background:var(--k)}
+.just-read .nt-led{animation:ntPop .45s var(--spring)}
+.just-read .nt-led:before,.read .nt-led:before{display:none}
+.just-read .nt-led>svg+svg,.read .nt-led>svg+svg{position:absolute;inset:4px;width:10px;height:10px;opacity:1;stroke:#fff}
+.root.dark .just-read .nt-led>svg+svg,.root.dark .read .nt-led>svg+svg{stroke:#062521}
 
 /* ---------- vuoto ---------- */
 .nt-empty{display:flex;flex-direction:column;align-items:center;gap:.35rem;padding:1.5rem .5rem 1rem;text-align:center;font-size:.82rem;color:var(--mu)}
