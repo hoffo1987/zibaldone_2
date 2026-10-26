@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { collection, deleteDoc, doc, getDoc, getDocs, limit, query, where, writeBatch, type Firestore } from "firebase/firestore";
 import { Sparkles, X, Reply, ChevronDown, Trash2, Loader2, EyeOff, UserRound, Sprout, CornerDownRight, ArrowUpRight } from "lucide-react";
@@ -13,8 +13,10 @@ import "./scintille.css";
 // Le scintille nel lettore di un pensiero del diario. Tre modi:
 //   lettore  il pensiero di un altro: si seleziona una frase e si accende (al massimo 5), le proprie restano tenui e si tolgono
 //   autore   il proprio pensiero: la barra col totale e l'interruttore, le frasi accese che brillano, toccandole emozioni e note
-//   admin    come l'autore, per qualunque pensiero, e in più chi ha acceso cosa (solo nell'elenco)
-// Il DOM del foglio non si tocca: le frasi si colorano con la CSS Custom Highlight API; dove manca, un elenco sotto la barra.
+//   admin    vede tutte le scintille di un pensiero altrui e chi le ha accese (solo nell'elenco); come ogni lettore ne accende
+// Il testo del foglio non si tocca. La luce è uno strato sotto le parole (GlowLayer), disegnato sui rettangoli delle frasi:
+// un alone caldo e un filamento, una corrente che corre lungo la frase quando si accende, un respiro irregolare da valvola,
+// qualche brace che sale dalle frasi più accese. Le parole accese prendono un tono caldo con la CSS Custom Highlight API.
 // I comandi che galleggiano (la selezione, la scheda per accendere, il fumetto di una frase) sono portali nel body: il
 // pannello del lettore si anima con transform e un fixed al suo interno non starebbe fermo.
 export type ScMode = "autore" | "admin" | "lettore";
@@ -22,7 +24,7 @@ type Pick = { a: number; b: number; cit: string; anchor: Ancora | null; why: str
 type Placed = { s: Scintilla; a: number; b: number };
 
 const HL = typeof window !== "undefined" && typeof (window as any).Highlight === "function" && typeof CSS !== "undefined" && !!(CSS as any).highlights;
-const NAMES = ["sc-1", "sc-2", "sc-3", "sc-4", "sc-mia", "sc-new", "sc-focus"];
+const NAMES = ["sc-1", "sc-2", "sc-3", "sc-4"];
 const setHL = (name: string, ranges: Range[]) => {
   if (!HL) return;
   const reg = (CSS as any).highlights;
@@ -35,20 +37,76 @@ const tipoLabel = (t: Tipo) => TIPI.find((x) => x.id === t)?.label || "";
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const MOSTRA = "circuito:scintille:mostra";
 
-// La luce si scalda e si raffredda piano, a gradini: i colori di ::highlight() non si animano, ma un attributo sulla
-// radice sì (data-sc da 0 a 6, vedi scintille.css). Con il movimento ridotto si accende e si spegne di colpo.
-const STEPS = 6;
-const useWarm = (on: boolean) => {
-  useEffect(() => {
-    const root = document.documentElement, target = on ? STEPS : 0;
-    let k = Number(root.dataset.sc || 0), t = 0;
-    if (!moving()) { root.dataset.sc = String(target); return; }
-    const step = () => { if (k === target) return; k += k < target ? 1 : -1; root.dataset.sc = String(k); t = window.setTimeout(step, on ? 210 : 120); };
-    t = window.setTimeout(step, on ? 260 : 0);
-    return () => clearTimeout(t);
-  }, [on]);
-  useEffect(() => () => { delete document.documentElement.dataset.sc; }, []);
+// --- lo strato di luce ---
+type Glow = { key: string; a: number; b: number; level: number; mine: boolean; fresh: boolean; focus: boolean };
+type Box = { x: number; y: number; w: number; h: number };
+// numeri stabili per una frase: ogni valvola respira col suo ritmo, ma sempre lo stesso
+const seed = (k: string) => { let h = 2166136261; for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 16777619); return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0) % 1000) / 1000; };
+// i pezzi di una riga (un nodo di testo per volta) diventano un solo rettangolo per riga
+const righe = (rs: DOMRect[]) => {
+  const out: { l: number; t: number; r: number; b: number }[] = [];
+  rs.filter((q) => q.width > 1 && q.height > 1).forEach((q) => {
+    const m = out.find((o) => Math.abs((o.t + o.b) / 2 - (q.top + q.bottom) / 2) < q.height / 2 && q.left <= o.r + 8 && q.right >= o.l - 8);
+    if (m) { m.l = Math.min(m.l, q.left); m.r = Math.max(m.r, q.right); m.t = Math.min(m.t, q.top); m.b = Math.max(m.b, q.bottom); }
+    else out.push({ l: q.left, t: q.top, r: q.right, b: q.bottom });
+  });
+  return out.sort((x, y) => x.t - y.t || x.l - y.l);
 };
+const RUN = 760; // quanto impiega la corrente a percorrere una frase (ms)
+function GlowLayer({ paper, ix, spans, on, epoch }: { paper: HTMLElement; ix: Indice; spans: Glow[]; on: boolean; epoch: number }) {
+  const [boxes, setBoxes] = useState<Record<string, Box[]>>({});
+  const sig = spans.map((g) => g.key).join("|");
+  useLayoutEffect(() => {
+    let raf = 0;
+    const run = () => {
+      raf = 0;
+      const P = paper.getBoundingClientRect(), m: Record<string, Box[]> = {};
+      spans.forEach((g) => {
+        const r = rangeDi(ix, g.a, g.b);
+        if (r) m[g.key] = righe(Array.from(r.getClientRects())).map((q) => ({ x: q.l - P.left - paper.clientLeft, y: q.t - P.top - paper.clientTop, w: q.r - q.l, h: q.b - q.t }));
+      });
+      setBoxes(m);
+    };
+    run();
+    const later = () => { if (!raf) raf = requestAnimationFrame(run); };
+    const ro = new ResizeObserver(later); ro.observe(paper);
+    paper.addEventListener("load", later, true);
+    (document as any).fonts?.ready?.then(later);
+    return () => { ro.disconnect(); paper.removeEventListener("load", later, true); cancelAnimationFrame(raf); };
+  }, [paper, ix, sig]);
+  const still = !moving();
+  let embers = 0;
+  const sparks: React.ReactNode[] = [];
+  const layer = <div className={`scg ${on ? "on" : ""} ${still ? "still" : ""}`} aria-hidden="true">
+    {spans.map((g, i) => {
+      const bs = boxes[g.key];
+      if (!bs?.length) return null;
+      const rnd = seed(g.key), total = bs.reduce((n, b) => n + b.w, 0);
+      let acc = 0;
+      const lines = bs.map((b, j) => {
+        const o = acc / total; acc += b.w;
+        const st: any = { left: b.x, top: b.y, width: b.w, height: b.h, "--o": o.toFixed(3), "--f": (b.w / total).toFixed(3), "--w": `${b.w}px` };
+        return <i key={j} className="scg-l" style={st}><b className="scg-head" /></i>;
+      });
+      // le braci: dalle frasi accese da più persone, poche e lente
+      const n = g.mine || still ? 0 : Math.min(g.level === 4 ? 4 : g.level === 3 ? 2 : g.level === 2 ? 1 : 0, 18 - embers);
+      embers += Math.max(0, n);
+      const ems = Array.from({ length: Math.max(0, n) }, (_, k) => {
+        const b = bs[Math.floor(rnd() * bs.length)];
+        return <em key={`e${k}`} className="scg-e" style={{ left: b.x + b.w * (0.1 + rnd() * 0.8), top: b.y + b.h * 0.35, ["--dx" as any]: `${(rnd() - 0.5) * 26}px`, ["--t" as any]: `${2.6 + rnd() * 2.2}s`, ["--dl" as any]: `${rnd() * 3}s` }} />;
+      });
+      // appena accesa: alla fine della frase uno scoppio di scintille a scia, sopra le parole
+      const last = bs[bs.length - 1];
+      if (g.fresh && !still) for (let k = 0; k < 16; k++) {
+        const ang = (k / 16) * Math.PI * 2 + rnd() * 0.4, d = 26 + rnd() * 34;
+        sparks.push(<em key={`${epoch}:${g.key}:${k}`} className="scg-s" style={{ left: last.x + last.w, top: last.y + last.h * 0.55, ["--x" as any]: `${Math.cos(ang) * d}px`, ["--y" as any]: `${Math.sin(ang) * d - 8}px`, ["--r" as any]: `${ang}rad`, ["--dl" as any]: `${rnd() * 120}ms` }} />);
+      }
+      const st: any = { "--d": `${Math.min(i, 8) * 150}ms`, "--br": `${4.2 + rnd() * 2.6}s`, "--bd": `${-rnd() * 5}s` };
+      return <span key={`${epoch}:${g.key}`} className={`scg-p l${g.level} ${g.mine ? "mine" : ""} ${g.fresh ? "fresh" : ""} ${g.focus ? "focus" : ""}`} style={st}>{lines}{ems}</span>;
+    })}
+  </div>;
+  return createPortal(<>{layer}{sparks.length > 0 && <div className="scg-fx" aria-hidden="true">{sparks}</div>}</>, paper);
+}
 
 // i rettangoli di una frase contengono il punto toccato?
 const hit = (ix: Indice, a: number, b: number, x: number, y: number) => {
@@ -61,10 +119,14 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
   onReceived?: (id: string, list: Scintilla[]) => void; onReply: (r: { id: string; cit: string }) => void; notify: (m: string) => void;
 }) {
   const id: string = item.id;
-  const reader = mode === "lettore";
+  const reader = mode === "lettore", lights = mode !== "autore"; // chi può accendere: chiunque non sia l'autore
   // lettore: le proprie; autore e admin: tutte
   const [list, setList] = useState<Scintilla[] | null>(null);
   const pz = useRef<string[]>([]); // le voci del tetto di chi legge, come sono su Firestore
+  const [mieIds, setMieIds] = useState<string[]>([]);
+  const setPz = (v: string[]) => { pz.current = v; setMieIds(v); };
+  const [paper, setPaper] = useState<HTMLElement | null>(null);
+  const [epoch, setEpoch] = useState(0); // riaccendendo le frasi la corrente ripassa
   const [ix, setIx] = useState<Indice | null>(null);
   const [show, setShow] = useState(() => { try { return localStorage.getItem(MOSTRA) !== "0"; } catch { return true; } });
   const [open, setOpen] = useState(false);
@@ -80,7 +142,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
   // --- lettura ---
   useEffect(() => {
     let on = true;
-    setList(null); setPick(null); setCompose(null); setPop(null); setWho(null); pz.current = [];
+    setList(null); setPick(null); setCompose(null); setPop(null); setWho(null); setPz([]);
     (async () => {
       try {
         if (reader) {
@@ -91,18 +153,20 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
             const x = s.exists() ? leggiScintilla(sid, s.data()) : null;
             if (x) found.push(x); else if (!s.exists()) stale.push(sid);
           }));
-          pz.current = sids;
+          let left = sids;
           // tolte dall'autore: la voce se ne va e il posto torna libero (una alla volta, come vogliono le regole)
           for (const sid of stale) {
-            const rest = pz.current.filter((x) => x !== sid), b = writeBatch(db);
+            const rest = left.filter((x) => x !== sid), b = writeBatch(db);
             b.delete(doc(db, "scintille_mie", uid, "voci", sid)); b.set(doc(db, "scintille_mie", uid, "pezzi", id), { voci: rest });
-            try { await b.commit(); pz.current = rest; } catch { break; }
+            try { await b.commit(); left = rest; } catch { break; }
           }
-          if (on) setList(found.sort((a, b) => a.giorno - b.giorno));
+          if (on) { setPz(left); setList(found.sort((a, b) => a.giorno - b.giorno)); }
         } else {
           const s = await getDocs(collection(db, "pensieri", id, "scintille"));
           const found = s.docs.map((d) => leggiScintilla(d.id, d.data())).filter(Boolean) as Scintilla[];
-          if (on) { setList(found); received.current?.(id, found); }
+          // l'admin che legge il pensiero di un altro può accenderne: servono le sue voci per il tetto
+          const own = lights ? (await getDocs(query(collection(db, "scintille_mie", uid, "voci"), where("pensieroId", "==", id)))).docs.map((d) => d.id) : [];
+          if (on) { setPz(own); setList(found); received.current?.(id, found); }
         }
       } catch (e) {
         if (on) setList([]);
@@ -110,10 +174,10 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
       }
     })();
     return () => { on = false; };
-  }, [db, id, uid, reader]);
+  }, [db, id, uid, reader, lights]);
 
   // --- il testo del foglio ---
-  useEffect(() => { const el = rt(); setIx(el ? indiceDi(el) : null); }, [id, item.content]);
+  useEffect(() => { const el = rt(); setIx(el ? indiceDi(el) : null); setPaper(el?.closest<HTMLElement>("[data-sheet-paper]") || null); }, [id, item.content]);
 
   const placed = useMemo(() => {
     const at: Placed[] = [], lost: Scintilla[] = [];
@@ -122,38 +186,27 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
   }, [ix, list]);
   const tratti = useMemo(() => fondi(placed.at.map((p) => ({ a: p.a, b: p.b, id: p.s.id }))), [placed]);
   const lit = reader || (show && !!list?.length);
-  useWarm(lit);
-
-  // --- il brillio ---
+  const glow = useMemo<Glow[]>(() => (reader
+    ? placed.at.map((p) => ({ key: `${p.a}-${p.b}`, a: p.a, b: p.b, level: 1, mine: true, fresh: p.s.id === fresh, focus: !!pop?.ids.includes(p.s.id) }))
+    : tratti.map((t) => ({ key: `${t.a}-${t.b}`, a: t.a, b: t.b, level: intensita(t.n), mine: false, fresh: !!fresh && t.ids.includes(fresh), focus: !!pop && t.ids.some((x) => pop.ids.includes(x)) }))), [reader, placed, tratti, fresh, pop]);
+  // la luce si spegne piano e, riaccesa, la corrente ripassa lungo le frasi
+  const wasLit = useRef(lit);
+  useEffect(() => { if (lit && !wasLit.current) setEpoch((e) => e + 1); wasLit.current = lit; }, [lit]);
+  useEffect(() => { if (!fresh) return; const t = setTimeout(() => setFresh(null), 2600); return () => clearTimeout(t); }, [fresh]);
+  // le parole accese prendono un tono caldo, più deciso dove le scintille si sommano
   useEffect(() => {
-    if (!HL || !ix) return;
-    const by: Range[][] = [[], [], [], [], []], mia: Range[] = [];
-    if (reader) placed.at.forEach((p) => { const r = rangeDi(ix, p.a, p.b); if (r) mia.push(r); });
-    else tratti.forEach((t) => { const r = rangeDi(ix, t.a, t.b); if (r) by[intensita(t.n)].push(r); });
+    if (!HL || !ix || reader || !show) return;
+    const by: Range[][] = [[], [], [], [], []];
+    tratti.forEach((t) => { const r = rangeDi(ix, t.a, t.b); if (r) by[intensita(t.n)].push(r); });
     [1, 2, 3, 4].forEach((l) => setHL(`sc-${l}`, by[l]));
-    setHL("sc-mia", mia);
-    return () => clearHL(["sc-1", "sc-2", "sc-3", "sc-4", "sc-mia"]);
-  }, [ix, placed, tratti, reader]);
+    return () => clearHL();
+  }, [ix, tratti, reader, show]);
   useEffect(() => () => clearHL(), []);
-  // appena accesa: un lampo caldo che si posa nel tono tenue
-  useEffect(() => {
-    if (!fresh || !ix) return;
-    const p = placed.at.find((x) => x.s.id === fresh), r = p && rangeDi(ix, p.a, p.b);
-    if (!r) return;
-    setHL("sc-new", [r]);
-    const t = setTimeout(() => { setHL("sc-new", []); setFresh(null); }, moving() ? 1500 : 900);
-    return () => { clearTimeout(t); setHL("sc-new", []); };
-  }, [fresh, ix, placed]);
-  // la frase del fumetto aperto
-  useEffect(() => {
-    if (!pop || !ix) { setHL("sc-focus", []); return; }
-    setHL("sc-focus", placed.at.filter((p) => pop.ids.includes(p.s.id)).map((p) => rangeDi(ix, p.a, p.b)).filter(Boolean) as Range[]);
-  }, [pop, ix, placed]);
 
   // --- la selezione di chi legge ---
   const pressing = useRef(false);
   useEffect(() => {
-    if (!reader || !ix) return;
+    if (!lights || !ix) return;
     let raf = 0, hide = 0;
     const check = () => {
       raf = 0;
@@ -175,7 +228,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
     sc?.addEventListener("scroll", on, { passive: true });
     window.addEventListener("resize", on);
     return () => { document.removeEventListener("selectionchange", on); sc?.removeEventListener("scroll", on); window.removeEventListener("resize", on); cancelAnimationFrame(raf); clearTimeout(hide); };
-  }, [reader, ix]);
+  }, [lights, ix]);
 
   // --- toccare una frase accesa ---
   useEffect(() => {
@@ -203,9 +256,9 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
   }, [pop]);
 
   // --- accendere e togliere ---
-  const mine = reader ? list || [] : [];
+  const mine = reader ? list || [] : (list || []).filter((s) => mieIds.includes(s.id));
   const full = mine.length >= LIMITE;
-  const overlaps = !!pick && placed.at.some((p) => siToccano(p, pick));
+  const overlaps = !!pick && placed.at.some((p) => mieIds.includes(p.s.id) && siToccano(p, pick));
   const light = async (p: Pick, tipo: Tipo, nota: string) => {
     if (!p.anchor || full) return false;
     const ref = doc(collection(db, "pensieri", id, "scintille")), g = oggi(), note = nota.trim().slice(0, NOTA_MAX);
@@ -217,7 +270,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
       b.set(doc(db, "scintille_mie", uid, "voci", ref.id), { pensieroId: id, giorno: g });
       b.set(doc(db, "scintille_mie", uid, "pezzi", id), { voci: [...pz.current, ref.id] });
       await b.commit();
-      pz.current = [...pz.current, ref.id];
+      setPz([...pz.current, ref.id]);
       setList((l) => [...(l || []), { id: ref.id, ...data, nota: note }]);
       setFresh(ref.id); haptic("success"); sound.spark(true);
       window.getSelection()?.removeAllRanges(); setPick(null);
@@ -231,11 +284,11 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
   };
   const remove = async (sid: string) => {
     try {
-      if (reader) {
+      if (pz.current.includes(sid)) {
         const rest = pz.current.filter((x) => x !== sid), b = writeBatch(db);
         b.delete(doc(db, "pensieri", id, "scintille", sid)); b.delete(doc(db, "scintille_mie", uid, "voci", sid));
         b.set(doc(db, "scintille_mie", uid, "pezzi", id), { voci: rest });
-        await b.commit(); pz.current = rest;
+        await b.commit(); setPz(rest);
       } else await deleteDoc(doc(db, "pensieri", id, "scintille", sid));
       const next = (list || []).filter((s) => s.id !== sid);
       setList(next); if (!reader) received.current?.(id, next);
@@ -273,7 +326,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
       {s.nota && <span className="sc-nota-t">{s.nota}</span>}
       {mode === "admin" && who && <span className="sc-who"><UserRound size={11} aria-hidden="true" />{whoName(s.id)}</span>}
       {actions && <span className="sc-it-acts">
-        {reader ? <button type="button" className="sc-lnk" onClick={() => remove(s.id)}><Trash2 size={12} />Togli</button>
+        {mieIds.includes(s.id) ? <button type="button" className="sc-lnk" onClick={() => remove(s.id)}><Trash2 size={12} />Togli{reader ? "" : " la tua"}</button>
           : <button type="button" className={`sc-lnk ${sure === s.id ? "warn" : ""}`} onClick={() => (sure === s.id ? remove(s.id) : setSure(s.id))}><Trash2 size={12} />{sure === s.id ? "Conferma: togli" : "Togli"}</button>}
       </span>}
     </li>
@@ -285,7 +338,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
       {!lost && <button type="button" className="sc-lnk" onClick={() => reply(cit)}><Reply size={12} />Rispondi con un pensiero</button>}
     </li>
   );
-  const listOpen = open || (!HL && !reader && show && !!list?.length);
+  const listOpen = open;
   const total = list?.length || 0;
 
   // --- la barra in cima ---
@@ -300,7 +353,8 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
     <div className={`rd-bar sc-bar ${total ? "has" : ""}`}>
       <span className="rd-k"><Sparkles size={13} aria-hidden="true" />Scintille</span>
       {list === null ? <span className="sc-hint mu">…</span> : total ? <span className="sc-hint"><b key={total} className="sc-n">{total}</b> {total === 1 ? "accesa" : "accese"}{placed.lost.length > 0 && <span className="mu"> · {placed.lost.length} su frasi cambiate</span>}</span>
-        : <span className="sc-hint mu">{mode === "admin" ? "Nessuna scintilla su questo pensiero." : "Quando qualcuno accende una frase, qui la vedrai brillare."}</span>}
+        : <span className="sc-hint mu">{mode === "admin" ? "Nessuna scintilla: seleziona una frase per accenderne una." : "Quando qualcuno accende una frase, qui la vedrai brillare."}</span>}
+      {mode === "admin" && mine.length > 0 && <span className="sc-hint mu">· le tue {mine.length} di {LIMITE}</span>}
       <span className="flex-1" />
       {mode === "admin" && total > 0 && <button type="button" className="sc-lst" disabled={whoBusy} onClick={() => (who ? setWho(null) : whoLoad())}>{whoBusy ? <Loader2 size={13} className="animate-spin" /> : <UserRound size={13} />}{who ? "Nascondi nomi" : "Chi le ha accese"}</button>}
       {total > 0 && <button type="button" className="sc-lst" aria-expanded={listOpen} onClick={() => setOpen(!listOpen)}>Elenco<ChevronDown size={14} /></button>}
@@ -310,6 +364,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
 
   return <>
     {bar}
+    {paper && ix && glow.length > 0 && <GlowLayer paper={paper} ix={ix} spans={glow} on={lit} epoch={epoch} />}
     {listOpen && list && <div className="sc-list">
       {reader ? <ul>{order.map((s) => <li key={s.id} className="sc-g"><div className="sc-g-hd"><q>{flat(s.cit)}</q></div><ul>{entry(s)}</ul></li>)}{placed.lost.length > 0 && placed.lost.map((s) => <li key={s.id} className="sc-g lost"><div className="sc-g-hd"><q>{flat(s.cit)}</q></div><ul>{entry(s)}</ul></li>)}</ul>
         : <>
@@ -319,7 +374,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
     </div>}
 
     {/* la barra della selezione: sul computer sopra la frase, sul telefono in basso (non litiga col menu di sistema) */}
-    {reader && pick && !compose && createPortal(
+    {lights && pick && !compose && createPortal(
       <div className={`sc-pick ${compact ? "dock" : "float"} ${!compact && pick.rect.top < 90 ? "below" : ""}`} role="toolbar" aria-label="Frase selezionata"
         style={compact ? undefined : { left: Math.max(140, Math.min(window.innerWidth - 140, pick.rect.left + pick.rect.width / 2)), top: pick.rect.top < 90 ? pick.rect.bottom + 10 : pick.rect.top - 10 }}
         onPointerDown={() => { pressing.current = true; }} onPointerUp={() => setTimeout(() => { pressing.current = false; }, 500)} onPointerCancel={() => { pressing.current = false; }}

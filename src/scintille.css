@@ -1,41 +1,64 @@
 /* ===== Le scintille =====
-   Una frase accesa è una valvola sul foglio: la luce è calda (ambra), si scalda e si raffredda piano. Il foglio non si
-   tocca: le frasi si colorano con ::highlight() (CSS Custom Highlight API), e siccome quei colori non si animano la luce
-   sale a gradini con data-sc sulla radice (0 spento, 6 pieno), che ScintilleReader fa avanzare. Quattro intensità:
-   una persona, due, tre o quattro, cinque e più. Chi legge vede le proprie in tono tenue, sottolineate a puntini.
+   Una frase accesa è una valvola sul foglio. Sotto le parole (lo strato .scg, dentro la carta, dietro il testo) c'è la sua
+   luce: un alone caldo e un filamento incandescente sotto la riga. Quando la frase si accende una corrente la percorre da
+   sinistra a destra, con la testa luminosa che corre; poi respira, irregolare, ognuna col suo ritmo; dalle frasi accese
+   da più persone sale qualche brace. Quattro intensità (una persona, due, tre o quattro, cinque e più) cambiano forza,
+   ampiezza e braci. Chi legge vede le proprie come un filamento tratteggiato e tenue. Appena accesa, una frase scoppia
+   in scintille. Le parole accese prendono un tono caldo con ::highlight() (CSS Custom Highlight API).
    I comandi che galleggiano (barra della selezione, scheda, fumetto) stanno in .root, sopra il lettore. */
-:root[data-sc="1"] ::highlight(sc-1){background-color:rgba(255,178,40,0.050)}
-:root[data-sc="1"] ::highlight(sc-2){background-color:rgba(255,178,40,0.070);text-shadow:0 0 .55em rgba(255,140,0,0.033)}
-:root[data-sc="1"] ::highlight(sc-3){background-color:rgba(255,178,40,0.092);text-shadow:0 0 .55em rgba(255,140,0,0.067)}
-:root[data-sc="1"] ::highlight(sc-4){background-color:rgba(255,178,40,0.117);text-shadow:0 0 .55em rgba(255,140,0,0.100)}
-:root[data-sc="1"] ::highlight(sc-mia){background-color:rgba(255,186,60,0.033);text-decoration:underline dotted rgba(196,120,0,0.142)}
-:root[data-sc="2"] ::highlight(sc-1){background-color:rgba(255,178,40,0.100)}
-:root[data-sc="2"] ::highlight(sc-2){background-color:rgba(255,178,40,0.140);text-shadow:0 0 .55em rgba(255,140,0,0.067)}
-:root[data-sc="2"] ::highlight(sc-3){background-color:rgba(255,178,40,0.183);text-shadow:0 0 .55em rgba(255,140,0,0.133)}
-:root[data-sc="2"] ::highlight(sc-4){background-color:rgba(255,178,40,0.233);text-shadow:0 0 .55em rgba(255,140,0,0.200)}
-:root[data-sc="2"] ::highlight(sc-mia){background-color:rgba(255,186,60,0.067);text-decoration:underline dotted rgba(196,120,0,0.283)}
-:root[data-sc="3"] ::highlight(sc-1){background-color:rgba(255,178,40,0.150)}
-:root[data-sc="3"] ::highlight(sc-2){background-color:rgba(255,178,40,0.210);text-shadow:0 0 .55em rgba(255,140,0,0.100)}
-:root[data-sc="3"] ::highlight(sc-3){background-color:rgba(255,178,40,0.275);text-shadow:0 0 .55em rgba(255,140,0,0.200)}
-:root[data-sc="3"] ::highlight(sc-4){background-color:rgba(255,178,40,0.350);text-shadow:0 0 .55em rgba(255,140,0,0.300)}
-:root[data-sc="3"] ::highlight(sc-mia){background-color:rgba(255,186,60,0.100);text-decoration:underline dotted rgba(196,120,0,0.425)}
-:root[data-sc="4"] ::highlight(sc-1){background-color:rgba(255,178,40,0.200)}
-:root[data-sc="4"] ::highlight(sc-2){background-color:rgba(255,178,40,0.280);text-shadow:0 0 .55em rgba(255,140,0,0.133)}
-:root[data-sc="4"] ::highlight(sc-3){background-color:rgba(255,178,40,0.367);text-shadow:0 0 .55em rgba(255,140,0,0.267)}
-:root[data-sc="4"] ::highlight(sc-4){background-color:rgba(255,178,40,0.467);text-shadow:0 0 .55em rgba(255,140,0,0.400);color:#3a2400}
-:root[data-sc="4"] ::highlight(sc-mia){background-color:rgba(255,186,60,0.133);text-decoration:underline dotted rgba(196,120,0,0.567)}
-:root[data-sc="5"] ::highlight(sc-1){background-color:rgba(255,178,40,0.250)}
-:root[data-sc="5"] ::highlight(sc-2){background-color:rgba(255,178,40,0.350);text-shadow:0 0 .55em rgba(255,140,0,0.167)}
-:root[data-sc="5"] ::highlight(sc-3){background-color:rgba(255,178,40,0.458);text-shadow:0 0 .55em rgba(255,140,0,0.333)}
-:root[data-sc="5"] ::highlight(sc-4){background-color:rgba(255,178,40,0.583);text-shadow:0 0 .55em rgba(255,140,0,0.500);color:#3a2400}
-:root[data-sc="5"] ::highlight(sc-mia){background-color:rgba(255,186,60,0.167);text-decoration:underline dotted rgba(196,120,0,0.708)}
-:root[data-sc="6"] ::highlight(sc-1){background-color:rgba(255,178,40,0.300)}
-:root[data-sc="6"] ::highlight(sc-2){background-color:rgba(255,178,40,0.420);text-shadow:0 0 .55em rgba(255,140,0,0.200)}
-:root[data-sc="6"] ::highlight(sc-3){background-color:rgba(255,178,40,0.550);text-shadow:0 0 .55em rgba(255,140,0,0.400)}
-:root[data-sc="6"] ::highlight(sc-4){background-color:rgba(255,178,40,0.700);text-shadow:0 0 .55em rgba(255,140,0,0.600);color:#3a2400}
-:root[data-sc="6"] ::highlight(sc-mia){background-color:rgba(255,186,60,0.200);text-decoration:underline dotted rgba(196,120,0,0.850)}
-::highlight(sc-new){background-color:rgba(255,178,40,.62);text-shadow:0 0 .6em rgba(255,150,0,.6)}
-::highlight(sc-focus){background-color:rgba(255,170,30,.5);text-decoration:underline solid rgba(190,110,0,.8)}
+::highlight(sc-1){color:#3a2a14;text-shadow:0 0 .35em rgba(255,170,40,.3)}
+::highlight(sc-2){color:#47290a;text-shadow:0 0 .4em rgba(255,170,40,.38)}
+::highlight(sc-3){color:#552e00;text-shadow:0 0 .45em rgba(255,176,40,.45)}
+::highlight(sc-4){color:#5e3200;text-shadow:0 0 .5em rgba(255,166,20,.7)}
+
+/* ---------- lo strato di luce ---------- */
+.scg{position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:0;transition:opacity 1.1s cubic-bezier(.4,0,.2,1)}
+.scg.on{opacity:1;transition-duration:.5s}
+.scg-p{--k:.55;--c1:255,184,64;--c2:255,128,10;position:absolute;inset:0;animation:scgBreath var(--br,5s) ease-in-out var(--bd,0s) infinite}
+.scg-p.l2{--k:.68}.scg-p.l3{--k:.86}.scg-p.l4{--k:1;--c1:255,192,70;--c2:255,110,0}
+/* la riga accesa: il vetro caldo dietro le parole */
+.scg-l{position:absolute;border-radius:6px;
+  background:linear-gradient(180deg,rgba(var(--c1),calc(.24*var(--k))),rgba(var(--c1),calc(.48*var(--k))) 68%,rgba(var(--c2),calc(.34*var(--k))));
+  box-shadow:0 0 calc(12px + 16px*var(--k)) calc(2px + 4px*var(--k)) rgba(var(--c2),calc(.34*var(--k)));
+  animation:scgRun calc(var(--f)*760ms) linear calc(var(--d) + var(--o)*760ms) both}
+/* l'alone, largo e sfumato */
+.scg-l:before{content:"";position:absolute;inset:calc(-6px - 6px*var(--k)) calc(-8px - 8px*var(--k));border-radius:50%;
+  background:radial-gradient(closest-side,rgba(var(--c1),calc(.58*var(--k))),rgba(var(--c2),calc(.24*var(--k))) 62%,transparent);filter:blur(6px)}
+/* il filamento incandescente sotto la riga */
+.scg-l:after{content:"";position:absolute;left:3px;right:3px;bottom:2px;height:2px;border-radius:2px;opacity:calc(.45 + .55*var(--k));
+  background:linear-gradient(90deg,transparent,rgba(255,180,50,.95) 8%,#FFF2C6 50%,rgba(255,180,50,.95) 92%,transparent);
+  box-shadow:0 0 5px 1px rgba(255,160,20,.85),0 0 14px 3px rgba(255,130,0,calc(.45*var(--k)))}
+/* la testa della corrente che corre lungo la riga mentre si accende */
+.scg-head{position:absolute;left:0;bottom:-3px;width:10px;height:10px;margin-left:-5px;border-radius:50%;opacity:0;
+  background:radial-gradient(circle,#fff 0 25%,#FFE29A 45%,rgba(255,170,30,0) 72%);box-shadow:0 0 12px 4px rgba(255,190,60,.9),0 0 26px 8px rgba(255,140,0,.45);
+  animation:scgHead calc(var(--f)*760ms) linear calc(var(--d) + var(--o)*760ms) both}
+@keyframes scgRun{from{clip-path:inset(-40px 100% -40px -40px);filter:saturate(1.35) brightness(1.15)}to{clip-path:inset(-40px -40px -40px -40px);filter:none}}
+@keyframes scgHead{0%{opacity:1;transform:translateX(0)}92%{opacity:1}100%{opacity:0;transform:translateX(var(--w))}}
+/* il respiro della valvola: non regolare, ognuna col suo tempo */
+@keyframes scgBreath{0%,100%{opacity:.86}22%{opacity:1}31%{opacity:.93}37%{opacity:1}64%{opacity:.9}78%{opacity:.98}}
+/* le braci che salgono e si spengono */
+.scg-e{position:absolute;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:radial-gradient(circle,#FFF3D0 0 30%,#FFB02E 70%);box-shadow:0 0 7px 2px rgba(255,120,0,.85);opacity:0;
+  animation:scgEmber var(--t,3s) ease-out calc(var(--d) + 900ms + var(--dl,0s)) infinite}
+@keyframes scgEmber{0%{opacity:0;transform:translate(0,0) scale(1)}12%{opacity:1}70%{opacity:.7}100%{opacity:0;transform:translate(var(--dx),-34px) scale(.25)}}
+/* appena accesa: più luce, e lo scoppio di scintille alla fine della frase */
+.scg-p.fresh{--k:1.15}
+.scg-p.fresh .scg-l{animation:scgRun calc(var(--f)*760ms) linear calc(var(--o)*760ms) both,scgFlash 1.6s ease-out calc(var(--f)*760ms + var(--o)*760ms) both}
+.scg-p.fresh .scg-head{animation-delay:calc(var(--o)*760ms)}
+@keyframes scgFlash{0%{filter:saturate(1.6) brightness(1.2)}100%{filter:none}}
+.scg-fx{position:absolute;inset:0;z-index:3;pointer-events:none}
+.scg-s{position:absolute;width:12px;height:3px;margin:-1.5px 0 0 -6px;border-radius:3px;background:linear-gradient(90deg,rgba(255,140,0,0),#FFB020 40%,#FFF6DA);
+  box-shadow:0 0 6px 1px rgba(255,140,0,.9),0 0 14px 3px rgba(255,100,0,.4);opacity:0;animation:scgBurst .95s cubic-bezier(.12,.7,.3,1) calc(760ms + var(--dl,0ms)) both}
+@keyframes scgBurst{0%{opacity:1;transform:translate(0,0) rotate(var(--r)) scaleX(1.5)}60%{opacity:.9}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r)) scaleX(.3)}}
+/* la frase del fumetto aperto si accende di più */
+.scg-p.focus{--k:1.25}
+/* le proprie, per chi legge: solo un filamento tratteggiato, tenue */
+.scg-p.mine .scg-l{background:none;box-shadow:none}
+.scg-p.mine .scg-l:before{opacity:.35}
+.scg-p.mine .scg-l:after{height:2px;opacity:.85;background:repeating-linear-gradient(90deg,#F2A20C 0 4px,transparent 4px 7px);box-shadow:0 0 6px rgba(255,150,0,.55)}
+.scg-p.mine.focus .scg-l{background:linear-gradient(180deg,transparent,rgba(255,196,84,.28))}
+/* senza movimento: la luce è già accesa e ferma */
+.scg.still,.scg.still *{animation:none!important;transition:none!important}
+.scg.still .scg-head,.scg.still .scg-e{display:none}
 
 /* ---------- la striscia nel lettore ---------- */
 .root .sc-bar{flex-wrap:wrap;row-gap:.35rem;background:linear-gradient(90deg,color-mix(in srgb,var(--am) 9%,var(--sf)),var(--sf) 55%)}
