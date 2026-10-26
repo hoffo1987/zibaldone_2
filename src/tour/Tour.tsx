@@ -3,6 +3,7 @@ import { Volume2, VolumeX, ChevronRight } from "lucide-react";
 import * as sound from "../sound";
 import { Text3D } from "../d3";
 import { createFilm, Film, FilmText, MUSIC } from "./film";
+import { helpSteps, type Step } from "./help";
 import "./tour.css";
 
 // ===== LA PRESENTAZIONE DEL PRIMO ACCESSO =====
@@ -10,7 +11,6 @@ import "./tour.css";
 // Poi il tour guidato: la scena si spegne in un nodo ambra che vola sul primo elemento vero del sito, e da lì una pista
 // collega ogni spiegazione all'elemento di cui parla, sezione dopo sezione.
 
-type Step = { tab: string; target: string; title: string; body: string };
 // Il tour segue l'ordine delle sezioni (sul telefono: Home, Scrivi, Scritti, Altro). Le voci che sul telefono stanno nel
 // menu Altro lo dicono: lì il foro si apre sul pulsante Altro, che prende il nome della sezione aperta.
 const STUDENT: Step[] = [
@@ -63,18 +63,22 @@ const grainTile = () => {
   } catch { return ""; }
 };
 
-// elemento visibile con quel data-tour (sidebar e barra mobile hanno gli stessi: vale quello che si vede)
+// elemento visibile con quel data-tour (sidebar e barra mobile hanno gli stessi: vale quello che si vede); con «css:» un
+// selettore qualsiasi (le guide delle sezioni puntano anche a elementi senza data-tour, come la prima scheda di un elenco)
 const findTarget = (id: string): HTMLElement | null => {
-  const all = Array.from(document.querySelectorAll<HTMLElement>(`[data-tour="${id}"]`));
+  const all = Array.from(document.querySelectorAll<HTMLElement>(id.startsWith("css:") ? id.slice(4) : `[data-tour="${id}"]`));
   return all.find((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && el.getClientRects().length > 0; }) || null;
 };
 
-// mode: "auto" film e poi tour (primo accesso), "film" solo il filmato, "guide" solo il tour guidato (dalle Opzioni)
-export type TourMode = "auto" | "film" | "guide";
-export type TourProps = { mode: TourMode; admin: boolean; name: string; calm: boolean; low: boolean; nav: (tab: string) => void; hold: (on: boolean) => void; onDone: (to?: string) => void };
+// mode: "auto" film e poi tour (primo accesso), "film" solo il filmato, "guide" solo il tour guidato (dalle Opzioni),
+// "help" la guida breve della sezione aperta (il punto interrogativo accanto al titolo, help.ts)
+export type TourMode = "auto" | "film" | "guide" | "help";
+export type TourProps = { mode: TourMode; admin: boolean; name: string; calm: boolean; low: boolean; nav: (tab: string) => void; hold: (on: boolean) => void; onDone: (to?: string) => void; section?: string };
 
-export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }: TourProps) {
-  const steps = admin ? ADMIN : STUDENT;
+export default function Tour({ mode: asked, admin, name, calm, low, nav, hold, onDone, section = "" }: TourProps) {
+  const help = asked === "help", mode: TourMode = help ? "guide" : asked;
+  // la guida di una sezione resta nella sezione: solo i passi i cui elementi ci sono adesso
+  const [steps] = useState(() => (help ? helpSteps(section, admin).filter((s) => findTarget(s.target)) : admin ? ADMIN : STUDENT));
   const [phase, setPhase] = useState<"prep" | "gate" | "film" | "guide">(mode === "guide" ? "guide" : "prep");
   const [muted, setMuted] = useState(!sound.enabled());
   const [caption, setCaption] = useState("");
@@ -90,6 +94,8 @@ export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }
   const text = useRef(filmText(admin, name)).current;
 
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  // una guida senza passi (la sezione non mostra niente da spiegare) si chiude subito
+  useEffect(() => { if (help && !steps.length) done.current(); }, []);
 
   // il volume della musica di sottofondo scende per tutta la presentazione
   useEffect(() => {
@@ -231,7 +237,7 @@ export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }
   }, [phase]);
 
   return (
-    <div ref={host} className={`tour ${phase === "guide" ? "tr-guide" : ""}`} role="dialog" aria-modal="true" aria-label="Presentazione del Circuito">
+    <div ref={host} className={`tour ${phase === "guide" ? "tr-guide" : ""}`} role="dialog" aria-modal="true" aria-label={help ? "Guida della sezione" : "Presentazione del Circuito"}>
       {phase !== "guide" && <div className="tr-film">
         <canvas ref={cv} aria-hidden="true" />
         {grain && <i className="tr-grain" style={{ backgroundImage: `url(${grain})` }} aria-hidden="true" />}
@@ -252,7 +258,7 @@ export default function Tour({ mode, admin, name, calm, low, nav, hold, onDone }
         {phase !== "film" && !pressed && <button type="button" className="tr-btn tr-close" onClick={() => done.current()}>{mode === "film" ? "Chiudi" : "Salta"}</button>}
       </div>}
       <i ref={spark} className="tr-spark" aria-hidden="true" />
-      {phase === "guide" && <Guide steps={steps} nav={nav} onDone={(to) => done.current(to)} admin={admin} />}
+      {phase === "guide" && steps.length > 0 && <Guide steps={steps} nav={help ? () => {} : nav} onDone={(to) => done.current(to)} admin={admin} help={help} />}
     </div>
   );
 }
@@ -266,7 +272,7 @@ const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 const ease = (x: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 4);
 const rrect = (b: Box, r: number) => { r = Math.min(r, b.w / 2, b.h / 2); return `M${b.x + r} ${b.y}H${b.x + b.w - r}A${r} ${r} 0 0 1 ${b.x + b.w} ${b.y + r}V${b.y + b.h - r}A${r} ${r} 0 0 1 ${b.x + b.w - r} ${b.y + b.h}H${b.x + r}A${r} ${r} 0 0 1 ${b.x} ${b.y + b.h - r}V${b.y + r}A${r} ${r} 0 0 1 ${b.x + r} ${b.y}Z`; };
 
-function Guide({ steps, nav, onDone, admin }: { steps: Step[]; nav: (tab: string) => void; onDone: (to?: string) => void; admin: boolean }) {
+function Guide({ steps, nav, onDone, admin, help = false }: { steps: Step[]; nav: (tab: string) => void; onDone: (to?: string) => void; admin: boolean; help?: boolean }) {
   const [i, setI] = useState(0);
   const dir = useRef(1);
   const svg = useRef<SVGSVGElement>(null), card = useRef<HTMLDivElement>(null), primary = useRef<HTMLButtonElement>(null);
@@ -374,10 +380,10 @@ function Guide({ steps, nav, onDone, admin }: { steps: Step[]; nav: (tab: string
         <circle ref={n1} className="tg-n1" r={4.5} />
         <circle ref={n2} className="tg-n2" r={5.5} />
       </svg>
-      <div ref={card} className="tg-card pn" role="group" aria-roledescription="passo del tour" aria-label={`${i + 1} di ${steps.length}: ${step.title}`}>
+      <div ref={card} className="tg-card pn" role="group" aria-roledescription={help ? "passo della guida" : "passo del tour"} aria-label={`${i + 1} di ${steps.length}: ${step.title}`}>
         <div className="tg-top">
           <span className="tg-n">{String(i + 1).padStart(2, "0")} <i>/</i> {String(steps.length).padStart(2, "0")}</span>
-          <button type="button" className="tg-skip lk mu" onClick={() => onDone()}>Salta il tour</button>
+          <button type="button" className="tg-skip lk mu" onClick={() => onDone()}>{help ? "Chiudi" : "Salta il tour"}</button>
         </div>
         <div key={i} className="tg-body">
           <h3 className="hd tg-t"><Text3D text={step.title} layers={5} className="t3-ink" anim /></h3>
@@ -385,9 +391,9 @@ function Guide({ steps, nav, onDone, admin }: { steps: Step[]; nav: (tab: string
         </div>
         <div className="tg-dots" aria-hidden="true">{steps.map((_, j) => <i key={j} className={j < i ? "done" : j === i ? "on" : ""} />)}</div>
         <div className="tg-act">
-          <button type="button" className="bt" onClick={() => go(-1)} disabled={i === 0}>Indietro</button>
-          {last && !admin && <button type="button" className="bt" onClick={() => onDone()}>Fine</button>}
-          <button ref={primary} type="button" className="bt on" onClick={() => (last ? onDone(admin ? undefined : "write") : go(1))}>{last ? (admin ? "Fine" : "Inizia a scrivere") : "Avanti"}<ChevronRight size={15} /></button>
+          {steps.length > 1 && <button type="button" className="bt" onClick={() => go(-1)} disabled={i === 0}>Indietro</button>}
+          {last && !admin && !help && <button type="button" className="bt" onClick={() => onDone()}>Fine</button>}
+          <button ref={primary} type="button" className="bt on" onClick={() => (last ? onDone(admin || help ? undefined : "write") : go(1))}>{last ? (help ? "Ho capito" : admin ? "Fine" : "Inizia a scrivere") : "Avanti"}<ChevronRight size={15} /></button>
         </div>
       </div>
     </div>

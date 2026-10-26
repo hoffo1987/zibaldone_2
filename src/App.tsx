@@ -32,6 +32,7 @@ import { EmptyCircuit } from "./EmptyCircuit";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
 import { ScintilleReader, EchiDelPensiero, type ScMode } from "./ScintilleReader";
+import { ScintilleMie } from "./ScintilleMie";
 import { notificheScintille, notificheEchi, chiaveEco, oggi, spuntoEco, flat, leggiScintilla, CIT_MAX, type Scintilla, type Vista, type Eco } from "./scintille";
 import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 import { Navigation, SectionLocation, ScrittiSwitch, NAV_ORDER, inHub } from "./Navigation";
@@ -1165,7 +1166,7 @@ export default function App() {
   const [tab, setTab] = useState("home");
   // presentazione del primo accesso (film + tour guidato): una volta per account su questo dispositivo;
   // dalle Opzioni si rivedono il solo filmato ("film") o il solo tour ("guide")
-  const [tour, setTour] = useState<"" | "auto" | "film" | "guide">("");
+  const [tour, setTour] = useState<"" | "auto" | "film" | "guide" | "help">("");
   const [tourHold, setTourHold] = useState(false);
   const [month, setMonth] = useState(() => mKey(Date.now()));
   const [monthFilter, setMonthFilter] = useState("all");
@@ -2159,7 +2160,8 @@ export default function App() {
   const holdTour = (on: boolean) => { setTourHold(on); holdLoops(on); };
   // il tour cambia sezione senza riempire la cronologia: alla fine il tasto Indietro non ripercorre i passi
   const tourNav = (t: string) => { history.replaceState({ tab: t }, ""); setSel(null); setTab(t); setSelMode(false); setIds([]); setSearch(""); setKindFilter("all"); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
-  const endTour = (to?: string) => { if (user) tourMark(user.uid); holdTour(false); const m = tour; setTour(""); if (to) go(to); else if (m !== "film") tourNav("home"); };
+  // la guida di una sezione si chiude dove si era: non segna la presentazione come vista e non cambia pagina
+  const endTour = (to?: string) => { const m = tour; if (m === "help") { setTour(""); return; } if (user) tourMark(user.uid); holdTour(false); setTour(""); if (to) go(to); else if (m !== "film") tourNav("home"); };
   const tourLow = (navigator.hardwareConcurrency || 8) <= 4 || ((navigator as any).deviceMemory || 8) <= 3;
 
   const textMeta = useMemo(() => new WeakMap<object, { _tx: string; _words: number; _img: boolean }>(), []);
@@ -2492,14 +2494,16 @@ export default function App() {
   };
   const unread = allNotifs.filter((n) => !n.letta).length;
   // un eco si apre nel diario (è il pensiero di un altro); voti e scintille aprono il proprio scritto
+  // un pensiero del diario di un altro, da fuori del Diario (un eco nella campanella, una scintilla accesa): si va nel
+  // Diario e lo si apre
+  const openDiary = async (id: string, known?: any) => {
+    let t: any = known || items.find((x) => x.id === id) || pubItems.find((x) => x.id === id);
+    if (!t) { try { const q = await getDoc(doc(db, "testi", id)); if (q.exists()) t = readPublic(q.data(), q.id); } catch {} }
+    go("diario");
+    if (t) setTimeout(() => openView(t), 320); else notify("Quel pensiero non c’è più.");
+  };
   const openNotif = async (n: any) => {
-    if (n.tipo === "eco" && n.ecoId) {
-      let t: any = items.find((x) => x.id === n.ecoId) || pubItems.find((x) => x.id === n.ecoId);
-      if (!t) { try { const q = await getDoc(doc(db, "testi", n.ecoId)); if (q.exists()) t = readPublic(q.data(), q.id); } catch {} }
-      go("diario");
-      if (t) setTimeout(() => openView(t), 320); else notify("Quel pensiero non c’è più.");
-      return;
-    }
+    if (n.tipo === "eco" && n.ecoId) { openDiary(n.ecoId); return; }
     go("my_pages"); const t = n.pensieroId && items.find((x) => x.id === n.pensieroId); if (t) setTimeout(() => openView(t), 320);
   };
   const bell = (r: boolean) => (
@@ -2834,7 +2838,8 @@ export default function App() {
           <SectionLocation tab={tab} admin={isAdmin} editing={!!editingId} />
           {inHub(tab) && <ScrittiSwitch tab={tab} admin={isAdmin} onNavigate={go} />}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>{isList && !loading && <p className="page-count mt-2" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "scritto" : "scritti"}</p>}{tab === "altri" && !(pubLoading || loading) && <p className="page-count mt-2" aria-live="polite"><span key={pubShown.length} className="tick-n">{pubShown.length}</span> {pubShown.length === 1 ? "scritto da leggere" : "scritti da leggere"} · senza nomi né date</p>}</div>
+            <div><div className="page-head" data-tour="page-head"><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>
+              <button type="button" className="help-q" onClick={() => setTour("help")} aria-label={`Come funziona: ${titles[tab]}`} title="Come funziona questa sezione"><span aria-hidden="true">?</span></button></div>{isList && !loading && <p className="page-count mt-2" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "scritto" : "scritti"}</p>}{tab === "altri" && !(pubLoading || loading) && <p className="page-count mt-2" aria-live="polite"><span key={pubShown.length} className="tick-n">{pubShown.length}</span> {pubShown.length === 1 ? "scritto da leggere" : "scritti da leggere"} · senza nomi né date</p>}</div>
             {["altri", "diario"].includes(tab) && <div className="sr-only" aria-live="polite">{tab === "diario" ? diaryShown.length : pubShown.length} pagine</div>}
             {["altri", "diario"].includes(tab) && <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>}
             {isList && (
@@ -2892,6 +2897,10 @@ export default function App() {
             {pubShown.length > visible && <div className="flex justify-center mt-8"><button className="bt !px-6 !py-3" onClick={() => setVisible((v) => v + 18)}>Mostra altri ({pubShown.length - visible})</button></div>}
             </>
           ))}
+          {tab === "my_pages" && db && <ScintilleMie db={db} uid={user.uid} ready={vistePronte && ownDiary.every((id) => scByP[id])}
+            received={Object.keys(mieiDiario).map((id) => ({ id, title: mieiDiario[id].title, list: scByP[id] || [] }))}
+            find={(id) => items.find((x) => x.id === id) || null} onLook={() => refreshScintille(true)}
+            onOpenOwn={(id) => { const t = items.find((x) => x.id === id); if (t) openView(t); }} onOpenOther={(t) => openDiary(t.id, t)} />}
           {/* LISTA */}
           {isList && (loading ? (
             <Sheets />
@@ -3164,7 +3173,7 @@ export default function App() {
 
       {/* presentazione: il velo scuro copre il sito finché il film non è pronto, così la home non lampeggia prima */}
       {(tour || wantTour) && (tour
-        ? <React.Suspense fallback={tour === "guide" ? null : <div className="fixed inset-0 z-[110]" style={{ background: "#000302" }} />}><Tour key={tour} mode={tour} admin={isAdmin} name={tourName} calm={!!G.nomotion} low={tourLow} nav={tourNav} hold={holdTour} onDone={endTour} /></React.Suspense>
+        ? <React.Suspense fallback={tour === "guide" || tour === "help" ? null : <div className="fixed inset-0 z-[110]" style={{ background: "#000302" }} />}><Tour key={tour} mode={tour} admin={isAdmin} name={tourName} calm={!!G.nomotion} low={tourLow} nav={tourNav} hold={holdTour} onDone={endTour} section={tab} /></React.Suspense>
         : <div className="fixed inset-0 z-[110]" style={{ background: "#000302" }} />)}
     </>
   );

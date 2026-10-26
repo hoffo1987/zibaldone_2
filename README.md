@@ -14,6 +14,9 @@ titolo, testo, foto e disegni restano modificabili. Gli scritti precedenti sono 
   vede soltanto le proprie. `pensieri/{id}/scintille/{sid}` non ha uid né orario (solo il giorno) e ha un id casuale;
   chi l'ha accesa sta in `scintille_mie/{uid}/voci/{sid}`, il tetto di 5 in `scintille_mie/{uid}/pezzi/{id}`. Le
   notifiche dell'autore le calcola il suo client: nessuno scrive in `notifiche` tranne l'admin per i voti.
+- In **I miei scritti** il riquadro «Le tue scintille» (`src/ScintilleMie.tsx`) raccoglie le scintille ricevute sui
+  propri pensieri (anonime, le stesse delle notifiche) e quelle accese da sé sui pensieri degli altri; toccando una
+  frase si apre il pensiero.
 - Da una frase si può **rispondere con un pensiero**: il nuovo pensiero porta `nataDa` (id dell'origine e citazione),
   immutabile dopo la pubblicazione, e il lettore mostra a tutti quanti pensieri sono nati da uno. Firestore espone a chi
   legge un documento anche la sua data di creazione tecnica: l'orario esatto di una scintilla non è quindi segreto
@@ -266,7 +269,11 @@ Alla fine un nodo ambra vola sul primo elemento del sito e parte il tour guidato
 elementi veri (`src/tour/Tour.tsx`). Si può saltare in qualunque momento (anche con Esc) e togliere l'audio.
 
 Viene mostrata una volta per account su ogni dispositivo (`localStorage`, chiave `circuito:tour:<uid>`) e si può rivedere
-dalle Opzioni: **Rivedi il filmato** (solo il film) e **Rivedi il tour** (solo il tour guidato). Il codice della presentazione e il jingle si scaricano solo per chi deve vederla.
+dalle Opzioni: **Rivedi il filmato** (solo il film) e **Rivedi il tour** (solo il tour guidato).
+
+Accanto al titolo di ogni sezione un **punto interrogativo** apre la guida breve di quella sezione: lo stesso tour
+guidato, con i passi scritti in `src/tour/help.ts` (che cosa si fa lì e gli elementi che contano, diversi per chi
+amministra). I passi il cui elemento non è sulla pagina si saltano; la guida si chiude dove si era. Il codice della presentazione e il jingle si scaricano solo per chi deve vederla.
 
 Per rivedere e verificare il componente reale in locale, senza login o connessione a Firebase:
 
