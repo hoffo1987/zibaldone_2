@@ -50,8 +50,8 @@ export const helpSteps = (tab: string, admin: boolean): Step[] => {
     case "my_pages": return [
       s(HEAD, "I miei scritti", "Tutto quello che hai scritto, in un posto solo: ritrovalo, riaprilo, modificalo."),
       s("filters", "Cerca e filtra", "Per parola, tipo, mese o ordine. Seleziona per eliminare più scritti insieme."),
-      s("css:.sm-scr", "Le tue scintille", "Ogni emozione è un canale con la sua onda: più è alta, più frasi l’hanno ricevuta. Tocca un canale per vedere solo quelle."),
-      s("css:.sm-sel", "Ricevute o accese da te", "Gira la manopola: le scintille accese dagli altri sui tuoi pensieri, o quelle che hai acceso tu. Tocca un titolo per riaprire il pensiero."),
+      s("css:.stm-scr", "Le tue scintille", "Ogni emozione è un canale con la sua onda: più è alta, più frasi l’hanno ricevuta. Tocca un canale per vedere solo quelle."),
+      s("css:.stm-sel", "Ricevute o accese da te", "Gira la manopola: le scintille accese dagli altri sui tuoi pensieri, o quelle che hai acceso tu. Tocca un titolo per riaprire il pensiero."),
       s(CARD, "I tuoi scritti", "Apri uno scritto per rileggerlo o modificarlo. Dopo la lettura dell’amministratore vedrai anche il voto."),
     ];
     case "podio": return admin ? [

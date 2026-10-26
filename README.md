@@ -23,11 +23,15 @@ titolo, testo, foto e disegni restano modificabili. Gli scritti precedenti sono 
   togliendo una scintilla o spegnendo la luce l'onda si appiattisce e sbiadisce. A riposo non si disegna nulla. Senza
   WebGPU o col movimento ridotto le stesse tracce sono in SVG, ferme. Le onde si ripetono ogni 96 pixel: lo shader e
   l'SVG usano le stesse funzioni.
-- In **I miei scritti** «Le tue scintille» (`src/ScintilleMie.tsx`) è uno strumento: lo schermo al fosforo mostra i
-  quattro canali, alti quanto le scintille di ciascuna emozione (toccandone uno l'elenco mostra solo quelle), e la
-  manopola passa tra le scintille ricevute sui propri pensieri (anonime, le stesse delle notifiche) e quelle accese da sé
-  sui pensieri degli altri. Nell'elenco ogni frase ha il suo segnale; toccando il titolo si apre il pensiero. Toccando
-  l'intestazione la sezione si ritrae e resta la riga con i due conteggi; la scelta si ricorda su quel dispositivo.
+- In **I miei scritti** «Le tue scintille» (`src/ScintilleMie.tsx`) è uno strumento. Lo schermo, in WebGPU
+  (`src/strumentoGpu.ts`), è una stanza buia: i quattro canali sono tubi al neon piegati nella forma della loro onda, in
+  piedi a profondità diverse sopra un pavimento di vetro con il reticolo, la loro pozza di luce e il riflesso. Un canale
+  senza scintille è un tubo spento; ampiezza e luce crescono con le scintille. I tubi si accendono da sinistra all'arrivo
+  e a ogni giro di manopola; col puntatore sopra la camera si inclina appena e le onde scorrono; a riposo non si disegna
+  nulla. Le etichette dei canali sono HTML, appese all'inizio di ogni tubo: toccandone una (o il tubo) l'elenco mostra solo
+  quell'emozione. Senza WebGPU le stesse quattro tracce in piano. La manopola passa tra le scintille ricevute sui propri
+  pensieri (anonime, le stesse delle notifiche) e quelle accese da sé sui pensieri degli altri. Toccando il titolo di un
+  pensiero lo si apre; toccando l'intestazione la sezione si ritrae e la scelta si ricorda su quel dispositivo.
 - Da una frase si può **rispondere con un pensiero**: il nuovo pensiero porta `nataDa` (id dell'origine e citazione),
   immutabile dopo la pubblicazione, e il lettore mostra a tutti quanti pensieri sono nati da uno. Firestore espone a chi
   legge un documento anche la sua data di creazione tecnica: l'orario esatto di una scintilla non è quindi segreto

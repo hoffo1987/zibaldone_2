@@ -1,11 +1,14 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, type Firestore } from "firebase/firestore";
 import { ChevronDown, Loader2, ArrowUpRight, X } from "lucide-react";
 import { TIPI, flat, leggiScintilla, msDelGiorno, oggi, type Scintilla, type Tipo } from "./scintille";
-import { faseCanale, seme } from "./onde";
 import { Onda, Chip } from "./Segnali";
 import { readPublic, PUBLIC_VERSION } from "./testi";
 import { haptic } from "./haptics";
+import { moving } from "./motion";
+import { renderLoop } from "./renderLoop";
+import { fieldDevice, webgpuReady } from "./field/common";
+import { Strumento } from "./strumentoGpu";
 import "./scintille.css";
 
 // «Le tue scintille», in I miei scritti: lo strumento che legge il segnale dei propri pensieri.
@@ -29,8 +32,6 @@ const SHOW = 3; // pensieri visibili prima di «Mostra tutte»
 const FOLD = "circuito:scintille:ritratte";
 const foldGet = () => { try { return localStorage.getItem(FOLD) === "1"; } catch { return false; } };
 const foldSet = (v: boolean) => { try { localStorage.setItem(FOLD, v ? "1" : "0"); } catch {} };
-// due cifre, come sul display di uno strumento
-const dd = (n: number | null) => (n === null ? "--" : String(Math.min(99, n)).padStart(2, "0"));
 const label = (t: Tipo) => TIPI.find((x) => x.id === t)!.label;
 
 export function ScintilleMie({ db, uid, received, ready, find, onOpenOwn, onOpenOther, onLook }: {
@@ -45,6 +46,14 @@ export function ScintilleMie({ db, uid, received, ready, find, onOpenOwn, onOpen
   const [solo, setSolo] = useState<Tipo | null>(null); // il canale scelto sullo schermo
   const [hl, setHl] = useState<Tipo | null>(null); // il canale sotto il puntatore (dallo schermo o da una frase)
   const fold = () => { const v = !shut; setShut(v); foldSet(v); haptic("select"); };
+  // lo schermo in WebGPU, dove c'è (lo stesso dispositivo dello sfondo); altrimenti le tracce in piano
+  const [gpu, setGpu] = useState<GPUDevice | null>(null);
+  useEffect(() => {
+    if (!webgpuReady()) return;
+    let on = true;
+    fieldDevice("low-power", process.env.REACT_APP_EMULATORS === "1").then((d) => { if (on) setGpu(d); });
+    return () => { on = false; };
+  }, []);
 
   // all'apertura le ricevute si rileggono (al massimo ogni 30 secondi, come per la campanella)
   useEffect(() => { onLook(); }, []);
@@ -106,84 +115,129 @@ export function ScintilleMie({ db, uid, received, ready, find, onOpenOwn, onOpen
   };
   const pick = (t: Tab) => { if (t !== tab) { setTab(t); setAll(false); setSolo(null); setHl(null); haptic("select"); } };
   const lane = (t: Tipo) => { setSolo(solo === t ? null : t); setAll(false); haptic("select"); };
-  const last = groups[0]?.list[0]?.giorno;
 
-  return <section className={`sm pn ${shut ? "shut" : ""}`} aria-labelledby="sm-t" data-hl={hl || solo || undefined}>
-    <h2 className="sm-h"><button type="button" className="sm-hd" aria-expanded={!shut} aria-controls="sm-fold" onClick={fold}>
-      <span className="sm-ic" aria-hidden="true"><Onda tipo="bellissima" w={30} h={22} a={7} stroke={1.8} fade={5} /></span>
+  return <section className={`stm pn ${shut ? "shut" : ""}`} aria-labelledby="stm-t" data-hl={hl || solo || undefined}>
+    <h2 className="stm-h"><button type="button" className="stm-hd" aria-expanded={!shut} aria-controls="stm-fold" onClick={fold}>
+      <span className="stm-ic" aria-hidden="true"><Onda tipo="bellissima" w={30} h={22} a={7} stroke={1.8} fade={5} /></span>
       <span className="min-w-0 flex-1 block">
-        <span id="sm-t" className="hd sm-t block">Le tue scintille</span>
-        <span className="sm-sub block">{shut
-          ? <span className="sm-rd"><span><b>{dd(okRec ? nRec : null)}</b> ricevute</span><span><b>{dd(okAcc ? nAcc : null)}</b> accese da te</span></span>
+        <span id="stm-t" className="hd stm-t block">Le tue scintille</span>
+        <span className="stm-sub block">{shut
+          ? <span className="stm-rd"><span><b>{okRec ? nRec : "…"}</b> ricevute</span><span><b>{okAcc ? nAcc : "…"}</b> accese da te</span></span>
           : "Il segnale delle frasi che hanno colpito: quelle accese sui tuoi pensieri e quelle che hai acceso tu."}</span>
       </span>
-      <span className="sm-fl" aria-hidden="true"><ChevronDown size={16} /></span>
+      <span className="stm-fl" aria-hidden="true"><ChevronDown size={16} /></span>
       <span className="sr-only">{shut ? " · tocca per aprire" : " · tocca per ritrarre"}</span>
     </button></h2>
     {/* chiusa, il contenuto resta montato (i dati restano) ma non si raggiunge con la tastiera */}
-    <div id="sm-fold" className="sm-fold" {...(shut ? { inert: "" } : {})}><div className="sm-in">
-      <div className="sm-deck">
-        {/* lo schermo: si ridisegna, canale per canale, a ogni giro di manopola */}
-        <div className="sm-scr" role="group" aria-label={`Scintille ${tab === "ricevute" ? "ricevute" : "accese da te"} per emozione`}>
-          <div className="sm-scr-hd" aria-hidden="true">
-            <span><i className="sm-rec" />{tab === "ricevute" ? "CH · Ricevute" : "CH · Accese da te"}</span>
-            <span>TOT <b>{busy ? "--" : dd(total)}</b></span>
-          </div>
-          <div key={tab} className={`sm-lanes ${busy ? "wait" : ""}`}>
-            {TIPI.map((t, i) => {
-              const n = counts[t.id], on = !busy && n > 0;
-              return <button key={t.id} type="button" className={`sm-lane t-${t.id} ${on ? "" : "zero"} ${hl === t.id ? "hl" : ""}`} style={{ ["--i" as any]: i }}
-                aria-pressed={solo === t.id} disabled={!on} aria-label={`${t.label}: ${n} ${n === 1 ? "scintilla" : "scintille"}${solo === t.id ? ", mostrate da sole" : ""}`}
-                onClick={() => lane(t.id)} onPointerEnter={(e) => { if (e.pointerType === "mouse" && on) setHl(t.id); }} onPointerLeave={() => setHl(null)}>
-                <span className="sm-lane-k" aria-hidden="true">CH{i + 1}<span>{t.label}</span></span>
-                <span className="sm-lane-w" aria-hidden="true">
-                  {on ? <Onda tipo={t.id} h={30} a={Math.min(11, 3.5 + 2 * n)} stroke={1.6} fade={18} ph={i * 13} className={`sm-trace ${hl === t.id || solo === t.id ? "run" : ""}`} /> : <i className="sm-zero" />}
-                  <i className="sm-beam" />
-                </span>
-                <span className="sm-lane-n" aria-hidden="true">{busy ? "--" : dd(n)}</span>
-              </button>;
-            })}
-          </div>
-          <div className="sm-scr-ft" aria-hidden="true">
-            <span>{busy ? "in ascolto…" : total ? `${groups.length} ${groups.length === 1 ? "pensiero" : "pensieri"}` : "nessun segnale"}</span>
-            <span>{!busy && last !== undefined ? `ultima ${quando(last)}` : ""}</span>
-          </div>
+    <div id="stm-fold" className="stm-fold" {...(shut ? { inert: "" } : {})}><div className="stm-in">
+      <div className="stm-deck">
+        {/* lo schermo: in WebGPU i tubi al neon in prospettiva, altrimenti le quattro tracce in piano */}
+        <div className="stm-scr" role="group" aria-label={`Scintille ${tab === "ricevute" ? "ricevute" : "accese da te"} per emozione`}>
+          {gpu ? <Schermo3D dev={gpu} counts={counts} tab={tab} busy={busy} hl={hl} solo={solo} onHover={setHl} onPick={lane} onLost={() => setGpu(null)} />
+            : <div key={tab} className={`stm-lanes ${busy ? "wait" : ""}`}>
+              {TIPI.map((t, i) => {
+                const n = counts[t.id], on = !busy && n > 0;
+                return <button key={t.id} type="button" className={`stm-lane t-${t.id} ${on ? "" : "zero"}`} style={{ ["--i" as any]: i }}
+                  aria-pressed={solo === t.id} disabled={!on} aria-label={`${t.label}: ${n} ${n === 1 ? "scintilla" : "scintille"}${solo === t.id ? ", mostrate da sole" : ""}`}
+                  onClick={() => lane(t.id)} onPointerEnter={(e) => { if (e.pointerType === "mouse" && on) setHl(t.id); }} onPointerLeave={() => setHl(null)}>
+                  <span className="stm-lane-k" aria-hidden="true"><b>{busy ? "…" : n}</b>{t.label}</span>
+                  <span className="stm-lane-w" aria-hidden="true">
+                    {on ? <Onda tipo={t.id} h={30} a={Math.min(11, 3.5 + 2 * n)} stroke={1.6} fade={18} ph={i * 13} className={`stm-trace ${hl === t.id || solo === t.id ? "run" : ""}`} /> : <i className="stm-zero" />}
+                    <i className="stm-beam" />
+                  </span>
+                </button>;
+              })}
+            </div>}
         </div>
         {/* la manopola: due posizioni, Ricevute e Accese da te */}
-        <div className="sm-sel" role="tablist" aria-label="Quali scintille">
-          <button type="button" role="tab" aria-selected={tab === "ricevute"} className="sm-ch" onClick={() => pick("ricevute")}>
-            <i className="sm-led" aria-hidden="true" /><span className="sm-ch-t"><b>Ricevute</b><small>sui tuoi pensieri</small></span><span className="sm-ch-n">{dd(okRec ? nRec : null)}</span>
+        <div className="stm-sel" role="tablist" aria-label="Quali scintille">
+          <button type="button" role="tab" aria-selected={tab === "ricevute"} className="stm-ch" onClick={() => pick("ricevute")}>
+            <span className="stm-ch-t">Ricevute</span><span className="stm-ch-n">{okRec ? nRec : "…"}</span>
           </button>
-          <button type="button" className={`sm-knob ${tab}`} tabIndex={-1} aria-hidden="true" onClick={() => pick(tab === "ricevute" ? "accese" : "ricevute")}>
-            <i className="sm-knob-sk" /><i className="sm-knob-cap"><i className="sm-knob-tick" /></i>
+          <button type="button" className={`stm-knob ${tab}`} tabIndex={-1} aria-hidden="true" onClick={() => pick(tab === "ricevute" ? "accese" : "ricevute")}>
+            <i className="stm-knob-sk" /><i className="stm-knob-cap" /><i className="stm-knob-tick" />
           </button>
-          <button type="button" role="tab" aria-selected={tab === "accese"} className="sm-ch r" onClick={() => pick("accese")}>
-            <span className="sm-ch-n">{dd(okAcc ? nAcc : null)}</span><span className="sm-ch-t"><b>Accese<span className="sm-long"> da te</span></b><small>sui pensieri degli altri</small></span><i className="sm-led" aria-hidden="true" />
+          <button type="button" role="tab" aria-selected={tab === "accese"} className="stm-ch r" onClick={() => pick("accese")}>
+            <span className="stm-ch-n">{okAcc ? nAcc : "…"}</span><span className="stm-ch-t">Accese da te</span>
           </button>
         </div>
       </div>
-      <div key={`${tab}:${solo || ""}`} className="sm-body" role="tabpanel">
-        {solo && <p className="sm-solo"><span className={`sm-solo-k t-${solo}`}>Solo il canale <b>{label(solo)}</b></span><button type="button" className="sc-lst" onClick={() => { setSolo(null); haptic("select"); }}>Tutti i canali<X size={13} /></button></p>}
-        {busy ? <div className="sm-empty"><Loader2 size={16} className="animate-spin" /></div>
-          : !shown.length ? <p className="sm-empty">{tab === "ricevute" ? "Quando qualcuno accenderà una frase dei tuoi pensieri, il suo segnale arriverà qui. Chi l’ha accesa resta anonimo." : "Leggi il Diario: seleziona una frase che ti colpisce e accendi una scintilla. Il suo segnale resterà qui."}</p>
-          : <ul className="sm-l">
-            {(all ? shown : shown.slice(0, SHOW)).map((g, i) => <li key={g.key} className="sm-g" style={{ ["--i" as any]: i }}>
-              <button type="button" className="sm-gh" disabled={tab === "accese" && !docs[g.key]} onClick={() => open(g.key)}>
-                <span className="sm-gt">{g.title || "Pensiero ritirato"}</span>
-                <span className="sm-gn">{g.list.length} {g.list.length === 1 ? "scintilla" : "scintille"}</span>
+      <div key={`${tab}:${solo || ""}`} className="stm-body" role="tabpanel">
+        {solo && <p className="stm-solo"><span className={`stm-solo-k t-${solo}`}>Solo <b>{label(solo)}</b></span><button type="button" className="sc-lst" onClick={() => { setSolo(null); haptic("select"); }}>Tutte le emozioni<X size={13} /></button></p>}
+        {busy ? <div className="stm-empty"><Loader2 size={16} className="animate-spin" /></div>
+          : !shown.length ? <p className="stm-empty">{tab === "ricevute" ? "Quando qualcuno accenderà una frase dei tuoi pensieri, il suo segnale arriverà qui. Chi l’ha accesa resta anonimo." : "Leggi il Diario: seleziona una frase che ti colpisce e accendi una scintilla. Il suo segnale resterà qui."}</p>
+          : <ul className="stm-l">
+            {(all ? shown : shown.slice(0, SHOW)).map((g, i) => <li key={g.key} className="stm-g" style={{ ["--i" as any]: i }}>
+              <button type="button" className="stm-gh" disabled={tab === "accese" && !docs[g.key]} onClick={() => open(g.key)}>
+                <span className="stm-gt">{g.title || "Pensiero ritirato"}</span>
+                <span className="stm-gn">{g.list.length} {g.list.length === 1 ? "scintilla" : "scintille"}</span>
                 {(tab === "ricevute" || docs[g.key]) && <ArrowUpRight size={14} aria-hidden="true" />}
               </button>
-              <ul>{g.list.map((s, j) => <li key={s.id} className={`sm-s t-${s.tipo}`} style={{ ["--j" as any]: Math.min(i * 2 + j, 10) }}
+              <ul>{g.list.map((s) => <li key={s.id} className={`stm-s t-${s.tipo}`}
                 onPointerEnter={(e) => { if (e.pointerType === "mouse") setHl(s.tipo); }} onPointerLeave={() => setHl(null)}>
-                <q className="sm-q">{flat(s.cit)}</q>
-                <Onda tipo={s.tipo} h={12} a={3.2} stroke={1.5} fade={22} ph={faseCanale(seme(s.id), 0)} className="sm-sig" />
-                <span className="sm-meta"><Chip tipo={s.tipo} /><span className="sm-d">{quando(s.giorno)}</span></span>
-                {s.nota && <p className="sm-nota">{s.nota}</p>}
+                <q className="stm-q">{flat(s.cit)}</q>
+                <span className="stm-meta"><Chip tipo={s.tipo} /><span className="stm-d">{quando(s.giorno)}</span></span>
+                {s.nota && <p className="stm-nota">{s.nota}</p>}
               </li>)}</ul>
             </li>)}
           </ul>}
-        {!busy && shown.length > SHOW && <button type="button" className="sc-lst sm-more" aria-expanded={all} onClick={() => setAll(!all)}>{all ? "Mostra meno" : `Mostra tutte (${shown.length} pensieri)`}<ChevronDown size={14} /></button>}
+        {!busy && shown.length > SHOW && <button type="button" className="sc-lst stm-more" aria-expanded={all} onClick={() => setAll(!all)}>{all ? "Mostra meno" : `Mostra tutte (${shown.length} pensieri)`}<ChevronDown size={14} /></button>}
       </div>
     </div></div>
   </section>;
+}
+
+// Lo schermo in WebGPU (strumentoGpu.ts): la tela e, sopra, le etichette dei canali appese all'inizio di ogni tubo.
+// Le etichette sono i pulsanti veri (per la tastiera e i lettori di schermo); toccare un tubo fa lo stesso.
+function Schermo3D({ dev, counts, tab, busy, hl, solo, onHover, onPick, onLost }: {
+  dev: GPUDevice; counts: Record<Tipo, number>; tab: Tab; busy: boolean; hl: Tipo | null; solo: Tipo | null;
+  onHover: (t: Tipo | null) => void; onPick: (t: Tipo) => void; onLost: () => void;
+}) {
+  const box = useRef<HTMLDivElement>(null), cv = useRef<HTMLCanvasElement>(null), eng = useRef<Strumento | null>(null);
+  const tags = useRef<(HTMLButtonElement | null)[]>([]);
+  const lost = useRef(onLost); lost.current = onLost;
+  const chans = TIPI.map((t) => ({ tipo: t.id, n: busy ? 0 : counts[t.id] }));
+  const sig = chans.map((c) => c.n).join(",");
+  useEffect(() => {
+    const c = cv.current; if (!c) return;
+    let e: Strumento;
+    try { e = new Strumento(dev, c, !moving()); } catch (err) { console.warn("Schermo delle scintille in WebGPU non partito", err); lost.current(); return; }
+    eng.current = e; e.tagsOn(tags.current); e.fit(); e.set(chans, true);
+    const ro = new ResizeObserver(() => e.fit()); ro.observe(c);
+    const halt = renderLoop((t) => e.draw(t), () => e.fps(), c);
+    let gone = false;
+    dev.lost.then(() => { if (!gone) lost.current(); });
+    return () => { gone = true; halt(); ro.disconnect(); e.destroy(); eng.current = null; };
+  }, [dev]);
+  // un giro di manopola (o i dati appena arrivati): i tubi si riaccendono da sinistra
+  const first = useRef(true);
+  useEffect(() => { if (first.current) { first.current = false; return; } eng.current?.set(chans, true); }, [tab, busy]);
+  useEffect(() => { eng.current?.set(chans, false); }, [sig]);
+  const on = hl || solo;
+  useEffect(() => { eng.current?.highlight(on ? TIPI.findIndex((t) => t.id === on) : -1); }, [on]);
+  const at = (cx: number, cy: number) => { const r = box.current!.getBoundingClientRect(); return [cx - r.left, cy - r.top, r.width, r.height]; };
+  const move = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse" || !eng.current) return;
+    const [x, y, w, h] = at(e.clientX, e.clientY); eng.current.pointer((x / w) * 2 - 1, (y / h) * 2 - 1, true);
+    if ((e.target as Element).closest(".stm-tag")) return;
+    const i = eng.current.pick(x, y), t = i >= 0 && counts[TIPI[i].id] > 0 ? TIPI[i].id : null;
+    if (t !== hl) onHover(t);
+  };
+  const leave = () => { eng.current?.pointer(0, 0, false); onHover(null); };
+  const click = (e: React.MouseEvent) => {
+    if (!eng.current || (e.target as Element).closest(".stm-tag")) return;
+    const [x, y] = at(e.clientX, e.clientY), i = eng.current.pick(x, y);
+    if (i >= 0 && counts[TIPI[i].id] > 0) onPick(TIPI[i].id);
+  };
+  return <div ref={box} className="stm-3d" onPointerMove={move} onPointerLeave={leave} onClick={click}>
+    <canvas ref={cv} className="stm-cv" aria-hidden="true" />
+    {TIPI.map((t, i) => {
+      const n = busy ? 0 : counts[t.id];
+      return <button key={t.id} ref={(el) => { tags.current[i] = el; }} type="button" className={`stm-tag t-${t.id} ${n ? "" : "zero"} ${on === t.id ? "on" : ""}`}
+        aria-pressed={solo === t.id} disabled={!n} aria-label={`${t.label}: ${n} ${n === 1 ? "scintilla" : "scintille"}${solo === t.id ? ", mostrate da sole" : ""}`}
+        onClick={() => onPick(t.id)} onPointerEnter={(e) => { if (e.pointerType === "mouse" && n) onHover(t.id); }}>
+        <b aria-hidden="true">{busy ? "…" : n}</b><span aria-hidden="true">{t.label}</span>
+      </button>;
+    })}
+  </div>;
 }

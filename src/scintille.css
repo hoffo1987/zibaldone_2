@@ -139,7 +139,7 @@
 .sc-chip .onda{margin-left:-.1rem}
 /* il segnale sotto una frase citata (elenco e fumetto del lettore): tenue, si anima solo dove la frase è indicata */
 .sc-sig{display:block;margin:.15rem 0 .1rem;opacity:.8}
-.sc-pop .sc-sig{animation:smDraw .7s cubic-bezier(.4,.05,.3,1) .1s both}
+.sc-pop .sc-sig{animation:stmDraw .7s cubic-bezier(.4,.05,.3,1) .1s both}
 @media (prefers-reduced-motion:reduce){.sc-pop .sc-sig{animation:none}}
 
 /* ---------- la scheda per accendere ---------- */
@@ -194,170 +194,137 @@
 @media (prefers-reduced-motion:reduce){.sc-q-on,.sc-tipo .onda-g{animation:none!important}.sc-q,.sc-tipo-w{transition:none}}
 
 /* ---------- «Le tue scintille», in I miei scritti: lo strumento ---------- */
-/* Il pannello è la piastra di uno strumento da banco: alluminio appena spazzolato, quattro viti, lo schermo al fosforo
-   incassato nella cornice e sotto la manopola dei canali. */
-.root .sm{position:relative;overflow:hidden;margin-bottom:1.5rem;padding:1rem 1.1rem 1.15rem;border-radius:22px;
-  background:
-    radial-gradient(circle at 10px 10px,var(--sm-screw) 0 2.6px,var(--sm-screw-d) 3.2px,transparent 3.8px),
-    radial-gradient(circle at calc(100% - 10px) 10px,var(--sm-screw) 0 2.6px,var(--sm-screw-d) 3.2px,transparent 3.8px),
-    radial-gradient(circle at 10px calc(100% - 10px),var(--sm-screw) 0 2.6px,var(--sm-screw-d) 3.2px,transparent 3.8px),
-    radial-gradient(circle at calc(100% - 10px) calc(100% - 10px),var(--sm-screw) 0 2.6px,var(--sm-screw-d) 3.2px,transparent 3.8px),
-    repeating-linear-gradient(0deg,rgba(0,0,0,.014) 0 1px,transparent 1px 3px),
-    linear-gradient(180deg,color-mix(in srgb,#fff 40%,var(--pn)),var(--pn) 60%);
-  --sm-screw:#D7DDD8;--sm-screw-d:#8E9891}
-.root.dark .sm{--sm-screw:#3A4744;--sm-screw-d:#1C2725;
-  background-image:
-    radial-gradient(circle at 10px 10px,var(--sm-screw) 0 2.6px,var(--sm-screw-d) 3.2px,transparent 3.8px),
-    radial-gradient(circle at calc(100% - 10px) 10px,var(--sm-screw) 0 2.6px,var(--sm-screw-d) 3.2px,transparent 3.8px),
-    radial-gradient(circle at 10px calc(100% - 10px),var(--sm-screw) 0 2.6px,var(--sm-screw-d) 3.2px,transparent 3.8px),
-    radial-gradient(circle at calc(100% - 10px) calc(100% - 10px),var(--sm-screw) 0 2.6px,var(--sm-screw-d) 3.2px,transparent 3.8px),
-    repeating-linear-gradient(0deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px),
-    linear-gradient(180deg,color-mix(in srgb,#fff 3%,var(--pn)),var(--pn) 60%)}
-.sm-h{margin:0;font:inherit}
-.sm-hd{display:flex;align-items:center;gap:.8rem;width:calc(100% + .8rem);margin:-.35rem -.4rem;padding:.35rem .4rem;text-align:left;border-radius:14px;color:inherit;cursor:pointer}
-.sm-hd:focus-visible{outline:2px solid var(--am);outline-offset:2px}
+/* Una piastra sola, uno schermo, una manopola. Lo schermo è una finestra scura su una stanza: in WebGPU
+   (strumentoGpu.ts) i quattro canali sono tubi al neon in prospettiva sopra un pavimento di vetro; le etichette, in
+   HTML, sono appese all'inizio di ogni tubo e sono i pulsanti veri. Senza WebGPU le stesse quattro tracce in piano.
+   Un solo carattere per i testi (quello del sito), i numeri allineati; il corsivo serif resta solo per le frasi. */
+.root .stm{position:relative;overflow:hidden;margin-bottom:1.5rem;padding:1rem 1.1rem 1.15rem;border-radius:22px;
+  background:linear-gradient(180deg,color-mix(in srgb,#fff 35%,var(--pn)),var(--pn) 55%)}
+.root.dark .stm{background:linear-gradient(180deg,color-mix(in srgb,#fff 3%,var(--pn)),var(--pn) 55%)}
+.stm-h{margin:0;font:inherit}
+.stm-hd{display:flex;align-items:center;gap:.8rem;width:calc(100% + .8rem);margin:-.35rem -.4rem;padding:.35rem .4rem;text-align:left;border-radius:14px;color:inherit;cursor:pointer}
+.stm-hd:focus-visible{outline:2px solid var(--am);outline-offset:2px}
 /* l'icona: un ritaglio dello schermo, con la fioritura accesa */
-.sm-ic{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:12px;color:#F4B73F;
-  background:radial-gradient(120% 100% at 50% 0%,#12261F,#06110F 70%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07),inset 0 2px 8px rgba(0,0,0,.7),0 0 0 3px color-mix(in srgb,var(--ink) 8%,var(--sf)),0 0 0 4px var(--ln)}
-.sm-ic .onda{filter:drop-shadow(0 0 2px #F4B73F) drop-shadow(0 0 6px rgba(244,183,63,.5))}
-.sm-t{font-size:1.15rem;font-weight:800;line-height:1.2}
-.sm-sub{margin-top:.15rem;font-size:.8rem;color:var(--mu)}
-.sm-rd{display:inline-flex;flex-wrap:wrap;gap:.2rem .9rem}
-.sm-rd span{white-space:nowrap}
-.sm-rd b,.sm-ch-n,.sm-lane-n,.sm-scr-hd,.sm-scr-ft,.sm-lane-k{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
-.sm-rd b{margin-right:.3rem;font-weight:700;color:color-mix(in srgb,var(--am) 80%,var(--ink))}
-.sm-fl{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:10px;color:var(--mu);background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln);transition:transform .35s var(--spring,ease),color .2s}
-.sm.shut .sm-fl{transform:rotate(-90deg)}
-@media (hover:hover){.sm-hd:hover .sm-fl,.sm-hd:hover .sm-t{color:var(--am)}}
+.stm-ic{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:12px;color:#F4B73F;
+  background:radial-gradient(120% 100% at 50% 0%,#12261F,#06110F 70%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07),inset 0 2px 8px rgba(0,0,0,.7)}
+.stm-ic .onda{filter:drop-shadow(0 0 2px #F4B73F) drop-shadow(0 0 6px rgba(244,183,63,.5))}
+.stm-t{font-size:1.15rem;font-weight:800;line-height:1.2}
+.stm-sub{margin-top:.15rem;font-size:.8rem;color:var(--mu)}
+.stm-rd{display:inline-flex;flex-wrap:wrap;gap:.2rem .9rem}
+.stm-rd span{white-space:nowrap}
+.stm-rd b{margin-right:.25rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--ink)}
+.stm-fl{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:10px;color:var(--mu);background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln);transition:transform .35s var(--spring,ease),color .2s}
+.stm.shut .stm-fl{transform:rotate(-90deg)}
+@media (hover:hover){.stm-hd:hover .stm-fl,.stm-hd:hover .stm-t{color:var(--am)}}
 /* la sezione si ritrae: le righe della griglia scendono a zero, il contenuto resta sotto la piega */
-.sm-fold{display:grid;grid-template-rows:1fr;transition:grid-template-rows .4s var(--e-land,ease-out),opacity .3s}
-.sm.shut .sm-fold{grid-template-rows:0fr;opacity:0}
-.sm-in{min-height:0;overflow:hidden;padding:0 7px}
-.sm-in>:first-child{margin-top:1.05rem}
+.stm-fold{display:grid;grid-template-rows:1fr;transition:grid-template-rows .4s var(--e-land,ease-out),opacity .3s}
+.stm.shut .stm-fold{grid-template-rows:0fr;opacity:0}
+.stm-in{min-height:0;overflow:hidden}
+.stm-in>:first-child{margin-top:1rem}
 
-/* lo schermo: vetro scuro incassato in una cornice, reticolo, righe di scansione, il riflesso in alto */
-.sm-deck{display:grid;gap:.9rem}
-.sm-scr{--p1:#33D1BA;position:relative;isolation:isolate;padding:.65rem .75rem .55rem;border-radius:15px;color:rgba(170,236,220,.62);
-  background:radial-gradient(130% 120% at 50% -10%,#10241F,#06110F 58%,#030908);
-  box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 0 6px color-mix(in srgb,var(--ink) 9%,var(--sf)),0 0 0 7px var(--ln),inset 0 1px 0 rgba(255,255,255,.07),inset 0 0 26px rgba(0,0,0,.8),0 16px 28px -18px rgba(0,0,0,.7)}
-.sm-scr:before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
-  background:repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 3px),
-    linear-gradient(90deg,rgba(120,240,215,.06) 1px,transparent 1px) 0 0/10% 100%,
-    radial-gradient(120% 90% at 50% 50%,transparent 60%,rgba(0,0,0,.45))}
-.sm-scr:after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(168deg,rgba(255,255,255,.075),transparent 34%)}
-.sm-scr .t-riconosco{--t:#33D1BA}.sm-scr .t-bellissima{--t:#F4B73F}.sm-scr .t-ridere{--t:#EE9A5C}.sm-scr .t-commosso{--t:#F6A0BA}
-.sm-scr-hd,.sm-scr-ft{display:flex;align-items:center;justify-content:space-between;gap:.6rem;font-size:.6rem;letter-spacing:.14em;text-transform:uppercase}
-.sm-scr-hd span:first-child{display:inline-flex;align-items:center;gap:.45rem}
-.sm-scr-hd b{margin-left:.35rem;font-size:.82rem;letter-spacing:.06em;color:#F4B73F;text-shadow:0 0 6px rgba(244,183,63,.7)}
-.sm-rec{width:6px;height:6px;border-radius:50%;background:#F4B73F;box-shadow:0 0 6px #F4B73F,0 0 12px rgba(244,183,63,.5)}
-.sm-scr-ft{margin-top:.25rem;color:rgba(170,236,220,.42)}
-.sm-lanes{display:grid;gap:1px;margin-top:.4rem}
-/* un canale: l'etichetta, la traccia sulla sua linea dello zero e il numero */
-.sm-lane{--t:#33D1BA;position:relative;display:grid;grid-template-columns:1fr 2.6rem;grid-template-rows:auto 30px;column-gap:.5rem;align-items:center;padding:.15rem .2rem .05rem .35rem;border-radius:8px;
-  text-align:left;color:var(--t);transition:opacity .3s,background .3s}
-.sm-lane:disabled{cursor:default}
-.sm-lane-k{grid-column:1;grid-row:1;display:flex;gap:.45rem;font-size:.56rem;letter-spacing:.12em;text-transform:uppercase;color:color-mix(in srgb,var(--t) 72%,transparent)}
-.sm-lane-k span{letter-spacing:.06em;text-transform:none;color:rgba(200,240,230,.5)}
-.sm-lane-w{grid-column:1;grid-row:2;position:relative;height:30px;overflow:hidden}
-.sm-lane-w:before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px dashed rgba(120,240,215,.13)}
-.sm-trace{position:relative;filter:drop-shadow(0 0 1.4px var(--t)) drop-shadow(0 0 5px color-mix(in srgb,var(--t) 55%,transparent));
-  animation:smDraw .95s cubic-bezier(.4,.05,.3,1) calc(120ms + var(--i)*120ms) both,smHot 1.5s ease-out calc(120ms + var(--i)*120ms) both}
-.sm-zero{position:absolute;left:4%;right:4%;top:50%;height:1px;margin-top:-.5px;background:color-mix(in srgb,var(--t) 30%,transparent);box-shadow:0 0 4px color-mix(in srgb,var(--t) 25%,transparent)}
-/* il pennello che ridisegna il canale a ogni giro di manopola */
-.sm-beam{position:absolute;left:0;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;opacity:0;pointer-events:none;
-  background:radial-gradient(circle,#fff 0 30%,var(--t) 70%);box-shadow:0 0 8px 2px var(--t),0 0 18px 4px color-mix(in srgb,var(--t) 45%,transparent);
-  animation:smBeam .95s cubic-bezier(.4,.05,.3,1) calc(120ms + var(--i)*120ms) both}
-@keyframes smDraw{from{clip-path:inset(-8px 100% -8px 0)}to{clip-path:inset(-8px 0 -8px 0)}}
-@keyframes smHot{from{opacity:1;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 9px var(--t)) brightness(1.5)}}
-@keyframes smBeam{0%{left:0;opacity:0}8%{opacity:1}92%{opacity:1}100%{left:100%;opacity:0}}
-.sm-lane-n{grid-column:2;grid-row:1/3;justify-self:end;font-size:1.05rem;font-weight:700;color:var(--t);text-shadow:0 0 7px color-mix(in srgb,var(--t) 65%,transparent)}
-.sm-lane.zero .sm-lane-n{color:color-mix(in srgb,var(--t) 32%,transparent);text-shadow:none}
-.sm-lane.zero .sm-lane-k{color:color-mix(in srgb,var(--t) 38%,transparent)}
-.sm-lanes.wait .sm-beam,.sm-lanes.wait .sm-trace{animation:none}
-/* il canale scelto: la freccia del trigger a sinistra e la banda accesa */
-.sm-lane[aria-pressed="true"]{background:linear-gradient(90deg,color-mix(in srgb,var(--t) 13%,transparent),color-mix(in srgb,var(--t) 4%,transparent))}
-.sm-lane[aria-pressed="true"]:before{content:"";position:absolute;left:-1px;top:50%;margin-top:3px;border:5px solid transparent;border-left:6px solid var(--t);filter:drop-shadow(0 0 4px var(--t))}
-.sm-lane:focus-visible{outline:2px solid var(--t);outline-offset:1px}
-@media (hover:hover){.sm-lane:not(:disabled):hover{background:color-mix(in srgb,var(--t) 8%,transparent)}}
-/* un canale indicato (dallo schermo o da una frase dell'elenco): gli altri si abbassano */
-.sm[data-hl="riconosco"] .sm-lane:not(.t-riconosco),.sm[data-hl="bellissima"] .sm-lane:not(.t-bellissima),
-.sm[data-hl="ridere"] .sm-lane:not(.t-ridere),.sm[data-hl="commosso"] .sm-lane:not(.t-commosso){opacity:.34}
+/* lo schermo: vetro scuro con un filo di cornice e il riflesso in alto; dentro, la stanza dei tubi */
+.stm-deck{display:grid;gap:.75rem}
+.stm-scr{position:relative;isolation:isolate;overflow:hidden;border-radius:16px;
+  background:radial-gradient(120% 100% at 50% 0%,#0E211D,#050D0C 62%,#030807);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.07),inset 0 1px 0 rgba(255,255,255,.08),0 0 0 1px rgba(0,0,0,.35),0 18px 32px -22px rgba(0,0,0,.8)}
+.stm-scr:after{content:"";position:absolute;inset:0;z-index:3;border-radius:inherit;pointer-events:none;background:linear-gradient(170deg,rgba(255,255,255,.06),transparent 30%)}
+.stm-scr .t-riconosco{--t:#33D1BA}.stm-scr .t-bellissima{--t:#F4B73F}.stm-scr .t-ridere{--t:#EE9A5C}.stm-scr .t-commosso{--t:#F6A0BA}
+.stm-3d{position:relative;height:clamp(236px,24vw,260px);cursor:default}
+.stm-cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+/* l'etichetta di un canale, all'inizio del suo tubo: il numero grande nel colore dell'emozione e il nome */
+.stm-tag{position:absolute;left:0;top:0;z-index:2;display:inline-flex;align-items:baseline;gap:.4rem;margin:-2.15rem 0 0 -.35rem;padding:.18rem .5rem .22rem .4rem;border-radius:9px;
+  white-space:nowrap;color:rgba(226,244,239,.9);background:rgba(4,11,10,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--t) 22%,transparent);transition:box-shadow .3s,background .3s,opacity .3s}
+.stm-tag b{font-size:1rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--t);text-shadow:0 0 10px color-mix(in srgb,var(--t) 70%,transparent)}
+.stm-tag span{font-size:.74rem;font-weight:650;line-height:1}
+.stm-tag.zero{color:rgba(226,244,239,.38);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.stm-tag.zero b{color:rgba(226,244,239,.32);text-shadow:none}
+.stm-tag.on,.stm-tag[aria-pressed="true"]{background:color-mix(in srgb,var(--t) 22%,rgba(4,11,10,.7));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--t) 70%,transparent),0 0 16px -4px var(--t)}
+.stm-tag:not(:disabled){cursor:pointer}
+.stm-tag:focus-visible{outline:2px solid var(--t);outline-offset:2px}
+.stm[data-hl] .stm-tag:not(.on):not([aria-pressed="true"]){opacity:.45}
 
-/* la manopola: due posizioni, con le loro spie e i display */
-.sm-sel{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.7rem}
-.sm-sel>.sm-ch{justify-self:end}.sm-sel>.sm-ch.r{justify-self:start}
-.sm-ch{display:flex;align-items:center;gap:.6rem;min-width:0;padding:.5rem .65rem;border-radius:14px;text-align:left;color:var(--mu);box-shadow:inset 0 0 0 1px transparent;transition:background .3s,box-shadow .3s,color .3s}
-.sm-ch.r{justify-content:flex-end;text-align:right}
-.sm-ch-t{display:flex;flex-direction:column;min-width:0}
-.sm-ch-t b{font-size:.86rem;font-weight:800;line-height:1.2;color:var(--mu);transition:color .3s}
-.sm-ch-t small{font-size:.68rem;line-height:1.3;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sm-ch-n{flex:none;padding:.3rem .42rem;border-radius:7px;font-size:.88rem;font-weight:700;line-height:1;color:rgba(244,183,63,.32);
-  background:#06110F;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),inset 0 1px 4px rgba(0,0,0,.7);transition:color .35s,text-shadow .35s}
-.sm-led{flex:none;width:8px;height:8px;border-radius:50%;background:color-mix(in srgb,var(--ink) 16%,var(--sf));box-shadow:inset 0 0 0 1px var(--ln2);transition:background .35s,box-shadow .35s}
-.sm-ch[aria-selected="true"]{background:color-mix(in srgb,var(--am) 7%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--am) 32%,var(--ln))}
-.sm-ch[aria-selected="true"] .sm-ch-t b{color:var(--ink)}
-.sm-ch[aria-selected="true"] .sm-ch-n{color:#F4B73F;text-shadow:0 0 6px rgba(244,183,63,.75)}
-.sm-ch[aria-selected="true"] .sm-led{background:radial-gradient(circle at 40% 35%,#FFF4D6,#FFC24A 55%,#E89400);box-shadow:0 0 0 2px color-mix(in srgb,var(--am) 18%,transparent),0 0 8px color-mix(in srgb,var(--am) 80%,transparent)}
-.sm-ch:focus-visible{outline:2px solid var(--am);outline-offset:2px}
-@media (hover:hover){.sm-ch[aria-selected="false"]:hover .sm-ch-t b{color:var(--ink)}.sm-ch[aria-selected="false"]:hover .sm-led{background:color-mix(in srgb,var(--am) 40%,var(--sf))}}
-/* la manopola: la ghiera zigrinata e l'indice girano, il cappello di alluminio spazzolato resta (la luce non gira) */
-.sm-knob{--a:-52deg;position:relative;flex:none;width:54px;height:54px;border-radius:50%;cursor:pointer}
-.sm-knob.accese{--a:52deg}
-.sm-knob:before,.sm-knob:after{content:"";position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px;border-radius:50%;background:var(--ln2);transition:background .35s,box-shadow .35s}
-.sm-knob:before{transform:rotate(-52deg) translateY(-34px)}
-.sm-knob:after{transform:rotate(52deg) translateY(-34px)}
-.sm-knob.ricevute:before,.sm-knob.accese:after{background:#F4B73F;box-shadow:0 0 6px rgba(244,183,63,.9)}
-.sm-knob-sk{position:absolute;inset:0;border-radius:50%;transform:rotate(var(--a));transition:transform .6s cubic-bezier(.34,1.45,.5,1);
-  background:repeating-conic-gradient(from 0deg,#2F3836 0 5deg,#566260 5deg 10deg);box-shadow:0 0 0 1px rgba(0,0,0,.45),0 4px 8px -2px rgba(0,0,0,.45),0 1px 0 rgba(255,255,255,.25)}
-.sm-knob-cap{position:absolute;inset:6px;border-radius:50%;
+/* senza WebGPU: le quattro tracce in piano, ognuna sotto il suo nome */
+.stm-lanes{display:grid;gap:2px;padding:.7rem .8rem .75rem}
+.stm-lane{--t:#33D1BA;position:relative;display:grid;grid-template-rows:auto 30px;padding:.2rem .35rem .05rem;border-radius:9px;text-align:left;color:var(--t);transition:opacity .3s,background .3s}
+.stm-lane:disabled{cursor:default}
+.stm-lane-k{display:flex;align-items:baseline;gap:.4rem;font-size:.74rem;font-weight:650;color:rgba(226,244,239,.85)}
+.stm-lane-k b{font-size:.95rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--t)}
+.stm-lane-w{position:relative;height:30px;overflow:hidden}
+.stm-lane-w:before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px solid rgba(120,240,215,.08)}
+.stm-trace{position:relative;filter:drop-shadow(0 0 1.4px var(--t)) drop-shadow(0 0 5px color-mix(in srgb,var(--t) 55%,transparent));
+  animation:stmDraw .95s cubic-bezier(.4,.05,.3,1) calc(120ms + var(--i)*120ms) both}
+.stm-zero{position:absolute;left:4%;right:4%;top:50%;height:1px;margin-top:-.5px;background:color-mix(in srgb,var(--t) 30%,transparent)}
+.stm-beam{position:absolute;left:0;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;opacity:0;pointer-events:none;
+  background:radial-gradient(circle,#fff 0 30%,var(--t) 70%);box-shadow:0 0 8px 2px var(--t);animation:stmBeam .95s cubic-bezier(.4,.05,.3,1) calc(120ms + var(--i)*120ms) both}
+@keyframes stmDraw{from{clip-path:inset(-8px 100% -8px 0)}to{clip-path:inset(-8px 0 -8px 0)}}
+@keyframes stmBeam{0%{left:0;opacity:0}8%{opacity:1}92%{opacity:1}100%{left:100%;opacity:0}}
+.stm-lane.zero .stm-lane-k{color:rgba(226,244,239,.35)}
+.stm-lane.zero .stm-lane-k b{color:rgba(226,244,239,.3)}
+.stm-lanes.wait .stm-beam,.stm-lanes.wait .stm-trace{animation:none}
+.stm-lane[aria-pressed="true"]{background:color-mix(in srgb,var(--t) 12%,transparent)}
+.stm-lane:focus-visible{outline:2px solid var(--t);outline-offset:1px}
+@media (hover:hover){.stm-lane:not(:disabled):hover{background:color-mix(in srgb,var(--t) 8%,transparent)}}
+.stm[data-hl="riconosco"] .stm-lane:not(.t-riconosco),.stm[data-hl="bellissima"] .stm-lane:not(.t-bellissima),
+.stm[data-hl="ridere"] .stm-lane:not(.t-ridere),.stm[data-hl="commosso"] .stm-lane:not(.t-commosso){opacity:.34}
+
+/* la manopola tra due parole: quella scelta è piena, con il suo numero; la ghiera zigrinata e l'indice girano, il
+   cappello di alluminio spazzolato resta fermo (la luce non gira con lui) */
+.stm-sel{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.9rem}
+.stm-ch{justify-self:end;display:inline-flex;align-items:baseline;gap:.45rem;padding:.35rem .2rem;border-radius:8px;font-size:.86rem;font-weight:700;color:var(--mu);transition:color .3s}
+.stm-ch.r{justify-self:start}
+.stm-ch-t{position:relative;white-space:nowrap}
+/* sotto la parola scelta, un filo d'ambra che si allunga */
+.stm-ch-t:after{content:"";position:absolute;left:0;right:0;bottom:-.35rem;height:2px;border-radius:2px;background:var(--am);box-shadow:0 0 8px color-mix(in srgb,var(--am) 70%,transparent);
+  transform:scaleX(0);transition:transform .35s var(--e-land,ease-out)}
+.stm-ch-n{font-size:.78rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--mu)}
+.stm-ch[aria-selected="true"]{color:var(--ink)}
+.stm-ch[aria-selected="true"] .stm-ch-t:after{transform:scaleX(1)}
+.stm-ch[aria-selected="true"] .stm-ch-n{color:color-mix(in srgb,var(--am) 80%,var(--ink))}
+.stm-ch:focus-visible{outline:2px solid var(--am);outline-offset:3px}
+@media (hover:hover){.stm-ch[aria-selected="false"]:hover{color:var(--ink)}}
+.stm-knob{--a:-50deg;position:relative;flex:none;width:46px;height:46px;border-radius:50%;cursor:pointer}
+.stm-knob.accese{--a:50deg}
+.stm-knob-sk,.stm-knob-tick{position:absolute;inset:0;border-radius:50%;transform:rotate(var(--a));transition:transform .6s cubic-bezier(.34,1.45,.5,1)}
+.stm-knob-sk{background:repeating-conic-gradient(from 0deg,#2F3836 0 5deg,#566260 5deg 10deg);box-shadow:0 0 0 1px rgba(0,0,0,.45),0 4px 8px -2px rgba(0,0,0,.45)}
+.stm-knob-cap{position:absolute;inset:5px;border-radius:50%;
   background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.95),rgba(255,255,255,0) 42%),
     conic-gradient(from 20deg,#E9ECE9,#B9C0BB 12%,#F4F6F3 25%,#AEB5B0 38%,#EEF0EE 50%,#B4BBB6 63%,#F2F4F1 76%,#AAB2AC 88%,#E9ECE9);
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.18),inset 0 -3px 6px rgba(0,0,0,.18),0 1px 2px rgba(0,0,0,.35);transition:transform .15s}
-.sm-knob-tick{position:absolute;inset:0;border-radius:50%;transform:rotate(var(--a));transition:transform .6s cubic-bezier(.34,1.45,.5,1)}
-.sm-knob-tick:before{content:"";position:absolute;left:50%;top:5px;width:3px;height:14px;margin-left:-1.5px;border-radius:2px;background:#E89400;box-shadow:0 0 5px rgba(255,170,30,.85)}
-.sm-knob:active .sm-knob-cap{transform:scale(.955)}
-@media (hover:hover){.sm-knob:hover .sm-knob-sk{background:repeating-conic-gradient(from 0deg,#343E3C 0 5deg,#5E6A68 5deg 10deg)}}
-.sm-ch-t b{white-space:nowrap}
-/* sul telefono: «Ricevute» e «Accese» (lo schermo dice già «accese da te»), la spia la fa il display acceso */
-@media (max-width:480px){.sm-ch-t small,.sm-long,.sm-led{display:none}.sm-ch{padding:.45rem .55rem;gap:.45rem}.sm-sel{gap:.45rem}}
+.stm-knob-tick:before{content:"";position:absolute;left:50%;top:4px;width:3px;height:12px;margin-left:-1.5px;border-radius:2px;background:#E89400;box-shadow:0 0 5px rgba(255,170,30,.85)}
+.stm-knob:active .stm-knob-cap{transform:scale(.955)}
+@media (hover:hover){.stm-knob:hover .stm-knob-sk{background:repeating-conic-gradient(from 0deg,#343E3C 0 5deg,#5E6A68 5deg 10deg)}}
 
-/* l'elenco: per pensiero, ogni frase con il suo segnale */
-.sm-body{margin-top:1rem}
-.sm-solo{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem;margin:0 0 .4rem}
-.sm-solo-k{padding-left:.55rem;border-left:3px solid var(--t);font-size:.8rem;color:var(--mu)}
-.sm-solo-k b{color:var(--ink)}
-.sm-empty{display:flex;justify-content:center;padding:.6rem .5rem .2rem;font-size:.84rem;color:var(--mu);text-align:center}
-.sm-l{list-style:none;margin:0;padding:0}
-.sm-g{padding:.65rem 0 .2rem;border-top:1px solid var(--ln);animation:scIn .35s var(--e-land,ease-out) both;animation-delay:calc(var(--i,0)*70ms)}
-.sm-g:first-child{border-top:0;padding-top:.1rem}
-.sm-g>ul{list-style:none;margin:0;padding:0}
-.sm-gh{display:flex;align-items:center;gap:.55rem;width:100%;padding:.25rem .15rem;text-align:left;border-radius:8px;color:var(--ink)}
-.sm-gh:disabled{cursor:default}
-.sm-gt{flex:1;min-width:0;font-weight:800;font-size:.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .2s}
-.sm-gn{flex:none;font:700 .6rem/1 var(--label);letter-spacing:.1em;text-transform:uppercase;color:var(--mu)}
-.sm-gh svg{flex:none;color:var(--mu);transition:transform .25s var(--spring,ease),color .2s}
-@media (hover:hover){.sm-gh:not(:disabled):hover .sm-gt,.sm-gh:not(:disabled):hover svg{color:var(--am)}.sm-gh:not(:disabled):hover svg{transform:translate(2px,-2px)}}
-.sm-gh:focus-visible{outline:2px solid var(--am);outline-offset:2px}
-/* la frase: la sua guida colorata a sinistra, il segnale che la sottolinea, l'emozione, il giorno e la nota */
-.sm-s{position:relative;margin-top:.3rem;padding:.5rem .55rem .55rem .95rem;border-radius:12px;transition:background .3s}
-.sm-s:before{content:"";position:absolute;left:.25rem;top:.65rem;bottom:.65rem;width:2px;border-radius:2px;background:color-mix(in srgb,var(--t) 45%,var(--ln));transition:background .3s,box-shadow .3s}
-.sm-q{display:block;quotes:"«" "»";font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:.95rem;line-height:1.5;color:var(--ink);overflow-wrap:anywhere}
-.sm-sig{margin-top:.15rem;opacity:.85;animation:smDraw .8s cubic-bezier(.4,.05,.3,1) calc(180ms + var(--j,0)*90ms) both}
-.sm-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem .6rem;margin-top:.3rem}
-.sm-d{font-size:.72rem;color:var(--mu)}
-.sm-nota{position:relative;margin:.55rem 0 0;padding:.45rem .7rem;border-radius:10px;font-size:.84rem;line-height:1.45;color:var(--ink);overflow-wrap:anywhere;
-  background:color-mix(in srgb,var(--t) 8%,var(--sf));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--t) 20%,transparent)}
-/* la nota parla dalla frase: un piccolo becco verso l'alto */
-.sm-nota:before{content:"";position:absolute;left:14px;top:-5px;width:9px;height:9px;transform:rotate(45deg);background:inherit;
-  box-shadow:inset 1px 1px 0 color-mix(in srgb,var(--t) 20%,transparent);clip-path:polygon(0 0,100% 0,0 100%)}
+/* l'elenco: per pensiero, ogni frase con la sua guida nel colore dell'emozione */
+.stm-body{margin-top:1.1rem}
+.stm-solo{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem;margin:0 0 .5rem}
+.stm-solo-k{padding-left:.55rem;border-left:3px solid var(--t);font-size:.8rem;color:var(--mu)}
+.stm-solo-k b{color:var(--ink)}
+.stm-empty{display:block;padding:.6rem .5rem .2rem;font-size:.84rem;line-height:1.5;color:var(--mu);text-align:center}
+.stm-l{list-style:none;margin:0;padding:0}
+.stm-g{padding:.65rem 0 .2rem;border-top:1px solid var(--ln);animation:scIn .35s var(--e-land,ease-out) both;animation-delay:calc(var(--i,0)*70ms)}
+.stm-g:first-child{border-top:0;padding-top:.1rem}
+.stm-g>ul{list-style:none;margin:0;padding:0}
+.stm-gh{display:flex;align-items:center;gap:.55rem;width:100%;padding:.25rem .15rem;text-align:left;border-radius:8px;color:var(--ink)}
+.stm-gh:disabled{cursor:default}
+.stm-gt{flex:1;min-width:0;font-weight:800;font-size:.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .2s}
+.stm-gn{flex:none;font-size:.72rem;font-weight:600;color:var(--mu)}
+.stm-gh svg{flex:none;color:var(--mu);transition:transform .25s var(--spring,ease),color .2s}
+@media (hover:hover){.stm-gh:not(:disabled):hover .stm-gt,.stm-gh:not(:disabled):hover svg{color:var(--am)}.stm-gh:not(:disabled):hover svg{transform:translate(2px,-2px)}}
+.stm-gh:focus-visible{outline:2px solid var(--am);outline-offset:2px}
+.stm-s{position:relative;margin-top:.3rem;padding:.5rem .55rem .55rem .95rem;border-radius:12px;transition:background .3s}
+.stm-s:before{content:"";position:absolute;left:.25rem;top:.6rem;bottom:.6rem;width:3px;border-radius:3px;background:color-mix(in srgb,var(--t) 55%,var(--ln));transition:background .3s,box-shadow .3s}
+.stm-q{display:block;quotes:"«" "»";font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:.98rem;line-height:1.5;color:var(--ink);overflow-wrap:anywhere}
+.stm-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem .6rem;margin-top:.35rem}
+.stm-d{font-size:.72rem;color:var(--mu)}
+.stm-nota{margin:.45rem 0 0;padding:.1rem 0 .1rem .7rem;border-left:2px solid color-mix(in srgb,var(--t) 35%,var(--ln));font-size:.85rem;line-height:1.45;color:var(--ink);overflow-wrap:anywhere}
 @media (hover:hover){
-  .sm-s:hover{background:color-mix(in srgb,var(--t) 6%,transparent)}
-  .sm-s:hover:before{background:var(--t);box-shadow:0 0 8px color-mix(in srgb,var(--t) 60%,transparent)}
-  .sm-s:hover .sm-sig{opacity:1}
-  .sm-s:hover .sm-sig .onda-g{animation:ondaRun 1.5s linear infinite}
+  .stm-s:hover{background:color-mix(in srgb,var(--t) 6%,transparent)}
+  .stm-s:hover:before{background:var(--t);box-shadow:0 0 8px color-mix(in srgb,var(--t) 60%,transparent)}
 }
-.sm-more{margin-top:.6rem}
-.root.nomotion .sm *,.root.nomotion .sm{animation:none!important}
-.root.nomotion .sm-fold,.root.nomotion .sm-fl,.root.nomotion .sm-knob *{transition:none!important}
-.root.nomotion .sm-beam{display:none}
-@media (prefers-reduced-motion:reduce){.sm *{animation:none!important}.sm-beam{display:none}.sm-fold,.sm-fl,.sm-knob-sk,.sm-knob-tick,.sm-lane{transition:none!important}}
+.stm-more{margin-top:.6rem}
+.root.nomotion .stm *,.root.nomotion .stm{animation:none!important}
+.root.nomotion .stm-fold,.root.nomotion .stm-fl,.root.nomotion .stm-knob *,.root.nomotion .stm-ch-t:after{transition:none!important}
+.root.nomotion .stm-beam{display:none}
+@media (prefers-reduced-motion:reduce){.stm *{animation:none!important}.stm-beam{display:none}.stm-fold,.stm-fl,.stm-knob-sk,.stm-knob-tick,.stm-lane,.stm-ch-t:after{transition:none!important}}
+@media (max-width:480px){.stm-sel{gap:.6rem}.stm-ch{font-size:.82rem}}
