@@ -52,3 +52,10 @@ test("un pensiero firmato porta il nome solo se l'autore l'ha scelto, e mai un c
   expect(pubOf({ ...scritto, firmato: true })).toEqual({ version: 2, kind: "complete", title: "Titolo", excerpt: "c" });
   expect(pubOf({ ...diary, firmato: true, author: undefined })).not.toHaveProperty("firma");
 });
+test("la copia pubblica del diario porta il legame con il pensiero da cui è nato, e solo quello", () => {
+  const eco = { title: "Eco", kind: "diary", content: "<p>x</p>", strokes: [], w: 900, h: 600, nataDa: { id: "orig", cit: "una frase", extra: 1 } };
+  expect(pubOf(eco).nataDa).toEqual({ id: "orig", cit: "una frase" });
+  expect(pubOf({ ...eco, kind: "complete", excerpt: "x" })).not.toHaveProperty("nataDa");
+  expect(pubOf({ ...eco, nataDa: { id: "", cit: "x" } })).not.toHaveProperty("nataDa");
+  expect(pubSig({ ...eco, nataDa: undefined })).toBe(pubSig({ title: "Eco", kind: "diary", content: "<p>x</p>", strokes: [], w: 900, h: 600 }));
+});

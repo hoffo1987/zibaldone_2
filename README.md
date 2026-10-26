@@ -8,6 +8,16 @@ titolo, testo, foto e disegni restano modificabili. Gli scritti precedenti sono 
 
 - Il Diario è leggibile per intero da tutti gli utenti registrati, senza nomi né date pubbliche. Solo autore e admin
   possono conoscere l'identità. Non riceve voti, stati, note di valutazione o segnalibri e non partecipa al podio.
+- Chi legge un pensiero del diario di un altro può accendere una **scintilla** su una frase (da 3 parole a 280
+  caratteri, al massimo 5 per pensiero), con un'emozione fissa e una nota facoltativa. Una scintilla non è un voto:
+  niente punteggi né totali pubblici. La vedono solo l'autore, senza sapere chi l'ha accesa, e gli admin; chi la accende
+  vede soltanto le proprie. `pensieri/{id}/scintille/{sid}` non ha uid né orario (solo il giorno) e ha un id casuale;
+  chi l'ha accesa sta in `scintille_mie/{uid}/voci/{sid}`, il tetto di 5 in `scintille_mie/{uid}/pezzi/{id}`. Le
+  notifiche dell'autore le calcola il suo client: nessuno scrive in `notifiche` tranne l'admin per i voti.
+- Da una frase si può **rispondere con un pensiero**: il nuovo pensiero porta `nataDa` (id dell'origine e citazione),
+  immutabile dopo la pubblicazione, e il lettore mostra a tutti quanti pensieri sono nati da uno. Firestore espone a chi
+  legge un documento anche la sua data di creazione tecnica: l'orario esatto di una scintilla non è quindi segreto
+  per l'autore, anche se l'app mostra solo il giorno.
 - Gli scritti completi partecipano alla selezione mensile. Gli altri utenti ricevono un estratto di al massimo il 30%
   del testo e 480 byte; il lettore mostra un avviso. HTML integrale, immagini e disegni restano all'autore e agli admin.
 - `pensieri/{id}` contiene l'originale privato. `testi/{id}` versione 2 contiene esclusivamente la proiezione consentita,

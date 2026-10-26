@@ -10,7 +10,7 @@
 .root .cp.cp-wide{width:400px}
 @media (max-width:767px){.root .cp.cp-wide{width:auto}}
 
-.nt{--vote:#D99000;--upd:var(--ac)}
+.nt{--vote:#D99000;--upd:var(--ac);--spark:#F2A20C;--eco:var(--diary)}
 .root.dark .nt{--vote:var(--am)}
 
 /* ---------- riepilogo ---------- */
@@ -28,13 +28,14 @@
 .nt-all:disabled{opacity:.4;cursor:default}
 
 /* ---------- filtri ---------- */
-.nt-tabs{position:relative;display:grid;grid-template-columns:repeat(3,1fr);padding:3px;margin-bottom:.6rem;border-radius:12px;background:color-mix(in srgb,var(--ink) 5%,var(--sf));box-shadow:inset 0 0 0 1px var(--ln)}
+.nt-tabs{position:relative;display:grid;grid-template-columns:repeat(var(--n,3),1fr);padding:3px;margin-bottom:.6rem;border-radius:12px;background:color-mix(in srgb,var(--ink) 5%,var(--sf));box-shadow:inset 0 0 0 1px var(--ln)}
 .root.dark .nt-tabs{background:color-mix(in srgb,#000 25%,var(--sf))}
-.nt-tab-ind{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px)/3);border-radius:9px;background:var(--pn);box-shadow:0 1px 3px rgba(12,29,26,.15),inset 0 0 0 1px var(--ln);transform:translateX(calc(var(--t) * 100%));transition:transform .45s var(--spring)}
+.nt-tab-ind{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px)/var(--n,3));border-radius:9px;background:var(--pn);box-shadow:0 1px 3px rgba(12,29,26,.15),inset 0 0 0 1px var(--ln);transform:translateX(calc(var(--t) * 100%));transition:transform .45s var(--spring)}
 .nt-tab{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;gap:.35rem;height:32px;font-size:.78rem;font-weight:650;color:var(--mu);transition:color .2s}
 .nt-tab[aria-selected="true"]{color:var(--ink)}
 .nt-tab-n{min-width:18px;padding:0 4px;border-radius:6px;font:700 .62rem/16px var(--label);background:color-mix(in srgb,var(--ink) 8%,transparent)}
 .nt-tab.voti[aria-selected="true"] .nt-tab-n{color:#3B2A00;background:color-mix(in srgb,var(--vote) 35%,transparent)}
+.nt-tab.scintille[aria-selected="true"] .nt-tab-n{color:#3B2A00;background:color-mix(in srgb,var(--spark) 38%,transparent)}
 .nt-tab.novita[aria-selected="true"] .nt-tab-n{color:var(--ac);background:color-mix(in srgb,var(--ac) 16%,transparent)}
 .nt-tab-dot{position:absolute;top:5px;right:8px;width:6px;height:6px;border-radius:50%;background:var(--am);box-shadow:0 0 6px var(--am)}
 
@@ -58,6 +59,8 @@
 .nt-card{--k:var(--upd);position:relative;display:flex;gap:.75rem;width:100%;margin-bottom:.5rem;padding:.8rem .8rem .75rem .95rem;border-radius:14px;text-align:left;
   background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln);transition:background .5s,box-shadow .5s,transform .25s var(--e-land);animation:ntIn .45s var(--e-land) backwards;animation-delay:calc(min(var(--i),8)*40ms)}
 .nt-card.vote{--k:var(--vote)}
+.nt-card.spark{--k:var(--spark)}
+.nt-card.eco{--k:var(--eco)}
 @keyframes ntIn{from{opacity:0;transform:translateY(6px)}}
 .nt-card:before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--k);opacity:0;transform:scaleY(.3);transition:opacity .5s,transform .5s var(--e-land)}
 .nt-card.unread{background:color-mix(in srgb,var(--k) 8%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--k) 32%,var(--ln)),0 8px 18px -14px color-mix(in srgb,var(--k) 90%,transparent)}
@@ -94,6 +97,14 @@ button.nt-card{cursor:pointer}
   background:radial-gradient(circle at 35% 28%,#FFF3C4,#F2C14E 45%,#B8860B);box-shadow:inset 0 0 0 2px rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.18),0 6px 14px -6px rgba(184,134,11,.9)}
 .nt-medal b{font:800 .95rem/1 'Bricolage Grotesque','Instrument Sans',sans-serif;letter-spacing:-.03em}
 .nt-medal small{font:700 .5rem/1 var(--label);opacity:.7}
+/* la scintilla: una valvola accesa col numero delle frasi; l'eco: il tasto col colore del diario */
+.nt-valve{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;width:40px;height:44px;border-radius:14px 14px 10px 10px;color:#3a2400;
+  background:radial-gradient(90% 80% at 50% 30%,#FFF3D0,#FFC24A 55%,#E08A00);box-shadow:inset 0 0 0 1px rgba(255,255,255,.45),0 0 14px -3px rgba(255,165,20,.9)}
+.nt-valve b{font:800 .85rem/1 'Bricolage Grotesque','Instrument Sans',sans-serif}
+.nt-card.eco .nt-key{color:var(--eco);background:linear-gradient(180deg,color-mix(in srgb,var(--eco) 5%,var(--pn)),color-mix(in srgb,var(--eco) 14%,var(--pn)));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--eco) 28%,transparent),0 2px 0 color-mix(in srgb,var(--eco) 22%,var(--ln2))}
+.nt-cit{quotes:"«" "»";font-style:italic}
+.nt-cit:before{content:open-quote}.nt-cit:after{content:close-quote}
+.nt-card.spark .nt-kind svg{fill:none}
 
 /* il LED: acceso se è nuova, il timer che si riempie mentre è in vista, la spunta quando è letta. La spunta resta:
    una notifica già letta la mostra sempre, anche riaprendo il pannello; solo quella appena letta fa il salto */

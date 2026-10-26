@@ -5,6 +5,7 @@
 //   back     torni a una sezione precedente: gli stessi click, in discesa
 //   loading  il passaggio dal sito al gioco segreto
 //   intro    il jingle della presentazione al primo accesso
+//   spark()  la scintilla accesa (o tolta) su una frase del diario: due note sintetizzate, nessun file
 // I file in public/audio sono già portati a un riferimento comune da scripts/build-audio.cjs (picco a -1 dBFS,
 // jingle a -16 LUFS): qui si decide quanto suona ciascuno rispetto agli altri. Il tick al passaggio è il più basso
 // perché si sente di continuo e deve solo sfiorare; il cambio di sezione sta un gradino sopra; caricamento e jingle
@@ -84,6 +85,21 @@ export function load(k: Cue): Promise<AudioBuffer | null> {
   return decoded[k] || (decoded[k] = bytes[k]!.then((d) => (d ? decode(c, d) : null)).then((b) => { if (b) ready[k] = b; return b; }).catch(() => null));
 }
 export const buffer = (k: Cue) => ready[k] || null;
+
+// La scintilla: due note brevi e calde che salgono (si accende) o scendono (si toglie). Sintetizzate, senza file, sullo
+// stesso bus degli effetti: con gli effetti spenti o il volume a zero tace.
+export function spark(on = true) {
+  const c = ctx;
+  if (!c || !out || !cfg.on || c.state !== "running") return;
+  const t = c.currentTime, notes = on ? [1318.5, 1975.5] : [1174.7, 880];
+  notes.forEach((f, i) => {
+    const o = c.createOscillator(), g = c.createGain(), at = t + i * 0.075;
+    o.type = "sine"; o.frequency.setValueAtTime(f, at);
+    g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(dbGain(-21 - i * 2), at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.42);
+    o.connect(g); g.connect(out!); o.start(at); o.stop(at + 0.45);
+    o.onended = () => { try { o.disconnect(); g.disconnect(); } catch {} };
+  });
+}
 
 export function play(k: Cue, o: PlayOpts = {}): Voice | null {
   const c = ctx, b = ready[k], bus = cfg.on ? out : o.force ? lim : null;

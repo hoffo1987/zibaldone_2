@@ -45,8 +45,25 @@ test('i filtri separano voti e novità, e leggono solo quello che si vede', () =
   expect(host.querySelector('.nt-card.vote')).not.toBeNull();
   act(()=>jest.advanceTimersByTime(1400));
   expect(onRead).toHaveBeenCalledWith(['vote']);
-  act(()=>tabs()[2].click());
+  act(()=>tabs()[3].click());
   expect(host.querySelector('.nt-card.upd')).not.toBeNull();
+});
+test('scintille ed echi hanno il loro filtro, la data del solo giorno, e aprono il pensiero', () => {
+  const onOpen=jest.fn();
+  const spark={ id:'scintilla:s_p1_20400', key:'s_p1_20400', tipo:'scintilla', pensieroId:'p1', titolo:'Sul treno', conteggio:3, tipi:['bellissima','ridere'], giorno:20400, timestamp:20400*864e5, letta:false };
+  const eco={ id:'eco:e_x', key:'e_x', tipo:'eco', pensieroId:'p1', ecoId:'x', titolo:'Sul treno', cit:'una frase', giorno:20400, timestamp:20400*864e5, letta:false };
+  act(()=>root.render(<Panel list={[spark,eco,vote]} onRead={()=>{}} onOpen={onOpen} stars={()=>null} />));
+  act(()=>tabs()[1].click());
+  expect(host.querySelectorAll('.nt-card')).toHaveLength(1);
+  act(()=>tabs()[2].click());
+  expect(host.querySelectorAll('.nt-card')).toHaveLength(2);
+  const card=host.querySelector('.nt-card.spark');
+  expect(card.textContent).toContain('3 frasi accese');
+  expect(card.textContent).toContain('Bellissima · Mi ha fatto ridere');
+  // niente ora: solo il giorno
+  expect(card.querySelector('.nt-when').textContent).not.toMatch(/\d{1,2}:\d{2}/);
+  act(()=>host.querySelector('.nt-card.eco').click());
+  expect(onOpen).toHaveBeenCalledWith(eco);
 });
 test('le da leggere stanno tutte in cima e ci restano anche dopo averle lette', () => {
   const onRead=jest.fn(), old={...vote,id:'old',timestamp:0};

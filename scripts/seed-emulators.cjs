@@ -31,6 +31,21 @@ const WRITINGS = [
   { id: 'd-finestra', who: 'sara', kind: 'diary', at: day(10, 15, 22), title: 'Dalla finestra', content: P('Dalla finestra si vede un pezzo di collina e un pezzo di tangenziale. Io guardo sempre la collina, ma ascolto la tangenziale.') },
   { id: 'd-treno', who: 'giulia', kind: 'diary', firmato: true, at: day(10, 17, 8), title: 'Sul treno delle sette', content: P('Il treno delle sette è pieno di gente che dorme con la testa sul vetro. Sembriamo tutti in attesa di un sogno che parta in orario.') },
   { id: 'd-nonno', who: 'marco', kind: 'diary', at: day(10, 18, 9), title: 'Le mani del nonno', content: P('Mio nonno aggiusta le radio. Dice che il segreto è ascoltare il fruscio prima della voce.') },
+  // un eco: nato da una frase del treno delle sette
+  { id: 'd-eco-sogno', who: 'sara', kind: 'diary', at: day(10, 19, 22), title: 'Il sogno in ritardo', nataDa: { id: 'd-treno', cit: 'Sembriamo tutti in attesa di un sogno che parta in orario.' },
+    content: P('«Sembriamo tutti in attesa di un sogno che parta in orario.»', 'Il mio sogno parte sempre in ritardo, ma almeno non salta mai le fermate piccole.') },
+];
+// Le scintille: chi le accende (mai scritto nella scintilla), su quale pensiero, la frase e l'emozione. Una frase non c'è
+// più nel testo: finisce tra «Frasi che non ci sono più».
+const SPARKS = [
+  { by: 'andrea', on: 'd-treno', cit: 'pieno di gente che dorme con la testa sul vetro', tipo: 'riconosco', nota: 'Ogni mattina, identico. Anche io sono quello col vetro.', ago: 1 },
+  { by: 'andrea', on: 'd-treno', cit: 'Il treno delle sette', tipo: 'ridere', ago: 0 },
+  { by: 'sara', on: 'd-treno', cit: 'Sembriamo tutti in attesa di un sogno che parta in orario.', tipo: 'bellissima', ago: 1 },
+  { by: 'marco', on: 'd-treno', cit: 'in attesa di un sogno', tipo: 'commosso', ago: 0 },
+  { by: 'prof', on: 'd-treno', cit: 'in attesa di un sogno che parta', tipo: 'bellissima', nota: 'Da leggere in classe.', ago: 0 },
+  { by: 'marco', on: 'd-treno', cit: 'una frase che non c’è più nel testo', pre: 'Il treno delle sette è ', post: '', tipo: 'bellissima', ago: 2 },
+  { by: 'giulia', on: 'd-finestra', cit: 'Io guardo sempre la collina, ma ascolto la tangenziale.', tipo: 'riconosco', nota: 'Anch’io, dalla mia.', ago: 0 },
+  { by: 'giulia', on: 'd-caffe', cit: 'Ho preso un sette in matematica e l’ho festeggiato da solo.', tipo: 'ridere', ago: 3 },
 ];
 
 const value = (v) => {
@@ -69,14 +84,28 @@ const excerptOf = (html) => {
     const person = PEOPLE.find((p) => p.key === w.who);
     const o = { title: w.title, content: w.content, strokes: [], w: 900, h: 600, author: person.name, timestamp: w.at, userId: uid[w.who], isStarred: false, kind: w.kind };
     if (w.kind === 'complete') { o.excerpt = excerptOf(w.content); if (w.rating) { o.rating = w.rating; o.svelato = true; } }
-    else o.firmato = !!w.firmato;
+    else { o.firmato = !!w.firmato; if (w.nataDa) o.nataDa = w.nataDa; }
     await put(`pensieri/${w.id}`, o);
     const pub = w.kind === 'diary'
       ? { version: 2, kind: 'diary', title: w.title, content: w.content, strokes: [], w: 900, h: 600, ...(w.firmato ? { firma: person.name, autoreId: uid[w.who] } : {}) }
       : { version: 2, kind: 'complete', title: w.title, excerpt: o.excerpt };
+    if (w.nataDa) pub.nataDa = w.nataDa;
     await put(`testi/${w.id}`, pub);
     if (w.kind === 'complete') await put(`valutazioni/${w.id}`, { stato: w.rating ? 'scelto' : 'da_leggere', nota: '', voto: w.rating || 0, segnalibro: w.rating === 5, updatedAt: w.at });
     if (w.rating) await put(`notifiche/n-${w.id}`, { userId: uid[w.who], pensieroId: w.id, titolo: w.title, voto: w.rating, timestamp: w.at + 86400000, letta: false });
   }
-  console.log(`Emulatori pronti: ${PEOPLE.length} persone (${PEOPLE.map((p) => p.email).join(', ')}), ${WRITINGS.length} scritti.`);
+  // scintille: la scintilla senza identità, la voce privata di chi l'ha accesa e il suo posto nel tetto di 5
+  const flat = (t) => t.replace(/[\s\u00a0]+/g, ' ').trim();
+  const textOf = (html) => flat(html.replace(/<\/(p|div)>/g, ' ').replace(/<[^>]+>/g, ''));
+  const today = Math.floor(Date.now() / 864e5), pezzi = {};
+  for (const [i, sp] of SPARKS.entries()) {
+    const w = WRITINGS.find((x) => x.id === sp.on), text = textOf(w.content), at = text.indexOf(sp.cit);
+    const pre = sp.pre ?? (at > 0 ? text.slice(Math.max(0, at - 40), at) : ''), post = sp.post ?? (at >= 0 ? text.slice(at + sp.cit.length, at + sp.cit.length + 40) : '');
+    const sid = `seed${String(i).padStart(2, '0')}${Math.random().toString(36).slice(2, 12)}`.padEnd(20, 'x'), giorno = today - sp.ago;
+    await put(`pensieri/${sp.on}/scintille/${sid}`, { cit: sp.cit, pre, post, tipo: sp.tipo, giorno, ...(sp.nota ? { nota: sp.nota } : {}) });
+    await put(`scintille_mie/${uid[sp.by]}/voci/${sid}`, { pensieroId: sp.on, giorno });
+    const k = `${uid[sp.by]}/pezzi/${sp.on}`; pezzi[k] = [...(pezzi[k] || []), sid];
+  }
+  for (const [k, voci] of Object.entries(pezzi)) await put(`scintille_mie/${k}`, { voci });
+  console.log(`Emulatori pronti: ${PEOPLE.length} persone (${PEOPLE.map((p) => p.email).join(', ')}), ${WRITINGS.length} scritti, ${SPARKS.length} scintille.`);
 })().catch((e) => { console.error(e); process.exit(1); });

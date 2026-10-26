@@ -1,10 +1,14 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowUpRight, Bell, Check, CheckCheck, ChevronDown, Sparkles, Star } from "lucide-react";
+import { ArrowUpRight, Bell, Check, CheckCheck, ChevronDown, CornerDownRight, Sparkles, Star } from "lucide-react";
+import { TIPI } from "./scintille";
 import "./notifications.css";
 
 const date = (timestamp: number) => new Date(timestamp).toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" });
 const time = (timestamp: number) => new Date(timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
 const isUpdate = (n: any) => n.tipo === "aggiornamento";
+// le scintille e gli echi sui propri pensieri del diario: calcolati dal client, con la data del solo giorno
+const isSpark = (n: any) => n.tipo === "scintilla" || n.tipo === "eco";
+const tipiOf = (n: any) => (n.tipi || []).map((t: string) => TIPI.find((x) => x.id === t)?.label).filter(Boolean).join(" · ");
 // quanto deve restare in vista una notifica perché conti come letta
 export const READ_MS = 1400;
 
@@ -15,15 +19,17 @@ const groupOf = (ts: number, now = Date.now()) => {
   return days <= 0 ? "Oggi" : days === 1 ? "Ieri" : days < 7 ? "Questa settimana" : "Prima";
 };
 
-type Filter = "tutte" | "voti" | "novita";
+type Filter = "tutte" | "voti" | "scintille" | "novita";
 const FILTERS: { id: Filter; label: string; test: (n: any) => boolean }[] = [
   { id: "tutte", label: "Tutte", test: () => true },
-  { id: "voti", label: "Voti", test: (n) => !isUpdate(n) },
+  { id: "voti", label: "Voti", test: (n) => !isUpdate(n) && !isSpark(n) },
+  { id: "scintille", label: "Scintille", test: isSpark },
   { id: "novita", label: "Novità", test: isUpdate },
 ];
 
-// Il pannello delle notifiche. Due tipi ben distinti: i voti ai propri scritti (una scheda dorata col voto in medaglia,
-// che apre lo scritto) e le novità del Circuito (la nota dell'aggiornamento con la sua versione). Quelle da leggere
+// Il pannello delle notifiche. Tre tipi ben distinti: i voti ai propri scritti (una scheda dorata col voto in medaglia,
+// che apre lo scritto), le scintille e gli echi sui propri pensieri del diario (anonimi, col solo giorno: una valvola
+// accesa col numero delle frasi) e le novità del Circuito (la nota dell'aggiornamento con la sua versione). Quelle da leggere
 // stanno tutte insieme in cima, prima delle già lette divise per giorno, e ci restano finché il pannello è aperto
 // (anche dopo averle lette), così l'elenco non salta sotto il dito. Una notifica si considera letta quando è rimasta
 // in vista per un momento: il suo LED si riempie come un timer e diventa una spunta. Si può anche segnare tutto come
@@ -95,12 +101,30 @@ export default function NotificationPanel({ list, onRead, onOpen, stars }: {
     return () => io.disconnect();
   }, [unreadKey]);
 
-  if (!list.length) return <div className="nt-empty"><span className="nt-empty-art" aria-hidden="true"><Bell size={22} /><i /></span><b>Nessuna notifica per ora</b><span>Qui trovi i voti ai tuoi scritti e le novità dell’applicazione.</span></div>;
+  if (!list.length) return <div className="nt-empty"><span className="nt-empty-art" aria-hidden="true"><Bell size={22} /><i /></span><b>Nessuna notifica per ora</b><span>Qui trovi i voti ai tuoi scritti, le scintille sui tuoi pensieri e le novità dell’applicazione.</span></div>;
 
   const count = (f: typeof FILTERS[number]) => ({ all: list.filter(f.test).length, new: list.filter((n) => f.test(n) && unreadOf(n)).length });
   const card = (n: any, i: number) => {
     const st = unreadOf(n) ? reading.has(n.id) ? "unread reading" : "unread" : lit.has(n.id) ? "just-read" : "read";
     const led = <span className="nt-led" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" pathLength={1} /></svg><Check size={10} strokeWidth={3.5} /></span>;
+    if (n.tipo === "scintilla") return <button key={n.id} type="button" data-nid={n.id} className={`nt-card spark ${st}`} style={{ ["--i" as any]: i }} onClick={() => { commit([n.id]); onOpen(n); }}>
+      <span className="nt-valve" aria-hidden="true"><Sparkles size={15} /><b>{n.conteggio}</b></span>
+      <span className="nt-body">
+        <span className="nt-top"><span className="nt-kind"><Sparkles size={11} />{n.conteggio === 1 ? "Una frase accesa" : `${n.conteggio} frasi accese`}</span>{led}</span>
+        <span className="nt-title">«{n.titolo}»</span>
+        {tipiOf(n) && <span className="nt-msg">{tipiOf(n)}</span>}
+        <span className="nt-foot"><span className="nt-when">{date(n.timestamp)}</span><span className="nt-go">Apri il pensiero<ArrowUpRight size={13} /></span></span>
+      </span>
+    </button>;
+    if (n.tipo === "eco") return <button key={n.id} type="button" data-nid={n.id} className={`nt-card eco ${st}`} style={{ ["--i" as any]: i }} onClick={() => { commit([n.id]); onOpen(n); }}>
+      <span className="nt-key" aria-hidden="true"><CornerDownRight size={17} /></span>
+      <span className="nt-body">
+        <span className="nt-top"><span className="nt-kind">Un pensiero è nato dal tuo</span>{led}</span>
+        <span className="nt-title">«{n.titolo}»</span>
+        <span className="nt-msg nt-cit">{n.cit}</span>
+        <span className="nt-foot"><span className="nt-when">{date(n.timestamp)}</span><span className="nt-go">Leggilo<ArrowUpRight size={13} /></span></span>
+      </span>
+    </button>;
     return isUpdate(n)
       ? <article key={n.id} data-nid={n.id} aria-label={`Aggiornamento ${n.versione}`} className={`nt-card upd ${st}`} style={{ ["--i" as any]: i }} onClick={() => commit([n.id])}>
         <span className="nt-key" aria-hidden="true"><Sparkles size={17} /></span>
@@ -132,14 +156,14 @@ export default function NotificationPanel({ list, onRead, onOpen, stars }: {
       </span>
       <button type="button" className="nt-all" disabled={!unread.length} onClick={() => commit(unread.map((n) => n.id))}><CheckCheck size={14} />Segna tutte come lette</button>
     </div>
-    <div className="nt-tabs" role="tablist" aria-label="Tipo di notifiche" style={{ ["--t" as any]: FILTERS.findIndex((f) => f.id === filter) }}>
+    <div className="nt-tabs" role="tablist" aria-label="Tipo di notifiche" style={{ ["--t" as any]: FILTERS.findIndex((f) => f.id === filter), ["--n" as any]: FILTERS.length }}>
       <span className="nt-tab-ind" aria-hidden="true" />
       {FILTERS.map((f) => { const c = count(f); return <button key={f.id} type="button" role="tab" aria-selected={filter === f.id} className={`nt-tab ${f.id}`} onClick={() => setFilter(f.id)}>
         {f.label}<span className="nt-tab-n">{c.all}</span>{c.new > 0 && <i className="nt-tab-dot" aria-label={`${c.new} da leggere`} />}
       </button>; })}
     </div>
     <div ref={box} className="nt-list" aria-label="Elenco notifiche">
-      {!shown.length && <p className="nt-none">{filter === "voti" ? "Ancora nessun voto: arriverà quando un tuo scritto completo sarà valutato e svelato." : "Nessuna novità da mostrare."}</p>}
+      {!shown.length && <p className="nt-none">{filter === "voti" ? "Ancora nessun voto: arriverà quando un tuo scritto completo sarà valutato e svelato." : filter === "scintille" ? "Ancora nessuna scintilla: arriverà quando qualcuno accenderà una frase dei tuoi pensieri del diario." : "Nessuna novità da mostrare."}</p>}
       {top.length > 0 && <>
         <p className={`nt-day nt-fresh ${topLeft ? "" : "done"}`}><span>{topLeft ? "Da leggere" : "Appena lette"}</span><b>{topLeft || top.length}</b></p>
         {top.map(card)}

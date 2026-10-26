@@ -13,7 +13,7 @@ export const excerptOf = (html: string) => {
   let bytes = 0;
   return selected.filter(c => { const n = c.codePointAt(0)!; bytes += n < 128 ? 1 : n < 2048 ? 2 : n < 65536 ? 3 : 4; return bytes <= 480; }).join("").trimEnd();
 };
-export const PUB_KEYS = ["version", "kind", "title", "excerpt", "content", "strokes", "w", "h", "firma", "autoreId", "carta"];
+export const PUB_KEYS = ["version", "kind", "title", "excerpt", "content", "strokes", "w", "h", "firma", "autoreId", "carta", "nataDa"];
 // il foglio su cui si scrive: a quadretti, a righe o bianco. Chi scrive lo sceglie; se non l'ha scelto, quello del suo
 // tipo (gli scritti completi a quadretti, i pensieri del diario a righe). Vale nell'editor, nelle anteprime e in lettura
 export type Carta = "quadretti" | "righe" | "bianco";
@@ -29,6 +29,9 @@ export const signatureOf = (t: any): { name: string; uid: string } | null => {
   if (t.firmato === undefined && typeof t.firma === "string" && typeof t.autoreId === "string") return { name: t.firma, uid: t.autoreId };
   return null;
 };
+// il legame di un pensiero nato da un altro: id dell'origine e la frase citata (vedi scintille.ts)
+export const nataDaOf = (t: any): { id: string; cit: string } | null =>
+  isDiary(t) && t?.nataDa && typeof t.nataDa.id === "string" && t.nataDa.id && typeof t.nataDa.cit === "string" && t.nataDa.cit ? { id: t.nataDa.id, cit: t.nataDa.cit } : null;
 export const pubOf = (t: any) => {
   const o: any = { version: PUBLIC_VERSION, kind: writingKind(t), title: t?.title || "Senza titolo" };
   if (isDiary(t)) {
@@ -36,6 +39,9 @@ export const pubOf = (t: any) => {
     // firma facoltativa: dall'originale firmato (author/userId) o da una copia pubblica che già la porta
     const sign = signatureOf(t);
     if (sign) { o.firma = sign.name; o.autoreId = sign.uid; }
+    // il pensiero nato da una frase di un altro: il legame viaggia con la copia, uguale all'originale
+    const n = nataDaOf(t);
+    if (n) o.nataDa = n;
   } else o.excerpt = typeof t?.excerpt === "string" ? t.excerpt : excerptOf(t?.content || "");
   if (isCarta(t?.carta)) o.carta = t.carta;
   return o;

@@ -205,3 +205,159 @@ test('diario firmato: il nome pubblico è quello vero e solo se l’autore lo sc
   const after = (await getDoc(doc(other, 'testi', 'signed-diary'))).data(); assert.equal(after.firma, undefined); assert.equal(after.autoreId, undefined);
   await assertFails(updateDoc(doc(admin, 'pensieri', 'signed-diary'), { firmato: true }));
 });
+
+// ===== Scintille e pensieri nati da un altro =====
+const today = () => Math.floor(Date.now() / 864e5);
+const spark = (over = {}) => ({ cit: 'testo integrale dello scritto', pre: 'CONTENUTO RISERVATO, ', post: '.', tipo: 'bellissima', giorno: today(), ...over });
+const sidOf = (name) => `sc-${name}`.padEnd(22, '0');
+// accendere: la scintilla, la voce privata e l'elenco del tetto, tutto insieme
+const light = (db, uid, id, sid, data = spark(), prev = []) => {
+  const b = writeBatch(db);
+  b.set(doc(db, 'pensieri', id, 'scintille', sid), data);
+  b.set(doc(db, 'scintille_mie', uid, 'voci', sid), { pensieroId: id, giorno: data.giorno });
+  b.set(doc(db, 'scintille_mie', uid, 'pezzi', id), { voci: [...prev, sid] });
+  return b.commit();
+};
+const unlight = (db, uid, id, sid, rest) => {
+  const b = writeBatch(db);
+  b.delete(doc(db, 'pensieri', id, 'scintille', sid));
+  b.delete(doc(db, 'scintille_mie', uid, 'voci', sid));
+  b.set(doc(db, 'scintille_mie', uid, 'pezzi', id), { voci: rest });
+  return b.commit();
+};
+let third;
+test('un lettore accende una scintilla su un pensiero altrui: la legge l’autore, non gli altri lettori', async () => {
+  third = env.authenticatedContext('third').firestore();
+  await assertSucceeds(publish(owner, 'sp-diary', original('diary')));
+  const sid = sidOf('base');
+  await assertSucceeds(light(other, 'other', 'sp-diary', sid));
+  const list = await assertSucceeds(getDocs(collection(owner, 'pensieri', 'sp-diary', 'scintille')));
+  assert.equal(list.size, 1);
+  const d = list.docs[0].data(); assert.equal(d.userId, undefined); assert.equal(d.tipo, 'bellissima');
+  await assertSucceeds(getDocs(collection(admin, 'pensieri', 'sp-diary', 'scintille')));
+  // chi l'ha accesa ritrova la propria, ma non vede quelle degli altri
+  await assertSucceeds(getDoc(doc(other, 'pensieri', 'sp-diary', 'scintille', sid)));
+  await assertFails(getDocs(collection(other, 'pensieri', 'sp-diary', 'scintille')));
+  await assertFails(getDoc(doc(third, 'pensieri', 'sp-diary', 'scintille', sid)));
+  await assertFails(getDocs(collection(third, 'pensieri', 'sp-diary', 'scintille')));
+});
+test('l’autore non sa chi ha acceso: scintille_mie è del lettore e degli admin', async () => {
+  const sid = sidOf('base');
+  await assertSucceeds(getDoc(doc(other, 'scintille_mie', 'other', 'voci', sid)));
+  await assertSucceeds(getDocs(query(collection(other, 'scintille_mie', 'other', 'voci'), where('pensieroId', '==', 'sp-diary'))));
+  await assertSucceeds(getDocs(query(collection(admin, 'scintille_mie', 'other', 'voci'), where('pensieroId', '==', 'sp-diary'))));
+  await assertFails(getDoc(doc(owner, 'scintille_mie', 'other', 'voci', sid)));
+  await assertFails(getDocs(collection(owner, 'scintille_mie', 'other', 'voci')));
+  await assertFails(getDoc(doc(owner, 'scintille_mie', 'other', 'pezzi', 'sp-diary')));
+});
+test('niente scintille sul proprio pensiero, sui completi o su pensieri che non esistono', async () => {
+  await assertFails(light(owner, 'owner', 'sp-diary', sidOf('own')));
+  await assertFails(light(other, 'other', 'complete', sidOf('complete')));
+  await assertFails(light(other, 'other', 'nessuno', sidOf('ghost')));
+});
+test('la scintilla resta senza identità e con i soli campi ammessi', async () => {
+  for (const [name, data] of [['uid', spark({ userId: 'other' })], ['ora', spark({ timestamp: Date.now() })], ['tipo', spark({ tipo: 'voto' })],
+    ['corta', spark({ cit: 'ok' })], ['lunga', spark({ cit: 'x'.repeat(281) })], ['nota', spark({ nota: 'x'.repeat(141) })],
+    ['pre', spark({ pre: 'x'.repeat(41) })], ['giorno', spark({ giorno: today() - 5 })], ['millis', spark({ giorno: Date.now() })]]) {
+    await assertFails(light(third, 'third', 'sp-diary', sidOf(`bad-${name}`), data));
+  }
+  await assertFails(light(third, 'third', 'sp-diary', 'corto', spark()));
+  await assertSucceeds(light(third, 'third', 'sp-diary', sidOf('nota'), spark({ nota: 'Mi ci ritrovo.' })));
+});
+test('la scintilla nasce solo con la sua voce privata e il suo posto nel tetto', async () => {
+  const sid = sidOf('alone');
+  await assertFails(setDoc(doc(third, 'pensieri', 'sp-diary', 'scintille', sid), spark()));
+  await assertFails(setDoc(doc(third, 'scintille_mie', 'third', 'voci', sid), { pensieroId: 'sp-diary', giorno: today() }));
+  const b = writeBatch(third);
+  b.set(doc(third, 'pensieri', 'sp-diary', 'scintille', sid), spark());
+  b.set(doc(third, 'scintille_mie', 'third', 'voci', sid), { pensieroId: 'sp-diary', giorno: today() });
+  await assertFails(b.commit());
+  // la voce privata deve dire il vero sul pensiero
+  const c = writeBatch(third);
+  c.set(doc(third, 'pensieri', 'sp-diary', 'scintille', sid), spark());
+  c.set(doc(third, 'scintille_mie', 'third', 'voci', sid), { pensieroId: 'diary', giorno: today() });
+  c.set(doc(third, 'scintille_mie', 'third', 'pezzi', 'sp-diary'), { voci: [sidOf('nota'), sid] });
+  await assertFails(c.commit());
+  // e non si scrive nella voce di un altro
+  await assertFails(light(third, 'other', 'sp-diary', sidOf('forged'), spark(), [sidOf('base')]));
+});
+test('al massimo 5 scintille per lettore e per pensiero, e il tetto non si aggira', async () => {
+  await assertSucceeds(publish(owner, 'sp-five', original('diary')));
+  const sids = [1, 2, 3, 4, 5].map((n) => sidOf(`five-${n}`));
+  for (let i = 0; i < 5; i++) await assertSucceeds(light(other, 'other', 'sp-five', sids[i], spark(), sids.slice(0, i)));
+  await assertFails(light(other, 'other', 'sp-five', sidOf('five-6'), spark(), sids));
+  // l'elenco non si accorcia senza togliere davvero una scintilla
+  await assertFails(setDoc(doc(other, 'scintille_mie', 'other', 'pezzi', 'sp-five'), { voci: sids.slice(1) }));
+  await assertFails(setDoc(doc(other, 'scintille_mie', 'other', 'pezzi', 'sp-five'), { voci: [] }));
+  // né si sostituisce una voce con un'altra
+  await assertFails(light(other, 'other', 'sp-five', sidOf('five-7'), spark(), sids.slice(1)));
+  // togliendone una si libera un posto
+  await assertSucceeds(unlight(other, 'other', 'sp-five', sids[0], sids.slice(1)));
+  await assertSucceeds(light(other, 'other', 'sp-five', sidOf('five-6'), spark(), sids.slice(1)));
+});
+test('si toglie solo da chi l’ha accesa, dall’autore o da un admin, mai a metà', async () => {
+  const sid = sidOf('base');
+  await assertFails(deleteDoc(doc(third, 'pensieri', 'sp-diary', 'scintille', sid)));
+  await assertFails(deleteDoc(doc(other, 'pensieri', 'sp-diary', 'scintille', sid)));
+  await assertFails(deleteDoc(doc(other, 'scintille_mie', 'other', 'voci', sid)));
+  await assertSucceeds(unlight(other, 'other', 'sp-diary', sid, []));
+  await assertSucceeds(light(other, 'other', 'sp-diary', sidOf('again'), spark(), []));
+  // nessun aggiornamento: si toglie e si rifà
+  await assertFails(updateDoc(doc(other, 'pensieri', 'sp-diary', 'scintille', sidOf('again')), { tipo: 'ridere' }));
+  await assertSucceeds(deleteDoc(doc(owner, 'pensieri', 'sp-diary', 'scintille', sidOf('again'))));
+  // tolta dall'autore: il lettore riordina le sue voci e ritrova il posto
+  const b = writeBatch(other);
+  b.delete(doc(other, 'scintille_mie', 'other', 'voci', sidOf('again')));
+  b.set(doc(other, 'scintille_mie', 'other', 'pezzi', 'sp-diary'), { voci: [] });
+  await assertSucceeds(b.commit());
+  await assertSucceeds(deleteDoc(doc(admin, 'pensieri', 'sp-diary', 'scintille', sidOf('nota'))));
+});
+test('un lettore non può creare notifiche, nemmeno per una scintilla', async () => {
+  await assertFails(setDoc(doc(other, 'notifiche', 'spark-note'), { userId: 'owner', pensieroId: 'sp-diary', titolo: 'Una pagina', voto: 5, timestamp: 1, letta: false }));
+  await assertFails(setDoc(doc(other, 'notifiche', 'spark-note-2'), { userId: 'owner', pensieroId: 'sp-diary', tipo: 'scintilla', giorno: today() }));
+});
+test('ciò che l’autore ha già visto delle scintille resta suo', async () => {
+  const seen = doc(owner, 'letture_scintille', 'owner', 'viste', `s_sp-diary_${today()}`);
+  await assertSucceeds(setDoc(seen, { giorno: today(), n: 2 }));
+  await assertSucceeds(getDoc(seen));
+  await assertFails(getDoc(doc(other, 'letture_scintille', 'owner', 'viste', `s_sp-diary_${today()}`)));
+  await assertFails(setDoc(doc(other, 'letture_scintille', 'owner', 'viste', 'x'), { giorno: 1, n: 1 }));
+  await assertFails(setDoc(seen, { giorno: today(), n: 2, chi: 'other' }));
+});
+const nato = (from, cit = 'testo integrale dello scritto') => ({ ...original('diary'), userId: 'other', author: 'Altro', nataDa: { id: from, cit } });
+const pairOf = (db, id, d, pub = { ...projection(d), ...(d.nataDa ? { nataDa: d.nataDa } : {}) }) => { const b = writeBatch(db); b.set(doc(db, 'pensieri', id), d); b.set(doc(db, 'testi', id), pub); return b.commit(); };
+test('un pensiero può nascere da una frase di un altro pensiero del diario', async () => {
+  await assertSucceeds(pairOf(other, 'eco-1', nato('sp-diary')));
+  const pub = (await getDoc(doc(third, 'testi', 'eco-1'))).data();
+  assert.deepEqual(pub.nataDa, { id: 'sp-diary', cit: 'testo integrale dello scritto' });
+  // l'autore dell'origine trova gli echi, senza sapere chi li ha scritti
+  const echi = await assertSucceeds(getDocs(query(collection(owner, 'testi'), where('version', '==', 2), where('nataDa.id', 'in', ['sp-diary', 'diary']))));
+  assert.equal(echi.size, 1); assert.equal(echi.docs[0].data().autoreId, undefined);
+});
+test('il legame nataDa vale solo nel diario, verso un pensiero del diario che esiste, ed è immutabile', async () => {
+  await assertFails(pairOf(other, 'eco-complete', { ...original(), userId: 'other', nataDa: { id: 'sp-diary', cit: 'x' } }));
+  await assertFails(pairOf(other, 'eco-ghost', nato('nessuno')));
+  await assertFails(pairOf(other, 'eco-from-complete', nato('complete')));
+  await assertFails(pairOf(other, 'eco-long', nato('sp-diary', 'x'.repeat(281))));
+  await assertFails(pairOf(other, 'eco-extra', { ...nato('sp-diary'), nataDa: { id: 'sp-diary', cit: 'x', chi: 'other' } }));
+  // la copia pubblica porta lo stesso legame dell'originale
+  const d = nato('sp-diary');
+  await assertFails(pairOf(other, 'eco-nocopy', d, projection(d)));
+  await assertFails(pairOf(other, 'eco-diffcopy', d, { ...projection(d), nataDa: { id: 'diary', cit: 'altro' } }));
+  // dopo la pubblicazione non si cambia, né si toglie; il resto si modifica come sempre
+  await assertFails(pairOf(other, 'eco-1', { ...d, nataDa: { id: 'diary', cit: 'altro' } }));
+  const { nataDa, ...without } = d;
+  await assertFails(pairOf(other, 'eco-1', without, projection(without)));
+  const edit = writeBatch(other);
+  edit.update(doc(other, 'pensieri', 'eco-1'), { title: 'Risposta', updatedAt: 9 });
+  edit.update(doc(other, 'testi', 'eco-1'), { title: 'Risposta' });
+  await assertSucceeds(edit.commit());
+  // se l'origine viene ritirata, l'eco resta modificabile
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'pensieri', 'eco-origin'), original('diary')); });
+  await assertSucceeds(pairOf(other, 'eco-2', nato('eco-origin')));
+  await env.withSecurityRulesDisabled(async (ctx) => { await deleteDoc(doc(ctx.firestore(), 'pensieri', 'eco-origin')); });
+  const later = writeBatch(other);
+  later.update(doc(other, 'pensieri', 'eco-2'), { content: '<p>Ancora</p>', updatedAt: 10 });
+  later.update(doc(other, 'testi', 'eco-2'), { content: '<p>Ancora</p>' });
+  await assertSucceeds(later.commit());
+});
