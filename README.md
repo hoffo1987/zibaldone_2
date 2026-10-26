@@ -14,10 +14,20 @@ titolo, testo, foto e disegni restano modificabili. Gli scritti precedenti sono 
   vede soltanto le proprie. `pensieri/{id}/scintille/{sid}` non ha uid né orario (solo il giorno) e ha un id casuale;
   chi l'ha accesa sta in `scintille_mie/{uid}/voci/{sid}`, il tetto di 5 in `scintille_mie/{uid}/pezzi/{id}`. Le
   notifiche dell'autore le calcola il suo client: nessuno scrive in `notifiche` tranne l'admin per i voti.
-- In **I miei scritti** il riquadro «Le tue scintille» (`src/ScintilleMie.tsx`) raccoglie le scintille ricevute sui
-  propri pensieri (anonime, le stesse delle notifiche) e quelle accese da sé sui pensieri degli altri; toccando una
-  frase si apre il pensiero. Toccando l'intestazione la sezione si ritrae e resta la riga con i due conteggi; la scelta
-  si ricorda su quel dispositivo.
+- Ogni emozione è un **segnale** con la sua forma d'onda (`src/onde.ts`): *Mi ci riconosco* una risonanza (un seno
+  calmo), *Bellissima* una fioritura (un seno che si gonfia a fusi), *Mi ha fatto ridere* un rimbalzo (archi che saltano),
+  *Mi ha commosso* un tremito (un fremito che arriva di colpo e si spegne piano). Sul foglio la frase accesa porta sotto
+  le parole un canale per emozione, più spesso e più alto quante più persone l'hanno scelta, e le parole prendono il tono
+  dell'emozione che domina. In WebGPU (`src/scintilleGpu.ts`) il pennello dell'oscilloscopio disegna la traccia quando la
+  frase si accende, col fosforo ancora caldo e un'oscillazione che si assesta; al passaggio del puntatore l'onda corre;
+  togliendo una scintilla o spegnendo la luce l'onda si appiattisce e sbiadisce. A riposo non si disegna nulla. Senza
+  WebGPU o col movimento ridotto le stesse tracce sono in SVG, ferme. Le onde si ripetono ogni 96 pixel: lo shader e
+  l'SVG usano le stesse funzioni.
+- In **I miei scritti** «Le tue scintille» (`src/ScintilleMie.tsx`) è uno strumento: lo schermo al fosforo mostra i
+  quattro canali, alti quanto le scintille di ciascuna emozione (toccandone uno l'elenco mostra solo quelle), e la
+  manopola passa tra le scintille ricevute sui propri pensieri (anonime, le stesse delle notifiche) e quelle accese da sé
+  sui pensieri degli altri. Nell'elenco ogni frase ha il suo segnale; toccando il titolo si apre il pensiero. Toccando
+  l'intestazione la sezione si ritrae e resta la riga con i due conteggi; la scelta si ricorda su quel dispositivo.
 - Da una frase si può **rispondere con un pensiero**: il nuovo pensiero porta `nataDa` (id dell'origine e citazione),
   immutabile dopo la pubblicazione, e il lettore mostra a tutti quanti pensieri sono nati da uno. Firestore espone a chi
   legge un documento anche la sua data di creazione tecnica: l'orario esatto di una scintilla non è quindi segreto
