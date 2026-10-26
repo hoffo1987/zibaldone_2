@@ -1,6 +1,6 @@
 // Il logo per la GPU: geometrie raggruppate per materiale, occlusione d'ambiente precalcolata e preparazione dei dati di
 // ogni fotogramma in un unico blocco uniform. Niente GPU qui dentro: il modulo si prova anche in Node.
-import { roundedSquare, roundedPlate, extrude, fromExtrude, tube, Curve3, LineCurve3, polyline, sphere, torus, box, transform, merge, type Geo } from "./geometry";
+import { roundedSquare, extrude, fromExtrude, tube, Curve3, LineCurve3, polyline, sphere, torus, box, transform, merge, type Geo } from "./geometry";
 import {
   TAU, A0, FRONT, BACK, PLATE_TOP, MAX_OBJ, MAX_SPRITE, arcAt, lineAt, clamp01, lin, ORBITS, TRACES, CAP_POS, NODE_R, ARC_Z, ARC_R, LINE_Z, LINE_R,
   LAMP, HALO, KEY, RIM, FOV, Pose, point, cameraZ, compose, mul, m4, type Quality, type LogoAnim, type V3,
@@ -19,10 +19,10 @@ export type Meshes = {
 
 
 // Tutte le parti ferme rispetto alla targa (piastra, filetto, incastonature, circuito sul retro, chip, piedini) sono già
-// trasformate nello spazio della targa: tutti i dettagli d'oro richiedono un solo disegno.
+// trasformate nello spazio della targa: l'oro diventa un solo disegno al posto di 33 oggetti separati.
 export function buildMeshes(q: Quality): Meshes {
-  // Smalto su una scocca raccordata: gli anelli condividono i vertici e le normali sono continue fino ai coperchi.
-  const plate = roundedPlate(29.5, 14.5, 5.8, 2.6, 3.4, q.bevel, q.curve);
+  // targa smaltata: estrusione con smussatura profonda, colori per vertice (diagonale chiara-scura, fianchi e retro più scuri)
+  const plate = transform(fromExtrude(extrude(roundedSquare(29.5, 14.5), { depth: 5.8, bevelThickness: 3.4, bevelSize: 2.6, bevelSegments: q.bevel, curveSegments: q.curve })), [0, 0, -2.9]);
   const ca = lin(0x22d8c0), cb = lin(0x07423d), side = lin(0x0d5c54), backCol = lin(0x082e2a), nv = plate.pos.length / 3;
   const colors = new Float32Array(nv * 3);
   for (let i = 0; i < nv; i++) {
@@ -40,10 +40,6 @@ export function buildMeshes(q: Quality): Meshes {
   // oro: incastonature, piste del retro con le loro piazzole, piedini del chip
   const capGeo = sphere(1, q.sphere, Math.round(q.sphere * 0.7));
   const gold: Geo[] = [];
-  // Due filetti metallici incassati sui fianchi rendono leggibile lo spessore anche durante la rotazione.
-  const edge = roundedSquare(31.95, 16.95).points(q.curve);
-  const edgePoints = edge.map((p) => [p.x, p.y]); edgePoints.push(edgePoints[0]);
-  for (const z of [-1.8, 1.8]) gold.push(tube(polyline(edgePoints, z), q.curve * 8, 0.22, 8));
   const socket = torus(1, 0.16, 8, 24);
   ([[arcAt(0, 0), 4.2], [lineAt(0, 0), 3.2], [arcAt(1, 0), 4.2]] as [V3, number][]).forEach(([p, r]) => { const s = r * 0.92; gold.push(transform(socket, [p.x, p.y, FRONT + 0.25], [s, s, s])); });
   TRACES.forEach((pts) => {
@@ -52,12 +48,7 @@ export function buildMeshes(q: Quality): Meshes {
   });
   const pin = box(1.1, 2.6, 0.8);
   for (let k = 0; k < 6; k++) [-1, 1].forEach((s) => gold.push(transform(pin, [1.75 + k * 2.5, -10 + s * 6.6, BACK - 0.9])));
-  // Piccole teste metalliche e chip con spigoli raccordati, veri volumi anche sul retro.
-  for (const x of [-21, 21]) for (const y of [-21, 21]) {
-    gold.push(transform(socket, [x, y, PLATE_TOP + 0.08], [0.8, 0.8, 0.8]));
-    gold.push(transform(capGeo, [x, y, PLATE_TOP + 0.12], [0.55, 0.55, 0.18]));
-  }
-  const chip = transform(roundedPlate(5, 0.8, 1.7, 0.35, 0.35, q.rimBevel, 8), [8, -10, BACK - 1.4], [1.5, 1, 1]);
+  const chip = transform(box(16, 11, 2.4), [8, -10, BACK - 1.4]);
   // la "C" e la pista: tubi con il parametro lungo la curva per la corrente e per il disegno progressivo
   const arc = tube(new Curve3((t) => arcAt(t, ARC_Z)), q.arc, ARC_R, q.radial);
   const line = tube(new LineCurve3(lineAt(0, LINE_Z), lineAt(1, LINE_Z)), 8, LINE_R, q.radial);
@@ -65,9 +56,9 @@ export function buildMeshes(q: Quality): Meshes {
     ["plate", plate], ["gold", merge(gold)], ["chip", chip], ["rim", rim], ["arc", arc], ["line", line], ["cap", capGeo],
     ["ring0", torus(ORBITS[0].r, 0.2, 6, q.rings)], ["ring1", torus(ORBITS[1].r, 0.2, 6, q.rings)],
   ];
-  // Il solo filetto estruso non ha vertici condivisi; tutte le superfici parametriche usano indici.
-  // I gruppi hanno meno di 65536 vertici e usano indici a 16 bit relativi al proprio inizio.
-  const plain = (name: string) => name === "rim";
+  // le estrusioni (targa e filetto) non hanno vertici condivisi: si disegnano senza indici, come in three.js; gli altri
+  // gruppi hanno meno di 65536 vertici e usano indici a 16 bit relativi al proprio inizio
+  const plain = (name: string) => name === "plate" || name === "rim";
   let nVert = 0, nIdx = 0;
   for (const [name, g] of parts) { nVert += g.pos.length / 3; if (!plain(name)) nIdx += g.idx.length; }
   const vertices = new Float32Array(nVert * 7), indices = new Uint16Array(nIdx + (nIdx & 1)), out: any = { colors };
@@ -137,7 +128,7 @@ export const OBJ = { plate: 0, gold: 1, chip: 2, rim: 3, arc: 4, line: 5, pearl:
 
 const C = {
   white: lin(0xffffff), gold: lin(0xe8b04a), chip: lin(0x0b1f1d), current: lin(0xf4fffd), amber: lin(0xfbbf24), sheen: lin(0x9ff3e4),
-  spark: lin(0xffe2a0), sky: lin(0xe8fcf8), ground: lin(0x52746b), teal: lin(0x2dd4bf), ptr: lin(0x99f6e4),
+  spark: lin(0xffe2a0), sky: lin(0xdffcf7), ground: lin(0x062521), teal: lin(0x2dd4bf), ptr: lin(0x99f6e4),
 };
 const ORBIT_COL = ORBITS.map((o) => lin(o.color));
 
@@ -156,11 +147,11 @@ export class FramePacker {
     this.sprites = 2 + 2 * q.trail;
     const d = this.data;
     // parti fisse del blocco: luci direzionali ed emisferica, esposizione
-    d.set([C.sky[0] * 0.9, C.sky[1] * 0.9, C.sky[2] * 0.9, 0], 52);
-    d.set([C.ground[0] * 0.85, C.ground[1] * 0.85, C.ground[2] * 0.85, 0], 56);
+    d.set([C.sky[0] * 0.65, C.sky[1] * 0.65, C.sky[2] * 0.65, 0], 52);
+    d.set([C.ground[0] * 0.65, C.ground[1] * 0.65, C.ground[2] * 0.65, 0], 56);
     d.set([0, 1, 0, 0], 60);
     d.set([KEY[0], KEY[1], KEY[2], 0, RIM[0], RIM[1], RIM[2], 0], 64);
-    d.set([2.8 * C.white[0], 2.8 * C.white[1], 2.8 * C.white[2], 0, 3.1 * C.teal[0], 3.1 * C.teal[1], 3.1 * C.teal[2], 0], 72);
+    d.set([2.1 * C.white[0], 2.1 * C.white[1], 2.1 * C.white[2], 0, 2.8 * C.teal[0], 2.8 * C.teal[1], 2.8 * C.teal[2], 0], 72);
     d[96] = 1.06; d[99] = 3.8 * Math.tan(((FOV / 2) * Math.PI) / 180); // dimensione delle scintille (gl_PointSize 3.8 con attenuazione)
     // materiali (le parti animate si aggiornano in pack)
     const mat = (k: number, col: number[], a: number, rough: number, metal: number, cc: number, ccr: number, envI: number, emis = [0, 0, 0], sheen = [0, 0, 0, 1], irid = [0, 1.3, 400]) => {
@@ -168,8 +159,8 @@ export class FramePacker {
       d.set([col[0], col[1], col[2], a, emis[0], emis[1], emis[2], envI, rough, metal, cc, ccr, sheen[0], sheen[1], sheen[2], sheen[3], irid[0], irid[1], irid[2], 0, -1, 0, 0, 0], o + 16);
     };
     const lite = this.lite;
-    mat(OBJ.plate, C.white, 1, 0.3, 0.12, 0.9, 0.16, 1.05);
-    mat(OBJ.gold, C.gold, 1, 0.28, 1, 0.35, 0.12, 1.35);
+    mat(OBJ.plate, C.white, 1, 0.26, 0.08, 0.95, 0.1, 0.95);
+    mat(OBJ.gold, C.gold, 1, 0.22, 1, 0.4, 0, 1.35);
     mat(OBJ.chip, C.chip, 1, 0.35, 0, 0.8, 0, 1);
     mat(OBJ.rim, C.white, 0.34, 0.22, 0, 1, 0, 1);
     for (const k of [OBJ.arc, OBJ.line]) mat(k, C.current, 1, 0.16, 0.04, 1, 0.05, 1.15, [0.05, 0.05, 0.05], lite ? [0, 0, 0, 1] : [...C.sheen, 0.35], [lite ? 0 : 0.32, 1.45, 400]);

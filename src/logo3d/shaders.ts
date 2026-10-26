@@ -1,6 +1,6 @@
 // Shader WGSL del logo. Il materiale fisico riproduce MeshPhysicalMaterial di three.js r160 (GGX + Smith correlato, strato
 // trasparente "clearcoat", velluto Charlie, iridescenza a film sottile, luce ambientale con multiscattering), la stessa
-// mappatura tonale ACES e codifica sRGB. Microtexture con mip, normali di dettaglio e luce di riempimento da studio.
+// mappatura tonale ACES e la stessa codifica sRGB per materiale: i colori si fondono sul canvas esattamente come prima.
 
 import { MAX_OBJ, MAX_SPRITE, MAX_PARTICLE, A0, PLATE_TOP } from "./anim";
 import { AO_EXTENT } from "./scene";
@@ -75,8 +75,6 @@ struct Particles { p: array<Particle, ${MAX_PARTICLE}> };
 @group(0) @binding(4) var glowTex: texture_2d<f32>;
 @group(0) @binding(5) var glowSamp: sampler;
 @group(0) @binding(6) var aoTex: texture_2d<f32>;
-@group(0) @binding(7) var surfaceTex: texture_2d<f32>;
-@group(0) @binding(8) var surfaceSamp: sampler;
 
 fn pow2(x: f32) -> f32 { return x * x; }
 fn pow2v(x: vec3f) -> vec3f { return x * x; }
@@ -301,21 +299,7 @@ fn occlusion(in: MeshOut, N: vec3f, o: Obj) -> f32 {
 }
 
 @fragment fn fsPhysical(in: MeshOut) -> @location(0) vec4f {
-  // Proiezione locale sulla faccia dominante: grana stabile anche sui fianchi e sul retro, senza cuciture UV visibili.
-  let baseN = normalize(in.nrm);
-  let pm = F.objs[0].model;
-  let ax = normalize(pm[0].xyz); let ay = normalize(pm[1].xyz); let az = normalize(pm[2].xyz);
-  let localN = abs(vec3f(dot(baseN, ax), dot(baseN, ay), dot(baseN, az)));
-  let sideX = localN.x > max(localN.y, localN.z);
-  let sideY = localN.y > max(localN.x, localN.z);
-  let uv = select(select(in.lp.xy, in.lp.xz, sideY), in.lp.zy, sideX);
-  let isMetal = in.obj == 1u;
-  let texel = textureSample(surfaceTex, surfaceSamp, uv * select(vec2f(0.12), vec2f(0.06, 0.85), isMetal));
-  let axisU = select(ax, az, sideX);
-  let T = normalize(axisU - baseN * dot(axisU, baseN));
-  let B = normalize(cross(baseN, T));
-  let strength = select(0.025, 0.065, isMetal);
-  let N = normalize(baseN + (T * (texel.g * 2.0 - 1.0) + B * (texel.b * 2.0 - 1.0)) * strength);
+  let N = normalize(in.nrm);
   let dxy = max(abs(dpdx(N)), abs(dpdy(N)));
   let geometryRoughness = max(max(dxy.x, dxy.y), dxy.z);
   let o = F.objs[in.obj];
@@ -323,11 +307,11 @@ fn occlusion(in: MeshOut, N: vec3f, o: Obj) -> f32 {
   let V = normalize(F.camPos.xyz - in.wpos);
   let dotNV = saturate(dot(N, V));
 
-  let diffuseColor = o.color.rgb * in.vcol * (0.97 + texel.r * 0.045);
+  let diffuseColor = o.color.rgb * in.vcol;
   let metal = o.pbr.y;
   var m: Mat;
   m.diffuse = diffuseColor * (1.0 - metal);
-  m.roughness = min(max(o.pbr.x + (texel.a - 0.5) * 0.12, 0.0525) + geometryRoughness, 1.0);
+  m.roughness = min(max(o.pbr.x, 0.0525) + geometryRoughness, 1.0);
   m.f0 = mix(vec3f(0.04), diffuseColor, metal);
   m.ccRough = min(max(o.pbr.w, 0.0525) + geometryRoughness, 1.0);
   let clearcoat = saturate(o.pbr.z);
@@ -351,9 +335,6 @@ fn occlusion(in: MeshOut, N: vec3f, o: Obj) -> f32 {
     let r = direct(F.dirDir[i].xyz, F.dirCol[i].rgb, N, V, m);
     acc.diff += r.diff; acc.spec += r.spec; acc.cc += r.cc; acc.sheen += r.sheen;
   }
-  // Pannello morbido dal basso a sinistra: separa il fianco in ombra dallo sfondo senza bruciare lo smalto.
-  let fill = direct(normalize(vec3f(-0.65, -0.35, 0.85)), F.hemiSky.rgb * 1.15, N, V, m);
-  acc.diff += fill.diff; acc.spec += fill.spec; acc.cc += fill.cc; acc.sheen += fill.sheen;
 
   // luce indiretta: emisfero (diffusa) e ambiente prefiltrato (diffusa e speculare con multiscattering)
   let irradiance = mix(F.hemiGround.rgb, F.hemiSky.rgb, 0.5 * dot(N, F.hemiDir.xyz) + 0.5);

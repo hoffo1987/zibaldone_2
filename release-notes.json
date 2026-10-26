@@ -1,4 +1,4 @@
 {
-  "titolo": "Il logo della panoramica prende più luce",
-  "messaggio": "Il modello 3D della panoramica ha bordi più morbidi, smalto satinato e dettagli in metallo spazzolato. Una luce più ricca e nuovi rilievi ne mettono in risalto lo spessore, anche mentre lo fai ruotare."
+  "titolo": "Ripristinato il modello precedente della panoramica",
+  "messaggio": "La panoramica torna al modello 3D precedente: sono state rimosse le nuove mesh, le microtexture e l’illuminazione aggiuntiva introdotte nell’ultimo aggiornamento."
 }

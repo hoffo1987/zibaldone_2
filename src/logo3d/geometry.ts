@@ -1,6 +1,6 @@
 // Geometrie del logo 3D, generate sulla CPU una volta sola e poi caricate in buffer GPU statici.
-// Primitive e curve senza dipendenze; la scocca usa una superficie parametrica indicizzata con normali analitiche.
-// Le estrusioni e le altre primitive mantengono gli algoritmi di three.js r160 senza scaricare la libreria.
+// Gli algoritmi sono quelli di three.js r160 (ExtrudeGeometry, TubeGeometry, SphereGeometry, TorusGeometry, BoxGeometry
+// con le stesse curve), riscritti senza dipendenze: stessi vertici e stesse normali, ma senza scaricare la libreria.
 
 export type Geo = {
   pos: Float32Array; // xyz
@@ -388,46 +388,6 @@ export function box(w: number, h: number, d: number): Geo {
 }
 
 export const fromExtrude = (e: { pos: number[]; nrm: number[] }): Geo => pack(e.pos, e.nrm, null, Array.from({ length: e.pos.length / 3 }, (_, i) => i));
-
-// Superficie parametrica indicizzata, come i torniti del podio: anelli condivisi e normali analitiche sulla
-// smussatura ellittica. I coperchi e i fianchi si raccordano senza salti nei riflessi e senza saldare triangoli sulla CPU.
-export function roundedPlate(half: number, radius: number, depth: number, width: number, bevelDepth: number, bevel: number, curve: number): Geo {
-  const pos: number[] = [], nrm: number[] = [], idx: number[] = [];
-  const contour: number[][] = [], c = half - radius;
-  for (let corner = 0; corner < 4; corner++) {
-    const cx = corner < 2 ? c : -c, cy = corner === 0 || corner === 3 ? -c : c;
-    for (let i = 0; i <= curve; i++) {
-      const a = (corner - 1) * Math.PI / 2 + i / curve * Math.PI / 2;
-      contour.push([cx, cy, Math.cos(a), Math.sin(a)]);
-    }
-  }
-  const n = contour.length;
-  const ring = (angle: number, front: boolean) => {
-    const offset = width * Math.sin(angle), z = (depth / 2 + bevelDepth * Math.cos(angle)) * (front ? 1 : -1);
-    const side = bevelDepth * Math.sin(angle), nz = width * Math.cos(angle) * (front ? 1 : -1);
-    const length = Math.hypot(side, nz);
-    for (const [cx, cy, nx, ny] of contour) {
-      pos.push(cx + (radius + offset) * nx, cy + (radius + offset) * ny, z);
-      nrm.push(nx * side / length, ny * side / length, nz / length);
-    }
-  };
-  for (let j = 0; j <= bevel; j++) ring(j / bevel * Math.PI / 2, false);
-  for (let j = bevel; j >= 0; j--) ring(j / bevel * Math.PI / 2, true);
-  const rings = 2 * (bevel + 1);
-  for (let j = 0; j < rings - 1; j++) for (let i = 0; i < n; i++) {
-    const a = j * n + i, b = j * n + (i + 1) % n, d = a + n, e = b + n;
-    idx.push(a, b, d, b, e, d);
-  }
-  for (const front of [false, true]) {
-    const center = pos.length / 3, start = front ? (rings - 1) * n : 0;
-    pos.push(0, 0, (depth / 2 + bevelDepth) * (front ? 1 : -1)); nrm.push(0, 0, front ? 1 : -1);
-    for (let i = 0; i < n; i++) {
-      const a = start + i, b = start + (i + 1) % n;
-      if (front) idx.push(center, a, b); else idx.push(center, b, a);
-    }
-  }
-  return pack(pos, nrm, null, idx);
-}
 
 function pack(pos: number[], nrm: number[], aux: number[] | null, idx: number[]): Geo {
   return { pos: new Float32Array(pos), nrm: new Float32Array(nrm), aux: aux ? new Float32Array(aux) : new Float32Array(pos.length / 3), idx: new Uint32Array(idx) };
