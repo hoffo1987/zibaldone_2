@@ -16,9 +16,6 @@ const PEOPLE = [
 ];
 const P = (...lines) => lines.map((l) => `<p>${l}</p>`).join('');
 const day = (m, d, h = 17) => new Date(2026, m - 1, d, h, 12).getTime();
-// la staffetta: settembre è già nel racconto, il mese in corso è in gara (sempre quello di oggi, per poterci scrivere)
-const NOW = new Date(), CUR = `${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}`, PREV_RELAY = '2026-09';
-const inCur = (hoursAgo) => Math.max(new Date(NOW.getFullYear(), NOW.getMonth(), 1, 9).getTime(), Date.now() - hoursAgo * 3600000);
 const WRITINGS = [
   { id: 'w-primo-mese', who: 'andrea', kind: 'complete', at: day(10, 3), title: 'Il primo mese del quinto anno', rating: 4, content: P('Settembre è passato come un treno che non ferma alle stazioni piccole. Ho contato le mattine con il cielo bianco sopra il cortile e le ho trovate tutte uguali, poi diverse.', 'C’è una cosa che nessuno dice del quinto anno: che si comincia a guardare la scuola come si guarda una casa da cui si trasloca. I corridoi diventano più lunghi, le porte più pesanti, i compagni più gentili.', 'Ho deciso di scrivere ogni sera una riga sola. Stasera la riga è questa: restare è anche un modo di partire.') },
   { id: 'w-lettera', who: 'giulia', kind: 'complete', at: day(10, 6), title: 'Lettera a chi resta', rating: 5, content: P('Caro te che resti, ti lascio le chiavi del cassetto in alto, quello che si apre solo tirando a sinistra.', 'Dentro ci sono i biglietti del cinema, una conchiglia, la ricevuta di un gelato diviso in due. Non sono ricordi: sono istruzioni.', 'Quando avrai paura di dimenticare, aprilo. Quando avrai paura di ricordare troppo, chiudilo piano.') },
@@ -34,11 +31,6 @@ const WRITINGS = [
   { id: 'd-finestra', who: 'sara', kind: 'diary', at: day(10, 15, 22), title: 'Dalla finestra', content: P('Dalla finestra si vede un pezzo di collina e un pezzo di tangenziale. Io guardo sempre la collina, ma ascolto la tangenziale.') },
   { id: 'd-treno', who: 'giulia', kind: 'diary', firmato: true, at: day(10, 17, 8), title: 'Sul treno delle sette', content: P('Il treno delle sette è pieno di gente che dorme con la testa sul vetro. Sembriamo tutti in attesa di un sogno che parta in orario.') },
   { id: 'd-nonno', who: 'marco', kind: 'diary', at: day(10, 18, 9), title: 'Le mani del nonno', content: P('Mio nonno aggiusta le radio. Dice che il segreto è ascoltare il fruscio prima della voce.') },
-  // i capitoli della staffetta: settembre (scelti e pubblicati) e il mese in corso (in gara, anonimi)
-  { id: 'c-set-binario', who: 'andrea', kind: 'complete', at: day(9, 12), staffetta: PREV_RELAY, chosen: 0, title: 'Il binario tre', content: P('L’ultimo giorno d’estate, il binario tre era vuoto. Solo una valigia, chiusa con lo spago, aspettava qualcuno che non arrivava.', 'Il capostazione disse che stava lì da agosto. Nessuno aveva il coraggio di aprirla, perché una valigia chiusa è ancora una promessa.') },
-  { id: 'c-set-valigia', who: 'giulia', kind: 'complete', at: day(9, 24), staffetta: PREV_RELAY, chosen: 1, title: 'Dentro la valigia', content: P('La aprii io, a settembre inoltrato, quando la scuola era già cominciata e le promesse avevano smesso di bastare.', 'Dentro c’era un’estate intera piegata con cura: un costume ancora umido, un biglietto di ritorno mai usato, e un quaderno con una sola frase. Diceva: chi trova questa valigia, continui il viaggio.') },
-  { id: 'c-cur-cassetto', who: 'marco', kind: 'complete', at: inCur(30), staffetta: CUR, title: 'Il cassetto in alto', content: P('Ti lascio le chiavi del cassetto in alto, scrisse, e io per giorni non lo aprii. Avevo paura che dentro ci fosse la fine di qualcosa.', 'Poi una sera tirai a sinistra, come diceva il biglietto, e il cassetto venne via tutto, leggero come se fosse vuoto. Non lo era.') },
-  { id: 'c-cur-chiavi', who: 'sara', kind: 'complete', at: inCur(6), staffetta: CUR, title: 'Le chiavi sbagliate', content: P('Le chiavi non erano quelle del cassetto. Lo capii dopo un’ora, seduta per terra, con la serratura che non voleva saperne.', 'Erano le chiavi di casa sua. Me le aveva lasciate per dirmi un’altra cosa, e io avevo letto solo la frase che volevo leggere.') },
   // un eco: nato da una frase del treno delle sette
   { id: 'd-eco-sogno', who: 'sara', kind: 'diary', at: day(10, 19, 22), title: 'Il sogno in ritardo', nataDa: { id: 'd-treno', cit: 'Sembriamo tutti in attesa di un sogno che parta in orario.' },
     content: P('«Sembriamo tutti in attesa di un sogno che parta in orario.»', 'Il mio sogno parte sempre in ritardo, ma almeno non salta mai le fermate piccole.') },
@@ -91,12 +83,12 @@ const excerptOf = (html) => {
   for (const w of WRITINGS) {
     const person = PEOPLE.find((p) => p.key === w.who);
     const o = { title: w.title, content: w.content, strokes: [], w: 900, h: 600, author: person.name, timestamp: w.at, userId: uid[w.who], isStarred: false, kind: w.kind };
-    if (w.kind === 'complete') { o.excerpt = excerptOf(w.content); if (w.rating) { o.rating = w.rating; o.svelato = true; } if (w.staffetta) o.staffetta = w.staffetta; }
+    if (w.kind === 'complete') { o.excerpt = excerptOf(w.content); if (w.rating) { o.rating = w.rating; o.svelato = true; } }
     else { o.firmato = !!w.firmato; if (w.nataDa) o.nataDa = w.nataDa; }
     await put(`pensieri/${w.id}`, o);
     const pub = w.kind === 'diary'
       ? { version: 2, kind: 'diary', title: w.title, content: w.content, strokes: [], w: 900, h: 600, ...(w.firmato ? { firma: person.name, autoreId: uid[w.who] } : {}) }
-      : { version: 2, kind: 'complete', title: w.title, excerpt: o.excerpt, ...(w.staffetta ? { staffetta: w.staffetta } : {}) };
+      : { version: 2, kind: 'complete', title: w.title, excerpt: o.excerpt };
     if (w.nataDa) pub.nataDa = w.nataDa;
     await put(`testi/${w.id}`, pub);
     if (w.kind === 'complete') await put(`valutazioni/${w.id}`, { stato: w.rating ? 'scelto' : 'da_leggere', nota: '', voto: w.rating || 0, segnalibro: w.rating === 5, updatedAt: w.at });
@@ -115,16 +107,5 @@ const excerptOf = (html) => {
     const k = `${uid[sp.by]}/pezzi/${sp.on}`; pezzi[k] = [...(pezzi[k] || []), sid];
   }
   for (const [k, voci] of Object.entries(pezzi)) await put(`scintille_mie/${k}`, { voci });
-  // la staffetta: gli incipit (frasi prese dagli estratti di scritti svelati), le fonti riservate e il racconto di settembre
-  const relays = [[PREV_RELAY, 'w-settembre', 'L’ultimo giorno d’estate'], [CUR, 'w-lettera', 'ti lascio le chiavi del cassetto in alto']];
-  for (const [mese, fonte, frase] of relays) {
-    const w = WRITINGS.find((x) => x.id === fonte);
-    if (!excerptOf(w.content).includes(frase)) throw Error(`La frase dell'incipit ${mese} non è nell'estratto di ${fonte}`);
-    await put(`staffetta/${mese}`, { frase, creato: Date.now() });
-    await put(`staffetta/${mese}/riservato/fonte`, { id: fonte });
-  }
-  const chosen = WRITINGS.filter((w) => w.staffetta === PREV_RELAY && w.chosen !== undefined);
-  for (const w of chosen) await put(`staffetta/${PREV_RELAY}/capitoli/${w.id}`, { ordine: w.chosen, title: w.title, content: w.content, firma: PEOPLE.find((p) => p.key === w.who).name, autoreId: uid[w.who] });
-  await put(`staffetta/${PREV_RELAY}/riservato/scelta`, { ids: chosen.map((w) => w.id) });
   console.log(`Emulatori pronti: ${PEOPLE.length} persone (${PEOPLE.map((p) => p.email).join(', ')}), ${WRITINGS.length} scritti, ${SPARKS.length} scintille.`);
 })().catch((e) => { console.error(e); process.exit(1); });

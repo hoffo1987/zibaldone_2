@@ -39,14 +39,12 @@ export const helpSteps = (tab: string, admin: boolean): Step[] => {
     case "altri": return [
       s(HEAD, "Scritti completi", "Gli scritti completi degli altri, in estratto e senza nomi né date. I migliori del mese salgono sul podio."),
       s("scritti-switch", "Diario e Scritti completi", "Da qui passi al Diario, dove i pensieri si leggono per intero."),
-      s("staffetta", "La staffetta", "Ogni mese una frase dal podio diventa l’incipit: scrivi il capitolo dopo. Resta anonimo; i capitoli scelti entrano per intero, con il nome, nel racconto del Circuito."),
       s(CARD, "Leggi un estratto", "Apri uno scritto per leggerne l’inizio: il testo integrale lo vedono solo l’autore e l’amministratore."),
     ];
     case "read": return [
       s(HEAD, "Scritti completi", "Gli scritti del mese arrivano con l’autore nascosto: leggi, vota e solo dopo scopri chi ha scritto."),
       s("scritti-switch", "Diario e Scritti completi", "Da qui passi al Diario: lì vedi sempre chi ha scritto, anche i pensieri anonimi."),
       s("filters", "Filtri", "Cerca, ordina, scegli il mese e lo stato della lettura, mostra i segnalati o quelli ancora da valutare."),
-      s("staffetta", "La staffetta", "Dalla regia scegli la frase dell’incipit tra gli scritti svelati del podio e, a fine mese, i capitoli del racconto: si pubblicano dal 3, con il podio."),
       s(CARD, "Leggi e valuta", "Apri uno scritto: da mezza a cinque stelle, una nota privata, poi svela l’autore. Dopo lo svelamento il voto è definitivo."),
     ];
     case "my_pages": return [

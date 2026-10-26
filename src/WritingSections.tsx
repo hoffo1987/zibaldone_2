@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowRight, BookOpen, FileText, ArrowUpRight, Eye, EyeOff, Feather, Flag, LockKeyhole, Pen, Signature, Star, Trophy, X } from "lucide-react";
+import { ArrowRight, BookOpen, FileText, ArrowUpRight, Eye, EyeOff, Feather, LockKeyhole, Pen, Signature, Star, Trophy } from "lucide-react";
 import { plain } from "./sanitize";
 import { isDiary, signatureOf, cartaOf, paperClass, type WritingKind } from "./testi";
 import "./writing.css";
@@ -99,20 +99,6 @@ export function ReadingNotice({ item }: { item: any }) {
     {isDiary(item) ? signatureOf(item) ? <><Signature size={19} /><div><b>Pensiero del diario · firmato</b><p>L’autore ha scelto di firmare questo pensiero. Non riceve voti, categorie o posizioni in classifica.</p></div></>
       : <><EyeOff size={19} /><div><b>Pensiero del diario · lettura integrale</b><p>Il nome dell’autore è visibile solo all’amministratore e all’autore stesso. Questo pensiero non riceve voti, categorie o posizioni in classifica.</p></div></>
       : <><LockKeyhole size={19} /><div><b>Stai leggendo soltanto un estratto</b><p>Per tutelare lo scritto, il testo integrale, le immagini e i disegni sono riservati all’autore e all’amministratore.</p></div></>}
-  </div>;
-}
-
-// il capitolo della staffetta: nell'editor la frase da cui parte e che fine farà il capitolo (anonimo come ogni scritto
-// completo; se l'admin lo sceglie, nel racconto si legge per intero e con il nome), nel lettore solo il legame
-export function RelayChip({ mese, frase, locked, reading, onRemove }: { mese: string; frase?: string; locked?: boolean; reading?: boolean; onRemove?: () => void }) {
-  return <div className="rl-chip" role={reading ? "note" : undefined}>
-    <Flag size={16} aria-hidden="true" />
-    <span className="rl-chip-b">
-      <span className="rl-chip-k">{reading ? `Capitolo della staffetta di ${mese}` : locked ? `Capitolo della staffetta di ${mese}` : `Il capitolo della staffetta di ${mese}`}</span>
-      {frase && <q>{frase}</q>}
-      {!reading && <span className="rl-chip-n">Resta anonimo e partecipa al podio come ogni scritto completo. Se l’amministratore lo sceglie per il racconto collettivo, dal 3 del mese dopo si leggerà per intero, con il tuo nome.</span>}
-    </span>
-    {!locked && !reading && onRemove && <button type="button" className="bt !p-2" aria-label="Togli il legame con la staffetta" title="Non è un capitolo" onClick={onRemove}><X size={14} /></button>}
   </div>;
 }
 
