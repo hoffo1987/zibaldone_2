@@ -1,0 +1,17 @@
+/* Targhetta d'ottone incisa: statica, senza canvas o filtri GPU. */
+.admin-badge{display:inline-flex;vertical-align:middle;align-items:center;justify-content:center;gap:5px;flex:none;max-width:100%;padding:3px 7px;border:1px solid #92713b;border-radius:5px;color:#f8d99b;background:linear-gradient(130deg,#23372f,#10241f 62%,#344035);box-shadow:inset 0 1px 0 #f8d99b38,inset 0 -1px 0 #0005;line-height:1;white-space:nowrap;text-shadow:none;letter-spacing:normal}
+.admin-badge svg{width:15px;height:15px;flex:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.admin-badge-copy{display:flex;flex-direction:column;gap:4px}
+.admin-badge b{font:800 9px/1.1 ui-monospace,'Courier New',monospace;letter-spacing:.1em;text-transform:uppercase}
+.admin-badge small{font:600 8px/1 ui-monospace,'Courier New',monospace;letter-spacing:.08em;text-transform:uppercase;color:#dcc38f}
+.admin-featured{padding:7px 11px;gap:8px;border-radius:7px}
+.admin-featured svg{width:25px;height:25px}.admin-featured b{font-size:11px}
+.admin-seal{width:19px;height:19px;padding:1px;border-radius:6px}
+.admin-avatar{position:relative;display:inline-flex;flex:none}.admin-avatar>.admin-seal{position:absolute;right:-4px;bottom:-3px}
+.account-by{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px 7px;max-width:100%;min-width:0;vertical-align:middle}
+.account-by>.account-name{min-width:0;overflow-wrap:anywhere}
+.account-heading{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
+.diary-card-by.account-by{display:flex;white-space:normal;overflow:visible}
+.rd-hd .account-by{white-space:normal;overflow:visible}
+.au-name .account-by{display:flex;white-space:normal}
+@media(forced-colors:active){.admin-badge{border-color:ButtonText;color:ButtonText;background:Canvas;box-shadow:none}.admin-badge small{color:ButtonText}}

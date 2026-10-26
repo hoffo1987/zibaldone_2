@@ -2,6 +2,9 @@ rules_version = '2';
 
 // Regole di Firestore per "Il Circuito". Si incollano in Firebase → Firestore Database → Regole → Pubblica.
 // Tutto ciò che non è elencato qui sotto è NEGATO.
+// Sigillo personale: app_config/admin_badge.uid identifica l'account scelto (configurazione non scrivibile dai client).
+// Solo copie pubbliche e scintille possono portare admin: true, verificato sul vero proprietario e su admins/{uid}.
+// Il sigillo è facoltativo per i vecchi client. Non contiene uid/nomi e non concede permessi.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -13,6 +16,13 @@ service cloud.firestore {
     function isAdmin() {
       return signedIn() &&
         exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function personalAdmin(uid) {
+      return uid is string && exists(/databases/$(database)/documents/admins/$(uid))
+        && get(/databases/$(database)/documents/app_config/admin_badge).data.uid == uid;
+    }
+    function sigilloValido(d, uid) {
+      return !('admin' in d) || (d.admin == true && personalAdmin(uid));
     }
 
     // pensieri: originali privati, tipo immutabile; i documenti senza kind sono scritti completi.
@@ -68,15 +78,16 @@ service cloud.firestore {
       let d = request.resource.data;
       let original = getAfter(pensiero(id)).data;
       return d.get('version', 0) == 2 && d.kind == tipo(original) && d.title == original.title
+        && sigilloValido(d, original.userId)
         && d.get('carta', null) == original.get('carta', null)
         && ((d.kind == 'diary'
-          && d.keys().hasOnly(['version', 'kind', 'title', 'content', 'strokes', 'w', 'h', 'firma', 'autoreId', 'carta', 'nataDa'])
+          && d.keys().hasOnly(['version', 'kind', 'title', 'content', 'strokes', 'w', 'h', 'firma', 'autoreId', 'carta', 'nataDa', 'admin'])
           && d.keys().hasAll(['version', 'kind', 'title', 'content', 'strokes', 'w', 'h'])
           && d.content == original.content && d.strokes == original.strokes && d.w == original.w && d.h == original.h
           && d.get('nataDa', null) == original.get('nataDa', null)
           && firmaFedele(d, original))
         || (d.kind == 'complete'
-          && d.keys().hasOnly(['version', 'kind', 'title', 'excerpt', 'carta'])
+          && d.keys().hasOnly(['version', 'kind', 'title', 'excerpt', 'carta', 'admin'])
           && d.keys().hasAll(['version', 'kind', 'title', 'excerpt'])
           && d.excerpt is string && d.excerpt.size() <= 480
           && d.excerpt.size() <= original.content.size() * 0.3
@@ -131,7 +142,8 @@ service cloud.firestore {
     }
 
     // ===== Scintille: chi legge un pensiero del diario accende una frase, chi l'ha scritto la vede brillare =====
-    // La scintilla non porta identità: niente uid, l'id è casuale e la data è solo il giorno (giorni dall'epoca, UTC).
+    // La scintilla non porta uid o nome; solo l'Admin personale può aggiungere il suo sigillo admin: true.
+    // L'id è casuale e la data è solo il giorno (giorni dall'epoca, UTC).
     // Chi l'ha accesa lo sa da scintille_mie/{uid}/voci/{sid}, che leggono solo lui e gli admin; il tetto di 5 per
     // pensiero è l'elenco scintille_mie/{uid}/pezzi/{pensiero}.voci, che cambia di una voce alla volta insieme alle voci.
     function oggi() { return math.floor(request.time.toMillis() / 86400000); }
@@ -140,7 +152,8 @@ service cloud.firestore {
     function pezziMiei(id) { return /databases/$(database)/documents/scintille_mie/$(request.auth.uid)/pezzi/$(id); }
     function autoreDi(id) { return get(pensiero(id)).data.userId == request.auth.uid; }
     function scintillaValida(d) {
-      return d.keys().hasOnly(['cit', 'pre', 'post', 'tipo', 'nota', 'giorno'])
+      return d.keys().hasOnly(['cit', 'pre', 'post', 'tipo', 'nota', 'giorno', 'admin'])
+        && sigilloValido(d, request.auth.uid)
         && d.keys().hasAll(['cit', 'pre', 'post', 'tipo', 'giorno'])
         && d.cit is string && d.cit.size() >= 3 && d.cit.size() <= 280
         && d.pre is string && d.pre.size() <= 40

@@ -17,6 +17,7 @@ before(async () => {
   await env.withSecurityRulesDisabled(async ctx => {
     const db = ctx.firestore();
     await setDoc(doc(db, 'admins', 'admin'), {});
+    await setDoc(doc(db, 'app_config', 'admin_badge'), { uid: 'admin' });
     await setDoc(doc(db, 'release_publishers', 'publisher'), {});
     for (const [id, kind] of [['complete', 'complete'], ['diary', 'diary']]) { const d = original(kind); await setDoc(doc(db, 'pensieri', id), d); await setDoc(doc(db, 'testi', id), projection(d)); }
     await setDoc(doc(db, 'testi', 'legacy'), { title: 'Vecchia copia', content: 'INTEGRALE NON LEGGIBILE' });
@@ -132,6 +133,28 @@ test('migrazione dei vecchi scritti in anteprime senza cambiare gli originali', 
 });
 test('nessuno può promuoversi ad admin o cambiare proprietario', async () => {
   await assertFails(setDoc(doc(owner, 'admins', 'owner'), {})); await assertFails(updateDoc(doc(owner, 'pensieri', 'diary'), { userId: 'other' }));
+});
+
+test('sigillo personale: configurazione in sola lettura, nessuna autoassegnazione', async () => {
+  await assertSucceeds(getDoc(doc(other, 'app_config', 'admin_badge')));
+  await assertFails(setDoc(doc(other, 'app_config', 'admin_badge'), { uid: 'other' }));
+  await assertFails(setDoc(doc(admin, 'app_config', 'admin_badge'), { uid: 'other' }));
+  await assertFails(updateDoc(doc(owner, 'testi', 'diary'), { admin: true }));
+  await assertFails(updateDoc(doc(admin, 'testi', 'diary'), { admin: true })); // Anche l'admin non può firmare il lavoro altrui.
+});
+
+test('sigillo sui soli scritti dell’Admin: nessuna identità aggiunta alla copia pubblica', async () => {
+  for (const kind of ['diary', 'complete']) {
+    const id = `admin-badge-${kind}`, d = { ...original(kind), userId: 'admin', author: 'Admin' };
+    const b = writeBatch(admin); b.set(doc(admin, 'pensieri', id), d); b.set(doc(admin, 'testi', id), { ...projection(d), admin: true });
+    await assertSucceeds(b.commit());
+    const pub = (await assertSucceeds(getDoc(doc(other, 'testi', id)))).data();
+    assert.equal(pub.admin, true); assert.equal(pub.userId, undefined); assert.equal(pub.autoreId, undefined); assert.equal(pub.author, undefined);
+    await assertFails(updateDoc(doc(admin, 'testi', id), { admin: 'true' }));
+    await assertFails(updateDoc(doc(admin, 'testi', id), { admin: false }));
+    await assertFails(updateDoc(doc(other, 'testi', id), { admin: true }));
+    await assertSucceeds(setDoc(doc(admin, 'testi', id), projection(d))); // Compatibilità con client precedenti.
+  }
 });
 test('le vecchie app salvano ancora gli originali, senza poter pubblicare copie integrali', async () => {
   const d = original(); delete d.kind; delete d.excerpt;
@@ -249,6 +272,21 @@ test('l’autore non sa chi ha acceso: scintille_mie è del lettore e degli admi
   await assertFails(getDoc(doc(owner, 'scintille_mie', 'other', 'voci', sid)));
   await assertFails(getDocs(collection(owner, 'scintille_mie', 'other', 'voci')));
   await assertFails(getDoc(doc(owner, 'scintille_mie', 'other', 'pezzi', 'sp-diary')));
+});
+
+test('le scintille dell’Admin portano il solo sigillo, non imitabile da altri account', async () => {
+  const sid = sidOf('admin-sigillo');
+  await assertSucceeds(light(admin, 'admin', 'sp-diary', sid, spark({ admin: true })));
+  const s = (await assertSucceeds(getDoc(doc(owner, 'pensieri', 'sp-diary', 'scintille', sid)))).data();
+  assert.equal(s.admin, true); assert.equal(s.userId, undefined); assert.equal(s.author, undefined);
+  await assertFails(light(other, 'other', 'sp-diary', sidOf('falso-sigillo'), spark({ admin: true }), [sidOf('base')]));
+  await assertFails(light(admin, 'admin', 'sp-diary', sidOf('sigillo-stringa'), spark({ admin: 'true' }), [sid]));
+  await assertFails(updateDoc(doc(admin, 'pensieri', 'sp-diary', 'scintille', sid), { nota: 'Riscritta' }));
+  await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'admins', 'second-admin'), {}));
+  const secondAdmin = env.authenticatedContext('second-admin').firestore();
+  await assertFails(light(secondAdmin, 'second-admin', 'sp-diary', sidOf('secondo-sigillo'), spark({ admin: true })));
+  // Il ruolo senza il sigillo personale continua a funzionare: nessun nuovo permesso per il badge.
+  await assertSucceeds(light(secondAdmin, 'second-admin', 'sp-diary', sidOf('secondo-normale')));
 });
 test('niente scintille sul proprio pensiero, sui completi o su pensieri che non esistono', async () => {
   await assertFails(light(owner, 'owner', 'sp-diary', sidOf('own')));

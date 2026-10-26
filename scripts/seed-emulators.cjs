@@ -17,6 +17,8 @@ const PEOPLE = [
 const P = (...lines) => lines.map((l) => `<p>${l}</p>`).join('');
 const day = (m, d, h = 17) => new Date(2026, m - 1, d, h, 12).getTime();
 const WRITINGS = [
+  { id: 'w-admin', who: 'prof', kind: 'complete', at: day(10, 21), title: 'Il filo che tiene insieme le parole', content: P('Ogni pagina comincia con una voce. Il Circuito è il posto in cui quelle voci si incontrano.', 'Scrivere significa anche trovare il tempo di ascoltare quello che gli altri hanno lasciato sul foglio.') },
+  { id: 'd-admin', who: 'prof', kind: 'diary', firmato: true, at: day(10, 22), title: 'Tra una pagina e l’altra', content: P('Tra una pagina e l’altra c’è sempre una frase che torna. Oggi mi porto via il rumore della pioggia sui vetri e una parola che non avevo mai usato.') },
   { id: 'w-primo-mese', who: 'andrea', kind: 'complete', at: day(10, 3), title: 'Il primo mese del quinto anno', rating: 4, content: P('Settembre è passato come un treno che non ferma alle stazioni piccole. Ho contato le mattine con il cielo bianco sopra il cortile e le ho trovate tutte uguali, poi diverse.', 'C’è una cosa che nessuno dice del quinto anno: che si comincia a guardare la scuola come si guarda una casa da cui si trasloca. I corridoi diventano più lunghi, le porte più pesanti, i compagni più gentili.', 'Ho deciso di scrivere ogni sera una riga sola. Stasera la riga è questa: restare è anche un modo di partire.') },
   { id: 'w-lettera', who: 'giulia', kind: 'complete', at: day(10, 6), title: 'Lettera a chi resta', rating: 5, content: P('Caro te che resti, ti lascio le chiavi del cassetto in alto, quello che si apre solo tirando a sinistra.', 'Dentro ci sono i biglietti del cinema, una conchiglia, la ricevuta di un gelato diviso in due. Non sono ricordi: sono istruzioni.', 'Quando avrai paura di dimenticare, aprilo. Quando avrai paura di ricordare troppo, chiudilo piano.') },
   { id: 'w-scale', who: 'marco', kind: 'complete', at: day(10, 9), title: 'Le scale di via Po', rating: 4, content: P('Le scale di via Po hanno novantadue gradini e un pianerottolo dove la luce entra di traverso.', 'Mia nonna li saliva contando ad alta voce, e quando sbagliava ricominciava da capo, senza fretta. Io li salgo due alla volta e non conto mai.', 'Forse è per questo che non so mai a che piano sono.') },
@@ -80,6 +82,7 @@ const excerptOf = (html) => {
     await put(`profili/${j.localId}`, { displayName: p.name, handle: p.name.split(' ')[0].toLowerCase(), status: p.status, bio: p.bio, avatar: '', banner: p.banner, createdAt: now, updatedAt: now });
     if (p.admin) await put(`admins/${j.localId}`, { nome: p.name });
   }
+  await put('app_config/admin_badge', { uid: uid.prof });
   for (const w of WRITINGS) {
     const person = PEOPLE.find((p) => p.key === w.who);
     const o = { title: w.title, content: w.content, strokes: [], w: 900, h: 600, author: person.name, timestamp: w.at, userId: uid[w.who], isStarred: false, kind: w.kind };
@@ -90,6 +93,7 @@ const excerptOf = (html) => {
       ? { version: 2, kind: 'diary', title: w.title, content: w.content, strokes: [], w: 900, h: 600, ...(w.firmato ? { firma: person.name, autoreId: uid[w.who] } : {}) }
       : { version: 2, kind: 'complete', title: w.title, excerpt: o.excerpt };
     if (w.nataDa) pub.nataDa = w.nataDa;
+    if (w.who === 'prof') pub.admin = true;
     await put(`testi/${w.id}`, pub);
     if (w.kind === 'complete') await put(`valutazioni/${w.id}`, { stato: w.rating ? 'scelto' : 'da_leggere', nota: '', voto: w.rating || 0, segnalibro: w.rating === 5, updatedAt: w.at });
     if (w.rating) await put(`notifiche/n-${w.id}`, { userId: uid[w.who], pensieroId: w.id, titolo: w.title, voto: w.rating, timestamp: w.at + 86400000, letta: false });
@@ -102,7 +106,7 @@ const excerptOf = (html) => {
     const w = WRITINGS.find((x) => x.id === sp.on), text = textOf(w.content), at = text.indexOf(sp.cit);
     const pre = sp.pre ?? (at > 0 ? text.slice(Math.max(0, at - 40), at) : ''), post = sp.post ?? (at >= 0 ? text.slice(at + sp.cit.length, at + sp.cit.length + 40) : '');
     const sid = `seed${String(i).padStart(2, '0')}${Math.random().toString(36).slice(2, 12)}`.padEnd(20, 'x'), giorno = today - sp.ago;
-    await put(`pensieri/${sp.on}/scintille/${sid}`, { cit: sp.cit, pre, post, tipo: sp.tipo, giorno, ...(sp.nota ? { nota: sp.nota } : {}) });
+    await put(`pensieri/${sp.on}/scintille/${sid}`, { cit: sp.cit, pre, post, tipo: sp.tipo, giorno, ...(sp.nota ? { nota: sp.nota } : {}), ...(sp.by === 'prof' ? { admin: true } : {}) });
     await put(`scintille_mie/${uid[sp.by]}/voci/${sid}`, { pensieroId: sp.on, giorno });
     const k = `${uid[sp.by]}/pezzi/${sp.on}`; pezzi[k] = [...(pezzi[k] || []), sid];
   }

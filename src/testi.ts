@@ -13,7 +13,7 @@ export const excerptOf = (html: string) => {
   let bytes = 0;
   return selected.filter(c => { const n = c.codePointAt(0)!; bytes += n < 128 ? 1 : n < 2048 ? 2 : n < 65536 ? 3 : 4; return bytes <= 480; }).join("").trimEnd();
 };
-export const PUB_KEYS = ["version", "kind", "title", "excerpt", "content", "strokes", "w", "h", "firma", "autoreId", "carta", "nataDa"];
+export const PUB_KEYS = ["version", "kind", "title", "excerpt", "content", "strokes", "w", "h", "firma", "autoreId", "carta", "nataDa", "admin"];
 // il foglio su cui si scrive: a quadretti, a righe o bianco. Chi scrive lo sceglie; se non l'ha scelto, quello del suo
 // tipo (gli scritti completi a quadretti, i pensieri del diario a righe). Vale nell'editor, nelle anteprime e in lettura
 export type Carta = "quadretti" | "righe" | "bianco";
@@ -44,6 +44,8 @@ export const pubOf = (t: any) => {
     if (n) o.nataDa = n;
   } else o.excerpt = typeof t?.excerpt === "string" ? t.excerpt : excerptOf(t?.content || "");
   if (isCarta(t?.carta)) o.carta = t.carta;
+  // Solo il sigillo, senza aggiungere nomi o uid alle copie anonime. Firestore verifica il proprietario reale.
+  if (t?.admin === true) o.admin = true;
   return o;
 };
 export const readPublic = (t: any, id: string) => ({ ...pubOf(t), id, _anon: true });

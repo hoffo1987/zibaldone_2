@@ -17,6 +17,16 @@ test("i campi che mancano non diventano undefined (Firestore li rifiuterebbe)", 
   expect(Object.values(pubOf(null))).not.toContain(undefined);
 });
 
+test("il sigillo verificato attraversa le copie pubbliche senza pubblicare altre identità", () => {
+  for (const kind of ["complete", "diary"]) {
+    const pub = pubOf({ ...scritto, kind, admin: true });
+    expect(pub.admin).toBe(true);
+    expect(pub).not.toHaveProperty("userId"); expect(pub).not.toHaveProperty("author");
+    expect(pubSig(pub)).toBe(pubSig({ ...scritto, kind, admin: true }));
+    expect(pubOf({ ...scritto, kind, admin: "true" })).not.toHaveProperty("admin");
+  }
+});
+
 test.each(["", "x", "ab", "Tre", "Un breve pensiero", "🌿😀✨ un giorno nuovo", "testo ".repeat(1000)])("l’estratto non contiene mai tutto il testo: caso %#", text => {
   const excerpt = excerptOf(`<p>${text}</p><img src="data:image/png;base64,AAAA" alt="SEGRETO">`);
   expect(excerpt.length).toBeLessThanOrEqual(480);

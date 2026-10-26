@@ -9,6 +9,7 @@ import { moving } from "./motion";
 import { renderLoop } from "./renderLoop";
 import { fieldDevice, webgpuReady } from "./field/common";
 import { Strumento } from "./strumentoGpu";
+import AdminBadge from "./AdminBadge";
 import "./scintille.css";
 
 // «Le tue scintille», in I miei scritti: lo strumento che legge il segnale dei propri pensieri.
@@ -34,9 +35,9 @@ const foldGet = () => { try { return localStorage.getItem(FOLD) === "1"; } catch
 const foldSet = (v: boolean) => { try { localStorage.setItem(FOLD, v ? "1" : "0"); } catch {} };
 const label = (t: Tipo) => TIPI.find((x) => x.id === t)!.label;
 
-export function ScintilleMie({ db, uid, received, ready, find, onOpenOwn, onOpenOther, onLook }: {
+export function ScintilleMie({ db, uid, received, ready, find, taggedAdmin = false, onOpenOwn, onOpenOther, onLook }: {
   db: Firestore; uid: string; received: Ricevute; ready: boolean; find: (id: string) => any;
-  onOpenOwn: (id: string) => void; onOpenOther: (t: any) => void; onLook: () => void;
+  taggedAdmin?: boolean; onOpenOwn: (id: string) => void; onOpenOther: (t: any) => void; onLook: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("ricevute");
   const [mine, setMine] = useState<Accesa[] | null>(null);
@@ -165,7 +166,7 @@ export function ScintilleMie({ db, uid, received, ready, find, onOpenOwn, onOpen
       <div key={`${tab}:${solo || ""}`} className="stm-body" role="tabpanel">
         {solo && <p className="stm-solo"><span className={`stm-solo-k t-${solo}`}>Solo <b>{label(solo)}</b></span><button type="button" className="sc-lst" onClick={() => { setSolo(null); haptic("select"); }}>Tutte le emozioni<X size={13} /></button></p>}
         {busy ? <div className="stm-empty"><Loader2 size={16} className="animate-spin" /></div>
-          : !shown.length ? <p className="stm-empty">{tab === "ricevute" ? "Quando qualcuno accenderà una frase dei tuoi pensieri, il suo segnale arriverà qui. Chi l’ha accesa resta anonimo." : "Leggi il Diario: seleziona una frase che ti colpisce e accendi una scintilla. Il suo segnale resterà qui."}</p>
+          : !shown.length ? <p className="stm-empty">{tab === "ricevute" ? "Quando qualcuno accenderà una frase dei tuoi pensieri, il suo segnale arriverà qui. Le scintille restano anonime, salvo quelle con il sigillo Admin." : "Leggi il Diario: seleziona una frase che ti colpisce e accendi una scintilla. Il suo segnale resterà qui."}</p>
           : <ul className="stm-l">
             {(all ? shown : shown.slice(0, SHOW)).map((g, i) => <li key={g.key} className="stm-g" style={{ ["--i" as any]: i }}>
               <button type="button" className="stm-gh" disabled={tab === "accese" && !docs[g.key]} onClick={() => open(g.key)}>
@@ -176,7 +177,7 @@ export function ScintilleMie({ db, uid, received, ready, find, onOpenOwn, onOpen
               <ul>{g.list.map((s) => <li key={s.id} className={`stm-s t-${s.tipo}`}
                 onPointerEnter={(e) => { if (e.pointerType === "mouse") setHl(s.tipo); }} onPointerLeave={() => setHl(null)}>
                 <q className="stm-q">{flat(s.cit)}</q>
-                <span className="stm-meta"><Chip tipo={s.tipo} /><span className="stm-d">{quando(s.giorno)}</span></span>
+                <span className="stm-meta"><Chip tipo={s.tipo} /><AdminBadge active={s.admin === true || (tab === "accese" && taggedAdmin)} /><span className="stm-d">{quando(s.giorno)}</span></span>
                 {s.nota && <p className="stm-nota">{s.nota}</p>}
               </li>)}</ul>
             </li>)}

@@ -55,6 +55,12 @@ con `npx firebase-tools deploy --only firestore:rules`. I backup dei dati sono l
 
 ## Sviluppo e verifica
 
+Il sigillo personale «Admin» usa `app_config/admin_badge.uid`, configurato sul server per il solo account scelto.
+I client non possono modificarlo né assegnarlo dal profilo. Il ruolo continua a dipendere da `admins/{uid}`.
+Le copie pubbliche e le scintille dell'account possono portare `admin: true`, verificato dalle regole sul proprietario
+reale; gli altri utenti restano anonimi. I vecchi client possono salvare senza questo campo. Il badge è CSS/SVG statico,
+con un unico listener di configurazione nell'app e nessuna risorsa WebGPU aggiuntiva.
+
 Gli aggiornamenti riusciti di `main` generano automaticamente un annuncio nel pannello Notifiche, per tutti gli
 utenti. La pipeline pubblica dopo controlli, build Android/iOS e conferma del deployment di produzione Vercel;
 ignora revisioni superate e modifiche alla sola documentazione. Un nuovo tentativo dello stesso commit non duplica

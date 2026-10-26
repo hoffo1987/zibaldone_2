@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import AdminBadge from "./AdminBadge";
 import { collection, deleteDoc, doc, getDoc, getDocs, limit, query, where, writeBatch, type Firestore } from "firebase/firestore";
 import { Sparkles, X, Reply, ChevronDown, Trash2, Loader2, EyeOff, UserRound, Sprout, CornerDownRight, ArrowUpRight } from "lucide-react";
 import { TIPI, LIMITE, NOTA_MAX, CIT_MAX, indiceDi, ritrova, fondi, selezioneDi, ancoraDi, motivoNo, rangeDi, leggiScintilla, siToccano, oggi, flat,
@@ -173,9 +174,9 @@ const hit = (ix: Indice, a: number, b: number, x: number, y: number) => {
   return !!r && Array.from(r.getClientRects()).some((q) => x >= q.left - 3 && x <= q.right + 3 && y >= q.top - 3 && y <= q.bottom + 3);
 };
 
-export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, onReceived, onReply, notify }: {
+export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, taggedAdmin = false, onReceived, onReply, notify }: {
   db: Firestore; uid: string; item: any; mode: ScMode; rt: () => HTMLElement | null; compact: boolean; profiles: Record<string, any>;
-  onReceived?: (id: string, list: Scintilla[]) => void; onReply: (r: { id: string; cit: string }) => void; notify: (m: string) => void;
+  taggedAdmin?: boolean; onReceived?: (id: string, list: Scintilla[]) => void; onReply: (r: { id: string; cit: string }) => void; notify: (m: string) => void;
 }) {
   const id: string = item.id;
   const reader = mode === "lettore", lights = mode !== "autore"; // chi può accendere: chiunque non sia l'autore
@@ -324,6 +325,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
     if (!p.anchor || full) return false;
     const ref = doc(collection(db, "pensieri", id, "scintille")), g = oggi(), note = nota.trim().slice(0, NOTA_MAX);
     const data: any = { ...p.anchor, tipo, giorno: g };
+    if (taggedAdmin) data.admin = true;
     if (note) data.nota = note;
     try {
       const b = writeBatch(db);
@@ -384,6 +386,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
   const entry = (s: Scintilla, actions = true) => (
     <li key={s.id} className="sc-it">
       <Chip tipo={s.tipo} />
+      <AdminBadge active={s.admin === true || (taggedAdmin && mieIds.includes(s.id))} />
       {s.nota && <span className="sc-nota-t">{s.nota}</span>}
       {mode === "admin" && who && <span className="sc-who"><UserRound size={11} aria-hidden="true" />{whoName(s.id)}</span>}
       {actions && <span className="sc-it-acts">
@@ -449,7 +452,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
         {pick.cit.length > 0 && pick.cit.length <= CIT_MAX && <button type="button" className="sc-rep" aria-label="Rispondi con un pensiero" onClick={() => reply(pick.cit)}><Reply size={15} /><span className="sc-long">Rispondi con un pensiero</span><span className="sc-short">Rispondi</span></button>}
       </div>, host())}
 
-    {compose && createPortal(<Compose pick={compose} compact={compact} onClose={() => setCompose(null)} onLight={async (t, n) => { if (await light(compose, t, n)) setCompose(null); }} />, host())}
+    {compose && createPortal(<Compose pick={compose} compact={compact} taggedAdmin={taggedAdmin} onClose={() => setCompose(null)} onLight={async (t, n) => { if (await light(compose, t, n)) setCompose(null); }} />, host())}
 
     {pop && list && createPortal(
       <div className="sc-pop pn" role="dialog" aria-label="Scintille su questa frase" style={{ left: Math.max(16, Math.min(window.innerWidth - 316, pop.x - 150)), top: pop.y > window.innerHeight * 0.55 ? undefined : pop.y + 16, bottom: pop.y > window.innerHeight * 0.55 ? window.innerHeight - pop.y + 16 : undefined }}
@@ -461,7 +464,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
           <ul>{xs.map((s) => entry(s))}</ul>
           {!reader && <button type="button" className="sc-lnk" onClick={() => reply(cit)}><Reply size={12} />Rispondi con un pensiero</button>}
         </div>)}
-        {!reader && <p className="sc-anon"><EyeOff size={11} aria-hidden="true" />{mode === "admin" ? "Le identità sono solo nell’elenco, per gli admin." : "Chi le ha accese resta anonimo."}</p>}
+        {!reader && <p className="sc-anon"><EyeOff size={11} aria-hidden="true" />{mode === "admin" ? "Le identità sono solo nell’elenco. Le scintille dell’Admin portano il suo sigillo." : "Chi le ha accese resta anonimo, salvo il sigillo delle scintille dell’Admin."}</p>}
       </div>, host())}
   </>;
 }
@@ -469,7 +472,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
 // La scheda per accendere: la frase, quattro emozioni fisse e una nota facoltativa. Ogni emozione mostra la sua onda;
 // scelta, l'onda si disegna sotto la frase citata, come la vedrà chi l'ha scritta. Sul telefono la scheda sale dal basso
 // e resta sopra la tastiera.
-function Compose({ pick, compact, onClose, onLight }: { pick: Pick; compact: boolean; onClose: () => void; onLight: (t: Tipo, nota: string) => Promise<void> }) {
+function Compose({ pick, compact, taggedAdmin, onClose, onLight }: { pick: Pick; compact: boolean; taggedAdmin: boolean; onClose: () => void; onLight: (t: Tipo, nota: string) => Promise<void> }) {
   const [tipo, setTipo] = useState<Tipo | null>(null);
   const [nota, setNota] = useState("");
   const [busy, setBusy] = useState(false);
@@ -507,7 +510,7 @@ function Compose({ pick, compact, onClose, onLight }: { pick: Pick; compact: boo
         <textarea className="inp" rows={2} maxLength={NOTA_MAX} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Che cosa ti ha fatto pensare?" onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) go(); }} />
         <small aria-live="polite">{nota.length}/{NOTA_MAX}</small>
       </label>
-      <p className="sc-priv"><EyeOff size={12} aria-hidden="true" />Chi l’ha scritto vedrà il segnale sotto la frase, l’emozione e la nota, mai il tuo nome.</p>
+      <p className="sc-priv"><EyeOff size={12} aria-hidden="true" />{taggedAdmin ? "Questa scintilla porterà il tuo sigillo Admin, insieme all’emozione e alla nota." : "Chi l’ha scritto vedrà il segnale sotto la frase, l’emozione e la nota, mai il tuo nome."}</p>
       <div className="sc-acts">
         <button type="button" className="bt" onClick={onClose}>Annulla</button>
         <button type="button" className="bt on sc-light" disabled={!tipo || busy} onClick={go}>{busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}Accendi</button>
@@ -544,12 +547,12 @@ export function EchiDelPensiero({ db, item, find, onOpen }: { db: Firestore; ite
     {nata && <div className="rd-bar sc-eco from">
       <span className="rd-k"><Sprout size={13} aria-hidden="true" />Nato da un pensiero</span>
       <q className="sc-eco-q">{nata.cit}</q>
-      {orig ? <button type="button" className="sc-lst" onClick={() => onOpen(orig)}>Leggi l’originale<ArrowUpRight size={13} /></button>
+      {orig ? <><AdminBadge active={orig.admin === true} /><button type="button" className="sc-lst" onClick={() => onOpen(orig)}>Leggi l’originale<ArrowUpRight size={13} /></button></>
         : orig === null && <span className="sc-gone">pensiero ritirato</span>}
     </div>}
     {kids.length > 0 && <div className="rd-bar sc-eco kids">
       <button type="button" className="sc-kids" aria-expanded={open} onClick={() => setOpen(!open)}><CornerDownRight size={14} aria-hidden="true" /><b>{kids.length}</b> {kids.length === 1 ? "pensiero nato da qui" : "pensieri nati da qui"}<ChevronDown size={14} /></button>
-      {open && <ul className="sc-kids-l">{kids.map((k) => <li key={k.id}><button type="button" onClick={() => onOpen(k)}><span className="sc-kid-t">{k.title || "Senza titolo"}</span>{nataDaOf(k) && <q>{nataDaOf(k)!.cit}</q>}</button></li>)}</ul>}
+      {open && <ul className="sc-kids-l">{kids.map((k) => <li key={k.id}><button type="button" onClick={() => onOpen(k)}><span className="sc-kid-t">{k.title || "Senza titolo"}</span><AdminBadge active={k.admin === true} />{nataDaOf(k) && <q>{nataDaOf(k)!.cit}</q>}</button></li>)}</ul>}
     </div>}
   </>;
 }

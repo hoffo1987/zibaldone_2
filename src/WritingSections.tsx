@@ -83,11 +83,11 @@ export function WritingIntro({ diary, onWrite }: { diary: boolean; onWrite: () =
 // anteprima del pensiero: gli a capo restano (si legge come è stato scritto) ma senza righe vuote ripetute né spazi
 // indivisibili in fila, che sul foglio a righe lasciavano buchi e righe spostate
 const preview = (html: string) => plain(html || "").replace(/\u00A0/g, " ").replace(/[ \t]+/g, " ").replace(/ *\n\s*/g, "\n").trim();
-export function DiaryCards({ items, onOpen, author, drawing }: { items: any[]; onOpen: (t: any, e: any) => void; author: (t: any) => string; drawing: (t: any) => React.ReactNode }) {
+export function DiaryCards({ items, onOpen, author, drawing }: { items: any[]; onOpen: (t: any, e: any) => void; author: (t: any) => React.ReactNode; drawing: (t: any) => React.ReactNode }) {
   return <div className="diary-grid grid sm:grid-cols-2 gap-5">
     {items.map(t => <article key={t.id} data-doc={t.id} className="diary-card pn" role="button" tabIndex={0} aria-label={`Leggi il pensiero ${t.title}`} onClick={e => onOpen(t, e)} onKeyDown={e => { if (["Enter", " "].includes(e.key)) { e.preventDefault(); onOpen(t, e); } }}>
       {/* in alto il titolo e sotto la firma (o la voce anonima); sul foglio soltanto il pensiero */}
-      <div className={`diary-card-top ${signatureOf(t) ? "signed" : ""}`}>{signatureOf(t) ? <Signature size={18} /> : <BookOpen size={18} />}<div className="min-w-0 flex-1"><h3 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title}</h3><span className="diary-card-by block truncate">{author(t)}</span></div><ArrowUpRight size={17} className="shrink-0 mt-1" /></div>
+      <div className={`diary-card-top ${signatureOf(t) ? "signed" : ""}`}>{signatureOf(t) ? <Signature size={18} /> : <BookOpen size={18} />}<div className="min-w-0 flex-1"><h3 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title}</h3><span className="diary-card-by account-by">{author(t)}</span></div><ArrowUpRight size={17} className="shrink-0 mt-1" /></div>
       <div className={`paper diary-paper ${paperClass(cartaOf(t))}`}><p className="whitespace-pre-line line-clamp-6">{preview(t.content) || "Un pensiero disegnato, oltre le parole."}</p>{drawing(t)}</div>
       <p className="diary-card-foot"><Feather size={13} aria-hidden="true" />Un pensiero da leggere, senza giudizi.</p>
     </article>)}
@@ -96,7 +96,7 @@ export function DiaryCards({ items, onOpen, author, drawing }: { items: any[]; o
 
 export function ReadingNotice({ item }: { item: any }) {
   return <div className={`reading-notice ${isDiary(item) ? "diary-notice" : ""}`} role="note">
-    {isDiary(item) ? signatureOf(item) ? <><Signature size={19} /><div><b>Pensiero del diario · firmato</b><p>L’autore ha scelto di firmare questo pensiero. Non riceve voti, categorie o posizioni in classifica.</p></div></>
+    {isDiary(item) ? item.admin === true ? <><Signature size={19} /><div><b>Pensiero del diario · Admin</b><p>Il sigillo distingue questo pensiero dell’Admin. Non riceve voti, categorie o posizioni in classifica.</p></div></> : signatureOf(item) ? <><Signature size={19} /><div><b>Pensiero del diario · firmato</b><p>L’autore ha scelto di firmare questo pensiero. Non riceve voti, categorie o posizioni in classifica.</p></div></>
       : <><EyeOff size={19} /><div><b>Pensiero del diario · lettura integrale</b><p>Il nome dell’autore è visibile solo all’amministratore e all’autore stesso. Questo pensiero non riceve voti, categorie o posizioni in classifica.</p></div></>
       : <><LockKeyhole size={19} /><div><b>Stai leggendo soltanto un estratto</b><p>Per tutelare lo scritto, il testo integrale, le immagini e i disegni sono riservati all’autore e all’amministratore.</p></div></>}
   </div>;

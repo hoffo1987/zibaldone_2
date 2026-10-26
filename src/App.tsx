@@ -27,6 +27,7 @@ import "./editor.css";
 import "./scritti.css";
 import "./reader.css";
 import "./authors.css";
+import AdminBadge from "./AdminBadge";
 import "./podio.css";
 import { EmptyCircuit } from "./EmptyCircuit";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
@@ -1185,6 +1186,18 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
+  const [badgeUid, setBadgeUid] = useState("");
+  const [badgeReady, setBadgeReady] = useState(false);
+  const taggedAdmin = isAdmin && !!badgeUid && user?.uid === badgeUid;
+  // Un solo documento pubblico, gestito dal server: il sigillo non è un campo modificabile del profilo.
+  useEffect(() => {
+    setBadgeUid(""); setBadgeReady(false);
+    if (!user || !db) return;
+    return onSnapshot(doc(db, "app_config", "admin_badge"), (s) => {
+      const uid = s.data()?.uid;
+      setBadgeUid(typeof uid === "string" && uid.length <= 128 ? uid : ""); setBadgeReady(true);
+    }, () => { setBadgeUid(""); setBadgeReady(true); });
+  }, [user]);
   // list
   const [rawItems, setRawItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1471,13 +1484,14 @@ export default function App() {
   // prima che la copia esistesse, o da una versione vecchia dell'app). Ogni scritto si controlla una volta per versione.
   const pubDone = useRef<Map<string, string>>(new Map());
   const pubAll = useRef(false);
-  const pubSync = (id: string, t: any) => { pubDone.current.set(id, pubSig(t)); return setDoc(doc(db, "testi", id), pubOf(t)); };
+  const withAdmin = (t: any) => ({ ...t, admin: !!badgeUid && t.userId === badgeUid });
+  const pubSync = (id: string, t: any) => { const marked = withAdmin(t); pubDone.current.set(id, pubSig(marked)); return setDoc(doc(db, "testi", id), pubOf(marked)); };
   useEffect(() => {
-    if (!db || !user || !adminChecked || loading || !rawScope) return;
+    if (!db || !user || !adminChecked || !badgeReady || loading || !rawScope) return;
     const full = isAdmin && rawScope === "all" && !pubAll.current;
-    const todo = rawItems.filter((t) => (isAdmin || t.userId === user.uid) && pubDone.current.get(t.id) !== pubSig(t));
+    const todo = rawItems.filter((t) => (isAdmin || t.userId === user.uid) && pubDone.current.get(t.id) !== pubSig(withAdmin(t)));
     if (!todo.length && !full) return;
-    todo.forEach((t) => pubDone.current.set(t.id, pubSig(t)));
+    todo.forEach((t) => pubDone.current.set(t.id, pubSig(withAdmin(t))));
     if (full) pubAll.current = true;
     (async () => {
       try {
@@ -1490,13 +1504,13 @@ export default function App() {
         } else {
           await Promise.all(todo.map(async (t) => { const s = await getDoc(doc(db, "testi", t.id)); if (s.exists()) have.set(t.id, s.data()); }));
         }
-        for (const t of todo) if (!have.has(t.id) || pubSig(have.get(t.id)) !== pubSig(t)) await pubSync(t.id, t);
+        for (const t of todo) if (!have.has(t.id) || pubSig(have.get(t.id)) !== pubSig(withAdmin(t))) await pubSync(t.id, t);
       } catch (e) {
         // niente nuovi tentativi in questa sessione: con le regole vecchie fallirebbe a ogni aggiornamento dell'archivio
         console.warn("Copie anonime degli scritti non aggiornate (controlla le regole di Firestore)", e);
       }
     })();
-  }, [rawItems, rawScope, loading, isAdmin, adminChecked, user]);
+  }, [rawItems, rawScope, loading, isAdmin, adminChecked, user, badgeReady, badgeUid]);
 
   // Scintille ed echi sui propri pensieri del diario: nessuno scrive notifiche per l'autore, le calcola il suo client
   // (scintille.ts). Si leggono le scintille dei 30 pensieri del diario più recenti, un pensiero alla volta (le regole non
@@ -2038,7 +2052,7 @@ export default function App() {
       if (editingId) b.update(ref, { ...d, updatedAt: Date.now() });
       else b.set(ref, { ...d, author, timestamp: Date.now(), userId: owner, isStarred: false });
       const link = orig ? nataDaOf(orig) : null;
-      const full = { ...d, author, userId: owner, ...(link ? { nataDa: link } : {}) };
+      const full = withAdmin({ ...d, author, userId: owner, ...(link ? { nataDa: link } : {}) });
       b.set(doc(db, "testi", ref.id), pubOf(full));
       await b.commit();
       pubDone.current.set(ref.id, pubSig(full));
@@ -2485,12 +2499,14 @@ export default function App() {
     ? <span className="rounded-full shrink-0 inline-flex items-center justify-center" style={{ width: size, height: size, background: "var(--sf)", border: "1px dashed var(--mu)" }}><EyeOff size={size * 0.5} className="mu" /></span>
     : <Avatar p={profiles[t.userId]} name={t.author} size={size} />;
   const wn = (t: any) => hid(t) ? "Autore nascosto" : dn(t.userId, t.author);
+  const markedWriting = (t: any) => t?._anon ? t.admin === true : !!badgeUid && t?.userId === badgeUid;
+  const writingName = (t: any) => <span className="account-by"><span className="account-name">{wn(t)}</span><AdminBadge active={!hid(t) && markedWriting(t)} /></span>;
   // chi ha scritto un pensiero del diario: l'admin lo vede sempre, gli altri solo se l'autore l'ha firmato
   const diaryAuthor = (t: any) => {
     const s = signatureOf(t), mine = t.userId === user.uid || s?.uid === user.uid;
-    if (isAdmin) return `Autore: ${dn(t.userId || s?.uid, t.author || s?.name)}${s ? " · firmato" : ""}`;
+    if (isAdmin) return <span className="account-by"><span>{`Autore: ${dn(t.userId || s?.uid, t.author || s?.name)}${s ? " · firmato" : ""}`}</span><AdminBadge active={markedWriting(t)} /></span>;
     if (mine) return s ? "Il tuo pensiero · firmato" : "Il tuo pensiero · anonimo agli altri";
-    return s ? dn(s.uid, s.name) : "Una voce del Circuito";
+    return <span className="account-by"><span>{s ? dn(s.uid, s.name) : markedWriting(t) ? "Un pensiero dell’Admin" : "Una voce del Circuito"}</span><AdminBadge active={markedWriting(t)} /></span>;
   };
   const unread = allNotifs.filter((n) => !n.letta).length;
   // un eco si apre nel diario (è il pensiero di un altro); voti e scintille aprono il proprio scritto
@@ -2515,7 +2531,7 @@ export default function App() {
   const row = (t: any, i = 0, rank?: number) => (
     <button key={t.id} data-doc={t.id} data-kind={isDiary(t) ? "diary" : "complete"} onClick={(e) => openView(t, e)} className="writing-row nv idx w-full px-4 py-3 rounded-xl text-left transition-colors" style={{ ["--i" as any]: i }}>
       <span className="writing-row-avatar">{rank && <span className="hd w-8 text-center font-bold mu">{rank}</span>}{who(t, 36)}</span>
-      <span className="writing-row-copy"><span className="writing-row-title font-semibold">{t.title}</span><span className="writing-row-byline mu text-xs"><span>{wn(t)}</span><span className="writing-row-date">{fmtDate(t.timestamp)}</span></span></span>
+      <span className="writing-row-copy"><span className="writing-row-title font-semibold">{t.title}</span><span className="writing-row-byline mu text-xs"><span>{writingName(t)}</span><span className="writing-row-date">{fmtDate(t.timestamp)}</span></span></span>
       <span className="writing-row-details"><span className={`kind-badge ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span>
       {isAdmin && canEvaluate(t) && <Stars v={t.rating || 0} size={14} />}</span>
     </button>
@@ -2597,7 +2613,7 @@ export default function App() {
               <div className="flex gap-2 justify-end pt-2"><button type="button" className="bt" onClick={() => setEditProf(false)}>Annulla</button><button className="bt on !px-6">Salva profilo</button></div>
             </form>
           ) : (<>
-            <h2 className="hd text-2xl md:text-3xl font-bold mt-3">{name}</h2>
+            <div className="account-heading mt-3"><h2 className="hd text-2xl md:text-3xl font-bold">{name}</h2><AdminBadge active={!!badgeUid && uid === badgeUid} featured /></div>
             <div className="mu text-sm">{p.handle ? `@${p.handle}` : own ? "Aggiungi un handle" : ""}{p.status ? ` · ${p.status}` : ""}</div>
             {p.bio ? <p className="mt-4 whitespace-pre-line">{p.bio}</p> : own && <p className="mu mt-4 text-sm">Aggiungi una bio per presentarti.</p>}
             <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-sm mu">
@@ -2698,7 +2714,7 @@ export default function App() {
               <div data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className={`pdm-card p${k + 1}`}>
                 <div className="flex items-center justify-between gap-2"><span className="pdm-rank"><span className="pdm-medal sm hd" aria-hidden="true">{k + 1}</span>{k + 1}° posto</span><Stars v={t.rating || 0} size={13} /></div>
                 <div className="hd font-bold leading-snug mt-1 line-clamp-2">{t.title}</div>
-                <div className="pdm-who flex items-center gap-2 mt-1.5 min-w-0">{who(t, 18)}<span className="mu text-xs truncate">{wn(t)}</span></div>
+                <div className="pdm-who flex items-center gap-2 mt-1.5 min-w-0">{who(t, 18)}<span className="mu text-xs">{writingName(t)}</span></div>
               </div>
             ); });
   // telefoni: i vincitori in schede sotto il palco 3D (le targhette sopra le coppe sarebbero troppo piccole)
@@ -2707,7 +2723,7 @@ export default function App() {
       <span className="pdm-medal hd" aria-hidden="true">{k + 1}</span>
       <div className="min-w-0 flex-1">
         <div className="pdm-row-title hd">{t.title}</div>
-        <div className="pdm-row-meta">{who(t, 18)}<span className="who">{wn(t)}</span><span className="stars"><Stars v={t.rating || 0} size={12} /></span></div>
+        <div className="pdm-row-meta">{who(t, 18)}<span className="who">{writingName(t)}</span><span className="stars"><Stars v={t.rating || 0} size={12} /></span></div>
       </div>
     </div>
   ));
@@ -2756,7 +2772,7 @@ export default function App() {
                       <Stars v={t.rating || 0} size={16} />
                     </div>
                     <h3 className="hd text-xl font-bold mt-5 line-clamp-2">{t.title}</h3>
-                    <div className="flex items-center gap-2 mt-2">{who(t, 24)}<span className="mu text-sm">{wn(t)}</span></div>
+                    <div className="flex items-center gap-2 mt-2">{who(t, 24)}<span className="mu text-sm">{writingName(t)}</span></div>
                     <p className="mu text-sm mt-3 line-clamp-3">{plain(t.content)}</p>
                   </div>
                 </Reveal>
@@ -2788,7 +2804,7 @@ export default function App() {
             <div className="au-body">
               <div className="au-who">
                 <button type="button" className="au-av" aria-label="Apri profilo" onClick={(e) => { e.stopPropagation(); setViewProf(a.uid); }}><Avatar p={p} name={a.name} size={58} /></button>
-                <div className="min-w-0 flex-1"><div className="hd font-bold text-lg truncate">{a.name}</div><div className="au-sub">{p.handle ? `@${p.handle}` : "Autore del Circuito"}</div></div>
+                <div className="min-w-0 flex-1"><div className="hd font-bold text-lg account-by"><span className="account-name">{a.name}</span><AdminBadge active={!!badgeUid && a.uid === badgeUid} /></div><div className="au-sub">{p.handle ? `@${p.handle}` : "Autore del Circuito"}</div></div>
               </div>
               {p.status ? <p className="au-status">«{p.status}»</p> : <p className="au-status none">Nessuno stato, per ora.</p>}
               <div className="au-stats">
@@ -2823,14 +2839,14 @@ export default function App() {
         footer={<div className="space-y-2">
           <ApkDownload compact />
           <div className="shell-user flex items-center gap-2">
-            <button onClick={() => go("profile")} data-snd="nav" className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="block font-semibold truncate">{myName}</span><span className="block mu text-xs truncate">{user.email}</span></span></button>
+            <button onClick={() => go("profile")} data-snd="nav" className="nv flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-xl p-1.5"><Avatar p={profiles[user.uid]} name={myName} size={36} /><span className="min-w-0 text-sm"><span className="account-by font-semibold"><span className="account-name">{myName}</span><AdminBadge active={taggedAdmin} /></span><span className="block mu text-xs truncate">{user.email}</span></span></button>
             <button className="bt !p-2" onClick={() => setOptOpen(true)} title="Opzioni" aria-label="Opzioni" data-tour="options"><Settings size={18} /></button>
             <button className="bt !p-2" onClick={logout} title="Esci"><LogOut size={16} /></button>
           </div>
         </div>}
         mobileHeader={<header className="shell-header md:hidden flex items-center justify-between px-4 py-3 pn !rounded-none !border-x-0 !border-t-0 sticky top-0 z-30 hdr">
         <div className="flex items-center gap-2"><Wordmark size={40} fs={19} tag={false} /></div>
-        <div className="flex items-center gap-2">{bell(true)}<button className="bt !p-2" onClick={() => setOptOpen(true)} aria-label="Opzioni" data-tour="options"><Settings size={18} /></button><button onClick={() => go("profile")} data-snd="nav" aria-label="Profilo" className="rounded-full" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /></button></div>
+        <div className="flex items-center gap-2">{bell(true)}<button className="bt !p-2" onClick={() => setOptOpen(true)} aria-label="Opzioni" data-tour="options"><Settings size={18} /></button><button onClick={() => go("profile")} data-snd="nav" aria-label="Profilo" className="rounded-full admin-avatar" style={tab === "profile" ? { boxShadow: "0 0 0 2px var(--ac)" } : {}}><Avatar p={profiles[user.uid]} name={myName} size={40} /><AdminBadge active={taggedAdmin} seal /></button></div>
       </header>} />
 
       <div className={`shell-main md:pb-12 relative ${isAdmin ? "shell-main-admin" : ""}`}>
@@ -2888,7 +2904,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
-                      <span className="kind-badge mb-2">Scritto completo · estratto</span><h2 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title || "Senza titolo"}</h2><p className="mu text-xs mt-3">Il testo integrale è riservato all’autore e all’amministratore.</p>
+                      <span className="account-by mb-2"><span className="kind-badge">Scritto completo · estratto</span><AdminBadge active={markedWriting(t)} /></span><h2 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title || "Senza titolo"}</h2><p className="mu text-xs mt-3">Il testo integrale è riservato all’autore e all’amministratore.</p>
                     </div>
                   </article></Reveal>
                 );
@@ -2897,7 +2913,7 @@ export default function App() {
             {pubShown.length > visible && <div className="flex justify-center mt-8"><button className="bt !px-6 !py-3" onClick={() => setVisible((v) => v + 18)}>Mostra altri ({pubShown.length - visible})</button></div>}
             </>
           ))}
-          {tab === "my_pages" && db && <ScintilleMie db={db} uid={user.uid} ready={vistePronte && ownDiary.every((id) => scByP[id])}
+          {tab === "my_pages" && db && <ScintilleMie db={db} uid={user.uid} taggedAdmin={taggedAdmin} ready={vistePronte && ownDiary.every((id) => scByP[id])}
             received={Object.keys(mieiDiario).map((id) => ({ id, title: mieiDiario[id].title, list: scByP[id] || [] }))}
             find={(id) => items.find((x) => x.id === id) || null} onLook={() => refreshScintille(true)}
             onOpenOwn={(id) => { const t = items.find((x) => x.id === id); if (t) openView(t); }} onOpenOther={(t) => openDiary(t.id, t)} />}
@@ -2925,7 +2941,7 @@ export default function App() {
                     </div>
                     <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
                       <span className={`kind-badge mb-2 ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span>{isAdmin && canEvaluate(t) && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span key={vals[t.id].stato} className={`stato-pill st-${vals[t.id].stato} ${vals[t.id].stato === "scelto" ? "scelto" : ""}`}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}<h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
-                      <div className="mt-2 flex items-center gap-2 mu text-xs">{who(t, 22)}<span className="truncate flex-1">{wn(t)}</span>{isDiary(t) && t.userId === user.uid && scByP[t.id]?.length > 0 && <span className="sc-card-n" title="Scintille ricevute" aria-label={`${scByP[t.id].length} scintille ricevute`}><Sparkles size={11} aria-hidden="true" />{scByP[t.id].length}</span>}<span className="shrink-0 meta-date">{fmtDate(t.timestamp)}</span></div>
+                      <div className="mt-2 flex items-center gap-2 mu text-xs">{who(t, 22)}<span className="min-w-0 flex-1">{writingName(t)}</span>{isDiary(t) && t.userId === user.uid && scByP[t.id]?.length > 0 && <span className="sc-card-n" title="Scintille ricevute" aria-label={`${scByP[t.id].length} scintille ricevute`}><Sparkles size={11} aria-hidden="true" />{scByP[t.id].length}</span>}<span className="shrink-0 meta-date">{fmtDate(t.timestamp)}</span></div>
                       {isAdmin && canEvaluate(t) && <div className="mt-3"><Stars v={t.rating || 0} onSet={t.svelato ? undefined : (n: number) => rate(t, n)} size={15} /></div>}
                       {!isAdmin && !isDiary(t) && t.svelato && t.rating > 0 && <div className="mt-3 flex items-center gap-2"><Stars v={t.rating} size={15} /><span className="mu text-xs">voto ricevuto</span></div>}
                     </div>
@@ -2942,6 +2958,7 @@ export default function App() {
             <form onSubmit={submit} className={`space-y-4 fadein ed-form ${kind === "diary" ? "is-diary" : ""}`}>
               <div>
                 <KindPicker value={kind} onChange={setKind} locked={!!editingId} sign={!editingId || rawItems.find((x) => x.id === editingId)?.userId === user.uid ? { on: signed, set: setSigned, name: myName } : undefined} />
+                {taggedAdmin && (!editingId || rawItems.find((x) => x.id === editingId)?.userId === user.uid) && <p className="mu text-xs account-by"><AdminBadge active />Il tuo sigillo resta visibile anche senza la firma con il nome.</p>}
                 {kind === "diary" && nataView && <div className="eco-chip"><Sprout size={16} aria-hidden="true" /><span className="eco-chip-b"><span className="eco-chip-k">{editingId ? "Nato da un pensiero" : "Rispondi a un pensiero"}</span><q>{nataView.cit}</q></span>{!editingId && <button type="button" className="bt !p-2" aria-label="Togli il legame con il pensiero" title="Togli il legame" onClick={() => setNataDa(null)}><X size={14} /></button>}</div>}
                 {!editingId && <DiaryPrompts key={user.uid} show={kind === "diary"} uid={user.uid} onPaper={spLast && onSheet(plain(content), spLast.s) ? { id: spLast.s.id, untouched: content === spLast.after } : null} onUse={putSpunto} onRemove={takeSpunto} />}
               </div>
@@ -3070,10 +3087,10 @@ export default function App() {
                 {anon ? <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
                   {sign ? <button type="button" onClick={() => setViewProf(sign.uid)} className="rd-av shrink-0" aria-label="Apri profilo"><Avatar p={profiles[sign.uid]} name={sign.name} size={44} /></button>
                     : <span className="rd-av rd-av-anon rounded-full shrink-0 inline-flex items-center justify-center"><BookOpen size={20} /></span>}
-                  <div className="flex-1 min-w-0"><span className="rd-kind"><i aria-hidden="true" />{diary ? "Pensiero del diario" : "Scritto completo · estratto"}</span><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title || "Senza titolo"}</h2><div className="mu text-xs truncate">{sign ? `${dn(sign.uid, sign.name)} · pensiero firmato` : diary ? "Pensiero anonimo · lettura integrale" : "Scritto anonimo · estratto"}</div></div>
+                  <div className="flex-1 min-w-0"><span className="rd-kind"><i aria-hidden="true" />{diary ? "Pensiero del diario" : "Scritto completo · estratto"}</span><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title || "Senza titolo"}</h2><div className="mu text-xs account-by"><span>{sign ? `${dn(sign.uid, sign.name)} · pensiero firmato` : markedWriting(sel) ? diary ? "Pensiero dell’Admin · lettura integrale" : "Scritto dell’Admin · estratto" : diary ? "Pensiero anonimo · lettura integrale" : "Scritto anonimo · estratto"}</span><AdminBadge active={markedWriting(sel)} /></div></div>
                 </div> : <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
                   {hidS ? <span className="rd-av shrink-0">{who(sel, 44)}</span> : <button type="button" onClick={() => setViewProf(sel.userId)} className="rd-av shrink-0" aria-label="Apri profilo">{fresh ? <span className="rvl-av"><i className="rg" /><i className="rg" /><span className="pf-av"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></span></span> : <Avatar p={profiles[sel.userId]} name={sel.author} size={44} />}</button>}
-                  <div className="flex-1 min-w-0"><span className="rd-kind"><i aria-hidden="true" />{diary ? "Pensiero del diario" : "Scritto completo"}</span><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
+                  <div className="flex-1 min-w-0"><span className="rd-kind"><i aria-hidden="true" />{diary ? "Pensiero del diario" : "Scritto completo"}</span><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs account-by"><span>{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)}</span><AdminBadge active={!hidS && markedWriting(sel)} /><span>· {fmtDate(sel.timestamp)}</span></div></div>
                 </div>}
                 <div className="rd-acts flex items-center gap-2 shrink-0 justify-end self-end md:self-auto w-full md:w-auto">
                   {!anon && <span className="rd-grp">
@@ -3106,7 +3123,7 @@ export default function App() {
               </>}
                 {(diary || anon) && <ReadingNotice item={sel} />}
                 {diary && <EchiDelPensiero db={db} item={sel} find={(id) => items.find((x) => x.id === id) || pubItems.find((x) => x.id === id && isDiary(x)) || null} onOpen={(t) => stepTo(t, 1)} />}
-                {scMode && <ScintilleReader key={sel.id} db={db} uid={user.uid} item={sel} mode={scMode} compact={compact} profiles={profiles} rt={() => readRef.current?.querySelector<HTMLElement>("[data-sheet-paper] .rt") || null}
+                {scMode && <ScintilleReader key={sel.id} db={db} uid={user.uid} item={sel} mode={scMode} compact={compact} profiles={profiles} taggedAdmin={taggedAdmin} rt={() => readRef.current?.querySelector<HTMLElement>("[data-sheet-paper] .rt") || null}
                   onReceived={scMode === "autore" ? gotScintille : undefined} onReply={replyWith} notify={notify} />}
                 {anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`reader-paper paper ${diary ? "diary-paper" : ""} ${paperClass(cartaOf(sel))} relative`} data-sheet-paper="">
                   <InkText className="rt relative p-6" html={readingHtml(sel.content)} source={sel.content} strokes={sel.strokes} w={sel.w} />

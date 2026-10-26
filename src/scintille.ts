@@ -1,6 +1,6 @@
 // ===== LE SCINTILLE =====
 // Chi legge un pensiero del diario può accendere una scintilla su una frase: chi l'ha scritto la vede brillare sul
-// foglio, senza sapere chi è stato. Qui c'è solo la parte che non tocca Firestore né React:
+// foglio, senza sapere chi è stato (l'Admin personale ha invece il suo sigillo). Qui c'è la parte senza Firestore/React:
 //   - il testo del lettore come lo vede chi seleziona (gli stessi a capo di plain() in sanitize.ts) e la sua mappa sul DOM;
 //   - la selezione trasformata in { cit, pre, post }, e il ritrovamento della frase anche dopo una modifica;
 //   - la fusione degli intervalli sovrapposti e l'intensità del brillio;
@@ -20,7 +20,7 @@ export const LIMITE = 5; // scintille per lettore e per pensiero (le regole lo f
 export const CIT_MAX = 280, CTX = 40, NOTA_MAX = 140, PAROLE_MIN = 3;
 
 export type Ancora = { cit: string; pre: string; post: string };
-export type Scintilla = Ancora & { id: string; tipo: Tipo; nota?: string; giorno: number };
+export type Scintilla = Ancora & { id: string; tipo: Tipo; nota?: string; giorno: number; admin?: true };
 
 // il giorno, mai l'ora: giorni dall'epoca (UTC), lo stesso numero che controllano le regole
 export const giornoDi = (ms: number) => Math.floor(ms / 864e5);
@@ -162,7 +162,7 @@ export const selezioneDi = (ix: Indice, root: Node, sel: Selection | null): { a:
 // una scintilla letta da Firestore, solo se ha la forma giusta
 export const leggiScintilla = (id: string, d: any): Scintilla | null =>
   d && typeof d.cit === "string" && isTipo(d.tipo) && typeof d.giorno === "number"
-    ? { id, cit: d.cit, pre: typeof d.pre === "string" ? d.pre : "", post: typeof d.post === "string" ? d.post : "", tipo: d.tipo, nota: typeof d.nota === "string" ? d.nota : "", giorno: d.giorno }
+    ? { id, cit: d.cit, pre: typeof d.pre === "string" ? d.pre : "", post: typeof d.post === "string" ? d.post : "", tipo: d.tipo, nota: typeof d.nota === "string" ? d.nota : "", giorno: d.giorno, ...(d.admin === true ? { admin: true as const } : {}) }
     : null;
 // sovrapposte: la stessa persona non accende due volte la stessa frase
 export const siToccano = (x: { a: number; b: number }, y: { a: number; b: number }) => x.a < y.b && y.a < x.b;
