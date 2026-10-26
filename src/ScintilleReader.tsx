@@ -8,15 +8,19 @@ import { nataDaOf, readPublic, PUBLIC_VERSION } from "./testi";
 import { haptic } from "./haptics";
 import * as sound from "./sound";
 import { moving } from "./motion";
+import { renderLoop } from "./renderLoop";
+import { fieldDevice, webgpuReady } from "./field/common";
+import { Luce as LuceGpu, type Span } from "./scintilleGpu";
 import "./scintille.css";
 
 // Le scintille nel lettore di un pensiero del diario. Tre modi:
 //   lettore  il pensiero di un altro: si seleziona una frase e si accende (al massimo 5), le proprie restano tenui e si tolgono
 //   autore   il proprio pensiero: la barra col totale e l'interruttore, le frasi accese che brillano, toccandole emozioni e note
 //   admin    vede tutte le scintille di un pensiero altrui e chi le ha accese (solo nell'elenco); come ogni lettore ne accende
-// Il testo del foglio non si tocca. La luce è uno strato sotto le parole (GlowLayer), disegnato sui rettangoli delle frasi:
-// un alone caldo e un filamento, una corrente che corre lungo la frase quando si accende, un respiro irregolare da valvola,
-// qualche brace che sale dalle frasi più accese. Le parole accese prendono un tono caldo con la CSS Custom Highlight API.
+// Il testo del foglio non si tocca. La luce è disegnata sui rettangoli delle frasi: in WebGPU (scintilleGpu.ts) un
+// filamento percorso dalla corrente sotto le parole, vapore caldo e alone, e sopra il foglio le particelle (scintille,
+// braci, la cometa dal pulsante Accendi); senza WebGPU o col movimento ridotto uno strato in CSS (GlowLayer) con le stesse
+// idee. Le parole accese prendono un tono caldo con la CSS Custom Highlight API.
 // I comandi che galleggiano (la selezione, la scheda per accendere, il fumetto di una frase) sono portali nel body: il
 // pannello del lettore si anima con transform e un fixed al suo interno non starebbe fermo.
 export type ScMode = "autore" | "admin" | "lettore";
@@ -52,8 +56,8 @@ const righe = (rs: DOMRect[]) => {
   });
   return out.sort((x, y) => x.t - y.t || x.l - y.l);
 };
-const RUN = 760; // quanto impiega la corrente a percorrere una frase (ms)
-function GlowLayer({ paper, ix, spans, on, epoch }: { paper: HTMLElement; ix: Indice; spans: Glow[]; on: boolean; epoch: number }) {
+// i rettangoli delle righe di ogni frase, in pixel della carta; si rimisurano quando la carta cambia misura
+function useBoxes(paper: HTMLElement, ix: Indice, spans: Glow[]) {
   const [boxes, setBoxes] = useState<Record<string, Box[]>>({});
   const sig = spans.map((g) => g.key).join("|");
   useLayoutEffect(() => {
@@ -74,6 +78,74 @@ function GlowLayer({ paper, ix, spans, on, epoch }: { paper: HTMLElement; ix: In
     (document as any).fonts?.ready?.then(later);
     return () => { ro.disconnect(); paper.removeEventListener("load", later, true); cancelAnimationFrame(raf); };
   }, [paper, ix, sig]);
+  return boxes;
+}
+
+// La luce: in WebGPU dove c'è (scintilleGpu.ts), altrimenti, o col movimento ridotto, lo strato in CSS qui sotto
+type Launch = { id: string; from: [number, number] } | null;
+function Luce(props: { paper: HTMLElement; ix: Indice; spans: Glow[]; on: boolean; epoch: number; launch: Launch; fresh: string | null }) {
+  const [gpu, setGpu] = useState<GPUDevice | null | undefined>(() => (moving() && webgpuReady() ? undefined : null));
+  useEffect(() => {
+    if (gpu !== undefined) return;
+    let on = true;
+    fieldDevice("low-power", process.env.REACT_APP_EMULATORS === "1").then((d) => { if (on) setGpu(d); });
+    return () => { on = false; };
+  }, [gpu]);
+  if (gpu === undefined) return null;
+  return gpu ? <GpuLayer dev={gpu} {...props} onLost={() => setGpu(null)} /> : <GlowLayer {...props} />;
+}
+
+function GpuLayer({ dev, paper, ix, spans, on, epoch, launch, fresh, onLost }: { dev: GPUDevice; paper: HTMLElement; ix: Indice; spans: Glow[]; on: boolean; epoch: number; launch: Launch; fresh: string | null; onLost: () => void }) {
+  const boxes = useBoxes(paper, ix, spans);
+  const under = useRef<HTMLCanvasElement>(null), over = useRef<HTMLCanvasElement>(null);
+  const eng = useRef<LuceGpu | null>(null);
+  const lost = useRef(onLost); lost.current = onLost;
+  const shown = useRef(on); shown.current = on;
+  useEffect(() => {
+    const u = under.current, o = over.current;
+    if (!u || !o) return;
+    let e: LuceGpu;
+    try { e = new LuceGpu(dev, u, o, paper, paper.closest<HTMLElement>("[data-sheet-scroll]")); } catch (err) { console.warn("Luce delle scintille in WebGPU non partita", err); lost.current(); return; }
+    eng.current = e;
+    e.onBurst = (big) => { if (big) { sound.crackle(); haptic("impact"); } };
+    e.fit(); e.show(shown.current, true);
+    const fit = () => e.fit();
+    const ro = new ResizeObserver(fit); ro.observe(paper);
+    window.addEventListener("resize", fit);
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerType !== "mouse") return;
+      const P = paper.getBoundingClientRect();
+      e.pointer(ev.clientX - P.left - paper.clientLeft, ev.clientY - P.top - paper.clientTop, true);
+    };
+    const leave = () => e.pointer(0, 0, false);
+    paper.addEventListener("pointermove", move); paper.addEventListener("pointerleave", leave);
+    const halt = renderLoop((t) => e.draw(t), () => e.fps(), paper);
+    let gone = false;
+    // dispositivo perso (driver, GPU ripresa dal sistema): resta lo strato in CSS
+    dev.lost.then(() => { if (!gone) lost.current(); });
+    return () => { gone = true; halt(); ro.disconnect(); window.removeEventListener("resize", fit); paper.removeEventListener("pointermove", move); paper.removeEventListener("pointerleave", leave); e.destroy(); eng.current = null; };
+  }, [dev, paper]);
+  // le frasi con le loro righe; la nuova vola dal pulsante (cometa) o si accende sul posto
+  const sig = spans.map((g) => `${g.key}:${g.level}:${g.mine ? 1 : 0}:${g.focus ? 1 : 0}`).join("|");
+  const done = useRef<string | null>(null);
+  useEffect(() => {
+    const e = eng.current; if (!e) return;
+    const list: Span[] = spans.filter((g) => boxes[g.key]?.length).map((g) => ({ key: g.key, boxes: boxes[g.key], level: g.level, mine: g.mine, focus: g.focus }));
+    const nu = spans.find((g) => g.fresh && boxes[g.key]?.length);
+    e.set(list, nu && fresh !== done.current ? nu.key : null);
+    if (nu && fresh !== done.current) { done.current = fresh; e.ignite(nu.key, launch?.id === fresh ? launch.from : null); }
+  }, [boxes, sig]);
+  const first = useRef(epoch);
+  useEffect(() => { if (epoch !== first.current) eng.current?.replay(); }, [epoch]);
+  useEffect(() => { eng.current?.show(on); }, [on]);
+  return createPortal(<>
+    <canvas ref={under} className="scl-u" aria-hidden="true" />
+    {createPortal(<canvas ref={over} className="scl-o" aria-hidden="true" />, host())}
+  </>, paper);
+}
+
+function GlowLayer({ paper, ix, spans, on, epoch }: { paper: HTMLElement; ix: Indice; spans: Glow[]; on: boolean; epoch: number }) {
+  const boxes = useBoxes(paper, ix, spans);
   const still = !moving();
   let embers = 0;
   const sparks: React.ReactNode[] = [];
@@ -134,6 +206,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
   const [compose, setCompose] = useState<Pick | null>(null);
   const [pop, setPop] = useState<{ x: number; y: number; ids: string[] } | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
+  const [launch, setLaunch] = useState<Launch>(null); // da dove parte la cometa della scintilla appena accesa
   const [who, setWho] = useState<Record<string, string> | null>(null);
   const [whoBusy, setWhoBusy] = useState(false);
   const [sure, setSure] = useState<string | null>(null); // l'autore toglie una scintilla ricevuta: secondo tocco per confermare
@@ -259,7 +332,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
   const mine = reader ? list || [] : (list || []).filter((s) => mieIds.includes(s.id));
   const full = mine.length >= LIMITE;
   const overlaps = !!pick && placed.at.some((p) => mieIds.includes(p.s.id) && siToccano(p, pick));
-  const light = async (p: Pick, tipo: Tipo, nota: string) => {
+  const light = async (p: Pick, tipo: Tipo, nota: string, from?: [number, number]) => {
     if (!p.anchor || full) return false;
     const ref = doc(collection(db, "pensieri", id, "scintille")), g = oggi(), note = nota.trim().slice(0, NOTA_MAX);
     const data: any = { ...p.anchor, tipo, giorno: g };
@@ -272,7 +345,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
       await b.commit();
       setPz([...pz.current, ref.id]);
       setList((l) => [...(l || []), { id: ref.id, ...data, nota: note }]);
-      setFresh(ref.id); haptic("success"); sound.spark(true);
+      setFresh(ref.id); setLaunch(from ? { id: ref.id, from } : null); haptic("success"); sound.spark(true);
       window.getSelection()?.removeAllRanges(); setPick(null);
       notify("Scintilla accesa: chi l’ha scritto vedrà la frase brillare.");
       return true;
@@ -364,7 +437,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
 
   return <>
     {bar}
-    {paper && ix && glow.length > 0 && <GlowLayer paper={paper} ix={ix} spans={glow} on={lit} epoch={epoch} />}
+    {paper && ix && glow.length > 0 && <Luce paper={paper} ix={ix} spans={glow} on={lit} epoch={epoch} launch={launch} fresh={fresh} />}
     {listOpen && list && <div className="sc-list">
       {reader ? <ul>{order.map((s) => <li key={s.id} className="sc-g"><div className="sc-g-hd"><q>{flat(s.cit)}</q></div><ul>{entry(s)}</ul></li>)}{placed.lost.length > 0 && placed.lost.map((s) => <li key={s.id} className="sc-g lost"><div className="sc-g-hd"><q>{flat(s.cit)}</q></div><ul>{entry(s)}</ul></li>)}</ul>
         : <>
@@ -385,7 +458,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
         {pick.cit.length > 0 && pick.cit.length <= CIT_MAX && <button type="button" className="sc-rep" aria-label="Rispondi con un pensiero" onClick={() => reply(pick.cit)}><Reply size={15} /><span className="sc-long">Rispondi con un pensiero</span><span className="sc-short">Rispondi</span></button>}
       </div>, host())}
 
-    {compose && createPortal(<Compose pick={compose} compact={compact} onClose={() => setCompose(null)} onLight={async (t, n) => { if (await light(compose, t, n)) setCompose(null); }} />, host())}
+    {compose && createPortal(<Compose pick={compose} compact={compact} onClose={() => setCompose(null)} onLight={async (t, n, from) => { if (await light(compose, t, n, from)) setCompose(null); }} />, host())}
 
     {pop && list && createPortal(
       <div className="sc-pop pn" role="dialog" aria-label="Scintille su questa frase" style={{ left: Math.max(16, Math.min(window.innerWidth - 316, pop.x - 150)), top: pop.y > window.innerHeight * 0.55 ? undefined : pop.y + 16, bottom: pop.y > window.innerHeight * 0.55 ? window.innerHeight - pop.y + 16 : undefined }}
@@ -403,7 +476,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, on
 
 // La scheda per accendere: la frase, quattro emozioni fisse e una nota facoltativa. Sul telefono sale dal basso e resta
 // sopra la tastiera.
-function Compose({ pick, compact, onClose, onLight }: { pick: Pick; compact: boolean; onClose: () => void; onLight: (t: Tipo, nota: string) => Promise<void> }) {
+function Compose({ pick, compact, onClose, onLight }: { pick: Pick; compact: boolean; onClose: () => void; onLight: (t: Tipo, nota: string, from?: [number, number]) => Promise<void> }) {
   const [tipo, setTipo] = useState<Tipo | null>(null);
   const [nota, setNota] = useState("");
   const [busy, setBusy] = useState(false);
@@ -417,7 +490,13 @@ function Compose({ pick, compact, onClose, onLight }: { pick: Pick; compact: boo
     f(); vv.addEventListener("resize", f); vv.addEventListener("scroll", f);
     return () => { vv.removeEventListener("resize", f); vv.removeEventListener("scroll", f); };
   }, [compact]);
-  const go = async () => { if (!tipo || busy) return; setBusy(true); await onLight(tipo, nota); setBusy(false); };
+  const btn = useRef<HTMLButtonElement>(null);
+  // la cometa parte dal centro del pulsante Accendi
+  const go = async () => {
+    if (!tipo || busy) return;
+    const r = btn.current?.getBoundingClientRect();
+    setBusy(true); await onLight(tipo, nota, r ? [r.left + r.width / 2, r.top + r.height / 2] : undefined); setBusy(false);
+  };
   return <div className="sc-ov" onClick={(e) => { e.stopPropagation(); onClose(); }}>
     <div role="dialog" aria-modal="true" aria-label="Accendi una scintilla" className={`sc-sheet pn ${compact ? "dock" : ""}`} style={compact ? { bottom: kb } : undefined}
       onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}>
@@ -433,7 +512,7 @@ function Compose({ pick, compact, onClose, onLight }: { pick: Pick; compact: boo
       <p className="sc-priv"><EyeOff size={12} aria-hidden="true" />Chi l’ha scritto vedrà la frase brillare, l’emozione e la nota, mai il tuo nome.</p>
       <div className="sc-acts">
         <button type="button" className="bt" onClick={onClose}>Annulla</button>
-        <button type="button" className="bt on sc-light" disabled={!tipo || busy} onClick={go}>{busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}Accendi</button>
+        <button ref={btn} type="button" className="bt on sc-light" disabled={!tipo || busy} onClick={go}>{busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}Accendi</button>
       </div>
     </div>
   </div>;

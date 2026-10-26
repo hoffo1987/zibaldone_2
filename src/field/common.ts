@@ -31,14 +31,15 @@ export const orbAt = (i: number, t: number, ph: number[][]) => {
 // della GPU integrata; il preset Cinema chiede quella più potente. Un adattatore software non vale la pena: restano le
 // luci fisse dello sfondo
 const devices: Record<string, Promise<GPUDevice | null>> = {};
-export const fieldDevice = (power: GPUPowerPreference = "low-power") => devices[power] || (devices[power] = (async () => {
+// soft: accetta anche l'adattatore software (le scintille negli emulatori, per provarle in locale senza GPU)
+export const fieldDevice = (power: GPUPowerPreference = "low-power", soft = false) => { const key = soft ? `${power}+soft` : power; return devices[key] || (devices[key] = (async () => {
   if (typeof navigator === "undefined" || !navigator.gpu) return null;
   const ad = await navigator.gpu.requestAdapter({ powerPreference: power });
   const info: any = (ad as any)?.info || {};
-  if (!ad || info.isFallbackAdapter || (ad as any).isFallbackAdapter) return null;
+  if (!ad || (!soft && (info.isFallbackAdapter || (ad as any).isFallbackAdapter))) return null;
   const d = await ad.requestDevice({ label: `sfondo-${power}` });
-  d.lost.then(() => { delete devices[power]; });
+  d.lost.then(() => { delete devices[key]; });
   return d;
-})().catch(() => null));
+})().catch(() => null)); };
 
 export const webgpuReady = () => typeof navigator !== "undefined" && !!(navigator as any).gpu;

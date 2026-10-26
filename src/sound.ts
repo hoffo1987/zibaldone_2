@@ -6,6 +6,7 @@
 //   loading  il passaggio dal sito al gioco segreto
 //   intro    il jingle della presentazione al primo accesso
 //   spark()  la scintilla accesa (o tolta) su una frase del diario: due note sintetizzate, nessun file
+//   crackle() lo scoppio della scintilla appena accesa, a fine corsa: colpo e crepitio sintetizzati
 // I file in public/audio sono già portati a un riferimento comune da scripts/build-audio.cjs (picco a -1 dBFS,
 // jingle a -16 LUFS): qui si decide quanto suona ciascuno rispetto agli altri. Il tick al passaggio è il più basso
 // perché si sente di continuo e deve solo sfiorare; il cambio di sezione sta un gradino sopra; caricamento e jingle
@@ -99,6 +100,29 @@ export function spark(on = true) {
     o.connect(g); g.connect(out!); o.start(at); o.stop(at + 0.45);
     o.onended = () => { try { o.disconnect(); g.disconnect(); } catch {} };
   });
+}
+
+// Lo scoppio della scintilla appena accesa, quando la corrente arriva in fondo alla frase: un colpo sordo e un crepitio
+// di piccoli schiocchi che si diradano, rumore filtrato sintetizzato al momento.
+export function crackle() {
+  const c = ctx;
+  if (!c || !out || !cfg.on || c.state !== "running") return;
+  const t = c.currentTime, sr = c.sampleRate, n = Math.floor(sr * 0.5), b = c.createBuffer(1, n, sr), d = b.getChannelData(0);
+  // schiocchi: impulsi brevi, fitti all'inizio e poi sempre più radi e deboli
+  for (let k = 0; k < 34; k++) {
+    const at = Math.floor(Math.pow(Math.random(), 2.2) * (n - 400)), amp = (0.35 + Math.random() * 0.65) * (1 - at / n), len = 40 + Math.floor(Math.random() * 160);
+    for (let i = 0; i < len; i++) d[at + i] += (Math.random() * 2 - 1) * amp * Math.exp(-i / (len * 0.25));
+  }
+  const src = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain();
+  src.buffer = b; bp.type = "bandpass"; bp.frequency.value = 3200; bp.Q.value = 0.7;
+  g.gain.value = dbGain(-17);
+  src.connect(bp); bp.connect(g); g.connect(out); src.start(t);
+  // il colpo: un seno che scende di tono
+  const o = c.createOscillator(), og = c.createGain();
+  o.type = "sine"; o.frequency.setValueAtTime(190, t); o.frequency.exponentialRampToValueAtTime(70, t + 0.16);
+  og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(dbGain(-19), t + 0.006); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  o.connect(og); og.connect(out); o.start(t); o.stop(t + 0.25);
+  src.onended = () => { try { src.disconnect(); bp.disconnect(); g.disconnect(); o.disconnect(); og.disconnect(); } catch {} };
 }
 
 export function play(k: Cue, o: PlayOpts = {}): Voice | null {

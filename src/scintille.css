@@ -12,6 +12,10 @@
 ::highlight(sc-4){color:#5e3200;text-shadow:0 0 .5em rgba(255,166,20,.7)}
 
 /* ---------- lo strato di luce ---------- */
+/* in WebGPU: la tela sotto le parole, dentro la carta, e quella delle particelle, ferma sulla finestra sopra il lettore */
+.scl-u{position:absolute;inset:0;z-index:-1;width:100%;height:100%;pointer-events:none}
+.scl-o{position:fixed;inset:0;z-index:57;width:100%;height:100%;pointer-events:none}
+/* senza WebGPU, o col movimento ridotto, lo strato in CSS */
 .scg{position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:0;transition:opacity 1.1s cubic-bezier(.4,0,.2,1)}
 .scg.on{opacity:1;transition-duration:.5s}
 .scg-p{--k:.55;--c1:255,184,64;--c2:255,128,10;position:absolute;inset:0;animation:scgBreath var(--br,5s) ease-in-out var(--bd,0s) infinite}
