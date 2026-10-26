@@ -16,13 +16,25 @@ titolo, testo, foto e disegni restano modificabili. Gli scritti precedenti sono 
   notifiche dell'autore le calcola il suo client: nessuno scrive in `notifiche` tranne l'admin per i voti.
 - In **I miei scritti** il riquadro «Le tue scintille» (`src/ScintilleMie.tsx`) raccoglie le scintille ricevute sui
   propri pensieri (anonime, le stesse delle notifiche) e quelle accese da sé sui pensieri degli altri; toccando una
-  frase si apre il pensiero.
+  frase si apre il pensiero. Toccando l'intestazione la sezione si ritrae e resta la riga con i due conteggi; la scelta
+  si ricorda su quel dispositivo.
 - Da una frase si può **rispondere con un pensiero**: il nuovo pensiero porta `nataDa` (id dell'origine e citazione),
   immutabile dopo la pubblicazione, e il lettore mostra a tutti quanti pensieri sono nati da uno. Firestore espone a chi
   legge un documento anche la sua data di creazione tecnica: l'orario esatto di una scintilla non è quindi segreto
   per l'autore, anche se l'app mostra solo il giorno.
 - Gli scritti completi partecipano alla selezione mensile. Gli altri utenti ricevono un estratto di al massimo il 30%
   del testo e 480 byte; il lettore mostra un avviso. HTML integrale, immagini e disegni restano all'autore e agli admin.
+- **La staffetta** (`src/staffetta.ts`, `src/StaffettaPanel.tsx`, in Scritti completi): ogni mese l'admin sceglie una
+  frase dall'estratto pubblico di uno scritto completo già svelato (il podio del mese prima viene proposto per primo) e
+  la pubblica come incipit in `staffetta/{mese}`, che contiene solo la frase. La fonte sta in
+  `staffetta/{mese}/riservato/fonte` e la legge solo l'admin. Le regole controllano che la frase sia un pezzo esatto
+  dell'estratto in `testi`, confrontando i byte in esadecimale allineati, quindi è pubblica per costruzione.
+- Un capitolo è uno scritto completo con `staffetta: "AAAA-MM"`: si scrive solo nel mese del suo incipit, il legame non
+  si cambia più e viaggia nella copia `testi` accanto all'estratto. Resta anonimo e partecipa al podio come gli altri.
+  L'admin sceglie e ordina i capitoli in `staffetta/{mese}/riservato/scelta`; dal 3 del mese dopo, come il podio, li
+  pubblica in `staffetta/{mese}/capitoli/{id}` per intero e con il nome, uguali all'originale (lo controllano le regole).
+  È l'unica eccezione all'estratto del 30%, e l'editor la dice a chi scrive il capitolo; l'autore può ritirare il proprio
+  capitolo dal racconto. Il racconto si legge nel lettore, giro dopo giro.
 - `pensieri/{id}` contiene l'originale privato. `testi/{id}` versione 2 contiene esclusivamente la proiezione consentita,
   senza identità o valutazioni. Salvataggio e modifica delle nuove pagine aggiornano entrambi i documenti atomicamente.
 - Le regole negano le vecchie copie pubbliche integrali, anche se richieste direttamente o da una vecchia app.

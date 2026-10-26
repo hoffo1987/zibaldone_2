@@ -207,7 +207,19 @@
 .root .sc-mie:before{content:"";position:absolute;left:18px;right:18px;top:0;height:2px;border-radius:2px;pointer-events:none;
   background:linear-gradient(90deg,transparent,#F2A20C 18%,#FFD27A 50%,#F2A20C 82%,transparent);box-shadow:0 0 10px 1px rgba(255,150,0,.55);animation:scMieFil 4.5s ease-in-out infinite}
 @keyframes scMieFil{0%,100%{opacity:.75}40%{opacity:1}55%{opacity:.85}}
-.sc-mie-hd{display:flex;align-items:flex-start;gap:.75rem}
+.sc-mie-h{margin:0;font:inherit}
+.sc-mie-hd{display:flex;align-items:flex-start;gap:.75rem;margin:-.35rem -.4rem;padding:.35rem .4rem;width:calc(100% + .8rem);text-align:left;border-radius:14px;color:inherit;cursor:pointer}
+.sc-mie-hd:focus-visible{outline:2px solid var(--am);outline-offset:2px}
+.sc-mie-fl{flex:none;display:grid;place-items:center;width:32px;height:32px;margin-top:3px;border-radius:10px;color:var(--mu);background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln);transition:transform .35s var(--spring,ease),color .2s}
+.sc-mie.shut .sc-mie-fl{transform:rotate(-90deg)}
+@media (hover:hover){.sc-mie-hd:hover .sc-mie-fl{color:var(--am)}.sc-mie-hd:hover .sc-mie-t{color:var(--am)}}
+.sc-mie-sum{display:inline-flex;align-items:center;gap:.3rem;margin-right:.8rem;font-weight:700;white-space:nowrap}
+.sc-mie-sum svg{color:var(--am)}
+/* la sezione si ritrae: le righe della griglia scendono a zero, il contenuto resta al suo posto sotto la piega */
+.sc-mie-fold{display:grid;grid-template-rows:1fr;transition:grid-template-rows .38s var(--e-land,ease-out),opacity .3s}
+.sc-mie.shut .sc-mie-fold{grid-template-rows:0fr;opacity:0}
+.sc-mie-in{min-height:0;overflow:hidden}
+.root .sc-mie.shut{padding-bottom:1rem}
 .sc-mie-ic{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:12px;color:#3a2400;
   background:radial-gradient(120% 140% at 30% 20%,#FFF1C7,#FFC24A 55%,#F09A00);box-shadow:0 0 16px -4px rgba(255,160,20,.9),inset 0 1px 0 rgba(255,255,255,.6)}
 .sc-mie-t{font-size:1.15rem;font-weight:800;line-height:1.2}
@@ -244,4 +256,5 @@
 .sc-mie-s .sc-nota-t{order:0}
 .sc-mie-more{margin-top:.6rem}
 .root.nomotion .sc-mie:before,.root.nomotion .sc-mie-g,.root.nomotion .sc-mie-body{animation:none}
-@media (prefers-reduced-motion:reduce){.sc-mie:before,.sc-mie-g,.sc-mie-body{animation:none}.sc-mie-thumb{transition:none}}
+.root.nomotion .sc-mie-fold,.root.nomotion .sc-mie-fl{transition:none}
+@media (prefers-reduced-motion:reduce){.sc-mie:before,.sc-mie-g,.sc-mie-body{animation:none}.sc-mie-thumb,.sc-mie-fold,.sc-mie-fl{transition:none}}

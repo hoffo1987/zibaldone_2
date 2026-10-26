@@ -1,0 +1,157 @@
+/* ===== LA STAFFETTA =====
+   Un pannello di vetro sopra la scheda, nel viola degli Scritti completi. A sinistra un relè (la staffetta dei
+   circuiti): giogo di ferro, bobina avvolta di rame, l'ancora sollevata e il contatto aperto. Passandoci sopra
+   l'ancora scatta giù, il contatto fa una scintilla e la corrente corre sul filo fino all'incipit, che si accende.
+   Giro e capitoli sono cifre di valvole Nixie. A riposo è tutto fermo; con il movimento ridotto non si muove nulla. */
+.root .rl{--rl:var(--complete);position:relative;isolation:isolate;overflow:hidden;margin-bottom:1.75rem;padding:1.15rem 1.2rem 1.2rem;border-radius:22px;
+  background:linear-gradient(160deg,color-mix(in srgb,var(--pn) 78%,transparent),color-mix(in srgb,var(--rl) 7%,color-mix(in srgb,var(--pn) 70%,transparent)));
+  -webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);
+  box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 55%,transparent),inset 0 0 0 1px color-mix(in srgb,var(--rl) 22%,var(--ln)),var(--sh1)}
+.root.dark .rl{box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 8%,transparent),inset 0 0 0 1px color-mix(in srgb,var(--rl) 26%,var(--ln)),var(--sh1)}
+.root:is(.noblur,.lite) .rl{-webkit-backdrop-filter:none;backdrop-filter:none;background:linear-gradient(160deg,var(--pn),color-mix(in srgb,var(--rl) 6%,var(--pn)))}
+/* il riflesso del vetro, una diagonale fredda */
+.root .rl:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(115deg,transparent 30%,color-mix(in srgb,#fff 16%,transparent) 42%,transparent 52%),
+    radial-gradient(120% 70% at 0% 0%,color-mix(in srgb,var(--rl) 14%,transparent),transparent 60%)}
+.rl-loading{display:flex;justify-content:center;padding:1.4rem}
+
+.rl-top{display:flex;align-items:flex-start;gap:1rem}
+.rl-k{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem .8rem;font:700 .62rem/1.2 var(--label);letter-spacing:.16em;text-transform:uppercase;color:var(--rl)}
+.rl-giro{display:inline-flex;align-items:center;gap:.4rem;color:var(--mu)}
+.rl-t{margin-top:.3rem;font-size:1.3rem;font-weight:800;line-height:1.15}
+.rl-sub{margin-top:.3rem;font-size:.84rem;color:var(--mu);max-width:44rem}
+
+/* ---------- il relè ---------- */
+.rl-relay{position:relative;flex:none;width:76px;height:64px;margin-top:2px}
+.rl-relay i{position:absolute;display:block}
+/* il giogo: una L di ferro brunito */
+.rl-yoke{left:6px;bottom:6px;width:52px;height:8px;border-radius:2px;background:linear-gradient(180deg,#6B7280,#3F4650);box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+.rl-yoke:after{content:"";position:absolute;right:0;bottom:0;width:8px;height:44px;border-radius:2px;background:linear-gradient(90deg,#4B5260,#6B7280 60%,#3F4650)}
+/* la bobina: spire di rame su un rocchetto scuro */
+.rl-coil{left:10px;bottom:14px;width:26px;height:34px;border-radius:4px;
+  background:linear-gradient(90deg,rgba(0,0,0,.28),transparent 35%,rgba(255,255,255,.28) 55%,rgba(0,0,0,.25)),
+    repeating-linear-gradient(180deg,#C77B3A 0 2px,#8E4B1D 2px 3px);box-shadow:0 0 0 2px #2B2F36,0 2px 4px rgba(0,0,0,.3)}
+.rl-coil:before,.rl-coil:after{content:"";position:absolute;left:-4px;right:-4px;height:4px;border-radius:2px;background:#2B2F36}
+.rl-coil:before{top:-5px}.rl-coil:after{bottom:-5px}
+/* l'ancora: imperniata sul giogo, sollevata; scatta giù al passaggio */
+.rl-arm{left:8px;top:6px;width:52px;height:5px;border-radius:3px;background:linear-gradient(180deg,#9AA3AE,#5A6270);transform-origin:52px 50%;transform:rotate(-11deg);
+  transition:transform .32s var(--spring,ease)}
+/* il contatto: la molla d'argento con la pastiglia, e il punto fisso */
+.rl-ct{left:-2px;top:0;width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#F5F7FA,#A7B0BA 70%);box-shadow:0 1px 2px rgba(0,0,0,.35)}
+.rl-spark{left:-6px;top:-4px;width:20px;height:20px;border-radius:50%;opacity:0;background:radial-gradient(circle,#FFF4D6,#FFC24A 35%,transparent 70%);transform:scale(.4)}
+/* il filo che porta la corrente verso l'incipit */
+.rl-wire{left:4px;top:12px;width:2px;height:48px;border-radius:2px;background:color-mix(in srgb,var(--cu) 70%,var(--ln));opacity:.75}
+.rl-wire:after{content:"";position:absolute;inset:0;border-radius:2px;opacity:0;background:linear-gradient(180deg,transparent,#FFD27A 40%,transparent 70%);background-size:100% 220%;background-position:0 0}
+
+/* ---------- l'incipit ---------- */
+.rl-q{position:relative;margin:1rem 0 0;padding:.9rem 1rem 1rem 1.15rem;border-radius:16px;background:color-mix(in srgb,var(--pn) 70%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--rl) 22%,var(--ln));transition:box-shadow .35s}
+.rl-q:before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:color-mix(in srgb,var(--cu) 70%,var(--ln));transition:background .3s,box-shadow .3s}
+.rl-q-k{font:700 .6rem/1.3 var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--mu)}
+.rl-q blockquote{margin:.35rem 0 0}
+.rl-q q,.rl-inline-q,.rl-pre q,.rc-inc q{quotes:"«" "»";font-family:Georgia,'Times New Roman',serif;font-style:italic;color:var(--ink);overflow-wrap:anywhere}
+.rl-q q{font-size:1.2rem;line-height:1.45}
+.rl-wait{display:flex;align-items:center;gap:.5rem;margin-top:1rem;font-size:.86rem;color:var(--mu)}
+
+/* al passaggio: l'ancora si chiude, scintilla, corrente sul filo, l'incipit si accende */
+@media (hover:hover){
+  .rl:hover .rl-arm{transform:rotate(0deg)}
+  .rl:hover .rl-spark{animation:rlSpark .5s .18s ease-out both}
+  .rl:hover .rl-wire:after{opacity:1;animation:rlFlow 1.1s .25s linear infinite}
+  .rl:hover .rl-q{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--am) 45%,var(--ln)),0 0 0 4px color-mix(in srgb,var(--am) 10%,transparent)}
+  .rl:hover .rl-q:before{background:var(--am);box-shadow:0 0 8px color-mix(in srgb,var(--am) 70%,transparent)}
+}
+@keyframes rlSpark{0%{opacity:0;transform:scale(.4)}35%{opacity:1;transform:scale(1.15)}100%{opacity:0;transform:scale(.8)}}
+@keyframes rlFlow{to{background-position:0 -220%}}
+
+/* ---------- le cifre Nixie ---------- */
+.rl-nx{display:inline-flex;gap:2px;padding:2px 3px;border-radius:7px;vertical-align:middle;
+  background:radial-gradient(120% 90% at 50% 20%,#2A2220,#120D0C 70%);box-shadow:inset 0 0 0 1px rgba(255,190,120,.18),inset 0 -6px 10px rgba(0,0,0,.6),0 1px 2px rgba(0,0,0,.3)}
+.rl-nx b{position:relative;display:inline-grid;place-items:center;width:.95em;height:1.35em;border-radius:4px;font:700 1rem/1 'Bricolage Grotesque','Instrument Sans',sans-serif;font-variant-numeric:tabular-nums;
+  color:#FFB45A;text-shadow:0 0 4px #FF7A1A,0 0 10px rgba(255,110,20,.75);
+  background:repeating-linear-gradient(60deg,rgba(255,190,120,.06) 0 1px,transparent 1px 4px),repeating-linear-gradient(-60deg,rgba(255,190,120,.06) 0 1px,transparent 1px 4px)}
+.rl-k .rl-nx b{font-size:.78rem}
+
+.rl-facts{display:flex;flex-wrap:wrap;gap:.5rem .9rem;margin:.9rem 0 0;padding:0;list-style:none}
+.rl-facts li{display:inline-flex;align-items:center;gap:.45rem;font-size:.8rem;color:var(--mu)}
+.rl-facts li svg{color:var(--rl)}
+.rl-facts li:first-child{color:var(--ink);font-weight:700}
+
+.rl-acts{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin-top:1rem}
+.root .rl-go{background:var(--rl);border-color:var(--rl);color:#fff}
+.root.dark .rl-go{color:#140C24}
+.rl-read .rl-n{min-width:20px;padding:.05rem .4rem;border-radius:999px;font:800 .68rem/1.4 var(--label);color:#fff;background:var(--rl)}
+.root.dark .rl-read .rl-n{color:#140C24}
+
+/* i capitoli in corsa: nodi lungo una pista */
+.rl-l{position:relative;margin:.8rem 0 0;padding:0 0 0 .2rem;list-style:none}
+.rl-l:before{content:"";position:absolute;left:11px;top:12px;bottom:12px;width:2px;border-radius:2px;background:color-mix(in srgb,var(--rl) 35%,var(--ln))}
+.rl-l li{animation:rlIn .3s var(--e-land,ease-out) both;animation-delay:calc(var(--i,0)*45ms)}
+@keyframes rlIn{from{opacity:0;transform:translateY(4px)}}
+.rl-c{position:relative;display:flex;align-items:center;gap:.7rem;width:100%;padding:.45rem .5rem;text-align:left;border-radius:10px;color:var(--ink)}
+.rl-c-node{flex:none;width:12px;height:12px;border-radius:50%;background:var(--pn);box-shadow:0 0 0 2px color-mix(in srgb,var(--rl) 60%,var(--ln));transition:background .2s,box-shadow .2s}
+.rl-c-t{flex:1;min-width:0;font-weight:700;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rl-c-me,.rl-c-anon{flex:none;font:700 .58rem/1 var(--label);letter-spacing:.1em;text-transform:uppercase;color:var(--mu)}
+.rl-c-me{color:var(--rl)}
+.rl-c>svg{flex:none;color:var(--mu)}
+@media (hover:hover){.rl-c:hover{background:color-mix(in srgb,var(--rl) 7%,transparent)}.rl-c:hover .rl-c-node{background:var(--am);box-shadow:0 0 0 2px var(--am),0 0 8px var(--am)}}
+.rl-c:focus-visible,.rl-regia-tg:focus-visible{outline:2px solid var(--rl);outline-offset:2px}
+
+/* ---------- la regia (admin) ---------- */
+.rl-regia-tg{display:flex;align-items:center;gap:.5rem;width:100%;margin-top:1.1rem;padding:.6rem .2rem 0;border-top:1px dashed var(--ln2);font:700 .66rem/1.2 var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--mu)}
+.rl-regia-tg svg:last-child{transition:transform .3s var(--spring,ease)}
+.rl-regia-tg[aria-expanded="true"] svg:last-child{transform:rotate(180deg)}
+.rl-regia{display:grid;gap:.8rem;margin-top:.7rem}
+.rl-box{border-radius:14px;background:color-mix(in srgb,var(--sf) 80%,transparent);box-shadow:inset 0 0 0 1px var(--ln)}
+.rl-box-k{display:flex;align-items:center;gap:.5rem;padding:.6rem .8rem;border-bottom:1px solid var(--ln);font-weight:800;font-size:.86rem}
+.rl-box-n{margin-left:auto;font:700 .6rem/1 var(--label);letter-spacing:.1em;text-transform:uppercase;color:var(--mu)}
+.rl-step{font:800 .6rem/1 var(--label);letter-spacing:.06em;padding:.3rem .35rem;border-radius:6px;color:var(--rl);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--rl) 40%,var(--ln))}
+.rl-box-b{padding:.7rem .8rem .8rem}
+.rl-words{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.4rem;font-family:Georgia,'Times New Roman',serif}
+.rl-words button{padding:.2rem .35rem;border-radius:6px;font-size:.9rem;color:var(--ink);box-shadow:inset 0 0 0 1px var(--ln);background:var(--pn)}
+.rl-words button.on{color:#fff;background:var(--rl);box-shadow:none}
+.root.dark .rl-words button.on{color:#140C24}
+.rl-pre{display:flex;align-items:baseline;gap:.6rem;margin-top:.6rem;font-size:.95rem}
+.rl-pre q{flex:1;min-width:0}
+.rl-pre-n{flex:none;font:700 .6rem/1 var(--label);color:var(--mu)}
+.rl-pick{display:grid;gap:.35rem;margin:0;padding:0;list-style:none}
+.rl-pick li{display:flex;align-items:center;gap:.4rem;border-radius:10px;background:var(--pn);box-shadow:inset 0 0 0 1px var(--ln)}
+.rl-pick li.on{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--rl) 50%,var(--ln))}
+.rl-pick-t{display:flex;align-items:center;gap:.6rem;flex:1;min-width:0;padding:.45rem .6rem;text-align:left;font-size:.86rem;color:var(--ink)}
+.rl-pick-n{flex:none;width:1.4em;text-align:center;font:800 .8rem/1 var(--label);color:var(--rl)}
+.rl-pick-mv{display:flex;gap:.25rem;padding-right:.4rem}
+.rl-led{flex:none;width:9px;height:9px;border-radius:50%;background:color-mix(in srgb,var(--ink) 18%,var(--sf));box-shadow:inset 0 0 0 1px var(--ln2)}
+.rl-pick li.on .rl-led{background:radial-gradient(circle at 40% 35%,#FFF4D6,#FFC24A 55%,#E89400);box-shadow:0 0 6px color-mix(in srgb,var(--am) 70%,transparent)}
+
+/* ---------- il racconto, nel lettore ---------- */
+/* il lettore è fatto di strisce da bordo a bordo: il giro è una striscia con la pista di rame, l'incipit una targa,
+   ogni capitolo un'intestazione sopra il suo foglio */
+.rc{display:flex;flex-direction:column}
+.rc-giro{display:flex;flex-direction:column}
+.rc-hd{display:flex;align-items:center;gap:.7rem;padding:1rem 1.15rem .3rem;font:700 .64rem/1.2 var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--mu)}
+.rc-gn{display:inline-flex;align-items:center;gap:.4rem;color:var(--complete)}
+.rc-hd:after{content:"";flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--cu) 65%,var(--ln)),transparent)}
+.rc-inc{margin:.6rem 1rem 1rem;padding:.8rem 1rem;border-radius:14px;background:color-mix(in srgb,var(--complete) 7%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--complete) 25%,var(--ln))}
+.rc-inc q{display:block;font-size:1.15rem;line-height:1.45}
+.rc-inc span{display:block;margin-top:.35rem;font:700 .58rem/1.2 var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--mu)}
+.rc-cap{display:flex;flex-direction:column}
+.rc-cap-hd{padding:.85rem 1.15rem .7rem;background:var(--sf);border-top:1px solid var(--ln);border-bottom:1px solid var(--ln)}
+.rc-ct{display:flex;flex-direction:column;gap:.2rem;font-size:1.2rem;font-weight:800;line-height:1.2}
+.rc-cn{font:700 .6rem/1.2 var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--complete)}
+.rc-by{margin-top:.2rem;font-size:.8rem;color:var(--mu)}
+
+/* il capitolo nel lettore e nell'editor */
+.rl-chip{display:flex;align-items:flex-start;gap:.6rem;margin-top:.75rem;padding:.6rem .8rem;border-radius:14px;
+  background:color-mix(in srgb,var(--complete) 8%,var(--pn));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--complete) 30%,var(--ln))}
+.rl-chip>svg{flex:none;margin-top:.2rem;color:var(--complete)}
+.rl-chip-b{flex:1;min-width:0}
+.rl-chip-k{display:block;font:700 .6rem/1.3 var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--complete)}
+.rl-chip q{display:block;quotes:"«" "»";font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:.9rem;line-height:1.45;color:var(--ink);overflow-wrap:anywhere}
+.rl-chip-n{display:block;margin-top:.3rem;font-size:.78rem;color:var(--mu)}
+/* nel lettore il legame è una delle strisce sotto l'intestazione */
+.root .rd .rl-chip{margin:0;align-items:center;padding:.6rem 1rem .6rem 1.15rem;border-radius:0;box-shadow:none;border-bottom:1px solid var(--ln)}
+.root .rd .rl-chip>svg{margin-top:0}
+.root .kind-badge.relay{color:var(--complete)}
+
+.root.nomotion .rl *,.root.nomotion .rc *{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion:reduce){.rl *,.rc *{animation:none!important;transition:none!important}}

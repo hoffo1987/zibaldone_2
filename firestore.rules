@@ -32,7 +32,7 @@ service cloud.firestore {
         && n.cit is string && n.cit.size() > 0 && n.cit.size() <= 280;
     }
     function validoOriginale(d) {
-      return d.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred', 'kind', 'excerpt', 'updatedAt', 'rating', 'svelato', 'firmato', 'carta', 'nataDa'])
+      return d.keys().hasOnly(['title', 'content', 'strokes', 'w', 'h', 'author', 'timestamp', 'userId', 'isStarred', 'kind', 'excerpt', 'updatedAt', 'rating', 'svelato', 'firmato', 'carta', 'nataDa', 'staffetta'])
         && d.keys().hasAll(['title', 'content', 'author', 'timestamp', 'userId', 'isStarred'])
         // I primi scritti, senza kind, potevano contenere solo testo: il foglio non era salvato.
         // Nei documenti moderni resta obbligatorio; nei vecchi ogni valore presente è comunque validato.
@@ -55,6 +55,8 @@ service cloud.firestore {
         && (tipo(d) == 'diary' || d.get('firmato', false) == false)
         // il pensiero nato da una frase di un altro: id dell'origine e citazione, solo nel diario
         && (!('nataDa' in d) || (tipo(d) == 'diary' && nataDaValida(d.nataDa)))
+        // il capitolo della staffetta: uno scritto completo moderno, legato al mese del suo incipit
+        && (!('staffetta' in d) || ('kind' in d && tipo(d) == 'complete' && meseValido(d.staffetta)))
         && (!('rating' in d) || votoValido(d.rating, 0.5))
         && (tipo(d) == 'complete' || (!('rating' in d) && d.isStarred == false && d.get('svelato', false) == false && d.get('excerpt', '') == ''));
     }
@@ -76,8 +78,9 @@ service cloud.firestore {
           && d.get('nataDa', null) == original.get('nataDa', null)
           && firmaFedele(d, original))
         || (d.kind == 'complete'
-          && d.keys().hasOnly(['version', 'kind', 'title', 'excerpt', 'carta'])
+          && d.keys().hasOnly(['version', 'kind', 'title', 'excerpt', 'carta', 'staffetta'])
           && d.keys().hasAll(['version', 'kind', 'title', 'excerpt'])
+          && d.get('staffetta', null) == original.get('staffetta', null)
           && d.excerpt is string && d.excerpt.size() <= 480
           && d.excerpt.size() <= original.content.size() * 0.3
           && d.excerpt == original.get('excerpt', d.excerpt)));
@@ -89,7 +92,7 @@ service cloud.firestore {
         && pub.get('carta', null) == d.get('carta', null)
         && ((tipo(d) == 'diary' && pub.content == d.content && pub.strokes == d.strokes && pub.w == d.w && pub.h == d.h && firmaFedele(pub, d)
             && pub.get('nataDa', null) == d.get('nataDa', null))
-          || (tipo(d) == 'complete' && pub.excerpt == d.get('excerpt', '')));
+          || (tipo(d) == 'complete' && pub.excerpt == d.get('excerpt', '') && pub.get('staffetta', null) == d.get('staffetta', null)));
     }
     match /pensieri/{id} {
       allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
@@ -101,6 +104,8 @@ service cloud.firestore {
         // (nataDa non è tra i campi modificabili qui sotto)
         && (!('nataDa' in request.resource.data) || (request.resource.data.nataDa.id != id
           && exists(pensiero(request.resource.data.nataDa.id)) && tipo(get(pensiero(request.resource.data.nataDa.id)).data) == 'diary'))
+        // un capitolo nasce solo nel mese del suo incipit; anche il legame staffetta poi non si cambia più
+        && (!('staffetta' in request.resource.data) || capitoloAperto(request.resource.data.staffetta))
         // Le vecchie app possono ancora salvare un completo privato, mai una copia integrale pubblica.
         && (!('kind' in request.resource.data) || pubblicazioneAllineata(id));
       allow update: if signedIn() && validoOriginale(request.resource.data)
@@ -128,6 +133,69 @@ service cloud.firestore {
       allow create, update: if signedIn() && existsAfter(pensiero(id))
         && (getAfter(pensiero(id)).data.userId == request.auth.uid || isAdmin()) && copiaFedele(id);
       allow delete: if isAdmin() || (signedIn() && exists(pensiero(id)) && get(pensiero(id)).data.userId == request.auth.uid);
+    }
+
+    // ===== Staffetta: una frase dal podio diventa l'incipit del mese, tutti scrivono il capitolo dopo =====
+    // staffetta/{mese} è l'incipit pubblico: solo la frase. Da quale scritto viene lo sa soltanto l'admin
+    // (staffetta/{mese}/riservato/fonte), e deve essere uno scritto completo già svelato. La frase è un pezzo esatto
+    // del suo estratto pubblico (testi), quindi pubblica per costruzione: il confronto si fa sui byte in esadecimale,
+    // con l'inizio su un byte intero ((..)*), perché le regole non sanno cercare una sottostringa letterale.
+    // I capitoli sono scritti completi con staffetta: mese; restano anonimi (in testi solo l'estratto). L'admin li
+    // sceglie in riservato/scelta e dal 3 del mese dopo, quando si svela il podio, li pubblica per intero e con il nome
+    // in staffetta/{mese}/capitoli/{id}, uguali all'originale. Chi scrive un capitolo lo sa già dall'editor.
+    function meseValido(m) { return m is string && m.matches('^20[0-9]{2}-(0[1-9]|1[0-2])$'); }
+    function annoDi(m) { return int(m.split('-')[0]); }
+    function numeroMese(m) { return int(m.split('-')[1]); }
+    function inizioMese(m) { return timestamp.date(annoDi(m), numeroMese(m), 1); }
+    function meseDopo(m) { return numeroMese(m) == 12 ? timestamp.date(annoDi(m) + 1, 1, 1) : timestamp.date(annoDi(m), numeroMese(m) + 1, 1); }
+    // la mezzanotte del 3 del mese dopo in Italia (UTC+2 d'estate; d'inverno un'ora prima: va bene lo stesso)
+    function svelamento(m) { return meseDopo(m) + duration.value(46, 'h'); }
+    function incipit(m) { return /databases/$(database)/documents/staffetta/$(m); }
+    function fonteDi(m) { return /databases/$(database)/documents/staffetta/$(m)/riservato/fonte; }
+    function capitoloAperto(m) {
+      return exists(incipit(m))
+        && request.time >= inizioMese(m) - duration.value(2, 'h') && request.time < meseDopo(m);
+    }
+    function fraseValida(f) { return f is string && f.size() >= 3 && f.size() <= 280 && f.trim() == f; }
+    function nellEstratto(frase, id) {
+      let pub = get(/databases/$(database)/documents/testi/$(id)).data;
+      return pub.get('version', 0) == 2 && pub.get('kind', '') == 'complete' && pub.get('excerpt', '') is string
+        && pub.get('excerpt', '').toUtf8().toHexString().matches('^(..)*' + frase.toUtf8().toHexString() + '.*$');
+    }
+    function fonteValida(id) {
+      return id is string && id.size() > 0 && id.size() <= 128
+        && completo(id) && get(pensiero(id)).data.get('svelato', false) == true;
+    }
+    match /staffetta/{mese} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && meseValido(mese)
+        && request.resource.data.keys().hasOnly(['frase', 'creato'])
+        && request.resource.data.keys().hasAll(['frase', 'creato'])
+        && fraseValida(request.resource.data.frase) && request.resource.data.creato is number
+        && existsAfter(fonteDi(mese)) && nellEstratto(request.resource.data.frase, getAfter(fonteDi(mese)).data.id);
+      allow delete: if isAdmin();
+    }
+    match /staffetta/{mese}/riservato/{voce} {
+      allow read, delete: if isAdmin();
+      allow create, update: if isAdmin() && meseValido(mese)
+        && ((voce == 'fonte' && request.resource.data.keys().hasOnly(['id']) && fonteValida(request.resource.data.id)
+            && existsAfter(incipit(mese)) && nellEstratto(getAfter(incipit(mese)).data.frase, request.resource.data.id))
+          || (voce == 'scelta' && request.resource.data.keys().hasOnly(['ids']) && request.resource.data.ids is list
+            && request.resource.data.ids.size() <= 30));
+    }
+    match /staffetta/{mese}/capitoli/{id} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && meseValido(mese) && request.time >= svelamento(mese)
+        && request.resource.data.keys().hasOnly(['ordine', 'title', 'content', 'firma', 'autoreId'])
+        && request.resource.data.keys().hasAll(['ordine', 'title', 'content', 'firma', 'autoreId'])
+        && request.resource.data.ordine is int && request.resource.data.ordine >= 0 && request.resource.data.ordine < 30
+        && completo(id) && get(pensiero(id)).data.get('staffetta', null) == mese
+        && request.resource.data.title == get(pensiero(id)).data.title
+        && request.resource.data.content == get(pensiero(id)).data.content
+        && request.resource.data.firma == get(pensiero(id)).data.author
+        && request.resource.data.autoreId == get(pensiero(id)).data.userId;
+      // l'autore può sempre ritirare il proprio capitolo dal racconto
+      allow delete: if isAdmin() || (signedIn() && resource.data.autoreId == request.auth.uid);
     }
 
     // ===== Scintille: chi legge un pensiero del diario accende una frase, chi l'ha scritto la vede brillare =====

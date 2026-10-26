@@ -11,7 +11,8 @@ import "./scintille.css";
 //               scByP in App), anonime come nel lettore;
 //   Accese      quelle accese da sé sui pensieri degli altri: le voci di scintille_mie/{uid}/voci, la scintilla e il
 //               titolo del pensiero (la copia pubblica in testi). Una scintilla che l'autore ha tolto non c'è più e non si mostra.
-// Toccando una frase si apre il pensiero.
+// Toccando una frase si apre il pensiero. La sezione si ritrae toccando l'intestazione: chiusa resta la riga del titolo
+// con i due conteggi, e la scelta si ricorda su questo dispositivo.
 export type Ricevute = { id: string; title: string; list: Scintilla[] }[];
 type Accesa = { s: Scintilla; pid: string; title: string | null };
 
@@ -21,6 +22,9 @@ const quando = (g: number) => {
   return d <= 0 ? "oggi" : d === 1 ? "ieri" : d < 7 ? `${d} giorni fa` : new Date(msDelGiorno(g)).toLocaleDateString("it-IT", { day: "numeric", month: "short" });
 };
 const SHOW = 3; // pensieri visibili prima di «Mostra tutte»
+const FOLD = "circuito:scintille:ritratte";
+const foldGet = () => { try { return localStorage.getItem(FOLD) === "1"; } catch { return false; } };
+const foldSet = (v: boolean) => { try { localStorage.setItem(FOLD, v ? "1" : "0"); } catch {} };
 
 export function ScintilleMie({ db, uid, received, ready, find, onOpenOwn, onOpenOther, onLook }: {
   db: Firestore; uid: string; received: Ricevute; ready: boolean; find: (id: string) => any;
@@ -30,6 +34,8 @@ export function ScintilleMie({ db, uid, received, ready, find, onOpenOwn, onOpen
   const [mine, setMine] = useState<Accesa[] | null>(null);
   const [all, setAll] = useState(false);
   const [docs, setDocs] = useState<Record<string, any>>({});
+  const [shut, setShut] = useState(foldGet);
+  const fold = () => { const v = !shut; setShut(v); foldSet(v); haptic("select"); };
 
   // all'apertura le ricevute si rileggono (al massimo ogni 30 secondi, come per la campanella)
   useEffect(() => { onLook(); }, []);
@@ -82,11 +88,20 @@ export function ScintilleMie({ db, uid, received, ready, find, onOpenOwn, onOpen
   };
   const pick = (t: "ricevute" | "accese") => { if (t !== tab) { setTab(t); setAll(false); haptic("select"); } };
 
-  return <section className="sc-mie pn" aria-labelledby="sc-mie-t">
-    <div className="sc-mie-hd">
+  const nShow = (n: number, ok: boolean) => (ok ? n : "…");
+  return <section className={`sc-mie pn ${shut ? "shut" : ""}`} aria-labelledby="sc-mie-t">
+    <h2 className="sc-mie-h"><button type="button" className="sc-mie-hd" aria-expanded={!shut} aria-controls="sc-mie-fold" onClick={fold}>
       <span className="sc-mie-ic" aria-hidden="true"><Sparkles size={17} /></span>
-      <div className="min-w-0 flex-1"><h2 id="sc-mie-t" className="hd sc-mie-t">Le tue scintille</h2><p className="sc-mie-sub">Le frasi che brillano: quelle accese sui tuoi pensieri e quelle che hai acceso tu.</p></div>
-    </div>
+      <span className="min-w-0 flex-1 block"><span id="sc-mie-t" className="hd sc-mie-t block">Le tue scintille</span>
+        <span className="sc-mie-sub block">{shut ? <>
+          <span className="sc-mie-sum"><Inbox size={12} aria-hidden="true" />{nShow(nRec, ready || late)} ricevute</span>
+          <span className="sc-mie-sum"><Send size={12} aria-hidden="true" />{nShow(nAcc, !!mine)} accese da te</span>
+        </> : "Le frasi che brillano: quelle accese sui tuoi pensieri e quelle che hai acceso tu."}</span></span>
+      <span className="sc-mie-fl" aria-hidden="true"><ChevronDown size={16} /></span>
+      <span className="sr-only">{shut ? " · tocca per mostrarle" : " · tocca per ritrarle"}</span>
+    </button></h2>
+    {/* chiusa, il contenuto resta montato (le due schede tengono i dati) ma non si raggiunge con la tastiera */}
+    <div id="sc-mie-fold" className="sc-mie-fold" {...(shut ? { inert: "" } : {})}><div className="sc-mie-in">
     <div className="sc-mie-tabs" role="tablist" aria-label="Scintille" data-i={tab === "ricevute" ? 0 : 1}>
       <span className="sc-mie-thumb" aria-hidden="true" />
       <button type="button" role="tab" aria-selected={tab === "ricevute"} onClick={() => pick("ricevute")}><Inbox size={14} aria-hidden="true" />Ricevute<b>{ready || late ? nRec : "…"}</b></button>
@@ -111,5 +126,6 @@ export function ScintilleMie({ db, uid, received, ready, find, onOpenOwn, onOpen
         </ul>}
       {!busy && groups.length > SHOW && <button type="button" className="sc-lst sc-mie-more" aria-expanded={all} onClick={() => setAll(!all)}>{all ? "Mostra meno" : `Mostra tutte (${groups.length} pensieri)`}<ChevronDown size={14} /></button>}
     </div>
+    </div></div>
   </section>;
 }

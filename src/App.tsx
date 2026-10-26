@@ -8,7 +8,7 @@ import {
   getFirestore, collection, onSnapshot, doc, writeBatch, query, where, orderBy, limit, setDoc, getDoc, getDocs, deleteField, connectFirestoreEmulator
 } from "firebase/firestore";
 import {
-  Bookmark, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
+  Bookmark, BookOpenText, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
   Save, Box, Search, Sun, Moon, Pencil, Minus, Square, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, ChevronDown, ArrowUpRight, ArrowRight, SendHorizontal, LockKeyhole, SlidersHorizontal, Clapperboard, Compass, BookOpen, Sparkles, Sprout
 } from "lucide-react";
@@ -20,7 +20,7 @@ import { snapshotReader } from "./snapshot";
 import { measure, measureAt, relayout, anchorInk, inkBottom, inkBounds, inkPreviewOf } from "./ink";
 import NotificationPanel, { BellMark } from "./NotificationPanel";
 import { mergeNotifications, splitNotificationIds, type UpdateAnnouncement } from "./notifications";
-import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt, RoomCard } from "./WritingSections";
+import { KindPicker, WritingIntro, DiaryCards, ReadingNotice, PublicExcerpt, RoomCard, RelayChip } from "./WritingSections";
 import { StatArt, type StatKind } from "./StatArt";
 import "./recent.css";
 import "./editor.css";
@@ -33,6 +33,8 @@ import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
 import { onSheet, type Spunto } from "./spunti";
 import { ScintilleReader, EchiDelPensiero, type ScMode } from "./ScintilleReader";
 import { ScintilleMie } from "./ScintilleMie";
+import { StaffettaPanel, Racconto } from "./StaffettaPanel";
+import { staffettaOf, nomeMese, MESE_RE, type Giro } from "./staffetta";
 import { notificheScintille, notificheEchi, chiaveEco, oggi, spuntoEco, flat, leggiScintilla, CIT_MAX, type Scintilla, type Vista, type Eco } from "./scintille";
 import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 import { Navigation, SectionLocation, ScrittiSwitch, NAV_ORDER, inHub } from "./Navigation";
@@ -1306,6 +1308,7 @@ export default function App() {
   const [kind, setKind] = useState<WritingKind>("complete");
   const [signed, setSigned] = useState(false); // pensiero del diario firmato col proprio nome (di base anonimo)
   const [nataDa, setNataDa] = useState<{ id: string; cit: string } | null>(null); // risposta a una frase di un altro pensiero
+  const [staffetta, setStaffetta] = useState<{ mese: string; frase: string } | null>(null); // capitolo della staffetta del mese
   const [strokes, setStrokes] = useState<any[]>([]);
   const [hist, setHist] = useState<any[][]>([]);
   const [fut, setFut] = useState<any[][]>([]);
@@ -1568,18 +1571,18 @@ export default function App() {
   // bozza: ripristino + salvataggio automatico
   useEffect(() => {
     // a ogni cambio di account riparto da un foglio vuoto: altrimenti il testo di chi è uscito finirebbe nella bozza di chi entra
-    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setNataDa(null); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setSpLast(null); setLoadTick((n) => n + 1); inkW.current = 0;
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setNataDa(null); setStaffetta(null); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setSpLast(null); setLoadTick((n) => n + 1); inkW.current = 0;
     if (!draftKey) return;
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) || "null");
-      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setKind(writingKind(d)); setSigned(d.firmato === true); setNataDa(nataDaOf({ kind: "diary", nataDa: d.nataDa })); setCarta(isCarta(d.carta) ? d.carta : null); setStrokes(d.strokes || []); inkW.current = d.w || 0; setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
+      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setKind(writingKind(d)); setSigned(d.firmato === true); setNataDa(nataDaOf({ kind: "diary", nataDa: d.nataDa })); setStaffetta(d.staffetta && MESE_RE.test(d.staffetta.mese) && typeof d.staffetta.frase === "string" ? { mese: d.staffetta.mese, frase: d.staffetta.frase } : null); setCarta(isCarta(d.carta) ? d.carta : null); setStrokes(d.strokes || []); inkW.current = d.w || 0; setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
     } catch {}
   }, [draftKey]);
   useEffect(() => {
     if (!draftKey || editingId || (!title && !plain(content).trim() && !strokes.length)) return;
-    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, kind, firmato: signed, nataDa, carta, strokes, height, w: inkW.current })); } catch {} }, 800);
+    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, kind, firmato: signed, nataDa, staffetta, carta, strokes, height, w: inkW.current })); } catch {} }, 800);
     return () => clearTimeout(t);
-  }, [title, content, kind, signed, nataDa, carta, strokes, height, editingId, draftKey]);
+  }, [title, content, kind, signed, nataDa, staffetta, carta, strokes, height, editingId, draftKey]);
   useEffect(() => { if (tab === "write" && editorRef.current) editorRef.current.innerHTML = clean(content); }, [tab, loadTick]);
   // «Rispondi con un pensiero»: arrivati sul foglio, la frase citata ci vola sopra come uno spunto
   const ecoSpunto = useRef<Spunto | null>(null);
@@ -1971,12 +1974,12 @@ export default function App() {
   };
 
   const resetForm = () => {
-    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setNataDa(null); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); inkW.current = 0;
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setNataDa(null); setStaffetta(null); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); inkW.current = 0;
     setDrawing(false); setImg(null); setSpLast(null); setLoadTick((n) => n + 1);
     try { localStorage.removeItem(draftKey); } catch {}
   };
   const startEdit = (t: any) => {
-    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setSigned(t.firmato === true); setNataDa(null); setCarta(isCarta(t.carta) ? t.carta : null); setStrokes(t.strokes || []); inkW.current = t.w || 900;
+    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setSigned(t.firmato === true); setNataDa(null); setStaffetta(null); setCarta(isCarta(t.carta) ? t.carta : null); setStrokes(t.strokes || []); inkW.current = t.w || 900;
     setHist([]); setFut([]); setHeight(t.h || 600); setSel(null); setDrawing(false); setSpLast(null); setTab("write"); setLoadTick((n) => n + 1);
   };
   // «Scrivi da qui»: lo spunto va in fondo al foglio (al posto di quello di prima, se nessuno l'ha ancora toccato), vola
@@ -2015,6 +2018,17 @@ export default function App() {
     haptic("select");
   };
 
+  // «Scrivi il capitolo»: uno scritto completo che parte dalla frase dell'incipit, legato alla staffetta del mese. La
+  // frase si posa sul foglio come uno spunto; il legame, dopo la pubblicazione, non si cambia più.
+  const relayWith = (r: { mese: string; frase: string }) => {
+    if (editingId) { go("write"); notify("Completa o annulla la modifica in corso prima di scrivere il capitolo."); return; }
+    const draft = title.trim() || plain(content).trim() || strokes.length;
+    if (draft && !(kind === "complete" && staffetta?.mese === r.mese)) { go("write"); notify("Hai già una bozza sul foglio: inviala o scartala prima di scrivere il capitolo."); return; }
+    setKind("complete"); setNataDa(null); setStaffetta(r);
+    if (!draft) ecoSpunto.current = spuntoEco(r.frase);
+    go("write");
+  };
+
   const submit = async (e: any) => {
     e.preventDefault();
     const html = clean(editorRef.current?.innerHTML || "");
@@ -2026,6 +2040,8 @@ export default function App() {
     if (kind === "diary" && (signed || orig?.firmato !== undefined)) data.firmato = signed;
     // il legame con il pensiero da cui nasce: solo alla prima pubblicazione, poi resta quello
     if (kind === "diary" && !editingId && nataDa) data.nataDa = nataDa;
+    // il capitolo della staffetta: solo alla prima pubblicazione, poi resta quello
+    if (kind === "complete" && !editingId && staffetta) data.staffetta = staffetta.mese;
     // il foglio si scrive solo se è stato scelto (o se lo scritto ne aveva già uno)
     if (carta || isCarta(orig?.carta)) data.carta = carta || cartaOf({ kind });
     const author = orig ? orig.author : profiles[user.uid]?.displayName || user.displayName || "Operatore", owner = orig ? orig.userId : user.uid;
@@ -2037,8 +2053,8 @@ export default function App() {
       const b = writeBatch(db);
       if (editingId) b.update(ref, { ...d, updatedAt: Date.now() });
       else b.set(ref, { ...d, author, timestamp: Date.now(), userId: owner, isStarred: false });
-      const link = orig ? nataDaOf(orig) : null;
-      const full = { ...d, author, userId: owner, ...(link ? { nataDa: link } : {}) };
+      const link = orig ? nataDaOf(orig) : null, relay = orig ? staffettaOf(orig) : null;
+      const full = { ...d, author, userId: owner, ...(link ? { nataDa: link } : {}), ...(relay ? { staffetta: relay } : {}) };
       b.set(doc(db, "testi", ref.id), pubOf(full));
       await b.commit();
       pubDone.current.set(ref.id, pubSig(full));
@@ -2048,7 +2064,8 @@ export default function App() {
       // lo scritto si salva comunque, senza ciò che le regole non accettano
       const tries: any[] = [data];
       if ("nataDa" in data) { const { nataDa: _n, ...x } = data; tries.push(x); }
-      if ("carta" in data) { const { carta: _c, nataDa: _n, ...x } = data; tries.push(x); }
+      if ("staffetta" in data) { const { staffetta: _s, ...x } = data; tries.push(x); }
+      if ("carta" in data) { const { carta: _c, nataDa: _n, staffetta: _s, ...x } = data; tries.push(x); }
       let fail: any = null, used = data;
       for (const t of tries) {
         try { await write(t); fail = null; used = t; break; }
@@ -2056,6 +2073,7 @@ export default function App() {
       }
       if (fail) throw fail;
       if ("nataDa" in data && !("nataDa" in used)) notify("Pensiero pubblicato, ma senza il legame: il pensiero da cui nasceva non c’è più.");
+      if ("staffetta" in data && !("staffetta" in used)) notify("Scritto inviato, ma non come capitolo: la staffetta di quel mese è chiusa.");
       setDone(editingId ? "edit" : "new"); haptic("success");
     } catch { notify("Salvataggio non riuscito. Riprova."); }
     setSaving(false);
@@ -2128,6 +2146,8 @@ export default function App() {
     setSwap(0); history.pushState({ tab, v: 1 }, ""); setSel(t);
   };
   const stepTo = (t: any, d: number) => { setSwap(d); setSel(t); };
+  // il racconto collettivo si legge nello stesso foglio degli scritti: un elemento finto, con i giri al posto del testo
+  const openStory = (story: Giro[], e?: any) => openView({ id: "staffetta:racconto", _anon: true, _story: story, title: "Il racconto del Circuito" }, e);
   const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
   const newWriting = (k: WritingKind) => { if (editingId) { go("write"); notify("Completa o annulla la modifica in corso prima di creare un nuovo scritto."); return; } setKind(k); go("write"); };
   const go = (t: string) => { if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setKindFilter("all"); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
@@ -2203,6 +2223,7 @@ export default function App() {
   }, [rawItems, prepared, pubItems, isAdmin, deferredSearch]);
   const words = useMemo(() => plain(content).trim().split(/\s+/).filter(Boolean).length, [content]);
   const nataView = editingId ? nataDaOf(rawItems.find((x) => x.id === editingId)) : nataDa;
+  const relayView = editingId ? (() => { const m = staffettaOf(rawItems.find((x) => x.id === editingId)); return m ? { mese: m, frase: "" } : null; })() : staffetta;
   const monthNow = mKey(Date.now());
   const monthOpts = useMemo(() => Array.from(new Set<string>(items.map((t) => mKey(t.timestamp)))).sort().reverse(), [items]);
   const thisMonth = useMemo(() => items.filter((t) => mKey(t.timestamp) === monthNow), [items, monthNow]);
@@ -2862,6 +2883,8 @@ export default function App() {
           {tab === "podio" && podioView}
           {tab === "authors" && authorsView}
           {["altri", "read", "diario"].includes(tab) && <WritingIntro diary={tab === "diario"} onWrite={() => newWriting(tab === "diario" ? "diary" : "complete")} />}
+          {["altri", "read"].includes(tab) && db && !(isAdmin ? loading : pubLoading || loading) && <StaffettaPanel db={db} admin={isAdmin} uid={user.uid} own={isAdmin ? items : rawItems} pub={isAdmin ? [] : pubItems}
+            onWrite={relayWith} onOpen={openView} onStory={openStory} notify={notify} />}
           {tab === "diario" && (pubLoading || loading ? <Sheets /> : diaryShown.length === 0
             ? <div className="pn p-10 text-center"><BookOpen size={34} className="mx-auto mu mb-4" /><h3 className="hd text-xl font-bold">{search ? "Nessun pensiero trovato" : "Il diario aspetta la prima pagina"}</h3><p className="mu text-sm mt-2">{search ? "Prova un’altra parola." : "Non serve avere tutto chiaro per cominciare a scrivere."}</p></div>
             : <><DiaryCards items={diaryShown.slice(0, visible)} onOpen={openView} author={diaryAuthor} drawing={t => t.strokes?.length ? <InkPreview strokes={t.strokes} className="ink-preview mt-3" /> : null} />{diaryShown.length > visible && <button className="bt mt-6" onClick={() => setVisible(v => v + 18)}>Altri pensieri</button>}</>)}
@@ -2888,7 +2911,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
-                      <span className="kind-badge mb-2">Scritto completo · estratto</span><h2 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title || "Senza titolo"}</h2><p className="mu text-xs mt-3">Il testo integrale è riservato all’autore e all’amministratore.</p>
+                      <span className={`kind-badge mb-2 ${staffettaOf(t) ? "relay" : ""}`}>{staffettaOf(t) ? "Staffetta · estratto" : "Scritto completo · estratto"}</span><h2 className="hd font-bold text-lg leading-snug line-clamp-2">{t.title || "Senza titolo"}</h2><p className="mu text-xs mt-3">Il testo integrale è riservato all’autore e all’amministratore.</p>
                     </div>
                   </article></Reveal>
                 );
@@ -2924,7 +2947,7 @@ export default function App() {
                       {isAdmin && canEvaluate(t) && !selMode && <button type="button" aria-label="Segnalibro" title={t.isStarred ? "Rimuovi segnalibro" : "Aggiungi segnalibro"} onClick={(e) => { e.stopPropagation(); star(t); }} aria-pressed={!!t.isStarred} className={`card-bm ${t.isStarred ? "on" : ""}`}><Bookmark size={15} /></button>}
                     </div>
                     <div className="meta p-5 border-t" style={{ borderColor: "var(--ln)" }}>
-                      <span className={`kind-badge mb-2 ${isDiary(t) ? "diary" : ""}`}>{writingLabel(t)}</span>{isAdmin && canEvaluate(t) && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span key={vals[t.id].stato} className={`stato-pill st-${vals[t.id].stato} ${vals[t.id].stato === "scelto" ? "scelto" : ""}`}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}<h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
+                      <span className={`kind-badge mb-2 ${isDiary(t) ? "diary" : staffettaOf(t) ? "relay" : ""}`}>{staffettaOf(t) ? "Capitolo della staffetta" : writingLabel(t)}</span>{isAdmin && canEvaluate(t) && vals[t.id]?.stato && vals[t.id].stato !== "da_leggere" && <span key={vals[t.id].stato} className={`stato-pill st-${vals[t.id].stato} ${vals[t.id].stato === "scelto" ? "scelto" : ""}`}>{STATI.find(([k]) => k === vals[t.id].stato)?.[1]}</span>}<h2 className="hd font-bold text-lg leading-snug line-clamp-1">{t.title}</h2>
                       <div className="mt-2 flex items-center gap-2 mu text-xs">{who(t, 22)}<span className="truncate flex-1">{wn(t)}</span>{isDiary(t) && t.userId === user.uid && scByP[t.id]?.length > 0 && <span className="sc-card-n" title="Scintille ricevute" aria-label={`${scByP[t.id].length} scintille ricevute`}><Sparkles size={11} aria-hidden="true" />{scByP[t.id].length}</span>}<span className="shrink-0 meta-date">{fmtDate(t.timestamp)}</span></div>
                       {isAdmin && canEvaluate(t) && <div className="mt-3"><Stars v={t.rating || 0} onSet={t.svelato ? undefined : (n: number) => rate(t, n)} size={15} /></div>}
                       {!isAdmin && !isDiary(t) && t.svelato && t.rating > 0 && <div className="mt-3 flex items-center gap-2"><Stars v={t.rating} size={15} /><span className="mu text-xs">voto ricevuto</span></div>}
@@ -2943,6 +2966,7 @@ export default function App() {
               <div>
                 <KindPicker value={kind} onChange={setKind} locked={!!editingId} sign={!editingId || rawItems.find((x) => x.id === editingId)?.userId === user.uid ? { on: signed, set: setSigned, name: myName } : undefined} />
                 {kind === "diary" && nataView && <div className="eco-chip"><Sprout size={16} aria-hidden="true" /><span className="eco-chip-b"><span className="eco-chip-k">{editingId ? "Nato da un pensiero" : "Rispondi a un pensiero"}</span><q>{nataView.cit}</q></span>{!editingId && <button type="button" className="bt !p-2" aria-label="Togli il legame con il pensiero" title="Togli il legame" onClick={() => setNataDa(null)}><X size={14} /></button>}</div>}
+                {kind === "complete" && relayView && <RelayChip mese={nomeMese(relayView.mese)} frase={relayView.frase} locked={!!editingId} onRemove={() => setStaffetta(null)} />}
                 {!editingId && <DiaryPrompts key={user.uid} show={kind === "diary"} uid={user.uid} onPaper={spLast && onSheet(plain(content), spLast.s) ? { id: spLast.s.id, untouched: content === spLast.after } : null} onUse={putSpunto} onRemove={takeSpunto} />}
               </div>
               {/* il titolo come l'intestazione del foglio: l'etichetta nel colore del tipo, il conteggio dei caratteri e il filetto che si accende */}
@@ -3027,7 +3051,7 @@ export default function App() {
               </div>
               <div className="ed-actions">
                 {(editingId || title || strokes.length > 0 || words > 0) && <button type="button" className="bt ed-discard" onClick={() => { if (confirm("Scartare le modifiche?")) resetForm(); }}><Trash2 size={15} />{editingId ? "Annulla modifica" : "Scarta bozza"}</button>}
-                <button className="bt ed-send" disabled={saving} data-tour="save">{saving ? <Loader2 size={17} className="animate-spin" /> : editingId ? <Save size={17} /> : <SendHorizontal size={17} />}{editingId ? "Salva modifiche" : kind === "diary" ? "Pubblica nel diario" : "Invia scritto completo"}</button>
+                <button className="bt ed-send" disabled={saving} data-tour="save">{saving ? <Loader2 size={17} className="animate-spin" /> : editingId ? <Save size={17} /> : <SendHorizontal size={17} />}{editingId ? "Salva modifiche" : kind === "diary" ? "Pubblica nel diario" : relayView ? "Invia il capitolo" : "Invia scritto completo"}</button>
               </div>
             </form>
           )}
@@ -3049,7 +3073,8 @@ export default function App() {
       {view && (() => {
         const sel = view; // durante l'uscita resta visibile l'ultimo scritto aperto
         // scritto di un altro letto da chi non è admin: c'è solo la copia anonima, e il foglio mostra solo titolo e contenuto
-        const anon = !!sel._anon, diary = isDiary(sel), list = tab === "diario" ? diaryShown : anon ? pubShown : shown;
+        const story: Giro[] | null = sel._story || null;
+        const anon = !!sel._anon, diary = isDiary(sel), list = story ? [] : tab === "diario" ? diaryShown : anon ? pubShown : shown;
         const si = list.findIndex((x) => x.id === sel.id);
         const hidS = !anon && hid(sel), fresh = !anon && rvl === sel.id;
         // il circuito dell'autore: i suoi scritti in ordine di data. Solo autori visibili, e solo scritti già svelati
@@ -3058,7 +3083,9 @@ export default function App() {
         const mi = mates.findIndex((x) => x.id === sel.id), m0 = Math.max(0, Math.min(mi - 3, mates.length - 7)), near = mates.slice(m0, m0 + 7);
         const own = !anon && sel.userId === user.uid, sign = anon ? signatureOf(sel) : null;
         // in fondo al foglio: quante parole e quanto si impiega a leggerle (circa 200 al minuto)
-        const nw = anon && !diary ? 0 : plain(sel.content || "").split(/\s+/).filter(Boolean).length, stato = vals[sel.id]?.stato || "da_leggere";
+        const nw = story ? story.reduce((n, g) => n + g.capitoli.reduce((k, c) => k + plain(c.content).split(/\s+/).filter(Boolean).length, 0), 0)
+          : anon && !diary ? 0 : plain(sel.content || "").split(/\s+/).filter(Boolean).length, stato = vals[sel.id]?.stato || "da_leggere";
+        const relay = story ? null : staffettaOf(sel);
         // le scintille: sul proprio pensiero se ne vedono le frasi accese, su quello di un altro se ne accendono (l'admin le vede tutte)
         const mineSel = anon ? signatureOf(sel)?.uid === user.uid : sel.userId === user.uid;
         const scMode: ScMode | null = !diary ? null : mineSel ? "autore" : isAdmin && !anon ? "admin" : "lettore";
@@ -3069,8 +3096,8 @@ export default function App() {
                 {fresh && <span className="rvl-sweep" />}
                 {anon ? <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
                   {sign ? <button type="button" onClick={() => setViewProf(sign.uid)} className="rd-av shrink-0" aria-label="Apri profilo"><Avatar p={profiles[sign.uid]} name={sign.name} size={44} /></button>
-                    : <span className="rd-av rd-av-anon rounded-full shrink-0 inline-flex items-center justify-center"><BookOpen size={20} /></span>}
-                  <div className="flex-1 min-w-0"><span className="rd-kind"><i aria-hidden="true" />{diary ? "Pensiero del diario" : "Scritto completo · estratto"}</span><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title || "Senza titolo"}</h2><div className="mu text-xs truncate">{sign ? `${dn(sign.uid, sign.name)} · pensiero firmato` : diary ? "Pensiero anonimo · lettura integrale" : "Scritto anonimo · estratto"}</div></div>
+                    : <span className="rd-av rd-av-anon rounded-full shrink-0 inline-flex items-center justify-center">{story ? <BookOpenText size={20} /> : <BookOpen size={20} />}</span>}
+                  <div className="flex-1 min-w-0"><span className="rd-kind"><i aria-hidden="true" />{story ? "La staffetta · racconto collettivo" : diary ? "Pensiero del diario" : "Scritto completo · estratto"}</span><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title || "Senza titolo"}</h2><div className="mu text-xs truncate">{story ? `${story.reduce((n, g) => n + g.capitoli.length, 0)} capitoli · ${story.length} ${story.length === 1 ? "giro" : "giri"} · scritto a più mani` : sign ? `${dn(sign.uid, sign.name)} · pensiero firmato` : diary ? "Pensiero anonimo · lettura integrale" : "Scritto anonimo · estratto"}</div></div>
                 </div> : <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
                   {hidS ? <span className="rd-av shrink-0">{who(sel, 44)}</span> : <button type="button" onClick={() => setViewProf(sel.userId)} className="rd-av shrink-0" aria-label="Apri profilo">{fresh ? <span className="rvl-av"><i className="rg" /><i className="rg" /><span className="pf-av"><Avatar p={profiles[sel.userId]} name={sel.author} size={44} /></span></span> : <Avatar p={profiles[sel.userId]} name={sel.author} size={44} />}</button>}
                   <div className="flex-1 min-w-0"><span className="rd-kind"><i aria-hidden="true" />{diary ? "Pensiero del diario" : "Scritto completo"}</span><h2 key={sel.id} className="doc-tt hd text-xl md:text-2xl font-bold line-clamp-2 md:truncate">{sel.title}</h2><div className="mu text-xs truncate">{hidS ? "Autore nascosto" : fresh ? <span className="rvl-name"><Scramble text={dn(sel.userId, sel.author)} on /></span> : dn(sel.userId, sel.author)} · {fmtDate(sel.timestamp)}</div></div>
@@ -3104,11 +3131,14 @@ export default function App() {
                 </button>
                 {panelOpen && <PannelloAdmin db={db} id={sel.id} notify={notify} />}
               </>}
-                {(diary || anon) && <ReadingNotice item={sel} />}
+                {(diary || anon) && !story && <ReadingNotice item={sel} />}
+                {relay && <RelayChip mese={nomeMese(relay)} reading />}
                 {diary && <EchiDelPensiero db={db} item={sel} find={(id) => items.find((x) => x.id === id) || pubItems.find((x) => x.id === id && isDiary(x)) || null} onOpen={(t) => stepTo(t, 1)} />}
                 {scMode && <ScintilleReader key={sel.id} db={db} uid={user.uid} item={sel} mode={scMode} compact={compact} profiles={profiles} rt={() => readRef.current?.querySelector<HTMLElement>("[data-sheet-paper] .rt") || null}
                   onReceived={scMode === "autore" ? gotScintille : undefined} onReply={replyWith} notify={notify} />}
-                {anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`reader-paper paper ${diary ? "diary-paper" : ""} ${paperClass(cartaOf(sel))} relative`} data-sheet-paper="">
+                {story ? <Racconto story={story} name={(c) => dn(c.autoreId, c.firma || "Autore del Circuito")}
+                  paper={(c) => <div className="reader-paper paper mm relative" data-sheet-paper=""><InkText className="rt relative p-6" html={readingHtml(c.content)} source={c.content} strokes={[]} w={900} /></div>} />
+                  : anon && !diary ? <PublicExcerpt excerpt={sel.excerpt || ""} /> : <div className={`reader-paper paper ${diary ? "diary-paper" : ""} ${paperClass(cartaOf(sel))} relative`} data-sheet-paper="">
                   <InkText className="rt relative p-6" html={readingHtml(sel.content)} source={sel.content} strokes={sel.strokes} w={sel.w} />
                 </div>}
                 {/* la fine del foglio: un nodo del circuito tra due piste, le parole e il tempo di lettura */}
@@ -3160,7 +3190,7 @@ export default function App() {
         <div className="fade fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="pn p-8 max-w-sm w-full text-center pop">
             <svg viewBox="0 0 64 64" width="72" height="72" className="mx-auto mb-3" fill="none" stroke="var(--ac)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><circle cx="32" cy="32" r="28" opacity=".3" /><path className="tick" d="M18 33l9 9 19-20" /></svg>
-            <h3 className="hd text-2xl font-bold">{done === "edit" ? "Modifiche salvate" : kind === "diary" ? "Pensiero pubblicato" : "Scritto inviato"}</h3>
+            <h3 className="hd text-2xl font-bold">{done === "edit" ? "Modifiche salvate" : kind === "diary" ? "Pensiero pubblicato" : staffetta ? "Capitolo inviato" : "Scritto inviato"}</h3>
             <div className="flex flex-wrap gap-2 mt-6 justify-center">
               <button className="bt" onClick={() => { setDone(null); resetForm(); }}><Plus size={15} />Nuovo</button>
               <button className="bt pri" onClick={() => { const destination = kind === "diary" ? "diario" : "my_pages"; setDone(null); resetForm(); go(destination); }}>{kind === "diary" ? "Apri il diario" : "Vai ai miei scritti"}</button>
