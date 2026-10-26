@@ -1,4 +1,4 @@
-import { roundedSquare, extrude, tube, Curve3, LineCurve3, polyline, sphere, torus, box, transform, merge } from "./geometry";
+import { roundedSquare, roundedPlate, extrude, tube, Curve3, LineCurve3, polyline, sphere, torus, box, transform, merge } from "./geometry";
 
 const unitNormals = (nrm) => { for (let i = 0; i < nrm.length; i += 3) { const l = Math.hypot(nrm[i], nrm[i + 1], nrm[i + 2]); if (Math.abs(l - 1) > 1e-5) return false; } return true; };
 const plate = (exact) => extrude(roundedSquare(29.5, 14.5), { depth: 5.8, bevelThickness: 3.4, bevelSize: 2.6, bevelSegments: 10, curveSegments: 40, exact });
@@ -29,6 +29,29 @@ test("the bevel no longer has the notch three.js produced on the left edge", () 
   for (const x of sides(plate(false))) expect(x).toBeCloseTo(32.1, 2);
   // the exact three.js r160 contour keeps the 1e-15 segment and pulls one corner of the side inwards
   expect(Math.min(...sides(plate(true)))).toBeLessThan(31);
+});
+
+test("the parametric shell keeps the silhouette, has continuous unit normals and outward triangles", () => {
+  const g = roundedPlate(29.5, 14.5, 5.8, 2.6, 3.4, 10, 40);
+  expect(unitNormals(g.nrm)).toBe(true);
+  expect(g.pos.every(Number.isFinite)).toBe(true);
+  expect(Math.max(...g.pos.filter((_, i) => i % 3 === 2))).toBeCloseTo(6.3, 5);
+  expect(Math.min(...g.pos.filter((_, i) => i % 3 === 2))).toBeCloseTo(-6.3, 5);
+  expect(Math.max(...g.pos.filter((_, i) => i % 3 === 0))).toBeCloseTo(32.1, 5);
+  expect(g.pos.length).toBeLessThan(plate(false).pos.length / 2);
+  // Ogni triangolo deve guardare fuori: gli indici sono usati con back-face culling, anche durante un giro completo.
+  for (let i = 0; i < g.idx.length; i += 3) {
+    const [a, b, c] = Array.from(g.idx.slice(i, i + 3), x => x * 3);
+    const u = [0, 1, 2].map(k => g.pos[b + k] - g.pos[a + k]);
+    const v = [0, 1, 2].map(k => g.pos[c + k] - g.pos[a + k]);
+    const cross = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    expect(cross.reduce((s, x, k) => s + x * g.nrm[a + k], 0)).toBeGreaterThan(0);
+  }
+  const n = 4 * 41;
+  for (let i = 0; i < n; i++) {
+    // Le due estremità del fianco hanno esattamente la stessa normale, senza una giunta visibile.
+    for (let k = 0; k < 3; k++) expect(g.nrm[(10 * n + i) * 3 + k]).toBeCloseTo(g.nrm[(11 * n + i) * 3 + k], 6);
+  }
 });
 
 test("tubes follow their curve with the arc-length parameter in aux", () => {

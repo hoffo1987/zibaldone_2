@@ -4,6 +4,7 @@
 import { renderShader, envShader, OBJ_PHASE, SPRITE_PHASE, PARTICLE_PHASE, ENV_MAX_MIP, ENV_W, ENV_H } from "./shaders";
 import { STUDIO, STUDIO_BG } from "./anim";
 import { buildMeshes, bakeAO, FramePacker, LogoAnim, OBJ, FOV, type Meshes, type Quality } from "./scene";
+import { bakeSurface } from "./surface";
 
 // MSAA 4× ovunque: sui telefoni (GPU a tile) i campioni restano nella memoria del tile e con storeOp "discard" non
 // costano banda; prima i telefoni non avevano antialiasing e i bordi della targa erano a scalini
@@ -29,10 +30,11 @@ export class Engine {
   private readonly module: GPUShaderModule;
   private readonly pipelines = new Map<string, Promise<Pipelines>>();
   private readonly geos = new Map<string, GeoBuffers>();
-  readonly samplers: { env: GPUSampler; glow: GPUSampler };
+  readonly samplers: { env: GPUSampler; glow: GPUSampler; surface: GPUSampler };
   env!: { tex: GPUTexture; view: GPUTextureView };
   glow!: { tex: GPUTexture; view: GPUTextureView };
   ao!: { tex: GPUTexture; view: GPUTextureView };
+  surface!: { tex: GPUTexture; view: GPUTextureView };
   lost = false;
   readonly onLost = new Set<() => void>();
   stats = { gpuBytes: 0 };
@@ -50,11 +52,17 @@ export class Engine {
         { binding: 4, visibility: Fr, texture: {} },
         { binding: 5, visibility: Fr, sampler: {} },
         { binding: 6, visibility: Fr, texture: {} },
+        { binding: 7, visibility: Fr, texture: {} },
+        { binding: 8, visibility: Fr, sampler: {} },
       ],
     });
     this.pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [this.layout] });
     this.module = device.createShaderModule({ label: "logo", code: renderShader });
-    this.samplers = { env: device.createSampler({ magFilter: "linear", minFilter: "linear" }), glow: device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear" }) };
+    this.samplers = {
+      env: device.createSampler({ magFilter: "linear", minFilter: "linear" }),
+      glow: device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear" }),
+      surface: device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", maxAnisotropy: 4 }),
+    };
     device.lost.then(() => {
       this.lost = true;
       if (current && current.engine === this) current = null;
@@ -66,6 +74,7 @@ export class Engine {
     const ready = this.buildEnv();
     this.buildGlow();
     this.buildAO();
+    this.buildSurface();
     await ready;
   }
 
@@ -167,6 +176,17 @@ export class Engine {
     this.stats.gpuBytes += S * S * 4;
   }
 
+  private buildSurface() {
+    const size = 256, levels = bakeSurface(size);
+    const tex = this.device.createTexture({ label: "logo-surface", size: [size, size], format: "rgba8unorm", mipLevelCount: levels.length, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+    levels.forEach((data, mipLevel) => {
+      const s = size >> mipLevel;
+      this.device.queue.writeTexture({ texture: tex, mipLevel }, data, { bytesPerRow: s * 4 }, [s, s]);
+      this.stats.gpuBytes += data.byteLength;
+    });
+    this.surface = { tex, view: tex.createView() };
+  }
+
   // ---- geometrie: un vertex buffer, un index buffer e i colori della targa per ogni livello di qualità ----
   geometry(q: Quality): GeoBuffers {
     const key = q.mobile ? "m" : "d";
@@ -223,7 +243,7 @@ export class Engine {
   destroy() {
     this.geos.forEach((g) => { g.vertex.destroy(); g.color.destroy(); g.index.destroy(); });
     this.geos.clear();
-    this.env?.tex.destroy(); this.glow?.tex.destroy(); this.ao?.tex.destroy();
+    this.env?.tex.destroy(); this.glow?.tex.destroy(); this.ao?.tex.destroy(); this.surface?.tex.destroy();
     this.device.destroy();
   }
 }
@@ -318,6 +338,7 @@ export class LogoView {
         { binding: 2, resource: e.view }, { binding: 3, resource: s.env },
         { binding: 4, resource: engine.glow.view }, { binding: 5, resource: s.glow },
         { binding: 6, resource: engine.ao.view },
+        { binding: 7, resource: engine.surface.view }, { binding: 8, resource: s.surface },
       ],
     });
   }
@@ -355,7 +376,7 @@ export class LogoView {
     p.setVertexBuffer(0, this.geo.vertex);
     p.setVertexBuffer(1, this.geo.color);
     p.setPipeline(P.plate);
-    p.draw(m.plate.count, 1, m.plate.first, OBJ.plate);
+    p.drawIndexed(m.plate.count, 1, m.plate.first, m.plate.base, OBJ.plate);
     p.setPipeline(P.base);
     p.drawIndexed(m.gold.count, 1, m.gold.first, m.gold.base, OBJ.gold);
     p.drawIndexed(m.chip.count, 1, m.chip.first, m.chip.base, OBJ.chip);

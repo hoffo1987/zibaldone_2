@@ -7,7 +7,8 @@ test("every batch of the static meshes stays inside the shared vertex and index 
   for (const mobile of [false, true]) {
     const m = buildMeshes(quality(mobile)), nv = m.vertices.length / 7;
     expect(m.vertices.every(Number.isFinite)).toBe(true);
-    expect(m.colors.length / 3).toBe(m.plate.count); // la targa è non indicizzata: un colore per vertice
+    expect(m.colors.length / 3).toBe(m.gold.base); // un colore per ogni vertice condiviso della targa
+    expect(m.plate.indexed).toBe(true);
     expect(m.plate.first).toBe(0);
     let end = 0, vend = 0;
     for (const name of ["plate", "gold", "chip", "rim", "arc", "line", "cap", "ring0", "ring1"]) {
