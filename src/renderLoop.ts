@@ -11,7 +11,8 @@ export const refreshes = (want: number, vsync: number) => Math.max(1, Math.floor
 // the fps to ask renderLoop for: it draws once (k - 0.4) refreshes have passed, that is exactly every k
 export const steadyFps = (want: number, vsync: number) => (vsync ? 1000 / ((refreshes(want, vsync) - 0.4) * vsync + 0.5) : want);
 // fps receives the estimated display refresh period (ms, 0 until known), so a caller can ask for an exact multiple of it
-export function renderLoop(draw: (time: number) => void, fps: (vsync: number) => number, element?: Element, resume?: () => void, foreground = false) {
+// pause runs when a running loop is put to sleep: a canvas whose last frame must not stay frozen on screen clears it there
+export function renderLoop(draw: (time: number) => void, fps: (vsync: number) => number, element?: Element, resume?: () => void, foreground = false, pause?: () => void) {
   let raf = 0, visible = !element || typeof IntersectionObserver === "undefined", disposed = false, last = -Infinity, prev = 0, vsync = 0;
   const active = () => !disposed && visible && !held && (foreground || !backgroundHeld) && !document.hidden;
   const frame = (time: number) => {
@@ -26,7 +27,7 @@ export function renderLoop(draw: (time: number) => void, fps: (vsync: number) =>
     if (active() && fps(vsync) > 0) raf = requestAnimationFrame(frame);
   };
   const sync = () => {
-    if (!active()) { cancelAnimationFrame(raf); raf = 0; return; }
+    if (!active()) { if (raf) { cancelAnimationFrame(raf); raf = 0; pause?.(); } return; }
     if (!raf) { last = -Infinity; prev = 0; resume?.(); raf = requestAnimationFrame(frame); }
   };
   const observer = element && typeof IntersectionObserver !== "undefined" ? new IntersectionObserver(entries => {

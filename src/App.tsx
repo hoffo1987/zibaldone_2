@@ -1012,7 +1012,10 @@ const FX = ({ dark, g, board = false }: { dark: boolean; g: any; board?: boolean
       }
       cb.globalCompositeOperation = "source-over";
     };
-    const stop = renderLoop(frame, () => gr.current.fps || 30);
+    // il canvas delle scintille sta sopra tutto (anche sopra il lettore): se il disegno si ferma a metà, per esempio
+    // perché il tocco ha aperto uno scritto, l'ultimo fotogramma resterebbe congelato sullo schermo
+    const still = () => { sparks.length = 0; sparked = false; cb.clearRect(0, 0, W, H); };
+    const stop = renderLoop(frame, () => gr.current.fps || 30, undefined, undefined, false, still);
     return () => { stop(); window.removeEventListener("resize", fit); window.removeEventListener("pointerdown", down); };
   }, [dark, board]);
   return (<>
@@ -3158,7 +3161,7 @@ export default function App() {
                 </div>
               </div>
               <div className="relative flex-1 min-h-0 flex flex-col">
-              {ascolta && sel && <Ascolta key={sel.id} title={sel.title || "Senza titolo"} album={diary ? "Diario" : anon ? "Scritti completi · estratto" : "Scritti completi"}
+              {ascolta && sel && <Ascolta key={`asc-${sel.id}`} title={sel.title || "Senza titolo"} album={diary ? "Diario" : anon ? "Scritti completi · estratto" : "Scritti completi"}
                 root={() => readRef.current?.querySelector<HTMLElement>("[data-sheet-paper] .rt") || readRef.current?.querySelector<HTMLElement>("[data-sheet-paper] > p") || null}
                 scroller={() => readRef.current} onClose={() => setAscolta(false)} />}
               {/* la pista di lettura: si disegna aprendo il foglio, poi segue lo scorrimento; in fondo il nodo diventa ambra */}

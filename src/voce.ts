@@ -83,7 +83,6 @@ type Opz = { titolo: string; album: string; frasi: Frase[]; onStato: (s: Stato) 
 export class Lettore {
   private i = 0; private playing = false; private tok = 0;
   private rate = 1; private voce: SpeechSynthesisVoice | null = null;
-  private ascolto: HTMLAudioElement | null = null; private chiuso = false;
   constructor(private o: Opz) {}
   get inCorso() { return this.playing; }
   get stato(): Stato { return { i: this.i, playing: this.playing, parola: null }; }
@@ -91,13 +90,13 @@ export class Lettore {
   setVoce(v: SpeechSynthesisVoice | null) { this.voce = v; if (this.playing) this.parla(this.i); }
   play(from = this.i) {
     if (!this.o.frasi.length) return;
-    this.playing = true; this.chiuso = false; attivo = this; this.i = Math.max(0, Math.min(this.o.frasi.length - 1, from));
+    this.playing = true; attivo = this; this.i = Math.max(0, Math.min(this.o.frasi.length - 1, from));
     this.sessione(true); this.parla(this.i);
   }
   pause() { this.playing = false; this.tok++; this.taci(); this.sessione(false); this.emit(); }
   toggle() { if (this.playing) this.pause(); else this.play(this.i); }
   vai(i: number) { this.i = Math.max(0, Math.min(this.o.frasi.length - 1, i)); if (this.playing) this.parla(this.i); else this.emit(); }
-  stop() { this.playing = false; this.chiuso = true; this.tok++; this.ascolto = null; this.taci(); this.sessione(false, true); }
+  stop() { this.playing = false; this.tok++; this.taci(); this.sessione(false, true); }
   // Chrome per Android a volte lascia parlare l'enunciazione in corso dopo cancel(): si ripete finché non è davvero muto
   private taci() {
     // vale per il lettore che parla adesso, non per questa istanza: una nuova lettura non deve essere zittita da una vecchia
@@ -135,16 +134,7 @@ export class Lettore {
     const ms: any = (navigator as any).mediaSession;
     sound.duck("voce", on ? 0.18 : null);
     if (fine) rilascia();
-    else {
-      const a = silenzio();
-      // pausa o ripresa dal riquadro multimediale o dalle cuffie: il sistema ferma l'audio muto e la voce lo segue,
-      // così anche il tasto sul foglio cambia
-      if (this.ascolto !== a) {
-        this.ascolto = a;
-        a.addEventListener("pause", () => { if (this.ascolto === a && this.playing && !a.ended) this.pause(); });
-      }
-      if (on) a.play().catch(() => {}); else a.pause();
-    }
+    else { const a = silenzio(); if (on) a.play().catch(() => {}); else a.pause(); }
     if (!ms) return;
     if (fine) {
       ["play", "pause", "stop", "previoustrack", "nexttrack", "seekbackward", "seekforward"].forEach((k) => { try { ms.setActionHandler(k, null); } catch {} });

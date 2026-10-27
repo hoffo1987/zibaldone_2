@@ -1,4 +1,4 @@
 {
-  "titolo": "Lettore audio più stabile su telefono",
-  "messaggio": "La capsula dell’ascolto su telefono non usa più la sfocatura che su alcuni Android restava dipinta dopo la chiusura, e la voce viene fermata più volte finché è davvero muta. Anche le righe e le schede toccate non restano più evidenziate dopo l’apertura."
+  "titolo": "Ascolto e apertura degli scritti sistemati",
+  "messaggio": "La X del lettore audio ora chiude davvero la capsula e ferma la voce, anche chiudendo lo scritto, e il tasto passa da pausa a play come deve. Toccando una scheda per aprire uno scritto, l’anello del tocco non resta più bloccato sopra il foglio."
 }
