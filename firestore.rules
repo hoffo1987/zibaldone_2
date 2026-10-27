@@ -285,6 +285,29 @@ service cloud.firestore {
         && request.resource.data.updatedAt is number;
     }
 
+    // Bozze salvate nel Circuito («Salva bozza»): fogli non ancora inviati, solo di chi li scrive. Nemmeno l'admin le
+    // legge: non sono ancora scritti. Stessi limiti di un originale; il proprietario non cambia mai.
+    function bozzaValida(d) {
+      return d.keys().hasOnly(['userId', 'title', 'content', 'strokes', 'w', 'h', 'kind', 'firmato', 'carta', 'nataDa', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['userId', 'title', 'content', 'strokes', 'w', 'h', 'kind', 'createdAt', 'updatedAt'])
+        && d.userId == request.auth.uid
+        && d.title is string && d.title.size() <= 200
+        && d.content is string && d.content.size() <= 950000
+        && d.strokes is list && d.strokes.size() <= 10000
+        && d.w is number && d.w > 0 && d.w <= 200000 && d.h is number && d.h > 0 && d.h <= 200000
+        && d.kind in ['complete', 'diary']
+        && d.get('firmato', false) is bool
+        && d.get('carta', 'quadretti') in ['quadretti', 'righe', 'bianco']
+        && (!('nataDa' in d) || nataDaValida(d.nataDa))
+        && d.createdAt is number && d.updatedAt is number;
+    }
+    match /bozze/{id} {
+      allow read, delete: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && bozzaValida(request.resource.data);
+      allow update: if signedIn() && resource.data.userId == request.auth.uid && bozzaValida(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
     match /profili/{uid} {
       allow read: if signedIn();
 

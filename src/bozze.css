@@ -1,0 +1,36 @@
+/* ===== Le bozze, in I miei scritti =====
+   Una lastra come le altre; ogni bozza è un foglio con il bordo sinistro tratteggiato (non ancora rilegato), nel colore
+   del suo tipo. Quella aperta sul foglio ha il bordo pieno. */
+.root .bz{margin-bottom:1.5rem;padding:1rem 1.1rem 1.1rem}
+.bz-hd{display:flex;align-items:center;gap:.8rem}
+.bz-ic{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:12px;color:var(--ac);
+  background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.55));box-shadow:inset 0 1px 0 #fff,0 6px 14px -9px rgba(12,29,26,.45)}
+.root.dark .bz-ic{background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.04));box-shadow:inset 0 1px 0 rgba(255,255,255,.16)}
+.bz-t{font-size:1.15rem;font-weight:800;line-height:1.2}
+.bz-sub{margin-top:.15rem;font-size:.8rem;color:var(--mu)}
+.bz-n{flex:none;min-width:28px;padding:.25rem .55rem;border-radius:999px;text-align:center;font-weight:800;font-size:.8rem;font-variant-numeric:tabular-nums;color:var(--ac);
+  background:color-mix(in srgb,var(--ac) 12%,transparent)}
+.bz-l{display:grid;gap:.6rem;margin:.9rem 0 0;padding:0;list-style:none}
+@media (min-width:900px){.bz-l{grid-template-columns:1fr 1fr}}
+.bz-it{--k:var(--complete);position:relative;display:flex;align-items:flex-end;gap:.8rem;padding:.8rem .85rem .8rem 1.05rem;border-radius:14px;
+  background:color-mix(in srgb,var(--pn) 70%,transparent);box-shadow:inset 0 0 0 1px var(--ln);animation:scIn .35s var(--e-land,ease-out) both;animation-delay:calc(var(--i,0)*60ms)}
+.bz-it.diary{--k:var(--diary)}
+.bz-it:before{content:"";position:absolute;left:.35rem;top:.7rem;bottom:.7rem;width:0;border-left:2px dashed color-mix(in srgb,var(--k) 60%,transparent)}
+.bz-it.now:before{border-left-style:solid;border-color:var(--k)}
+.bz-body{flex:1;min-width:0}
+.bz-tt{margin-top:.4rem;font-weight:800;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bz-x{margin-top:.2rem;font-size:.82rem;line-height:1.45;color:var(--mu);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bz-d{margin-top:.35rem;font-size:.72rem;font-weight:600;color:color-mix(in srgb,var(--k) 70%,var(--mu))}
+.bz-acts{flex:none;display:flex;gap:.4rem}
+.root.nomotion .bz-it{animation:none}
+@media (prefers-reduced-motion:reduce){.bz-it{animation:none}}
+@media (max-width:480px){.bz-it{flex-direction:column;align-items:stretch}.bz-acts .bt.on{flex:1}}
+
+/* nel piede dell'editor: la bozza che non entra più in questo dispositivo */
+.ed-auto.warn{color:#B45309}
+.ed-auto.warn i{background:#F59E0B!important;box-shadow:0 0 0 3px rgba(245,158,11,.25)!important}
+.root.dark .ed-auto.warn{color:#FBBF24}
+
+/* nell'editor: «Salva bozza» accanto a «Scarta», l'invio sotto a tutta larghezza sul telefono */
+.root .bt.ed-draft{min-height:48px;padding:0 1rem;border-radius:14px;white-space:nowrap}
+@media (max-width:560px){.ed-actions:has(.ed-draft){grid-template-columns:1fr 1fr}.ed-actions:has(.ed-draft)>.ed-send{grid-column:1/-1}}

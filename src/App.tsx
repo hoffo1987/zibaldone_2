@@ -5,10 +5,10 @@ import {
   signOut, updateProfile, sendPasswordResetEmail, confirmPasswordReset, connectAuthEmulator
 } from "firebase/auth";
 import {
-  getFirestore, collection, onSnapshot, doc, writeBatch, query, where, orderBy, limit, setDoc, getDoc, getDocs, deleteField, connectFirestoreEmulator
+  getFirestore, collection, onSnapshot, doc, writeBatch, query, where, orderBy, limit, setDoc, getDoc, getDocs, deleteDoc, deleteField, connectFirestoreEmulator
 } from "firebase/firestore";
 import {
-  Bookmark, Headphones, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
+  Bookmark, Headphones, FileClock, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
   Save, Box, Search, Sun, Moon, Pencil, Minus, Square, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, ChevronDown, ArrowUpRight, ArrowRight, SendHorizontal, LockKeyhole, SlidersHorizontal, Clapperboard, Compass, BookOpen, Sparkles, Sprout
 } from "lucide-react";
@@ -29,6 +29,7 @@ import "./reader.css";
 import "./authors.css";
 import AdminBadge from "./AdminBadge";
 import { Ascolta } from "./Ascolta";
+import { Bozze, type Bozza } from "./Bozze";
 import { voceDisponibile } from "./voce";
 import "./podio.css";
 import { EmptyCircuit } from "./EmptyCircuit";
@@ -1621,21 +1622,52 @@ export default function App() {
   }, [mieiDiario, scByP, echi, viste, vistePronte]);
   const allNotifs = useMemo(() => mergeNotifications(notifs, updateReadsReady ? updates : [], updateReads, derived), [notifs, updates, updateReads, updateReadsReady, derived]);
 
-  // bozza: ripristino + salvataggio automatico
-  useEffect(() => {
-    // a ogni cambio di account riparto da un foglio vuoto: altrimenti il testo di chi è uscito finirebbe nella bozza di chi entra
-    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setNataDa(null); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setSpLast(null); setLoadTick((n) => n + 1); inkW.current = 0;
-    if (!draftKey) return;
+  // La bozza automatica: il foglio nuovo resta in questo dispositivo (localStorage, una per account) mentre lo scrivi.
+  // Si salva poco dopo ogni modifica e subito quando la pagina si nasconde o si chiude (sul telefono l'app può essere
+  // chiusa in qualsiasi momento). Modificare uno scritto già inviato non la tocca mai: prima di aprire la modifica la
+  // bozza si mette al sicuro, e chiusa la modifica torna sul foglio. Se il dispositivo non ha più spazio (le foto pesano)
+  // il piede dell'editor lo dice e invita a salvarla nel Circuito, con «Salva bozza» (bozze/{id}, in I miei scritti).
+  const [bozzaId, setBozzaId] = useState<string | null>(null); // la bozza del Circuito che si sta continuando
+  const [draftWarn, setDraftWarn] = useState(false);
+  const loadLocal = () => {
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) || "null");
-      if (d) { setTitle(d.title || ""); setContent(d.content || ""); setKind(writingKind(d)); setSigned(d.firmato === true); setNataDa(nataDaOf({ kind: "diary", nataDa: d.nataDa })); setCarta(isCarta(d.carta) ? d.carta : null); setStrokes(d.strokes || []); inkW.current = d.w || 0; setHeight(d.height || 600); setLoadTick((n) => n + 1); notify("Bozza ripristinata."); }
-    } catch {}
+      if (!d) return false;
+      setTitle(d.title || ""); setContent(d.content || ""); setKind(writingKind(d)); setSigned(d.firmato === true); setNataDa(nataDaOf({ kind: "diary", nataDa: d.nataDa })); setCarta(isCarta(d.carta) ? d.carta : null); setStrokes(d.strokes || []); inkW.current = d.w || 0; setHeight(d.height || 600);
+      setBozzaId(typeof d.bozzaId === "string" ? d.bozzaId : null); setLoadTick((n) => n + 1);
+      return true;
+    } catch { return false; }
+  };
+  useEffect(() => {
+    // a ogni cambio di account riparto da un foglio vuoto: altrimenti il testo di chi è uscito finirebbe nella bozza di chi entra
+    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setNataDa(null); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); setDrawing(false); setImg(null); setSpLast(null); setBozzaId(null); setDraftWarn(false); setLoadTick((n) => n + 1); inkW.current = 0;
+    if (!draftKey) return;
+    if (loadLocal()) notify("Bozza ripristinata.");
   }, [draftKey]);
+  // il foglio nuovo com'è adesso (mai uno scritto in modifica), sempre aggiornato per il salvataggio d'emergenza
+  const sheet = { title, content, kind, firmato: signed, nataDa, carta, strokes, height, w: inkW.current, bozzaId };
+  const sheetNow = useRef(sheet); sheetNow.current = sheet;
+  const editingNow = useRef(editingId); editingNow.current = editingId;
+  const sent = useRef(false); // il foglio appena inviato: finché non si chiude non torna bozza
+  const saveLocal = (d = sheetNow.current) => {
+    if (!draftKey || editingNow.current || sent.current) return true;
+    if (!d.title && !plain(d.content).trim() && !d.strokes.length) return true;
+    try { localStorage.setItem(draftKey, JSON.stringify(d)); setDraftWarn(false); return true; }
+    catch { setDraftWarn(true); return false; }
+  };
   useEffect(() => {
     if (!draftKey || editingId || (!title && !plain(content).trim() && !strokes.length)) return;
-    const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ title, content, kind, firmato: signed, nataDa, carta, strokes, height, w: inkW.current })); } catch {} }, 800);
+    const t = setTimeout(() => saveLocal(), 350);
     return () => clearTimeout(t);
-  }, [title, content, kind, signed, nataDa, carta, strokes, height, editingId, draftKey]);
+  }, [title, content, kind, signed, nataDa, carta, strokes, height, editingId, draftKey, bozzaId]);
+  useEffect(() => {
+    const flush = () => { saveLocal(); };
+    const vis = () => { if (document.visibilityState === "hidden") flush(); };
+    document.addEventListener("visibilitychange", vis); window.addEventListener("pagehide", flush);
+    return () => { document.removeEventListener("visibilitychange", vis); window.removeEventListener("pagehide", flush); };
+  }, [draftKey]);
+  const warned = useRef(false);
+  useEffect(() => { if (draftWarn && !warned.current) { warned.current = true; notify("La bozza è troppo pesante per questo dispositivo: salvala nel Circuito con «Salva bozza»."); } if (!draftWarn) warned.current = false; }, [draftWarn]);
   useEffect(() => { if (tab === "write" && editorRef.current) editorRef.current.innerHTML = clean(content); }, [tab, loadTick]);
   // «Rispondi con un pensiero»: arrivati sul foglio, la frase citata ci vola sopra come uno spunto
   const ecoSpunto = useRef<Spunto | null>(null);
@@ -2026,13 +2058,19 @@ export default function App() {
     if (cur) { setStrokes((s) => [...s, cur]); setCur(null); }
   };
 
+  // chiudere il foglio: dopo una modifica torna la bozza che c'era (non si cancella mai); un foglio nuovo inviato o
+  // scartato porta via la sua bozza automatica (quella salvata nel Circuito resta in I miei scritti)
   const resetForm = () => {
-    setEditingId(null); setTitle(""); setContent(""); setKind("complete"); setSigned(false); setNataDa(null); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); inkW.current = 0;
-    setDrawing(false); setImg(null); setSpLast(null); setLoadTick((n) => n + 1);
+    const wasEdit = !!editingId;
+    sent.current = false; setEditingId(null); editingNow.current = null; setTitle(""); setContent(""); setKind("complete"); setSigned(false); setNataDa(null); setCarta(null); setStrokes([]); setHist([]); setFut([]); setHeight(600); inkW.current = 0;
+    setDrawing(false); setImg(null); setSpLast(null); setBozzaId(null); setDraftWarn(false); setLoadTick((n) => n + 1);
+    if (wasEdit) { loadLocal(); return; }
     try { localStorage.removeItem(draftKey); } catch {}
   };
   const startEdit = (t: any) => {
-    setEditingId(t.id); setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setSigned(t.firmato === true); setNataDa(null); setCarta(isCarta(t.carta) ? t.carta : null); setStrokes(t.strokes || []); inkW.current = t.w || 900;
+    // la bozza del foglio nuovo si mette al sicuro prima che la modifica prenda il suo posto
+    if (!editingId) saveLocal();
+    setBozzaId(null); setEditingId(t.id); editingNow.current = t.id; setTitle(t.title); setContent(t.content || ""); setKind(writingKind(t)); setSigned(t.firmato === true); setNataDa(null); setCarta(isCarta(t.carta) ? t.carta : null); setStrokes(t.strokes || []); inkW.current = t.w || 900;
     setHist([]); setFut([]); setHeight(t.h || 600); setSel(null); setDrawing(false); setSpLast(null); setTab("write"); setLoadTick((n) => n + 1);
   };
   // «Scrivi da qui»: lo spunto va in fondo al foglio (al posto di quello di prima, se nessuno l'ha ancora toccato), vola
@@ -2112,9 +2150,62 @@ export default function App() {
       }
       if (fail) throw fail;
       if ("nataDa" in data && !("nataDa" in used)) notify("Pensiero pubblicato, ma senza il legame: il pensiero da cui nasceva non c’è più.");
+      // inviato: la bozza salvata nel Circuito non serve più
+      if (!editingId && bozzaId) deleteDoc(doc(db, "bozze", bozzaId)).catch((e: any) => console.warn("Bozza non rimossa", e));
+      // e anche quella automatica, subito: se l'app si chiude senza toccare la finestra, lo scritto non torna come bozza
+      if (!editingId) { sent.current = true; try { localStorage.removeItem(draftKey); } catch {} }
       setDone(editingId ? "edit" : "new"); haptic("success");
     } catch { notify("Salvataggio non riuscito. Riprova."); }
     setSaving(false);
+  };
+
+  // --- le bozze salvate nel Circuito ---
+  const [bozze, setBozze] = useState<Bozza[]>([]);
+  const [savingDraft, setSavingDraft] = useState(false);
+  useEffect(() => {
+    setBozze([]);
+    if (!user || !db) return;
+    return onSnapshot(query(collection(db, "bozze"), where("userId", "==", user.uid)), (q: any) => {
+      const l: Bozza[] = []; q.forEach((d: any) => l.push({ id: d.id, ...d.data() }));
+      setBozze(l.sort((a, b) => b.updatedAt - a.updatedAt));
+    }, (e: any) => console.warn("Bozze non lette (controlla le regole di Firestore)", e));
+  }, [user]);
+  // salva il foglio nuovo nel Circuito (o aggiorna la bozza che si sta continuando); resta sul foglio
+  const saveDraft = async (quiet = false) => {
+    if (!user || !db || editingId) return false;
+    const html = clean(editorRef.current?.innerHTML || content);
+    if (!title.trim() && !plain(html).trim() && !/<img/.test(html) && !strokes.length) { if (!quiet) notify("Il foglio è vuoto: scrivi qualcosa prima di salvarlo."); return false; }
+    const st = (editorRef.current ? anchorInk(strokes, measure(editorRef.current)) : strokes).map((s) => ({ ...s, points: s.points.map((p: any) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 })) }));
+    const now = Date.now(), old = bozzaId ? bozze.find((b) => b.id === bozzaId) : null;
+    const data: any = { userId: user.uid, title: title.slice(0, 200), content: html, strokes: st, w: Math.round(inkW.current || canvasRef.current?.clientWidth || 900), h: Math.round(height), kind, createdAt: old?.createdAt || now, updatedAt: now };
+    if (kind === "diary" && signed) data.firmato = true;
+    if (kind === "diary" && nataDa) data.nataDa = nataDa;
+    if (carta) data.carta = carta;
+    if (new Blob([JSON.stringify(data)]).size > 950000) { notify("Bozza troppo pesante: riduci le immagini o il disegno."); return false; }
+    setSavingDraft(true);
+    try {
+      const ref = old ? doc(db, "bozze", old.id) : doc(collection(db, "bozze"));
+      await setDoc(ref, data);
+      setBozzaId(ref.id); saveLocal({ ...sheetNow.current, bozzaId: ref.id });
+      if (!quiet) { notify("Bozza salvata in I miei scritti."); haptic("success"); }
+      setSavingDraft(false);
+      return true;
+    } catch (e) { console.warn("Bozza non salvata", e); notify("Bozza non salvata nel Circuito. Resta su questo dispositivo: riprova tra poco."); setSavingDraft(false); return false; }
+  };
+  // riprendere una bozza: quella sul foglio, se c'è e non è la stessa, prima si salva nel Circuito (nulla va perso)
+  const continueDraft = async (b: Bozza) => {
+    if (editingId) { go("write"); notify("Completa o annulla la modifica in corso prima di riprendere una bozza."); return; }
+    const busy = (title.trim() || plain(content).trim() || strokes.length) && bozzaId !== b.id;
+    if (busy && !(await saveDraft(true))) { notify("Il foglio aperto non si è potuto salvare: invialo o scartalo prima di riprendere la bozza."); return; }
+    if (busy) notify("Il foglio che avevi aperto è stato salvato tra le bozze.");
+    setTitle(b.title || ""); setContent(b.content || ""); setKind(b.kind === "diary" ? "diary" : "complete"); setSigned(b.firmato === true); setNataDa(nataDaOf({ kind: "diary", nataDa: b.nataDa })); setCarta(isCarta(b.carta) ? b.carta : null);
+    setStrokes(b.strokes || []); inkW.current = b.w || 900; setHeight(b.h || 600); setHist([]); setFut([]); setDrawing(false); setSpLast(null); setBozzaId(b.id); setLoadTick((n) => n + 1);
+    go("write"); haptic("select");
+  };
+  const deleteDraft = async (b: Bozza) => {
+    if (!confirm(`Eliminare la bozza «${b.title.trim() || "Senza titolo"}»? Non si può annullare.`)) return;
+    try { await deleteDoc(doc(db, "bozze", b.id)); if (bozzaId === b.id) setBozzaId(null); notify("Bozza eliminata."); haptic("impact"); }
+    catch { notify("Bozza non eliminata. Riprova."); }
   };
 
   // --- azioni lista ---
@@ -2964,6 +3055,7 @@ export default function App() {
             {pubShown.length > visible && <div className="flex justify-center mt-8"><button className="bt !px-6 !py-3" onClick={() => setVisible((v) => v + 18)}>Mostra altri ({pubShown.length - visible})</button></div>}
             </>
           ))}
+          {tab === "my_pages" && <Bozze list={bozze} current={bozzaId} onContinue={continueDraft} onDelete={deleteDraft} />}
           {tab === "my_pages" && db && <ScintilleMie db={db} uid={user.uid} taggedAdmin={taggedAdmin} ready={vistePronte && ownDiary.every((id) => scByP[id])}
             received={Object.keys(mieiDiario).map((id) => ({ id, title: mieiDiario[id].title, list: scByP[id] || [] }))}
             find={(id) => items.find((x) => x.id === id) || null} onLook={() => refreshScintille(true)}
@@ -3085,7 +3177,7 @@ export default function App() {
                   {drawing && <div className="absolute inset-0 z-30" style={{ touchAction: tool === "hand" ? "pan-y" : "none", cursor: tool === "hand" ? "grab" : tool === "eraser" ? "cell" : "crosshair" }} onPointerDown={pDown} onPointerMove={pMove} onPointerUp={pUp} onPointerCancel={pUp} />}
                 </div>
                 <div className="editor-footer ed-foot">
-                  <span className="editor-footer-status ed-status"><span className="ed-count"><b key={drawing ? strokes.length : words}>{drawing ? strokes.length : words}</b>{drawing ? (strokes.length === 1 ? "tratto" : "tratti") : (words === 1 ? "parola" : "parole")}</span>{!editingId && <span className="ed-auto"><i aria-hidden="true" />Bozza automatica</span>}</span>
+                  <span className="editor-footer-status ed-status"><span className="ed-count"><b key={drawing ? strokes.length : words}>{drawing ? strokes.length : words}</b>{drawing ? (strokes.length === 1 ? "tratto" : "tratti") : (words === 1 ? "parola" : "parole")}</span>{!editingId && <span className={`ed-auto ${draftWarn ? "warn" : ""}`} title={draftWarn ? "Il dispositivo non ha più spazio per la bozza automatica: usa «Salva bozza»" : "Il foglio si salva da solo su questo dispositivo"}><i aria-hidden="true" />{draftWarn ? "Bozza non salvata qui" : bozzaId ? "Bozza nel Circuito" : "Bozza automatica"}</span>}</span>
                   <div className="paper-pick" role="radiogroup" aria-label="Foglio">{CARTE.map((c) => { const on = (carta || cartaOf({ kind })) === c, l = c === "quadretti" ? "A quadretti" : c === "righe" ? "A righe" : "Bianco"; return <button key={c} type="button" role="radio" aria-checked={on} title={`Foglio ${l.toLowerCase()}`} aria-label={`Foglio ${l.toLowerCase()}`} className={`bt !p-2 ${on ? "on" : ""}`} onClick={() => setCarta(c)}><i className={`pp-sw ${c}`} aria-hidden="true" /><span className="paper-pick-l">{l}</span></button>; })}</div>
                   <div className="editor-space-controls" role="group" aria-label="Spazio del foglio">
                     <button type="button" className="editor-add-space editor-remove-space bt" title="Riduci il foglio fino al contenuto" aria-label="Rimuovi spazio vuoto" disabled={height <= minPaperHeight} onClick={removeSpace}><Minus size={14} />Spazio</button>
@@ -3094,7 +3186,8 @@ export default function App() {
                 </div>
               </div>
               <div className="ed-actions">
-                {(editingId || title || strokes.length > 0 || words > 0) && <button type="button" className="bt ed-discard" onClick={() => { if (confirm("Scartare le modifiche?")) resetForm(); }}><Trash2 size={15} />{editingId ? "Annulla modifica" : "Scarta bozza"}</button>}
+                {(editingId || title || strokes.length > 0 || words > 0) && <button type="button" className="bt ed-discard" onClick={() => { if (confirm(editingId ? "Annullare la modifica? Lo scritto resta com’era." : bozzaId ? "Chiudere il foglio? La bozza salvata resta in I miei scritti; ciò che hai scritto dopo l’ultimo salvataggio si perde." : "Scartare la bozza? Il testo non salvato si perde.")) resetForm(); }}><Trash2 size={15} />{editingId ? "Annulla modifica" : bozzaId ? "Chiudi il foglio" : "Scarta bozza"}</button>}
+                {!editingId && (title || strokes.length > 0 || words > 0) && <button type="button" className="bt ed-draft" disabled={savingDraft} onClick={() => saveDraft()}>{savingDraft ? <Loader2 size={15} className="animate-spin" /> : <FileClock size={15} />}{bozzaId ? "Aggiorna bozza" : "Salva bozza"}</button>}
                 <button className="bt ed-send" disabled={saving} data-tour="save">{saving ? <Loader2 size={17} className="animate-spin" /> : editingId ? <Save size={17} /> : <SendHorizontal size={17} />}{editingId ? "Salva modifiche" : kind === "diary" ? "Pubblica nel diario" : "Invia scritto completo"}</button>
               </div>
             </form>

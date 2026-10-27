@@ -53,6 +53,17 @@ npx firebase-tools emulators:exec --only firestore --project demo-circuito 'npm 
 La CI esegue questi test senza credenziali o accesso ai dati reali. Dopo averli verificati, le regole si distribuiscono
 con `npx firebase-tools deploy --only firestore:rules`. I backup dei dati sono locali e ignorati da Git.
 
+## Bozze
+
+Il foglio nuovo ha una **bozza automatica** su questo dispositivo (`localStorage`, una per account): si salva poco
+dopo ogni modifica e subito quando la pagina si nasconde o si chiude. Modificare uno scritto già inviato non la tocca:
+prima di aprire la modifica la bozza si mette al sicuro e, chiusa la modifica (salvata o annullata), torna sul foglio.
+Inviato lo scritto, la bozza automatica se ne va subito. Se il dispositivo non ha più spazio (le foto pesano), il piede
+dell'editor lo segnala invece di perdere la bozza in silenzio.
+**Salva bozza** la mette nel Circuito (`bozze/{id}`): la legge e la modifica solo chi la scrive, nemmeno l'admin, ed è
+in **I miei scritti › Bozze** su ogni dispositivo, finché non la si riprende con **Continua** e la si invia (inviando,
+la bozza si cancella). Riprendendone una, il foglio aperto, se diverso, si salva prima tra le bozze.
+
 ## Ascoltare gli scritti
 
 Nel lettore il pulsante con le cuffie legge lo scritto ad alta voce (`src/voce.ts`, `src/Ascolta.tsx`): la voce è

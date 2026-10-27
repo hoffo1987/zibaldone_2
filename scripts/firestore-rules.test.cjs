@@ -399,3 +399,36 @@ test('il legame nataDa vale solo nel diario, verso un pensiero del diario che es
   later.update(doc(other, 'testi', 'eco-2'), { content: '<p>Ancora</p>' });
   await assertSucceeds(later.commit());
 });
+
+// ===== Bozze salvate nel Circuito =====
+const bozza = (over = {}) => ({ userId: 'owner', title: 'Un inizio', content: '<p>Ancora da finire</p>', strokes: [], w: 900, h: 600, kind: 'complete', createdAt: 1, updatedAt: 1, ...over });
+test('una bozza la legge, la modifica e la cancella solo chi la scrive, nemmeno l’admin', async () => {
+  await assertSucceeds(setDoc(doc(owner, 'bozze', 'b1'), bozza()));
+  await assertSucceeds(getDoc(doc(owner, 'bozze', 'b1')));
+  await assertSucceeds(getDocs(query(collection(owner, 'bozze'), where('userId', '==', 'owner'))));
+  await assertFails(getDoc(doc(other, 'bozze', 'b1')));
+  await assertFails(getDoc(doc(admin, 'bozze', 'b1')));
+  await assertFails(getDocs(collection(other, 'bozze')));
+  await assertFails(getDocs(query(collection(other, 'bozze'), where('userId', '==', 'owner'))));
+  await assertFails(updateDoc(doc(other, 'bozze', 'b1'), { title: 'Mia' }));
+  await assertFails(deleteDoc(doc(admin, 'bozze', 'b1')));
+  await assertSucceeds(updateDoc(doc(owner, 'bozze', 'b1'), { content: '<p>Più avanti</p>', updatedAt: 2 }));
+  await assertSucceeds(deleteDoc(doc(owner, 'bozze', 'b1')));
+  await assertFails(getDoc(doc(guest, 'bozze', 'b1')));
+});
+test('una bozza non si intesta ad altri e rispetta i limiti di uno scritto', async () => {
+  await assertFails(setDoc(doc(other, 'bozze', 'b2'), bozza()));
+  for (const over of [{ kind: 'voto' }, { title: 'x'.repeat(201) }, { carta: 'pergamena' }, { rating: 5 }, { strokes: 'no' }, { nataDa: { id: 'x', cit: 'y', chi: 'z' } }]) {
+    await assertFails(setDoc(doc(owner, 'bozze', 'b2'), bozza(over)));
+  }
+  await assertSucceeds(setDoc(doc(owner, 'bozze', 'b2'), bozza({ kind: 'diary', firmato: true, carta: 'righe', nataDa: { id: 'diary', cit: 'una frase' } })));
+  await assertFails(updateDoc(doc(owner, 'bozze', 'b2'), { userId: 'other' }));
+  await assertFails(updateDoc(doc(owner, 'bozze', 'b2'), { createdAt: 9 }));
+});
+test('pubblicare da una bozza: lo scritto nasce e la bozza se ne va, insieme', async () => {
+  await assertSucceeds(setDoc(doc(owner, 'bozze', 'b3'), bozza()));
+  const d = original(), b = writeBatch(owner);
+  b.set(doc(owner, 'pensieri', 'from-draft'), d); b.set(doc(owner, 'testi', 'from-draft'), projection(d)); b.delete(doc(owner, 'bozze', 'b3'));
+  await assertSucceeds(b.commit());
+  assert.equal((await getDoc(doc(owner, 'pensieri', 'from-draft'))).exists(), true);
+});
