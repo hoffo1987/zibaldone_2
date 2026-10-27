@@ -1431,12 +1431,9 @@ export default function App() {
   }, [G.spd]);
   useEffect(() => {
     if (!G.glow && !G.tilt && !G.ripple) return;
-    let raf = 0, el: any = null, ev: any = null, pel: any = null, pev: any = null;
+    let raf = 0, el: any = null, ev: any = null;
     const run = () => {
-      raf = 0;
-      // la luce sul bordo delle lastre di vetro segue il puntatore (solo col bagliore acceso)
-      if (pel && pev && G.glow) { const r = pel.getBoundingClientRect(); pel.style.setProperty("--mx", `${pev.clientX - r.left}px`); pel.style.setProperty("--my", `${pev.clientY - r.top}px`); pev = null; }
-      if (!el || !ev) return;
+      raf = 0; if (!el || !ev) return;
       const r = el.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
       if (G.glow) { el.style.setProperty("--mx", `${x}px`); el.style.setProperty("--my", `${y}px`); }
       if (!G.tilt || ev.pointerType !== "mouse") return;
@@ -1446,13 +1443,11 @@ export default function App() {
     };
     const mv = (e: any) => {
       if (e.pointerType !== "mouse") return; if (!G.glow && !G.tilt) return;
-      const p = G.glow ? e.target?.closest?.(".pn:not(.card)") : null; if (p) { pel = p; pev = e; }
       const t = e.target?.closest?.(".card,.bt"); if (t) { el = t; ev = e; }
-      if ((t || p) && !raf) raf = requestAnimationFrame(run);
+      if (t && !raf) raf = requestAnimationFrame(run);
     };
     const out = (e: any) => {
       const t = e.target?.closest?.(".card,.bt"); if (t && !t.contains(e.relatedTarget)) ["--rx", "--ry", "--tx", "--ty", "--mx", "--my"].forEach((k) => t.style.removeProperty(k));
-      const p = e.target?.closest?.(".pn:not(.card)"); if (p && !p.contains(e.relatedTarget)) { ["--mx", "--my"].forEach((k) => p.style.removeProperty(k)); if (pel === p) pel = null; }
     };
     const dn = (e: any) => {
       const t = e.target?.closest?.(".card,.bt"); if (!t) return;
