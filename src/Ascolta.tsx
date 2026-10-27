@@ -103,7 +103,7 @@ export function Ascolta({ title, album, root, scroller, onClose }: {
       {voci.length > 1 && <label className="asc-voce"><span className="sr-only">Voce</span>
         <select value={voci.find((v) => v.name === pref.voce)?.name || voci[0].name} onChange={(e) => voce(e.target.value)}>{voci.map((v) => <option key={v.name} value={v.name}>{short(v)}</option>)}</select>
       </label>}
-      <button type="button" className="asc-b" aria-label="Chiudi l’ascolto" onClick={onClose}><X size={15} /></button>
+      <button type="button" className="asc-b" aria-label="Chiudi l’ascolto" onClick={() => { L.stop(); hl("asc-f", null); hl("asc-w", null); onClose(); }}><X size={15} /></button>
     </span>
   </div>;
 }
