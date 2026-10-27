@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Il Circuito · senza rete</title>
+<!-- L'app installata apre il sito pubblicato (capacitor.config.ts): se la rete non c'è, mostra questa pagina locale. -->
+<style>
+  :root { --bg: #EDF2F1; --pn: #FFFFFC; --tx: #10201E; --mu: #5B6B68; --ac: #0F8B7A; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #08110F; --pn: #12211F; --tx: #E6EFED; --mu: #9AAEA9; --ac: #2DC5AE; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); color: var(--tx);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { width: 100%; max-width: 360px; padding: 28px 24px; border-radius: 24px; background: var(--pn); text-align: center;
+    box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 18px 40px -24px rgba(0,0,0,.35); }
+  svg { display: block; margin: 0 auto 16px; }
+  h1 { margin: 0 0 8px; font-size: 20px; }
+  p { margin: 0 0 20px; color: var(--mu); }
+  button { width: 100%; min-height: 48px; border: 0; border-radius: 14px; background: var(--ac); color: #fff; font: inherit; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+    <path d="M8 28h12l4-8 8 16 4-8h12" style="stroke: var(--ac)" />
+    <path d="M14 44 42 12" style="stroke: var(--mu)" />
+  </svg>
+  <h1>Il Circuito non è raggiungibile</h1>
+  <p>Controlla la connessione a internet e riprova: i tuoi scritti sono al sicuro nel Circuito.</p>
+  <button type="button" onclick="location.replace('https://ilcircuito.vercel.app/')">Riprova</button>
+</main>
+</body>
+</html>
