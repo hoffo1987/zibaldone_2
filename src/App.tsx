@@ -38,7 +38,7 @@ import { notificheScintille, notificheEchi, chiaveEco, oggi, spuntoEco, flat, le
 import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
 import { Navigation, SectionLocation, ScrittiSwitch, NAV_ORDER, inHub } from "./Navigation";
 import { Text3D, Terminal3D } from "./d3";
-import { renderLoop, holdLoops } from "./renderLoop";
+import { renderLoop, holdLoops, holdBackground } from "./renderLoop";
 import { netBuilder, publishNet, live, makeCurrent, type NetPen } from "./current";
 import FieldGlow from "./field/FieldGlow";
 import { webgpuReady } from "./field/common";
@@ -367,12 +367,30 @@ const BgArt = ({ kind, dark, show = true, board = false }: { kind: string; dark:
   return <canvas ref={ref} className="bd-art" style={show ? undefined : { visibility: "hidden" }} aria-hidden="true" />;
 };
 // board: preset Cinema, la scheda in 3D prende il posto di disegno, campo e impulsi piatti (restano le scintille al tocco)
-const Backdrop = ({ tab, fx, dark, art = true, g, board = false, quality }: { tab: string; fx: boolean; dark: boolean; art?: boolean; g: any; board?: boolean; quality?: string }) => {
+function usePanelPointer(enabled: boolean, hero = false) {
+  const pending = useRef<{ el: HTMLElement; x: number; y: number } | null>(null), raf = useRef(0);
+  useEffect(() => () => { cancelAnimationFrame(raf.current); raf.current = 0; pending.current = null; }, [enabled]);
+  const move = (e: React.PointerEvent<HTMLElement>) => {
+    if (!enabled || e.pointerType !== "mouse") return;
+    pending.current = { el: e.currentTarget, x: e.clientX, y: e.clientY };
+    if (raf.current) return;
+    raf.current = requestAnimationFrame(() => {
+      raf.current = 0; const p = pending.current; if (!p?.el.isConnected) return;
+      const r = (hero ? p.el.parentElement || p.el : p.el).getBoundingClientRect(), x = p.x - r.left, y = p.y - r.top;
+      if (hero) { p.el.style.setProperty("--hx", `${x}px`); p.el.style.setProperty("--hy", `${y}px`); }
+      p.el.style.setProperty("--nx", String((x / Math.max(1, r.width) - 0.5) * 2)); p.el.style.setProperty("--ny", String((y / Math.max(1, r.height) - 0.5) * 2));
+    });
+  };
+  const leave = (e: React.PointerEvent<HTMLElement>) => { cancelAnimationFrame(raf.current); raf.current = 0; pending.current = null; ["--nx", "--ny"].forEach(k => e.currentTarget.style.removeProperty(k)); };
+  return { move, leave };
+}
+
+const Backdrop = ({ tab, fx, dark, art = true, g, board = false, quality, quiet = false }: { tab: string; fx: boolean; dark: boolean; art?: boolean; g: any; board?: boolean; quality?: string; quiet?: boolean }) => {
   const k = tab === "profile" ? "authors" : ["home", "write", "podio", "authors"].includes(tab) ? tab : "archive";
   return (<>
-    {board ? <React.Suspense fallback={null}><Backdrop3D kind={k} dark={dark} g={g} quality={quality} /></React.Suspense> : g.aurora && <FieldGlow kind={k} dark={dark} g={g} />}
+    {!quiet && (board ? <React.Suspense fallback={null}><Backdrop3D kind={k} dark={dark} g={g} quality={quality} /></React.Suspense> : g.aurora && <FieldGlow kind={k} dark={dark} g={g} />)}
     <div key={k} className={`bd bd-${k} bdin fixed inset-0 z-0 pointer-events-none ${board ? "bd3d" : ""}`}><div className="bd-w" />{k === "podio" && <div className="bd-p" />}{(art || g.pulses || board) && <BgArt kind={k} dark={dark} show={art && !board} board={board} />}</div>
-    {fx && <FX dark={dark} g={g} board={board} />}
+    {fx && !quiet && <FX dark={dark} g={g} board={board} />}
   </>);
 };
 
@@ -929,7 +947,7 @@ const FX = ({ dark, g, board = false }: { dark: boolean; g: any; board?: boolean
     const place = () => {
       const el = live.el, net = live.net;
       if (geo.ver !== live.ver && el && net) geo = { ver: live.ver, top: el.offsetTop, w: el.offsetWidth / net.W, h: el.offsetHeight / net.H };
-      map.sx = geo.w; map.sy = geo.h; map.oy = geo.top - (parseFloat(document.documentElement.style.getPropertyValue("--sy")) || 0) * 0.12; map.vw = W; map.vh = H;
+      map.sx = geo.w; map.sy = geo.h; map.oy = geo.top - (gr.current.parallax ? window.scrollY : 0) * 0.12; map.vw = W; map.vh = H;
     };
     let dirty: number[] | null = null, sparked = false;
     const sparks: any[] = [];
@@ -1377,11 +1395,11 @@ export default function App() {
     if (lite) return;
     let raf = 0;
     // parallasse e barra di avanzamento si spengono da sole: la variabile resta a zero
-    const f = () => { raf = 0; const h = document.documentElement; const y = window.scrollY, m = h.scrollHeight - window.innerHeight; h.style.setProperty("--sy", G.parallax ? String(y) : "0"); h.style.setProperty("--sp", G.prog && m > 0 ? String(Math.min(1, y / m)) : "0"); };
+    const f = () => { raf = 0; const y = window.scrollY, m = document.documentElement.scrollHeight - window.innerHeight; document.querySelector<HTMLElement>(".bd")?.style.setProperty("--bg-scroll", G.parallax ? String(y) : "0"); const p = document.querySelector<HTMLElement>(".prog"); if (p) p.style.transform = `scaleX(${G.prog && m > 0 ? Math.min(1, y / m) : 0})`; };
     const on = () => { if (!raf) raf = requestAnimationFrame(f); };
     window.addEventListener("scroll", on, { passive: true }); f();
     return () => { window.removeEventListener("scroll", on); cancelAnimationFrame(raf); };
-  }, [lite, G.parallax, G.prog]);
+  }, [lite, G.parallax, G.prog, tab]);
   // velocità globale: rallenta o accelera ogni animazione e transizione CSS (anche quelle che nascono dopo)
   useEffect(() => {
     const doc: any = document;
@@ -1406,7 +1424,7 @@ export default function App() {
       else { el.style.setProperty("--tx", `${((x / r.width - 0.5) * 6 * k).toFixed(1)}px`); el.style.setProperty("--ty", `${((y / r.height - 0.5) * 4 * k).toFixed(1)}px`); }
     };
     const mv = (e: any) => { if (e.pointerType !== "mouse") return; if (!G.glow && !G.tilt) return; const t = e.target?.closest?.(".card,.bt"); if (!t) return; el = t; ev = e; if (!raf) raf = requestAnimationFrame(run); };
-    const out = (e: any) => { const t = e.target?.closest?.(".card,.bt"); if (t) ["--rx", "--ry", "--tx", "--ty"].forEach((k) => t.style.removeProperty(k)); };
+    const out = (e: any) => { const t = e.target?.closest?.(".card,.bt"); if (t && !t.contains(e.relatedTarget)) ["--rx", "--ry", "--tx", "--ty"].forEach((k) => t.style.removeProperty(k)); };
     const dn = (e: any) => {
       const t = e.target?.closest?.(".card,.bt"); if (!t) return;
       const r = t.getBoundingClientRect();
@@ -2238,6 +2256,10 @@ export default function App() {
   // lettore: il foglio resta montato durante l'uscita, per poter tornare nella sua scheda
   const [vs, setVs] = useState<any>(null);
   const view = sel || vs;
+  const backgroundPaused = !!(view || toDelete || done || viewProf || optOpen);
+  useLayoutEffect(() => { holdBackground(backgroundPaused); return () => holdBackground(false); }, [backgroundPaused]);
+  const panelPointer = usePanelPointer(!backgroundPaused && G.d3 && !G.nomotion);
+  const heroPointer = usePanelPointer(!backgroundPaused, true);
   const sheetRef = useRef<HTMLDivElement>(null), readRef = useRef<HTMLDivElement>(null), railRef = useRef<HTMLDivElement>(null);
   // il lettore si chiude toccando fuori solo se il tocco è cominciato fuori: chi seleziona una frase e rilascia oltre il
   // foglio non lo chiude per sbaglio
@@ -2264,13 +2286,14 @@ export default function App() {
   useReadTrace(readRef, railRef, view?.id);
   // 3D: le scritte estruse e il terminale si inclinano verso il puntatore (solo con il mouse; sui telefoni oscillano da sole)
   useEffect(() => {
-    if (!G.d3 || G.nomotion || compact) return;
+    if (!G.d3 || G.nomotion || compact || backgroundPaused) return;
     let raf = 0, x = 0, y = 0;
-    const apply = () => { raf = 0; document.querySelector<HTMLElement>(".root")?.style.setProperty("--gx", x.toFixed(3)); document.querySelector<HTMLElement>(".root")?.style.setProperty("--gy", y.toFixed(3)); };
+    const targets = Array.from(document.querySelectorAll<HTMLElement>(".t3d,.term3d,.f3d"));
+    const apply = () => { raf = 0; targets.forEach(el => { el.style.setProperty("--gx", x.toFixed(3)); el.style.setProperty("--gy", y.toFixed(3)); }); };
     const mv = (e: PointerEvent) => { if (e.pointerType !== "mouse") return; x = (e.clientX / window.innerWidth) * 2 - 1; y = (e.clientY / window.innerHeight) * 2 - 1; if (!raf) raf = requestAnimationFrame(apply); };
     window.addEventListener("pointermove", mv, { passive: true });
-    return () => { window.removeEventListener("pointermove", mv); cancelAnimationFrame(raf); const root = document.querySelector<HTMLElement>(".root"); root?.style.removeProperty("--gx"); root?.style.removeProperty("--gy"); };
-  }, [G.d3, G.nomotion, compact]);
+    return () => { window.removeEventListener("pointermove", mv); cancelAnimationFrame(raf); targets.forEach(el => { el.style.removeProperty("--gx"); el.style.removeProperty("--gy"); }); };
+  }, [G.d3, G.nomotion, compact, tab, backgroundPaused]);
   // un solo logo 3D alla volta (un solo canvas WebGPU): quello grande su schermi larghi, quello piccolo su telefono
   const [wide, setWide] = useState(() => !!window.matchMedia?.("(min-width:768px)").matches);
   useEffect(() => {
@@ -2414,8 +2437,8 @@ export default function App() {
 
   // diorama del pannello d'accesso: il puntatore inclina lo spazio (variabili --nx/--ny, da -1 a 1)
   const d3live = G.d3 && !G.nomotion;
-  const stageMove = (e: any) => { if (!d3live || e.pointerType !== "mouse") return; const el = e.currentTarget, r = el.getBoundingClientRect(); el.style.setProperty("--nx", (((e.clientX - r.left) / r.width - 0.5) * 2).toFixed(3)); el.style.setProperty("--ny", (((e.clientY - r.top) / r.height - 0.5) * 2).toFixed(3)); };
-  const stageLeave = (e: any) => { ["--nx", "--ny"].forEach((k) => e.currentTarget.style.removeProperty(k)); };
+  const stageMove = panelPointer.move;
+  const stageLeave = panelPointer.leave;
 
   if (!user || resetCode) {
     const Msg = authMsg && <div className={`mb-4 p-3 rounded-lg text-sm ${authMsg.t === "err" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{authMsg.m}</div>;
@@ -2643,14 +2666,8 @@ export default function App() {
     : [{ l: "I tuoi scritti", v: items.length, k: "mine" as StatKind, a: () => go("my_pages") },
       { l: "Questo mese", v: thisMonth.length, k: "month" as StatKind, a: () => { go("my_pages"); setMonthFilter(monthNow); } },
       { l: "Parole scritte", v: items.reduce((a, t) => a + wc(t), 0), k: "words" as StatKind, a: () => go("my_pages") }];
-  const heroMove = (e: any) => {
-    // si misura sul contenitore e non sul pannello: il pannello si inclina e, all'ingresso, si muove e si rimpicciolisce; il suo rettangolo
-    // dà coordinate sbagliate e a mouse fermo l'inclinazione sbagliata restava finché non si rimuoveva il puntatore (o si cambiava pagina)
-    const el = e.currentTarget, r = (el.parentElement || el).getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
-    el.style.setProperty("--hx", `${x}px`); el.style.setProperty("--hy", `${y}px`);
-    el.style.setProperty("--nx", String((x / r.width - 0.5) * 2)); el.style.setProperty("--ny", String((y / r.height - 0.5) * 2));
-  };
-  const heroLeave = (e: any) => { ["--nx", "--ny"].forEach((k) => e.currentTarget.style.removeProperty(k)); };
+  const heroMove = heroPointer.move;
+  const heroLeave = heroPointer.leave;
   const toRate = thisMonth.filter((t) => !isDiary(t) && !t.rating).length;
   // primo ingresso della sessione: la corrente percorre il bordo del pannello e lo accende; dopo, la home entra asciutta
   const boot = heroIntro.current && G.reveal;
@@ -2828,7 +2845,7 @@ export default function App() {
 
   return shell(
     <>
-      <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} board={G.bg3d && CINEMA_OK && !(tab === "podio" && podium3d)} quality={opts.q3d} />
+      <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} quiet={tab === "podio" && podium3d} board={G.bg3d && CINEMA_OK && !(tab === "podio" && podium3d)} quality={opts.q3d} />
       {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} covered={!isAdmin} sign={podiumLetters} tune={{ tier: opts.podioTier || "auto", scale: opts.podioScale || 0, fps: opts.podioFps || 60 }} onFail={() => setPodiumFail(true)} />}
       <Navigation tab={tab} admin={isAdmin} editing={!!editingId} railKey={railKey}
         hidden={kbOpen || (tab === "write" && drawing)} onNavigate={go}

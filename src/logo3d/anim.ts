@@ -78,6 +78,7 @@ export class LogoAnim {
   get nodeK() { return clamp01((this.nodeS[0] / NODE_R[0] + this.nodeS[1] / NODE_R[1] + Math.min(1, this.nodeS[2] / NODE_R[2])) / 3); }
 
   step(dt: number) {
+    dt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
     const T = (this.T += dt);
     const kIn = back((T - 0.05) / 1.0);
     this.badgeS = 0.35 + 0.65 * Math.min(1.06, kIn);
@@ -110,17 +111,25 @@ export class LogoAnim {
     this.ringA = 0.11 * ease((T - 1.5) / 0.8) * (1 + this.hoverK * 1.2);
     this.trailA = ease((T - 1.7) / 0.6);
     if (!this.drag) {
-      if (Math.abs(this.vel) > 2.4 && this.settle === null) this.vel *= Math.exp(-dt * 0.85);
+      if (Math.abs(this.vel) > 2.4 && this.settle === null) {
+        const decay = Math.exp(-dt * 0.85);
+        this.ang += this.vel * (1 - decay) / 0.85; this.vel *= decay;
+      }
       else {
         if (this.settle === null) {
           const p = (this.ang + this.vel * 0.25) / TAU;
           this.settle = (this.vel > 0.3 ? Math.ceil(p - 0.08) : this.vel < -0.3 ? Math.floor(p + 0.08) : Math.round(p)) * TAU;
         }
-        this.vel += (-(this.ang - this.settle) * 26 - this.vel * 8.5) * dt;
+        // Exact damped spring: stable even after a dropped frame or at a high animation speed.
+        const x = this.ang - this.settle, v = this.vel, damping = 4.25, w = Math.sqrt(26 - damping * damping);
+        const decay = Math.exp(-damping * dt), c = Math.cos(w * dt), s = Math.sin(w * dt), b = (v + damping * x) / w;
+        this.ang = this.settle + decay * (x * c + b * s);
+        this.vel = decay * (v * c - (damping * b + w * x) * s);
         if (Math.abs(this.ang - this.settle) < 0.0005 && Math.abs(this.vel) < 0.002) { this.ang = this.settle; this.vel = 0; }
       }
-      this.ang += this.vel * dt;
     }
+    // Keep angles small during repeated spins, preserving the spring's relative displacement.
+    if (Math.abs(this.ang) > TAU * 8) { const turns = Math.trunc(this.ang / TAU) * TAU; this.ang -= turns; if (this.settle !== null) this.settle -= turns; }
     this.cur.x = damp(this.cur.x, this.ptr.x, 6.5, dt); this.cur.y = damp(this.cur.y, this.ptr.y, 6.5, dt);
     this.rootR[0] = this.cur.y * 0.48 + Math.sin(T * 0.75) * 0.06; this.rootR[1] = this.cur.x * 0.74 + Math.sin(T * 0.55) * 0.11;
     this.rootP[0] = Math.sin(T * 1.25) * 1.9 + Math.cos(T * 0.65) * 0.5; this.rootP[1] = -60 * (1 - ease((T - 0.05) / 0.9)) + this.hoverK * 12;
@@ -128,7 +137,11 @@ export class LogoAnim {
   }
 
   // trascinamento orizzontale (dx in pixel, dt in secondi dall'ultimo movimento)
-  dragBy(dx: number, dt: number) { const d = dx * 0.013; this.ang += d; this.vel = damp(this.vel, d / dt, 18, dt); this.settle = null; }
+  dragBy(dx: number, dt: number) {
+    if (!Number.isFinite(dx) || !Number.isFinite(dt) || dt <= 0) return;
+    const d = dx * 0.013;
+    this.ang += d; this.vel = Math.max(-42, Math.min(42, damp(this.vel, d / Math.max(0.008, dt), 18, dt))); this.settle = null;
+  }
 
   // spinta: accelera la rotazione e la corrente, e fa esplodere le scintille dal centro
   kick() { this.vel = Math.min(42, this.vel + 9.5); this.settle = null; this.boost = 1; this.burst(this.q.mobile ? 24 : 44); }

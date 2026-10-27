@@ -51,6 +51,20 @@ test("a kick spins the badge, which then settles on a whole turn", () => {
   expect(a.ang / TAU).toBeCloseTo(Math.round(a.ang / TAU), 6);
 });
 
+test.each([1 / 60, 0.05, 0.4, 1])('rapid drags and long animation steps remain bounded (%s s)', dt => {
+  const a = new LogoAnim(false, quality(false), seeded());
+  a.drag = true;
+  for (let i = 0; i < 1000; i++) { a.dragBy(2000, 0.001); a.step(dt); }
+  expect(Math.abs(a.vel)).toBeLessThanOrEqual(42);
+  expect(Math.abs(a.ang)).toBeLessThanOrEqual(TAU * 8);
+  a.drag = false;
+  for (let i = 0; i < Math.ceil(24 / dt); i++) a.step(dt);
+  expect(a.vel).toBe(0);
+  expect(a.ang / TAU).toBeCloseTo(Math.round(a.ang / TAU), 6);
+  const p = new FramePacker(quality(false)); p.resize(340, 340); p.pack(a);
+  expect(Array.from(p.data).every(Number.isFinite)).toBe(true);
+});
+
 test("sparks are written once per burst in a ring buffer that restarts after a pause", () => {
   const q = quality(false), a = new LogoAnim(false, q, seeded());
   run(a, 2);

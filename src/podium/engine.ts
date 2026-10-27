@@ -692,7 +692,7 @@ export class PodiumView {
     for (let k = s.bloom.length - 1; k >= 1; k--) full(s.bloom[k - 1], P.up, [s.up[k - 1]], true);
     full(s.ldr, P.tone, [s.tone[h]]);
     full(this.ctx.getCurrentTexture().createView(), P.final, [s.final], false, true);
-    const ts = this.ts, slot = ts ? ts.busy.indexOf(false) : -1;
+    const ts = this.ts, slot = ts && this.frameNo % 15 === 0 ? ts.busy.indexOf(false) : -1;
     if (ts && slot >= 0) { enc.resolveQuerySet(ts.set, 0, 3, ts.resolve, 0); enc.copyBufferToBuffer(ts.resolve, 0, ts.read[slot], 0, 24); ts.busy[slot] = true; }
     d.queue.submit([enc.finish()]);
     if (ts && slot >= 0) {

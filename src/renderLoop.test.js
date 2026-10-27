@@ -1,4 +1,4 @@
-import { renderLoop, holdLoops, refreshes, steadyFps } from "./renderLoop";
+import { renderLoop, holdLoops, holdBackground, refreshes, steadyFps } from "./renderLoop";
 
 let pending, observer, hidden, next;
 beforeEach(() => {
@@ -63,4 +63,25 @@ test("steady pacing picks the refresh multiple nearest to the wanted rate", () =
   expect([60, 75, 90, 120, 144, 165, 240].map((hz) => refreshes(60, 1000 / hz))).toEqual([1, 1, 1, 2, 2, 3, 4]);
   expect(refreshes(30, 1000 / 60)).toBe(2);
   expect(steadyFps(60, 0)).toBe(60);
+});
+
+test('a reader suspends covered scenes while its own signal keeps running', () => {
+  const bg = jest.fn(), fg = jest.fn();
+  const stopBg = renderLoop(bg, () => 60), stopFg = renderLoop(fg, () => 60, undefined, undefined, true);
+  tick(0); holdBackground(true); tick(20);
+  expect(bg).toHaveBeenCalledTimes(1); expect(fg).toHaveBeenCalledTimes(2);
+  holdLoops(true); expect(pending.size).toBe(0);
+  holdLoops(false); tick(40); expect(bg).toHaveBeenCalledTimes(1);
+  holdBackground(false); tick(60); expect(bg).toHaveBeenCalledTimes(2);
+  stopBg(); stopFg();
+});
+
+test('an idle signal owns no animation frame and wakes immediately on input', () => {
+  let fps = 0;
+  const draw = jest.fn(), stop = renderLoop(draw, () => fps);
+  tick(0); expect(pending.size).toBe(0);
+  fps = 60; stop.invalidate(); tick(2);
+  expect(draw).toHaveBeenCalledTimes(2); expect(pending.size).toBe(1);
+  fps = 0; tick(20); expect(pending.size).toBe(0);
+  stop(); stop.invalidate(); expect(pending.size).toBe(0);
 });

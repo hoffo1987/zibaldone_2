@@ -298,6 +298,7 @@ export class LogoView {
   minScale = 1;
   onScale: (() => void) | null = null;
   private probe = { n: 0, slow: 0, fast: 0, busy: false };
+  private inflight = 0;
 
   constructor(private readonly engine: Engine, readonly canvas: HTMLCanvasElement, readonly q: Quality) {
     const d = engine.device;
@@ -385,7 +386,7 @@ export class LogoView {
   }
 
   render(anim: LogoAnim, interval = 1000 / 30) {
-    if (this.dead || this.engine.lost || !this.pipes || !this.depth) return false;
+    if (this.dead || this.engine.lost || !this.pipes || !this.depth || this.inflight >= 2) return false;
     const d = this.engine.device, m = this.geo.meshes;
     this.packer.pack(anim);
     d.queue.writeBuffer(this.frame, 0, this.packer.data);
@@ -406,6 +407,8 @@ export class LogoView {
     }
     pass.end();
     d.queue.submit([enc.finish()]);
+    this.inflight++;
+    d.queue.onSubmittedWorkDone().then(() => { this.inflight--; }, () => { this.inflight = 0; });
     const p = this.probe;
     if (++p.n % 15 === 0 && !p.busy) {
       p.busy = true;

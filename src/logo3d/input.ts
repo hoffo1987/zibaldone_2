@@ -1,15 +1,20 @@
 // Interazioni del logo, uguali per la versione WebGPU e per quella in Canvas 2D: il puntatore inclina la scena, il
 // trascinamento la fa girare, un clic (o Invio/spazio) le dà una spinta e avvisa il terminale fluttuante.
 import type { LogoAnim } from "./anim";
+import { backgroundActive } from "../renderLoop";
 
 export function bindLogoInput(el: HTMLElement, cv: HTMLElement, anim: LogoAnim) {
   const ptr = anim.ptr;
   let pointerId: number | null = null, dragY = 0, dragX = 0, dragMoved = 0, lastMove = 0, spins = 0;
-  const look = (e: PointerEvent) => {
-    if (e.pointerType !== "mouse") return;
+  let raf = 0, latest: PointerEvent | null = null;
+  const applyLook = () => { raf = 0; const e = latest; if (!e || !backgroundActive()) return;
     const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
     ptr.x = Math.max(-1, Math.min(1, (e.clientX - cx) / (window.innerWidth / 2)));
     ptr.y = Math.max(-1, Math.min(1, (e.clientY - cy) / (window.innerHeight / 2)));
+  };
+  const look = (e: PointerEvent) => {
+    if (e.pointerType !== "mouse" || !backgroundActive()) return;
+    latest = e; if (!raf) raf = requestAnimationFrame(applyLook);
   };
   const kick = () => { anim.kick(); spins++; window.dispatchEvent(new CustomEvent("circuito:giro", { detail: spins })); };
   const down = (e: PointerEvent) => { if (!e.isPrimary || e.button !== 0) return; pointerId = e.pointerId; anim.drag = true; dragY = e.clientY; dragX = e.clientX; dragMoved = 0; lastMove = performance.now(); try { cv.setPointerCapture(e.pointerId); } catch {} cv.style.cursor = "grabbing"; };
@@ -34,6 +39,7 @@ export function bindLogoInput(el: HTMLElement, cv: HTMLElement, anim: LogoAnim) 
   cv.addEventListener("pointerdown", down); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
   cv.addEventListener("pointerenter", enter); cv.addEventListener("pointerleave", leave); el.addEventListener("keydown", keyDown);
   return () => {
+    cancelAnimationFrame(raf);
     window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
     cv.removeEventListener("pointerdown", down); cv.removeEventListener("pointerenter", enter); cv.removeEventListener("pointerleave", leave); el.removeEventListener("keydown", keyDown);
   };

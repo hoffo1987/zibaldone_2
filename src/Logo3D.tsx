@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { renderLoop } from "./renderLoop";
+import { renderLoop, steadyFps } from "./renderLoop";
 import { acquireEngine, releaseEngine, LogoView, webgpuAvailable, type Engine } from "./logo3d/engine";
 import { LogoAnim, quality } from "./logo3d/scene";
 import { bindLogoInput, watchSize } from "./logo3d/input";
@@ -72,7 +72,7 @@ function Logo3D({ intro = true, spd = 1, fps = 30, fallback, className = "", onF
           requestAnimationFrame(() => { cv.style.opacity = "1"; });
         }
       };
-      cleanups.push(renderLoop(step, () => config.current.fps || 30, el, () => { t = performance.now(); }));
+      cleanups.push(renderLoop(step, vsync => steadyFps(config.current.fps || 30, vsync), el, () => { t = performance.now(); }));
     };
 
     return () => {

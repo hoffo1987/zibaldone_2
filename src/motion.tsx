@@ -158,18 +158,19 @@ export const useRail = (ref: React.RefObject<HTMLElement>, axis: "v" | "h", key:
 export const useReadTrace = (scroll: React.RefObject<HTMLElement>, rail: React.RefObject<HTMLElement>, key: any) => {
   useEffect(() => {
     const s = scroll.current, r = rail.current; if (!s || !r) return;
-    let raf = 0;
+    let raf = 0, m = 0;
     const upd = () => {
       raf = 0;
-      const m = s.scrollHeight - s.clientHeight, p = m > 8 ? Math.min(1, Math.max(0, s.scrollTop / m)) : 1;
-      r.style.setProperty("--rp", p.toFixed(4)); r.style.setProperty("--rh", `${r.clientHeight}px`);
+      const p = m > 8 ? Math.min(1, Math.max(0, s.scrollTop / m)) : 1;
+      r.style.setProperty("--rp", p.toFixed(4));
       r.classList.toggle("end", p > 0.985);
     };
     const on = () => { if (!raf) raf = requestAnimationFrame(upd); };
-    upd();
+    const measure = () => { m = s.scrollHeight - s.clientHeight; const height = r.clientHeight; r.style.setProperty("--rh", `${height}px`); on(); };
+    measure();
     s.addEventListener("scroll", on, { passive: true });
-    const ro = "ResizeObserver" in window ? new ResizeObserver(on) : null;
-    if (ro) { ro.observe(s); Array.from(s.children).forEach((c) => ro.observe(c)); }
+    const ro = "ResizeObserver" in window ? new ResizeObserver(measure) : null;
+    if (ro) { ro.observe(s); ro.observe(r); Array.from(s.children).forEach((c) => ro.observe(c)); }
     return () => { s.removeEventListener("scroll", on); ro?.disconnect(); cancelAnimationFrame(raf); };
   }, [key]);
 };

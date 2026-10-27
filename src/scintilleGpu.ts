@@ -100,6 +100,13 @@ struct VO { @builtin(position) pos: vec4f, @location(0) w: vec2f, @location(1) @
 }`;
 
 const OVER: GPUBlendState = { color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" }, alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" } };
+const pipelines = new WeakMap<GPUDevice, GPURenderPipeline>();
+// Bound the backing store by the viewport, independently of the length of the writing.
+export function signalSize(w: number, h: number, viewport: number, dpr: number, limit = 8192) {
+  const height = Math.max(1, Math.min(h, viewport + 384));
+  const scale = Math.min(dpr, 2, Math.sqrt(4e6 / Math.max(1, w * height)), limit / Math.max(1, height), limit / Math.max(1, w));
+  return { height, scale, width: Math.max(1, Math.floor(w * scale)), pixelsHigh: Math.max(1, Math.floor(height * scale)) };
+}
 
 export type Span = { key: string; boxes: { x: number; y: number; w: number; h: number }[]; canali: Canale[]; focus: boolean };
 type St = { span: Span; k: number; life: number; over: number; run: number; t0: number; dur: number; seed: number; dying: boolean; tot: number; fresh: boolean; arrived: boolean };
@@ -115,9 +122,11 @@ export class Segnale {
   private readonly cx: GPUCanvasContext;
   private readonly ud = new Float32Array(U_SIZE); private readonly ld = new Float32Array(MAXL * L_STRIDE);
   private st = new Map<string, St>();
-  private t = 0; private last = 0; private busy = 0; private dirty = true;
+  private t = performance.now() / 1000; private last = 0; private busy = 0; private dirty = true;
   private on = 1; private want = 1; private px = 0; private py = 0; private inside = false;
   private sc = 1;
+  private offset = 0; private height = 1; private paperHeight = 1;
+  onInvalidate?: () => void;
   onArrive?: () => void; // il pennello è arrivato in fondo alla frase appena accesa
 
   constructor(private readonly dev: GPUDevice, private readonly canvas: HTMLCanvasElement, private readonly paper: HTMLElement) {
@@ -127,18 +136,32 @@ export class Segnale {
     const U = GPUBufferUsage;
     this.ub = dev.createBuffer({ label: "segnale", size: U_SIZE * 4, usage: U.UNIFORM | U.COPY_DST });
     this.lb = dev.createBuffer({ label: "segnale-righe", size: this.ld.byteLength, usage: U.STORAGE | U.COPY_DST });
-    const m = dev.createShaderModule({ label: "segnale", code: SHADER });
-    this.pipe = dev.createRenderPipeline({ label: "segnale", layout: "auto", vertex: { module: m, entryPoint: "vs" }, fragment: { module: m, entryPoint: "fs", targets: [{ format, blend: OVER }] }, primitive: { topology: "triangle-list" } });
+    let pipe = pipelines.get(dev);
+    if (!pipe) {
+      const m = dev.createShaderModule({ label: "segnale", code: SHADER });
+      pipe = dev.createRenderPipeline({ label: "segnale", layout: "auto", vertex: { module: m, entryPoint: "vs" }, fragment: { module: m, entryPoint: "fs", targets: [{ format, blend: OVER }] }, primitive: { topology: "triangle-list" } });
+      pipelines.set(dev, pipe);
+    }
+    this.pipe = pipe;
     this.bind = dev.createBindGroup({ layout: this.pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.ub } }, { binding: 1, resource: { buffer: this.lb } }] });
     (Object.keys(CODICE) as Tipo[]).forEach((tp) => { const c = INCHIOSTRO[tp]; this.ud.set([c[0] / 255, c[1] / 255, c[2] / 255, 1], 8 + CODICE[tp] * 4); });
   }
 
   // la tela copre la carta; il filo è sottile e vuole i pixel veri: si scende di risoluzione solo con fogli enormi
-  fit() {
+  fit(viewport = window.innerHeight) {
     const W = this.paper.clientWidth, H = this.paper.clientHeight, dpr = window.devicePixelRatio || 1;
-    this.sc = Math.max(0.5, Math.min(dpr, 2, Math.sqrt(8e6 / Math.max(1, W * H)), 8000 / Math.max(1, H), 8000 / Math.max(1, W)));
-    this.canvas.width = Math.max(1, Math.round(W * this.sc)); this.canvas.height = Math.max(1, Math.round(H * this.sc));
+    const size = signalSize(W, H, viewport, dpr, this.dev.limits.maxTextureDimension2D);
+    this.sc = size.scale; this.height = size.height; this.paperHeight = H;
+    if (this.canvas.width !== size.width) this.canvas.width = size.width;
+    if (this.canvas.height !== size.pixelsHigh) this.canvas.height = size.pixelsHigh;
+    this.canvas.style.height = `${size.height}px`; this.canvas.style.bottom = "auto";
     this.dirty = true;
+  }
+  viewport(top: number) {
+    const offset = Math.floor(Math.max(0, Math.min(this.paperHeight - this.height, top - 192)));
+    if (offset === this.offset) return;
+    this.offset = offset; this.canvas.style.transform = `translateY(${offset}px)`;
+    this.dirty = true; this.onInvalidate?.();
   }
 
   // le frasi accese: una nuova entra col pennello (le nuove una dopo l'altra), una che sparisce si appiattisce e si spegne
@@ -169,12 +192,12 @@ export class Segnale {
   // snap: subito, senza dissolvenza (all'apertura)
   show(v: boolean, snap = false) { this.want = v ? 1 : 0; if (snap) this.on = this.want; this.wake(1.5); }
   pointer(x: number, y: number, inside: boolean) { this.px = x; this.py = y; this.inside = inside; this.wake(0.6); }
-  private wake(sec: number) { this.busy = Math.max(this.busy, this.t + sec); this.dirty = true; }
+  private wake(sec: number) { this.t = performance.now() / 1000; this.busy = Math.max(this.busy, this.t + sec); this.dirty = true; this.onInvalidate?.(); }
   // a riposo un disegno al secondo, solo per accorgersi di cambiare: il lavoro vero lo salta draw()
-  fps() { return this.t < this.busy ? 60 : 1; }
+  fps() { return this.t < this.busy ? 60 : 0; }
 
   draw(now: number) {
-    const dt = Math.min(0.05, this.last ? (now - this.last) / 1000 : 0.016); this.last = now; this.t += dt;
+    const dt = Math.min(0.25, this.last ? (now - this.last) / 1000 : 0.016); this.last = now; this.t = now / 1000;
     const moving = this.t < this.busy;
     if (!moving && !this.dirty) return;
     const ease = 1 - Math.exp(-dt * 7), hoverEase = 1 - Math.exp(-dt * 9);
@@ -197,13 +220,14 @@ export class Segnale {
       const dom = dominante(s.span.canali);
       let acc = 0;
       s.span.boxes.forEach((b) => {
-        if (nl >= MAXL) return;
-        this.ld.set([b.x, b.y, b.w, b.h, acc, s.tot, s.k, s.seed, s.t0, s.dur || 1, Math.max(s.over, s.span.focus ? 1 : 0), s.run,
+        const start = acc; acc += b.w;
+        if (nl >= MAXL || b.y + b.h + 16 < this.offset || b.y - 16 > this.offset + this.height) return;
+        this.ld.set([b.x, b.y - this.offset, b.w, b.h, start, s.tot, s.k, s.seed, s.t0, s.dur || 1, Math.max(s.over, s.span.focus ? 1 : 0), s.run,
           Math.min(4, s.span.canali.length), pack(s.span.canali), CODICE[dom.tipo], s.life * this.on], nl * L_STRIDE);
-        acc += b.w; nl++;
+        nl++;
       });
     });
-    if (anim) this.wake(0.25);
+    if (anim) this.busy = Math.max(this.busy, this.t + 0.25);
     this.dirty = false;
     this.ud.set([this.canvas.width, this.canvas.height, this.sc, this.t, Math.max(this.on, 0), dt, 0, 0], 0);
     this.dev.queue.writeBuffer(this.ub, 0, this.ud);

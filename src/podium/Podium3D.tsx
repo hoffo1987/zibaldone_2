@@ -8,6 +8,7 @@ import { pickSecretPane, WindowSecret } from './secret';
 import { loadDrape } from "./cloth";
 import { setAmbiencePan } from "../ambience";
 import type { SignText } from "./letters";
+import { ResolutionGovernor } from "./resolution";
 
 export type PodiumProps = {
   dark: boolean;
@@ -98,11 +99,14 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
     const tune = tuneRef.current, urlScale = Number(params.get("podioscale")) || 0, fps = tune?.fps || FPS;
     let fixedScale = urlScale || tune?.scale || 0;
     let W = 0, H = 0, left = 0, top = 0, ratio = 1, out = 1, scale = START_SCALE[tier], cap = 4, frameMs = 1000 / fps;
+    const resolution = new ResolutionGovernor();
+    let slotLeft = 0, slotTop = 0, pointerAt = -Infinity;
 
     const measure = () => {
       const dpr = window.devicePixelRatio || 1;
       if (narrow) {
         // il palco: larghezza piena, altezza fissata dal CSS su svh (non cambia quando la barra del browser si muove)
+        const rect = el.getBoundingClientRect(); slotLeft = rect.left; slotTop = rect.top;
         W = el.clientWidth; H = el.clientHeight; left = 0; top = 0;
       } else {
         // inquadratura: area libera della pagina (a destra della barra laterale, sotto titolo e mese)
@@ -110,7 +114,8 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
         const aside = document.querySelector("aside");
         left = aside && getComputedStyle(aside).display !== "none" ? aside.getBoundingClientRect().right : 0;
         top = Math.max(0, slot.getBoundingClientRect().top + window.scrollY);
-        slot.style.height = `${Math.max(460, H - top - 16)}px`;
+        const height = `${Math.max(460, H - top - 16)}px`;
+        if (slot.style.height !== height) slot.style.height = height;
       }
       out = Math.min(dpr, 2);
       const base = Math.min(dpr, narrow ? 1.5 : 2);
@@ -129,7 +134,7 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
       STEP_X.forEach((x, i) => {
         const tp = project(c, [x, TROPHY_TOP[i] + 0.22, TROPHY_Z]), a = project(c, [x - 1.1, STEP_TOP[i], STEP_D]), b = project(c, [x + 1.1, STEP_TOP[i], STEP_D]);
         const p = plateEls.current[i];
-        if (p && tp && a && b) { p.style.width = `${Math.max(150, (b.x - a.x) * k * 0.94)}px`; p.style.transform = `translate(${tp.x * k}px, ${tp.y * k}px) translate(-50%, -100%)`; }
+        if (p && tp && a && b) { const width = `${Math.round(Math.max(150, (b.x - a.x) * k * 0.94))}px`; if (p.style.width !== width) p.style.width = width; p.style.transform = `translate(${tp.x * k}px, ${tp.y * k}px) translate(-50%, -100%)`; }
       });
     };
     placeRef.current = place;
@@ -141,7 +146,7 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
     let yawTarget = 0, hover = -1;
     // coordinate del puntatore nell'immagine della scena (pixel CSS)
     const local = (e: PointerEvent) => {
-      if (narrow) { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+      if (narrow) return { x: e.clientX - slotLeft, y: e.clientY - slotTop };
       return { x: e.clientX, y: e.clientY + window.scrollY };
     };
     // Listen above the slot as well: on desktop the upper glass extends behind the heading.
@@ -158,6 +163,7 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
     const shownCanvas = () => cv.classList.contains('on');
     const secretDown = (e: PointerEvent) => {
       if (!e.isPrimary || e.button !== 0) { tap.id = -1; return; }
+      if (narrow) { const r = el.getBoundingClientRect(); slotLeft = r.left; slotTop = r.top; }
       tap.id = e.pointerId; tap.x = e.clientX; tap.y = e.clientY; tap.moved = false;
     };
     const secretMove = (e: PointerEvent) => {
@@ -213,6 +219,7 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
       (target as HTMLElement | null)?.click();
     };
     const onMove = (e: PointerEvent) => {
+      pointerAt = performance.now();
       ptr.x = (e.clientX / window.innerWidth) * 2 - 1; ptr.y = (e.clientY / window.innerHeight) * 2 - 1; ptr.in = true;
       const p = local(e); ptr.cx = p.x; ptr.cy = p.y;
       if (drag.on && e.pointerId === drag.id) {
@@ -236,7 +243,7 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
     };
     const onLeave = () => { ptr.in = false; ptr.cx = ptr.cy = -1; };
     slot.classList.add("live");
-    slot.addEventListener("pointermove", onMove); slot.addEventListener("pointerdown", onDown);
+    if (narrow) slot.addEventListener("pointermove", onMove, { passive: true }); slot.addEventListener("pointerdown", onDown);
     slot.addEventListener("pointerup", onUp); slot.addEventListener("pointercancel", onUp); slot.addEventListener("pointerleave", onLeave);
     if (!narrow) window.addEventListener("pointermove", onMove, { passive: true });
     cleanups.push(() => {
@@ -250,14 +257,20 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
       el.appendChild(cv);
       const ro = new ResizeObserver(() => fit());
       ro.observe(el);
-      cleanups.push(() => { ro.disconnect(); cv.remove(); });
+      let scrollFrame = 0;
+      const scroll = () => { if (!scrollFrame) scrollFrame = requestAnimationFrame(() => { scrollFrame = 0; const r = el.getBoundingClientRect(); slotLeft = r.left; slotTop = r.top; }); };
+      window.addEventListener("scroll", scroll, { passive: true });
+      cleanups.push(() => { ro.disconnect(); window.removeEventListener("scroll", scroll); cancelAnimationFrame(scrollFrame); cv.remove(); });
     } else {
       // la scena scorre con la pagina (è un'apertura a tutto schermo, non uno sfondo fisso)
       let raf = 0;
       const scroll = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; const y = `translate3d(0, ${-window.scrollY}px, 0)`; el.style.transform = y; if (over.current) over.current.style.transform = y; }); };
       window.addEventListener("scroll", scroll, { passive: true }); window.addEventListener("resize", fit);
-      const tick = window.setInterval(fit, 1000); // il titolo e la barra del mese possono cambiare altezza
-      cleanups.push(() => { window.removeEventListener("scroll", scroll); window.removeEventListener("resize", fit); clearInterval(tick); cancelAnimationFrame(raf); cv.remove(); slot.style.height = ""; });
+      let resizeFrame = 0;
+      const changed = () => { if (!resizeFrame) resizeFrame = requestAnimationFrame(() => { resizeFrame = 0; fit(); }); };
+      const ro = new ResizeObserver(changed);
+      document.querySelectorAll(".page-head,.pd-bar,aside").forEach(node => ro.observe(node));
+      cleanups.push(() => { window.removeEventListener("scroll", scroll); window.removeEventListener("resize", fit); ro.disconnect(); cancelAnimationFrame(resizeFrame); cancelAnimationFrame(raf); cv.remove(); slot.style.height = ""; });
       el.appendChild(cv);
       scroll();
     }
@@ -293,7 +306,8 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
       console.info(`Podio 3D: GPU ${dev.adapter.vendor || "?"} ${dev.adapter.architecture || ""}, ${Math.round(dev.gflops)} GFLOPS → fascia ${tier}`);
       const pace = (vsync: number) => { frameMs = vsync ? refreshes(fps, vsync) * vsync : 1000 / fps; return steadyFps(fps, vsync); };
       const t0 = performance.now();
-      let last = t0, first = true, night = darkRef.current ? 1 : 0, frames = 0, slowUntil = 0, avg = 1000 / fps, drawn = t0, hudAt = 0;
+      resolution.reset(t0);
+      let last = t0, first = true, night = darkRef.current ? 1 : 0, frames = 0, avg = 1000 / fps, drawn = t0, hudAt = 0;
       const sm = { x: 0, y: 0, yaw: 0, secretPan: 0, fx: 0, fz: 0, fyaw: 0 };
       const cups = new Float32Array(12), hot = [0, 0, 0];
       for (let i = 0; i < 3; i++) cups[i * 4] = i * 2.1;
@@ -301,7 +315,7 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
       cleanups.push(renderLoop((now) => {
         // risoluzione scelta nelle Opzioni mentre la sala è aperta: si applica subito
         const wantScale = urlScale || tuneRef.current?.scale || 0;
-        if (wantScale !== fixedScale) { fixedScale = wantScale; if (wantScale) scale = wantScale; fit(); }
+        if (wantScale !== fixedScale) { fixedScale = wantScale; if (wantScale) scale = wantScale; resolution.reset(now); fit(); }
         const dt = still === null ? Math.min(0.05, (now - last) / 1000) : 0; last = now;
         const t = still ?? (now - t0) / 1000, ease = (rate: number) => 1 - Math.exp(-dt * rate);
         if (!darkRef.current) { secret.reset(); secretStart = -1; }
@@ -341,7 +355,8 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
           cups[i * 4 + 2] = hot[i];
           plateEls.current[i]?.classList.toggle("hot", hover === i);
         }
-        slot.style.cursor = hover >= 0 ? "pointer" : drag.on && drag.moved > 8 ? "grabbing" : "grab";
+        const cursor = hover >= 0 ? "pointer" : drag.on && drag.moved > 8 ? "grabbing" : "grab";
+        if (slot.style.cursor !== cursor) slot.style.cursor = cursor;
         if (!view!.render(t, night, motion, cups, secretSeconds, reduced.matches)) return;
         place();
         // risoluzione adattiva sul tempo reale della GPU (marche temporali) o, dove manca, sul ritmo dei fotogrammi. Il
@@ -351,15 +366,13 @@ export default function Podium3D({ dark, plates, onFail, covered = false, sign, 
         avg += (now - drawn - avg) * 0.05; drawn = now;
         if (++frames % 30 === 0 && !fixedScale) {
           const gpu = view!.gpuMs, old = scale, budget = frameMs * 0.75;
+          let want = scale;
           if (gpu > 0) {
             const fixed = Math.min(view!.gpuFixedMs, gpu * 0.9);
-            const want = Math.min(q.maxScale, cap, Math.max(q.minScale, scale * Math.sqrt(Math.max(0.1, budget - fixed) / (gpu - fixed))));
-            if (want < scale * 0.97) { scale = Math.max(want, scale * 0.8); slowUntil = now + 4000; }
-            else if (want > scale * 1.03 && now > slowUntil) scale = Math.min(want, scale * 1.1);
-            // vicino ai pixel dello schermo si va a 1:1 esatto (ricampionare dell'1% ammorbidisce senza guadagno)
-            if (Math.abs(scale - 1) < 0.06 && want > 0.97) scale = Math.min(1, cap);
-          } else if (avg > frameMs * 1.3 && scale > q.minScale) { scale = Math.max(q.minScale, scale * 0.9); slowUntil = now + 6000; }
-          else if (avg < frameMs * 1.1 && scale < Math.min(1, q.maxScale, cap) && now > slowUntil) scale = Math.min(1, q.maxScale, cap, scale / 0.92 > 0.94 ? 1 : scale / 0.92);
+            want = scale * Math.sqrt(Math.max(0.1, budget - fixed) / (gpu - fixed));
+          } else if (avg > frameMs * 1.3) want = scale * 0.8;
+          else if (avg < frameMs * 1.1) want = Math.min(1, q.maxScale, cap);
+          scale = resolution.sample(scale, want, now, drag.on || now - pointerAt < 750, Math.min(q.minScale, cap), Math.min(q.maxScale, cap));
           if (Math.abs(scale - old) > 0.005) fit();
         }
         if (showHud && now - hudAt > 500) {

@@ -89,8 +89,20 @@ export function signedField(alpha: ArrayLike<number>, w: number, h: number, spre
 }
 
 type Atlas = { data: Uint8Array; w: number; h: number; cells: Map<string, number[]> };
+const atlasCache = new Map<string, Promise<Atlas>>();
+// The covered room repeats the same letters across visits and quality changes. Keep a bounded CPU atlas cache;
+// build a new one in short tasks so distance-field generation does not block navigation or scrolling.
+export function signAtlas(chars: string[], g: CanvasRenderingContext2D, px: number, pad: number, spread: number, width: number): Promise<Atlas> {
+  const sorted = [...chars].sort(), key = JSON.stringify([g.font, g.measureText("Mm").width, sorted, px, pad, spread, width]);
+  const saved = atlasCache.get(key); if (saved) return saved;
+  if (atlasCache.size >= 4) atlasCache.delete(atlasCache.keys().next().value!);
+  const pending = buildAtlas(sorted, g, px, pad, spread, width);
+  atlasCache.set(key, pending);
+  pending.catch(() => { if (atlasCache.get(key) === pending) atlasCache.delete(key); });
+  return pending;
+}
 // le lettere che servono, una cella ciascuna, a scaffali; il campo calcolato cella per cella
-function buildAtlas(chars: string[], g: CanvasRenderingContext2D, px: number, pad: number, spread: number, width: number): Atlas {
+async function buildAtlas(chars: string[], g: CanvasRenderingContext2D, px: number, pad: number, spread: number, width: number): Promise<Atlas> {
   const cells = new Map<string, number[]>(), boxes = chars.map((ch) => { const t = g.measureText(ch); return { ch, left: t.actualBoundingBoxLeft, right: t.actualBoundingBoxRight, asc: t.actualBoundingBoxAscent, desc: t.actualBoundingBoxDescent }; });
   let x = 0, y = 0, row = 0;
   const spots = boxes.map((b) => {
@@ -101,7 +113,9 @@ function buildAtlas(chars: string[], g: CanvasRenderingContext2D, px: number, pa
   });
   const H = Math.max(4, Math.ceil((y + row) / 4) * 4), data = new Uint8Array(width * H);
   const scratch = document.createElement("canvas"), sg = scratch.getContext("2d", { willReadFrequently: true } as any) as CanvasRenderingContext2D;
-  boxes.forEach((b, i) => {
+  let slice = performance.now();
+  for (let i = 0; i < boxes.length; i++) {
+    const b = boxes[i];
     const [cx, cy, w, h] = spots[i];
     scratch.width = w; scratch.height = h;
     sg.font = g.font; sg.textBaseline = "alphabetic"; sg.fillStyle = "#fff";
@@ -111,7 +125,12 @@ function buildAtlas(chars: string[], g: CanvasRenderingContext2D, px: number, pa
     const field = signedField(alpha, w, h, spread);
     for (let r = 0; r < h; r++) data.set(field.subarray(r * w, r * w + w), (cy + r) * width + cx);
     cells.set(b.ch, [cx / width, cy / H, (cx + w) / width, (cy + h) / H]);
-  });
+    if (performance.now() - slice >= 6 && i + 1 < boxes.length) {
+      const scheduler = (window as any).scheduler;
+      if (scheduler?.yield) await scheduler.yield(); else await new Promise(resolve => setTimeout(resolve, 0));
+      slice = performance.now();
+    }
+  }
   return { data, w: width, h: H, cells };
 }
 
@@ -266,7 +285,7 @@ export class Letters {
       box: (ch) => { const t = g.measureText(ch); return { left: t.actualBoundingBoxLeft, right: t.actualBoundingBoxRight, asc: t.actualBoundingBoxAscent, desc: t.actualBoundingBoxDescent }; },
     };
     const placed = layoutSign(text, metrics, px, pad);
-    const atlas = buildAtlas(Array.from(new Set(placed.map((p) => p.ch))), g, px, pad, spread, q.mobile ? 1024 : 2048);
+    const atlas = await signAtlas(Array.from(new Set(placed.map((p) => p.ch))), g, px, pad, spread, q.mobile ? 1024 : 2048);
     const tex = d.createTexture({ label: "podium-letters", size: [atlas.w, atlas.h], format: "r8unorm", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
     this.textures.push(tex);
     d.queue.writeTexture({ texture: tex }, atlas.data, { bytesPerRow: atlas.w }, [atlas.w, atlas.h]);

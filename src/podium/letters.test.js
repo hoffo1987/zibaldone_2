@@ -1,4 +1,4 @@
-import { layoutSign, signedField } from "./letters";
+import { layoutSign, signedField, signAtlas } from "./letters";
 
 // a monospaced stand-in for the canvas: every character is 50 px wide, 70 px tall above the baseline, 20 below
 const metrics = { advance: (s) => Array.from(s).length * 50, box: () => ({ left: 0, right: 50, asc: 70, desc: 20 }) };
@@ -33,4 +33,17 @@ test("the distance field is 0.5 on the outline, higher inside and lower outside"
   expect(at(10, 20)).toBeGreaterThan(0.5); expect(at(9, 20)).toBeLessThan(0.5);
   expect(at(14, 20)).toBeCloseTo(0.5 + 4.5 / 16, 1);
   expect(at(5, 20)).toBeCloseTo(0.5 - 4.5 / 16, 1);
+});
+
+test('reuses the same glyph atlas across scene quality changes, keeping every glyph', async () => {
+  const g = { font: '500 20px Test', measureText: () => ({ width: 12, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 12, actualBoundingBoxAscent: 14, actualBoundingBoxDescent: 3 }) };
+  const pixels = jest.fn((x, y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4).fill(255) }));
+  const spy = jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ clearRect() {}, fillText() {}, getImageData: pixels });
+  const a = await signAtlas(['A','B'], g, 20, 3, 2, 256), calls = pixels.mock.calls.length;
+  const b = await signAtlas(['B','A'], g, 20, 3, 2, 256);
+  expect(b).toBe(a); expect(pixels).toHaveBeenCalledTimes(calls);
+  expect([...a.cells.keys()]).toEqual(['A','B']);
+  expect(a.data.length).toBe(a.w * a.h);
+  expect(a.data.some(n => n > 127)).toBe(true);
+  spy.mockRestore();
 });

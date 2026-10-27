@@ -109,22 +109,32 @@ function GpuLayer({ dev, paper, ix, spans, on, epoch, fresh, onLost }: { dev: GP
     eng.current = e;
     // il pennello arriva in fondo alla frase appena accesa: un tocco leggero
     e.onArrive = () => haptic("impact");
-    e.fit(); e.show(shown.current, true);
-    const fit = () => e.fit();
-    const ro = new ResizeObserver(fit); ro.observe(paper);
-    window.addEventListener("resize", fit);
+    const scroller = paper.closest<HTMLElement>("[data-sheet-scroll]");
+    let paperY = 0, raf = 0;
+    let pointer: PointerEvent | null = null;
+    const viewport = () => e.viewport((scroller?.scrollTop || 0) - paperY);
+    const fit = () => {
+      const P = paper.getBoundingClientRect(), S = scroller?.getBoundingClientRect();
+      paperY = P.top - (S?.top || 0) - (scroller?.clientTop || 0) + (scroller?.scrollTop || 0);
+      e.fit(scroller?.clientHeight || window.innerHeight); viewport(); halt.invalidate();
+    };
+    const update = () => { raf = 0; const P = pointer ? paper.getBoundingClientRect() : null; viewport(); if (pointer && P) { e.pointer(pointer.clientX - P.left - paper.clientLeft, pointer.clientY - P.top - paper.clientTop, true); pointer = null; } };
+    const later = () => { if (!raf) raf = requestAnimationFrame(update); };
+    const ro = new ResizeObserver(fit); ro.observe(paper); if (scroller) ro.observe(scroller);
+    window.addEventListener("resize", fit); scroller?.addEventListener("scroll", later, { passive: true });
     const move = (ev: PointerEvent) => {
       if (ev.pointerType !== "mouse") return;
-      const P = paper.getBoundingClientRect();
-      e.pointer(ev.clientX - P.left - paper.clientLeft, ev.clientY - P.top - paper.clientTop, true);
+      pointer = ev; later();
     };
     const leave = () => e.pointer(0, 0, false);
     paper.addEventListener("pointermove", move); paper.addEventListener("pointerleave", leave);
-    const halt = renderLoop((t) => e.draw(t), () => e.fps(), paper);
+    const halt = renderLoop((t) => e.draw(t), () => e.fps(), paper, undefined, true);
+    e.onInvalidate = halt.invalidate;
+    fit(); e.show(shown.current, true);
     let gone = false;
     // dispositivo perso (driver, GPU ripresa dal sistema): restano le tracce in SVG
     dev.lost.then(() => { if (!gone) lost.current(); });
-    return () => { gone = true; halt(); ro.disconnect(); window.removeEventListener("resize", fit); paper.removeEventListener("pointermove", move); paper.removeEventListener("pointerleave", leave); e.destroy(); eng.current = null; };
+    return () => { gone = true; halt(); cancelAnimationFrame(raf); ro.disconnect(); scroller?.removeEventListener("scroll", later); window.removeEventListener("resize", fit); paper.removeEventListener("pointermove", move); paper.removeEventListener("pointerleave", leave); e.destroy(); eng.current = null; };
   }, [dev, paper]);
   const sig = spans.map((g) => `${g.key}:${g.canali.map((c) => c.tipo + c.n).join(",")}:${g.focus ? 1 : 0}`).join("|");
   const done = useRef<string | null>(null);
@@ -191,6 +201,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, ta
   const [show, setShow] = useState(() => { try { return localStorage.getItem(MOSTRA) !== "0"; } catch { return true; } });
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState<Pick | null>(null);
+  const pickRef = useRef(pick); pickRef.current = pick;
   const [compose, setCompose] = useState<Pick | null>(null);
   const [pop, setPop] = useState<{ x: number; y: number; ids: string[] } | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
@@ -275,6 +286,7 @@ export function ScintilleReader({ db, uid, item, mode, rt, compact, profiles, ta
       const el = rt(), sel = window.getSelection(), span = el ? selezioneDi(ix, el, sel) : null;
       if (!span) {
         clearTimeout(hide);
+        if (!pickRef.current) return;
         // un tocco sulla barra toglie la selezione prima del clic: la barra aspetta un momento
         hide = window.setTimeout(() => { if (!pressing.current) setPick(null); }, 260);
         return;
