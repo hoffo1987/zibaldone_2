@@ -53,12 +53,40 @@ npx firebase-tools emulators:exec --only firestore --project demo-circuito 'npm 
 La CI esegue questi test senza credenziali o accesso ai dati reali. Dopo averli verificati, le regole si distribuiscono
 con `npx firebase-tools deploy --only firestore:rules`. I backup dei dati sono locali e ignorati da Git.
 
+## Ascoltare gli scritti
+
+Nel lettore il pulsante con le cuffie legge lo scritto ad alta voce (`src/voce.ts`, `src/Ascolta.tsx`): la voce è
+quella del sistema (Web Speech API), in italiano, scelta tra le voci italiane disponibili. Si legge una frase alla
+volta (prima il titolo): pausa, frase precedente e successiva e velocità funzionano ovunque, anche su Chrome per Android.
+Sul foglio la frase che si sente è evidenziata (e la parola, dove la voce la annuncia) con la CSS Custom Highlight API,
+e il foglio la segue scorrendo, a meno che non lo si stia scorrendo a mano. Per le cuffie e il riquadro multimediale
+del telefono la pagina tiene un audio muto in riproduzione mentre la voce parla, e la Media Session porta titolo e
+comandi (riproduci, pausa, frase precedente e successiva); la musica di sottofondo si abbassa. Per chi non è admin degli
+scritti completi si sente solo l'estratto pubblico. Dove la sintesi vocale non c'è (per esempio nella WebView di
+Android) il pulsante non compare. Velocità e voce scelte si ricordano su quel dispositivo.
+
+## Il vetro
+
+Lo stile della barra laterale è esteso a tutto il sito (`src/glass.css`, caricato per ultimo): riquadri, schede,
+pulsanti, campi, selettori, interruttori, menu, finestre e fogli sono lastre di vetro con il filo di luce sul bordo
+(più forte su due angoli e, col bagliore acceso, dove passa il puntatore), e si muovono su molle (`linear()` dove il
+browser lo permette): le finestre si posano un po' più piccole e sfocate, la goccia dei selettori si allunga mentre
+corre, la lente degli interruttori si allarga quando la premi. In **Opzioni › Aspetto › Vetro** tre livelli: **Opaco**
+(nessuna sfocatura, il più leggero), **Vetro** (sfocatura sui riquadri e sulle finestre; le schede degli archivi
+restano piene) e **Liquido+** (anche le schede, sfocatura più profonda e, sui browser Chromium, una leggera rifrazione
+da vetro spesso dietro le finestre). Liquido+ è il punto di partenza sui computer capaci, Vetro altrove; il preset
+Leggero rende tutto opaco. Il `backdrop-filter` non va mai sui riquadri con un fondo pieno loro (lì non si vedrebbe e
+costerebbe lo stesso) né su chi contiene un menu aperto (bloccherebbe gli elementi fixed, come i fogli dal basso sul
+telefono).
+
 ## Sviluppo e verifica
 
 Il sigillo personale «Admin» usa `app_config/admin_badge.uid`, configurato sul server per il solo account scelto.
 I client non possono modificarlo né assegnarlo dal profilo. Il ruolo continua a dipendere da `admins/{uid}`.
 Le copie pubbliche e le scintille dell'account possono portare `admin: true`, verificato dalle regole sul proprietario
-reale; gli altri utenti restano anonimi. I vecchi client possono salvare senza questo campo. Il badge è CSS/SVG statico,
+reale; gli altri utenti restano anonimi. I vecchi client possono salvare senza questo campo. Il sigillo è una moneta
+d'oro con la C del Circuito in una capsula di vetro scuro con il filo d'oro (sul profilo più grande, su guilloché);
+al passaggio la moneta gira e una luce attraversa il vetro. È CSS/SVG,
 con un unico listener di configurazione nell'app e nessuna risorsa WebGPU aggiuntiva.
 
 Gli aggiornamenti riusciti di `main` generano automaticamente un annuncio nel pannello Notifiche, per tutti gli

@@ -8,7 +8,7 @@ import {
   getFirestore, collection, onSnapshot, doc, writeBatch, query, where, orderBy, limit, setDoc, getDoc, getDocs, deleteField, connectFirestoreEmulator
 } from "firebase/firestore";
 import {
-  Bookmark, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
+  Bookmark, Headphones, Loader2, Star, X, Trash2, ListChecks, CheckCircle2, Circle,
   Bold, Italic, Underline, Image as ImageIcon, LogOut, Eraser, Undo, Redo, PaintBucket, Type, Pen,
   Save, Box, Search, Sun, Moon, Pencil, Minus, Square, File, List, Palette, Copy, Plus, LayoutDashboard, Trophy, Users, ChevronLeft, ChevronRight, Hand, Eye, EyeOff, Camera, Award, CalendarDays, Settings, Zap, RotateCcw, Download, ChevronDown, ArrowUpRight, ArrowRight, SendHorizontal, LockKeyhole, SlidersHorizontal, Clapperboard, Compass, BookOpen, Sparkles, Sprout
 } from "lucide-react";
@@ -28,6 +28,8 @@ import "./scritti.css";
 import "./reader.css";
 import "./authors.css";
 import AdminBadge from "./AdminBadge";
+import { Ascolta } from "./Ascolta";
+import { voceDisponibile } from "./voce";
 import "./podio.css";
 import { EmptyCircuit } from "./EmptyCircuit";
 import { DiaryPrompts, inkInto, inkFlight, inkBack } from "./DiaryPrompts";
@@ -915,6 +917,10 @@ const resolveG = (o: any): any => {
     d3: !lite && o.d3 !== false,
   };
 };
+// Il vetro (glass.css): sui computer capaci parte liquido, altrove vetro. La lente (rifrazione dietro le finestre) è un
+// filtro SVG nel backdrop-filter, che solo i browser Chromium sanno disegnare
+const VETRO_DEF = (() => { try { return window.matchMedia("(pointer:fine) and (min-width:1024px)").matches && (navigator.hardwareConcurrency || 4) >= 8 ? "liquido" : "vetro"; } catch { return "vetro"; } })();
+const CHROMIUM = (() => { try { return !!(navigator as any).userAgentData?.brands?.some((b: any) => /Chromium/i.test(b.brand)); } catch { return false; } })();
 let GSPD = 1;  // velocità globale delle animazioni (serve anche ai timer fuori da React)
 // prima apertura della sessione: l'ingresso nel Circuito si vede per intero una volta sola, poi le pagine entrano in modo asciutto
 const FIRST = (() => { try { const s = sessionStorage.getItem("circuito:ingresso"); sessionStorage.setItem("circuito:ingresso", "1"); return !s; } catch { return true; } })();
@@ -1024,10 +1030,18 @@ const Sw = ({ on, set, label, hint, off }: any) => (
 // selettore con pillola che scorre (con rimbalzo) sotto l'opzione attiva
 const Seg = ({ v, set, items, big, soft, cols }: any) => {
   const n = items.length, idx = Math.max(0, items.findIndex(([id]: any) => id === v));
+  // la goccia di vetro si allunga mentre corre verso la nuova scelta e si assesta arrivando
+  const ind = useRef<HTMLSpanElement>(null), was = useRef(idx);
+  useEffect(() => {
+    const el = ind.current, from = was.current; was.current = idx;
+    if (!el || from === idx || !el.animate || el.closest(".root.nomotion,.root.lite") || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const k = Math.min(1, Math.abs(idx - from) / 2);
+    el.animate([{ scale: "1 1" }, { scale: `${1 + 0.18 * (0.6 + 0.4 * k)} ${1 - 0.1 * (0.6 + 0.4 * k)}`, offset: 0.32 }, { scale: ".97 1.03", offset: 0.64 }, { scale: "1 1" }], { duration: 600, easing: "cubic-bezier(.3,.7,.3,1)" });
+  }, [idx]);
   const c = cols || n, rows = Math.ceil(n / c), ci = idx % c, ri = Math.floor(idx / c); // "cols" dispone le opzioni su più righe
   return (
     <div className={`seg relative grid gap-1 p-1 rounded-2xl ${soft ? "soft" : ""}`} style={{ background: soft ? "var(--sf)" : "var(--ln)", border: soft ? "1px solid var(--ln)" : undefined, gridTemplateColumns: `repeat(${c},1fr)` }}>
-      <span className="seg-ind" style={{ width: `calc((100% - ${8 + (c - 1) * 4}px) / ${c})`, ...(rows > 1 ? { bottom: "auto", height: `calc((100% - ${8 + (rows - 1) * 4}px) / ${rows})` } : {}), transform: `translate(calc(${ci} * (100% + 4px)), calc(${ri} * (100% + 4px)))` }} />
+      <span ref={ind} className="seg-ind" style={{ width: `calc((100% - ${8 + (c - 1) * 4}px) / ${c})`, ...(rows > 1 ? { bottom: "auto", height: `calc((100% - ${8 + (rows - 1) * 4}px) / ${rows})` } : {}), transform: `translate(calc(${ci} * (100% + 4px)), calc(${ri} * (100% + 4px)))` }} />
       {items.map(([id, label]: any) => <button type="button" key={String(id)} onClick={(e) => set(id, e)} className={`bt !border-0 !bg-transparent !px-1 ${big ? "" : "!text-xs"} ${v === id ? "seg-on" : "mu"}`}>{label}</button>)}
     </div>
   );
@@ -1168,6 +1182,7 @@ export default function App() {
   const lite = G.lite;
   LITE = G.nomotion; GSPD = G.spd; M.off = G.nomotion; M.spd = G.spd;
   const setOpt = (k: string, v: any) => setOpts((o: any) => ({ ...o, [k]: v }));
+  const vetro: "opaco" | "vetro" | "liquido" = ["opaco", "vetro", "liquido"].includes(opts.vetro) ? opts.vetro : VETRO_DEF;
   const music = useMusic(!!opts.music, opts.musicVol ?? 0.35);
   const setMusic = (on: boolean) => { music.toggle(on); setOpt("music", on); };
   // suoni: sblocco al primo gesto, livello dalle Opzioni, tick su ciò che è interattivo
@@ -1413,9 +1428,12 @@ export default function App() {
   }, [G.spd]);
   useEffect(() => {
     if (!G.glow && !G.tilt && !G.ripple) return;
-    let raf = 0, el: any = null, ev: any = null;
+    let raf = 0, el: any = null, ev: any = null, pel: any = null, pev: any = null;
     const run = () => {
-      raf = 0; if (!el || !ev) return;
+      raf = 0;
+      // la luce sul bordo delle lastre di vetro segue il puntatore (solo col bagliore acceso)
+      if (pel && pev && G.glow) { const r = pel.getBoundingClientRect(); pel.style.setProperty("--mx", `${pev.clientX - r.left}px`); pel.style.setProperty("--my", `${pev.clientY - r.top}px`); pev = null; }
+      if (!el || !ev) return;
       const r = el.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
       if (G.glow) { el.style.setProperty("--mx", `${x}px`); el.style.setProperty("--my", `${y}px`); }
       if (!G.tilt || ev.pointerType !== "mouse") return;
@@ -1423,8 +1441,16 @@ export default function App() {
       if (el.classList.contains("card")) { el.style.setProperty("--rx", `${((y / r.height - 0.5) * -3 * k).toFixed(2)}deg`); el.style.setProperty("--ry", `${((x / r.width - 0.5) * 3 * k).toFixed(2)}deg`); }
       else { el.style.setProperty("--tx", `${((x / r.width - 0.5) * 6 * k).toFixed(1)}px`); el.style.setProperty("--ty", `${((y / r.height - 0.5) * 4 * k).toFixed(1)}px`); }
     };
-    const mv = (e: any) => { if (e.pointerType !== "mouse") return; if (!G.glow && !G.tilt) return; const t = e.target?.closest?.(".card,.bt"); if (!t) return; el = t; ev = e; if (!raf) raf = requestAnimationFrame(run); };
-    const out = (e: any) => { const t = e.target?.closest?.(".card,.bt"); if (t && !t.contains(e.relatedTarget)) ["--rx", "--ry", "--tx", "--ty"].forEach((k) => t.style.removeProperty(k)); };
+    const mv = (e: any) => {
+      if (e.pointerType !== "mouse") return; if (!G.glow && !G.tilt) return;
+      const p = G.glow ? e.target?.closest?.(".pn:not(.card)") : null; if (p) { pel = p; pev = e; }
+      const t = e.target?.closest?.(".card,.bt"); if (t) { el = t; ev = e; }
+      if ((t || p) && !raf) raf = requestAnimationFrame(run);
+    };
+    const out = (e: any) => {
+      const t = e.target?.closest?.(".card,.bt"); if (t && !t.contains(e.relatedTarget)) ["--rx", "--ry", "--tx", "--ty", "--mx", "--my"].forEach((k) => t.style.removeProperty(k));
+      const p = e.target?.closest?.(".pn:not(.card)"); if (p && !p.contains(e.relatedTarget)) { ["--mx", "--my"].forEach((k) => p.style.removeProperty(k)); if (pel === p) pel = null; }
+    };
     const dn = (e: any) => {
       const t = e.target?.closest?.(".card,.bt"); if (!t) return;
       const r = t.getBoundingClientRect();
@@ -2160,6 +2186,9 @@ export default function App() {
     setSwap(0); history.pushState({ tab, v: 1 }, ""); setSel(t);
   };
   const stepTo = (t: any, d: number) => { setSwap(d); setSel(t); };
+  // ascoltare lo scritto: si ferma chiudendo il lettore o passando a un altro scritto
+  const [ascolta, setAscolta] = useState(false);
+  useEffect(() => { setAscolta(false); }, [sel?.id]);
   const closeView = () => { if (history.state?.v) history.back(); else setSel(null); };
   const newWriting = (k: WritingKind) => { if (editingId) { go("write"); notify("Completa o annulla la modifica in corso prima di creare un nuovo scritto."); return; } setKind(k); go("write"); };
   const go = (t: string) => { if (t !== tab) history.pushState({ tab: t }, ""); setTab(t); setSelMode(false); setIds([]); setSearch(""); setKindFilter("all"); setMonthFilter("all"); setOnlyMarked(false); setUnrated(false); setStatoF("all"); };
@@ -2313,6 +2342,9 @@ export default function App() {
             <Seg v={dark} set={(v: boolean, e: any) => setTheme(v, e)} items={[[false, <><Sun size={14} />Chiaro</>], [true, <><Moon size={14} />Scuro</>]]} />
             <div className="h-2" />
             <Seg v={opts.text} set={(v: number) => setOpt("text", v)} items={[[0.9, "Testo piccolo"], [1, "Normale"], [1.12, "Grande"]]} />
+            <span className="block text-sm font-semibold mt-4 mb-1.5">Vetro</span>
+            <Seg v={lite ? "opaco" : vetro} set={(v: string) => setOpt("vetro", v)} items={[["opaco", "Opaco"], ["vetro", "Vetro"], ["liquido", <>Liquido<sup className="vetro-plus">+</sup></>]]} />
+            <p className="text-xs mu mt-2">{lite ? "Con il preset Leggero le lastre sono piene, senza sfocature." : ({ opaco: "Lastre piene, senza sfocature: il più leggero, anche sui telefoni meno recenti.", vetro: "Riquadri e finestre di vetro: il disegno del circuito si vede sfocato dietro. Equilibrato.", liquido: `Anche le schede diventano vetro, la sfocatura è più profonda${CHROMIUM ? " e dietro le finestre il fondo si piega come sotto un vetro spesso" : ""}. Il più bello: chiede di più alla scheda video.` } as any)[vetro]}</p>
             <h4 className="text-xs mu mt-6 mb-2">Effetti e animazioni</h4>
             <Seg cols={CINEMA_OK ? 3 : 2} v={opts.level} set={(v: string) => setLevel(v)} items={[...(CINEMA_OK ? [["cinema", <><Box size={13} />Cinema 3D</>]] : []), ["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"], ["custom", <><SlidersHorizontal size={13} />Personalizzato</>]]} />
             <p className="text-xs mu mt-2">{({ cinema: "Come Spettacolo, con lo sfondo in 3D: la scheda in prospettiva, le cariche sospese che la illuminano e le card che ne riflettono la luce. Solo su computer, chiede di più alla scheda video.", full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, campo elettrico e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria.", custom: `Scegli tu ogni effetto e quanto deve essere intenso · ${CBOOL.filter((k) => G[k]).length} di ${CBOOL.length} attivi.` } as any)[opts.level]}</p>
@@ -2431,7 +2463,11 @@ export default function App() {
             </div>
         </SettingsDialog>
       );
-  const shell = (children: any) => <div style={gStyle} className={`root ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} ${tourHold ? "tour-hold" : ""} min-h-screen`}><div className="prog" />{children}{settingsDialog}</div>;
+  const vetroCls = `vetro-${lite ? "opaco" : vetro}${!lite && vetro === "liquido" && CHROMIUM ? " lente" : ""}`;
+  const shell = (children: any) => <div style={gStyle} className={`root ${vetroCls} ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} ${tourHold ? "tour-hold" : ""} min-h-screen`}><div className="prog" />{children}{settingsDialog}
+    {/* la lente del vetro liquido: un rumore lentissimo che sposta appena il fondo dietro le finestre */}
+    {!lite && vetro === "liquido" && CHROMIUM && <svg className="vetro-defs" width="0" height="0" aria-hidden="true" focusable="false"><filter id="vetro-lente" x="-4%" y="-4%" width="108%" height="108%" colorInterpolationFilters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.0035 0.006" numOctaves="2" seed="11" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="34" xChannelSelector="R" yChannelSelector="G" /></filter></svg>}
+  </div>;
 
   if (authLoading || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);
 
@@ -3098,7 +3134,7 @@ export default function App() {
         const scMode: ScMode | null = !diary ? null : mineSel ? "autore" : isAdmin && !anon ? "admin" : "lettore";
         return (
           <div className={`doc-ov rd-ov fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/60 backdrop-blur-sm ${diary ? "is-diary" : ""} ${closing ? "out" : ""}`} onPointerDown={(e) => { ovDown.current = e.target === e.currentTarget; }} onClick={(e) => { if (e.target === e.currentTarget && ovDown.current) closeView(); }}>
-            <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={sel.title} className="reader-panel rd pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={sel.title} className={`reader-panel rd pn w-full max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden ${ascolta ? "listening" : ""}`} onClick={(e) => e.stopPropagation()}>
               <div className="doc-hd rd-hd relative overflow-hidden shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-4">
                 {fresh && <span className="rvl-sweep" />}
                 {anon ? <div className="flex items-center gap-3 min-w-0 w-full md:w-auto md:flex-1">
@@ -3117,10 +3153,14 @@ export default function App() {
                     {canEdit(sel) && <button className="bt rd-del" onClick={() => setToDelete([sel.id])} title="Elimina" aria-label="Elimina"><Trash2 size={15} /></button>}
                   </span>}
                   {si >= 0 && list.length > 1 && <span className="rd-grp rd-nav"><button className="bt" disabled={si <= 0} onClick={() => stepTo(list[si - 1], -1)} aria-label="Scritto precedente"><ChevronLeft size={15} /></button><span className="rd-pos" aria-label={`Scritto ${si + 1} di ${list.length}`}><b key={si}>{si + 1}</b>/{list.length}</span><button className="bt" disabled={si >= list.length - 1} onClick={() => stepTo(list[si + 1], 1)} aria-label="Scritto successivo"><ChevronRight size={15} /></button></span>}
+                  {voceDisponibile() && <button type="button" className={`bt rd-ear ${ascolta ? "on" : ""}`} aria-pressed={ascolta} onClick={() => { setAscolta(!ascolta); haptic("select"); }} title={ascolta ? "Smetti di ascoltare" : "Ascolta lo scritto"} aria-label={ascolta ? "Smetti di ascoltare" : "Ascolta lo scritto"}><Headphones size={15} /></button>}
                   <button className="reader-close rd-close bt" onClick={closeView} title="Chiudi" aria-label="Chiudi"><X size={15} /></button>
                 </div>
               </div>
               <div className="relative flex-1 min-h-0 flex flex-col">
+              {ascolta && sel && <Ascolta key={sel.id} title={sel.title || "Senza titolo"} album={diary ? "Diario" : anon ? "Scritti completi · estratto" : "Scritti completi"}
+                root={() => readRef.current?.querySelector<HTMLElement>("[data-sheet-paper] .rt") || readRef.current?.querySelector<HTMLElement>("[data-sheet-paper] > p") || null}
+                scroller={() => readRef.current} onClose={() => setAscolta(false)} />}
               {/* la pista di lettura: si disegna aprendo il foglio, poi segue lo scorrimento; in fondo il nodo diventa ambra */}
               <div ref={railRef} className="read-rail" aria-hidden="true"><i /><b /></div>
               <div key={sel.id} ref={readRef} data-sheet-scroll="" className={`overflow-y-auto flex-1 min-h-0 ${swap ? "doc-swap" : ""}`} style={{ ["--dir" as any]: swap || 1 }}>

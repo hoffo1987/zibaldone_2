@@ -1,17 +1,63 @@
-/* Targhetta d'ottone incisa: statica, senza canvas o filtri GPU. */
-.admin-badge{display:inline-flex;vertical-align:middle;align-items:center;justify-content:center;gap:5px;flex:none;max-width:100%;padding:3px 7px;border:1px solid #92713b;border-radius:5px;color:#f8d99b;background:linear-gradient(130deg,#23372f,#10241f 62%,#344035);box-shadow:inset 0 1px 0 #f8d99b38,inset 0 -1px 0 #0005;line-height:1;white-space:nowrap;text-shadow:none;letter-spacing:normal}
-.admin-badge svg{width:15px;height:15px;flex:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
-.admin-badge-copy{display:flex;flex-direction:column;gap:4px}
-.admin-badge b{font:800 9px/1.1 ui-monospace,'Courier New',monospace;letter-spacing:.1em;text-transform:uppercase}
-.admin-badge small{font:600 8px/1 ui-monospace,'Courier New',monospace;letter-spacing:.08em;text-transform:uppercase;color:#dcc38f}
-.admin-featured{padding:7px 11px;gap:8px;border-radius:7px}
-.admin-featured svg{width:25px;height:25px}.admin-featured b{font-size:11px}
-.admin-seal{width:19px;height:19px;padding:1px;border-radius:6px}
-.admin-avatar{position:relative;display:inline-flex;flex:none}.admin-avatar>.admin-seal{position:absolute;right:-4px;bottom:-3px}
+/* ===== Il sigillo dell'Admin =====
+   La capsula è vetro scuro (uguale nei due temi, perché l'oro risalti) con un filo d'oro che prende la luce su due
+   angoli; la moneta è oro spazzolato: una conica per la spazzolatura, un velo radiale per la luce, l'orlo in rilievo e la
+   C incisa (scura sotto, chiara sul bordo alto, come un conio). La parola è foglia d'oro sul testo. Solo gradienti e
+   ombre statiche; al passaggio una luce attraversa il vetro e la moneta fa un giro (niente a riposo, niente col
+   movimento ridotto). */
+.admin-badge{--ab-h:20px;position:relative;isolation:isolate;display:inline-flex;vertical-align:middle;align-items:center;gap:6px;flex:none;max-width:100%;
+  height:var(--ab-h);padding:0 9px 0 2px;border:1px solid transparent;border-radius:999px;line-height:1;white-space:nowrap;letter-spacing:normal;text-shadow:none;overflow:hidden;
+  background:linear-gradient(180deg,#22332E,#0D1916 70%,#13221E) padding-box,
+    linear-gradient(135deg,#FFF0C2,#C9963A 26%,#6E4E19 50%,#D9A84B 74%,#FFF3CF) border-box;
+  box-shadow:inset 0 1px 0 rgba(255,236,190,.22),inset 0 -1px 2px rgba(0,0,0,.5),0 2px 6px -2px rgba(80,55,10,.45),0 0 0 .5px rgba(0,0,0,.25)}
+/* la luce che attraversa il vetro */
+.admin-badge:after{content:"";position:absolute;inset:0;z-index:2;border-radius:inherit;pointer-events:none;transform:translateX(-120%);
+  background:linear-gradient(105deg,transparent 30%,rgba(255,240,200,.38) 47%,rgba(255,255,255,.12) 55%,transparent 68%)}
+/* la moneta */
+.ab-coin{position:relative;flex:none;display:grid;place-items:center;width:calc(var(--ab-h) - 4px);height:calc(var(--ab-h) - 4px);border-radius:50%;perspective:60px}
+.ab-face{position:absolute;inset:0;display:grid;place-items:center;border-radius:50%;
+  background:radial-gradient(circle at 34% 28%,rgba(255,250,228,.95),rgba(255,250,228,0) 46%),
+    conic-gradient(from 210deg,#F7DD97,#B98A33 14%,#FBE7AE 27%,#A77923 41%,#F5D689 56%,#B08128 70%,#FDEBB8 84%,#F7DD97);
+  box-shadow:inset 0 0 0 1px rgba(255,246,214,.75),inset 0 0 0 2px rgba(122,84,22,.55),inset 0 -2px 3px rgba(110,72,10,.45),0 1px 2px rgba(0,0,0,.45);
+  transform-style:preserve-3d;backface-visibility:visible}
+.ab-face svg{width:72%;height:72%;overflow:visible;filter:drop-shadow(0 .6px 0 rgba(255,248,222,.85))}
+.ab-c,.ab-t{stroke:#5B3C08;stroke-width:2;stroke-linecap:round}
+.ab-dot{fill:#5B3C08}
+/* la parola in foglia d'oro */
+.ab-copy{position:relative;z-index:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.ab-copy b{font:800 10.5px/1 'Bricolage Grotesque','Instrument Sans',sans-serif;letter-spacing:.06em;
+  background:linear-gradient(180deg,#FFF4D2 10%,#EBC06A 52%,#B9893A 92%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 1px 0 rgba(0,0,0,.55))}
+.ab-copy small{font:700 7.5px/1 var(--label,'Instrument Sans',sans-serif);letter-spacing:.18em;text-transform:uppercase;color:rgba(233,205,140,.78)}
+@media (hover:hover){
+  .admin-badge:hover:after{transition:transform .9s cubic-bezier(.3,.6,.2,1);transform:translateX(120%)}
+  .admin-badge:hover .ab-face{transition:transform 1s cubic-bezier(.34,1.3,.5,1);transform:rotateY(360deg)}
+}
+
+/* sul profilo: più grande, il fondo inciso a guilloché e la seconda riga */
+.admin-featured{--ab-h:40px;gap:10px;padding:0 16px 0 4px;
+  background:repeating-radial-gradient(circle at 18% 50%,rgba(233,200,120,.09) 0 1px,transparent 1px 4px) padding-box,
+    linear-gradient(180deg,#22332E,#0D1916 70%,#13221E) padding-box,
+    linear-gradient(135deg,#FFF0C2,#C9963A 26%,#6E4E19 50%,#D9A84B 74%,#FFF3CF) border-box;
+  box-shadow:inset 0 1px 0 rgba(255,236,190,.25),inset 0 -2px 4px rgba(0,0,0,.5),0 10px 24px -12px rgba(110,78,20,.7),0 0 0 .5px rgba(0,0,0,.3)}
+/* attorno alla moneta grande, i raggi del conio */
+.admin-featured .ab-coin:before{content:"";position:absolute;inset:-5px;border-radius:50%;
+  background:repeating-conic-gradient(rgba(240,205,120,.35) 0 4deg,transparent 4deg 12deg);-webkit-mask:radial-gradient(circle,transparent 58%,#000 60%,transparent 74%);mask:radial-gradient(circle,transparent 58%,#000 60%,transparent 74%)}
+.admin-featured .ab-face{box-shadow:inset 0 0 0 1.5px rgba(255,246,214,.75),inset 0 0 0 3px rgba(122,84,22,.5),inset 0 -3px 5px rgba(110,72,10,.45),0 2px 4px rgba(0,0,0,.5)}
+.admin-featured .ab-copy b{font-size:15px}
+.admin-featured .ab-copy small{font-size:8.5px}
+
+/* sull'avatar: la sola moneta, senza capsula */
+.admin-seal{--ab-h:22px;width:var(--ab-h);padding:0;gap:0;justify-content:center;background:none;border:0;box-shadow:none;overflow:visible}
+.admin-seal:after{display:none}
+.admin-seal .ab-coin{width:var(--ab-h);height:var(--ab-h)}
+.admin-avatar{position:relative;display:inline-flex;flex:none}.admin-avatar>.admin-seal{position:absolute;right:-5px;bottom:-4px}
+
 .account-by{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px 7px;max-width:100%;min-width:0;vertical-align:middle}
 .account-by>.account-name{min-width:0;overflow-wrap:anywhere}
 .account-heading{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
 .diary-card-by.account-by{display:flex;white-space:normal;overflow:visible}
 .rd-hd .account-by{white-space:normal;overflow:visible}
 .au-name .account-by{display:flex;white-space:normal}
-@media(forced-colors:active){.admin-badge{border-color:ButtonText;color:ButtonText;background:Canvas;box-shadow:none}.admin-badge small{color:ButtonText}}
+@media (prefers-reduced-motion:reduce){.admin-badge:hover:after,.admin-badge:hover .ab-face{transition:none;transform:none}}
+.root:is(.lite,.nomotion) .admin-badge:hover:after,.root:is(.lite,.nomotion) .admin-badge:hover .ab-face{transition:none;transform:none}
+@media(forced-colors:active){.admin-badge{border-color:ButtonText;background:Canvas;box-shadow:none}.ab-copy b{color:ButtonText;background:none}.ab-face{background:ButtonText}}

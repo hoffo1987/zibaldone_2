@@ -1,0 +1,68 @@
+/* ===== Ascolta =====
+   Sul foglio (carta chiara in entrambi i temi) la frase che si sente ha un velo d'ambra, la parola uno più pieno.
+   Il lettore è una capsula di vetro che galleggia sopra il fondo del foglio: entra salendo con una molla, il tasto grande
+   è una goccia di vetro verderame, la pista ha la sua manopola che scivola di frase in frase. */
+::highlight(asc-f){background-color:rgba(255,196,84,.3);color:#10211F}
+::highlight(asc-w){background-color:rgba(242,150,20,.5);color:#10211F}
+.reader-panel.listening .reader-scroll-content{padding-bottom:104px}
+
+.root .asc{position:absolute;left:50%;bottom:max(14px,env(safe-area-inset-bottom));z-index:6;display:flex;align-items:center;gap:.75rem;
+  width:min(660px,calc(100% - 24px));padding:8px 10px 8px 8px;border:1px solid transparent;border-radius:26px;transform:translateX(-50%);
+  background:linear-gradient(180deg,rgba(255,255,253,.8),rgba(246,248,243,.66)) padding-box,
+    linear-gradient(150deg,#fff,rgba(255,255,255,.25) 30%,rgba(255,255,255,.08) 62%,rgba(255,255,255,.75)) border-box;
+  -webkit-backdrop-filter:blur(22px) saturate(1.8);backdrop-filter:blur(22px) saturate(1.8);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 24px 48px -22px rgba(12,29,26,.55),0 3px 10px -4px rgba(12,29,26,.2);
+  animation:ascIn .6s var(--g-spring,cubic-bezier(.3,1.35,.5,1)) both}
+.root.dark .asc{background:linear-gradient(180deg,rgba(24,40,38,.78),rgba(10,20,19,.7)) padding-box,
+    linear-gradient(150deg,rgba(255,255,255,.4),rgba(255,255,255,.06) 30%,rgba(255,255,255,0) 62%,rgba(255,255,255,.25)) border-box;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 24px 48px -20px #000,0 3px 10px -4px rgba(0,0,0,.6)}
+.root:is(.noblur,.lite) .asc{-webkit-backdrop-filter:none;backdrop-filter:none;background:linear-gradient(180deg,#FFFFFC,#F2F5EF) padding-box,linear-gradient(150deg,#fff,#dfe5dc) border-box}
+.root.dark:is(.noblur,.lite) .asc{background:linear-gradient(180deg,#172826,#0D1918) padding-box,linear-gradient(150deg,#2c3f3c,#14211f) border-box}
+@keyframes ascIn{from{opacity:0;transform:translate(-50%,24px) scale(.94)}}
+
+/* il tasto grande: una goccia di vetro verderame */
+.asc-play{position:relative;flex:none;display:grid;place-items:center;width:46px;height:46px;border-radius:50%;color:#fff;
+  background:radial-gradient(120% 120% at 30% 18%,rgba(255,255,255,.55),rgba(255,255,255,0) 45%),linear-gradient(180deg,color-mix(in srgb,var(--ac) 80%,#fff),var(--ac) 55%,color-mix(in srgb,var(--ac) 80%,#000));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -2px 4px rgba(0,0,0,.18),0 8px 18px -8px color-mix(in srgb,var(--ac) 90%,transparent);
+  transition:transform .45s var(--g-spring,cubic-bezier(.3,1.35,.5,1))}
+.root.dark .asc-play{color:#042f2a}
+.asc-play:active{transform:scale(.9);transition-duration:.12s}
+.asc-play svg{filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
+.asc-play:focus-visible,.asc-b:focus-visible,.asc-bar:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+
+.asc-mid{flex:1;min-width:0}
+.asc-t{display:flex;align-items:center;gap:.5rem;min-width:0}
+.asc-tt{font-size:.82rem;font-weight:700;color:var(--ink);white-space:nowrap}
+.asc-al{margin-left:auto;font-size:.68rem;font-weight:600;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* l'equalizzatore: si muove solo mentre la voce parla */
+.asc-eq{display:inline-flex;align-items:flex-end;gap:2px;height:12px}
+.asc-eq i{width:2.5px;height:30%;border-radius:2px;background:var(--ac)}
+.asc.on .asc-eq i{animation:ascEq .9s ease-in-out infinite}
+.asc.on .asc-eq i:nth-child(2){animation-delay:-.35s}.asc.on .asc-eq i:nth-child(3){animation-delay:-.6s}.asc.on .asc-eq i:nth-child(4){animation-delay:-.15s}
+@keyframes ascEq{0%,100%{height:25%}50%{height:100%}}
+/* la pista: incassata, piena fin dove si è arrivati, con la manopola */
+.asc-bar{position:relative;height:16px;margin-top:3px;cursor:pointer}
+.asc-bar:before{content:"";position:absolute;left:0;right:0;top:6px;height:4px;border-radius:4px;background:color-mix(in srgb,var(--ink) 10%,transparent);box-shadow:inset 0 1px 1px rgba(0,0,0,.12)}
+.asc-fill{position:absolute;left:0;top:6px;height:4px;width:calc(var(--p)*100%);border-radius:4px;background:linear-gradient(90deg,color-mix(in srgb,var(--ac) 70%,#fff),var(--ac));transition:width .5s var(--g-spring,ease)}
+.asc-knob{position:absolute;top:2px;left:calc(var(--p)*100%);width:12px;height:12px;margin-left:-6px;border-radius:50%;background:#fff;
+  box-shadow:0 0 0 1px rgba(12,29,26,.12),0 2px 5px rgba(12,29,26,.3);transition:left .5s var(--g-spring,ease)}
+
+.asc-ctl{display:flex;align-items:center;gap:.3rem;flex:none}
+.asc-b{display:grid;place-items:center;min-width:34px;height:34px;padding:0 .4rem;border-radius:999px;color:var(--ink);
+  background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.45));box-shadow:inset 0 1px 0 #fff,inset 0 0 0 1px rgba(255,255,255,.6),0 3px 8px -5px rgba(12,29,26,.4);
+  transition:transform .4s var(--g-spring,ease),opacity .2s}
+.root.dark .asc-b{background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.04));box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 0 0 1px rgba(255,255,255,.06)}
+.asc-b:active{transform:scale(.9);transition-duration:.1s}
+.asc-b:disabled{opacity:.35}
+.asc-rate{font-size:.74rem;font-weight:800;font-variant-numeric:tabular-nums}
+.asc-voce select{height:34px;max-width:7.5rem;padding:0 .6rem;border-radius:999px;border:0;font-size:.74rem;font-weight:700;color:var(--ink);cursor:pointer;
+  background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.45));box-shadow:inset 0 1px 0 #fff,inset 0 0 0 1px rgba(255,255,255,.6)}
+.root.dark .asc-voce select{background:rgba(255,255,255,.08);color:var(--ink)}
+/* sul telefono i comandi vanno sotto, su una riga sola */
+@media (max-width:560px){
+  .root .asc{flex-wrap:wrap;row-gap:.4rem;border-radius:22px}
+  .asc-ctl{width:100%;justify-content:space-between}
+  .reader-panel.listening .reader-scroll-content{padding-bottom:150px}
+}
+.root:is(.lite,.nomotion) .asc,.root:is(.lite,.nomotion) .asc *{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion:reduce){.asc,.asc *{animation:none!important;transition:none!important}}
