@@ -33,4 +33,6 @@
 
 /* nell'editor: «Salva bozza» accanto a «Scarta», l'invio sotto a tutta larghezza sul telefono */
 .root .bt.ed-draft{min-height:48px;padding:0 1rem;border-radius:14px;white-space:nowrap}
-@media (max-width:560px){.ed-actions:has(.ed-draft){grid-template-columns:1fr 1fr}.ed-actions:has(.ed-draft)>.ed-send{grid-column:1/-1}}
+@media (max-width:560px){.ed-actions:has(.ed-draft){grid-template-columns:1fr 1fr}.ed-actions:has(.ed-draft)>.ed-send{grid-column:1/-1}
+  /* foglio ancora vuoto: niente «Scarta», la bozza prende tutta la riga */
+  .ed-actions:not(:has(.ed-discard))>.ed-draft{grid-column:1/-1}}

@@ -1502,7 +1502,9 @@ export default function App() {
     const q = dataScope === "all" ? collection(db, "pensieri") : query(collection(db, "pensieri"), where("userId", "==", user.uid));
     setLoading(true); setRawItems([]); setRawScope("");
     const read = snapshotReader((d) => ({ id: d.id, ...d.data() }));
-    return onSnapshot(q, (s: any) => {
+    // anche la sola conferma del server (stessi documenti, fromCache che passa a false) deve arrivare: senza, una prima
+    // lettura dalla cache lascerebbe rawScope vuoto per sempre, e con lui i pensieri del diario a cui arrivano le scintille
+    return onSnapshot(q, { includeMetadataChanges: true }, (s: any) => {
       setRawItems(read(s));
       setRawScope(s.metadata?.fromCache ? "" : dataScope);
       setLoading(false);
@@ -1591,7 +1593,7 @@ export default function App() {
     const got: Record<string, Scintilla[]> = {};
     await Promise.all(todo.map(async (id) => {
       try { const q = await getDocs(collection(db, "pensieri", id, "scintille")); got[id] = q.docs.map((d: any) => leggiScintilla(d.id, d.data())).filter(Boolean) as Scintilla[]; }
-      catch { scAt.current.delete(id); }
+      catch (e) { scAt.current.delete(id); console.warn("Scintille ricevute non lette (controlla le regole di Firestore)", e); }
     }));
     if (Object.keys(got).length) setScByP((m) => ({ ...m, ...got }));
     if (force ? now - ecoAt.current < 30000 : !todo.length) return;
@@ -1604,6 +1606,17 @@ export default function App() {
     } catch (e) { console.warn("Echi non letti (controlla le regole di Firestore)", e); }
   };
   useEffect(() => { refreshScintille(); }, [ownKey]);
+  // Le scintille non arrivano da sole (nessun ascolto in tempo reale): con l'app aperta a lungo, o ripresa dallo sfondo
+  // del telefono, il numero sulla campanella resterebbe quello dell'avvio. Si rileggono quando l'app torna davanti e
+  // ogni tre minuti mentre è visibile.
+  const refreshRef = useRef(refreshScintille); refreshRef.current = refreshScintille;
+  useEffect(() => {
+    if (!user) return;
+    const back = () => { if (document.visibilityState === "visible") refreshRef.current(true); };
+    const t = window.setInterval(back, 180000);
+    document.addEventListener("visibilitychange", back); window.addEventListener("focus", back);
+    return () => { window.clearInterval(t); document.removeEventListener("visibilitychange", back); window.removeEventListener("focus", back); };
+  }, [user]);
   // l'eco ha la data del giorno in cui lo si è visto la prima volta: la si annota subito
   useEffect(() => {
     if (!db || !user || !vistePronte) return;
@@ -3187,7 +3200,8 @@ export default function App() {
               </div>
               <div className="ed-actions">
                 {(editingId || title || strokes.length > 0 || words > 0) && <button type="button" className="bt ed-discard" onClick={() => { if (confirm(editingId ? "Annullare la modifica? Lo scritto resta com’era." : bozzaId ? "Chiudere il foglio? La bozza salvata resta in I miei scritti; ciò che hai scritto dopo l’ultimo salvataggio si perde." : "Scartare la bozza? Il testo non salvato si perde.")) resetForm(); }}><Trash2 size={15} />{editingId ? "Annulla modifica" : bozzaId ? "Chiudi il foglio" : "Scarta bozza"}</button>}
-                {!editingId && (title || strokes.length > 0 || words > 0) && <button type="button" className="bt ed-draft" disabled={savingDraft} onClick={() => saveDraft()}>{savingDraft ? <Loader2 size={15} className="animate-spin" /> : <FileClock size={15} />}{bozzaId ? "Aggiorna bozza" : "Salva bozza"}</button>}
+                {/* per tutti e sempre sul foglio nuovo, anche vuoto: chi lo cerca lo trova (vuoto, avvisa che non c'è nulla da salvare) */}
+                {!editingId && <button type="button" className="bt ed-draft" disabled={savingDraft} onClick={() => saveDraft()}>{savingDraft ? <Loader2 size={15} className="animate-spin" /> : <FileClock size={15} />}{bozzaId ? "Aggiorna bozza" : "Salva bozza"}</button>}
                 <button className="bt ed-send" disabled={saving} data-tour="save">{saving ? <Loader2 size={17} className="animate-spin" /> : editingId ? <Save size={17} /> : <SendHorizontal size={17} />}{editingId ? "Salva modifiche" : kind === "diary" ? "Pubblica nel diario" : "Invia scritto completo"}</button>
               </div>
             </form>

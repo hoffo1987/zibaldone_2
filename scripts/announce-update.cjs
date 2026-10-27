@@ -50,13 +50,15 @@ function announcement(commit, timestamp = Date.now(), notes = JSON.parse(fs.read
   return { ...validateNotes(notes), versione: version(), timestamp, commit };
 }
 const encode = data => Object.fromEntries(Object.entries(data).map(([k,v])=>[k,typeof v==='number'?{integerValue:String(v)}:{stringValue:v}]));
+// lo stato del deploy di produzione: Vercel lo chiamava «Vercel – ilcircuito», dall’ottobre 2026 solo «Vercel»
+const VERCEL=/^Vercel( – ilcircuito)?$/;
 async function waitForProduction(commit) {
   const token=process.env.GH_TOKEN, repo=process.env.GITHUB_REPOSITORY || 'hoffo1987/zibaldone_2';
   const get = async path => { const r=await fetch(`https://api.github.com/repos/${repo}/${path}`,{headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'}}); if(!r.ok)throw Error(`GitHub status check failed (${r.status})`); return r.json(); };
   for(let attempt=0;attempt<18;attempt++) {
     const current=await get('commits/main');
     if(current.sha!==commit) { console.log('A newer revision superseded this deployment; no announcement.'); return false; }
-    const status=await get(`commits/${commit}/status`), deploy=status.statuses.find(s=>s.context==='Vercel – ilcircuito');
+    const status=await get(`commits/${commit}/status`), deploy=status.statuses.find(s=>VERCEL.test(s.context));
     if(deploy?.state==='success')return true;
     if(['failure','error'].includes(deploy?.state))throw Error('Production deployment failed; announcement not published');
     await new Promise(resolve=>setTimeout(resolve,20000));
