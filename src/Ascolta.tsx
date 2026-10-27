@@ -81,7 +81,7 @@ export function Ascolta({ title, album, root, scroller, onClose }: {
 
   return <div className={`asc ${st.playing ? "on" : ""}`} role="region" aria-label="Ascolto dello scritto">
     <button type="button" className="asc-play" aria-label={st.playing ? "Pausa" : "Ascolta"} onClick={() => { L.toggle(); haptic("impact"); }}>
-      {st.playing ? <Pause size={18} /> : <Play size={18} />}
+      {st.playing ? <Pause key="p" size={18} /> : <Play key="r" size={18} />}
     </button>
     <div className="asc-mid">
       <div className="asc-t">

@@ -1,4 +1,4 @@
 {
-  "titolo": "Chiudi l’ascolto e la voce si ferma davvero",
-  "messaggio": "Con la X nel lettore audio la voce si interrompe subito, anche su telefono, e il riquadro multimediale sparisce. Pausa e ripresa cambiano il tasto in modo coerente."
+  "titolo": "Lettore audio più stabile su telefono",
+  "messaggio": "La capsula dell’ascolto su telefono non usa più la sfocatura che su alcuni Android restava dipinta dopo la chiusura, e la voce viene fermata più volte finché è davvero muta. Anche le righe e le schede toccate non restano più evidenziate dopo l’apertura."
 }

@@ -96,8 +96,10 @@
 .shell-sidebar .shell-link-title { font-size: 13.5px; }
 .dark .shell-link.act .shell-link-title { text-shadow: 0 0 14px color-mix(in srgb, var(--nav-color) 40%, transparent); }
 /* under the pointer a row turns into faint glass, and the light that follows the pointer takes the section's colour */
+@media (hover: hover) {
 .shell-link.nb:not(.act):hover { background: rgba(255,255,255,.42) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.55) !important; }
 .dark .shell-link.nb:not(.act):hover { background: rgba(255,255,255,.05) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06) !important; }
+}
 .shell-link.bt:before { background: radial-gradient(90px circle at var(--mx,50%) var(--my,50%), color-mix(in srgb, var(--nav-color) 16%, transparent), transparent 70%); }
 .shell-link.nb.act .gi svg { animation: none; }
 

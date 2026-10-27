@@ -58,6 +58,12 @@
 .asc-voce select{height:34px;max-width:7.5rem;padding:0 .6rem;border-radius:999px;border:0;font-size:.74rem;font-weight:700;color:var(--ink);cursor:pointer;
   background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.45));box-shadow:inset 0 1px 0 #fff,inset 0 0 0 1px rgba(255,255,255,.6)}
 .root.dark .asc-voce select{background:rgba(255,255,255,.08);color:var(--ink)}
+/* sul telefono niente sfocatura dietro la capsula: i livelli con backdrop-filter su alcuni Android restano dipinti a
+   schermo dopo il cambio di icona o la chiusura */
+@media (pointer:coarse){
+  .root .asc{-webkit-backdrop-filter:none;backdrop-filter:none;animation:none;background:linear-gradient(180deg,#FFFFFC,#F2F5EF) padding-box,linear-gradient(150deg,#fff,#dfe5dc) border-box}
+  .root.dark .asc{background:linear-gradient(180deg,#172826,#0D1918) padding-box,linear-gradient(150deg,#2c3f3c,#14211f) border-box}
+}
 /* sul telefono i comandi vanno sotto, su una riga sola */
 @media (max-width:560px){
   .root .asc{flex-wrap:wrap;row-gap:.4rem;border-radius:22px}

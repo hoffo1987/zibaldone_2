@@ -33,9 +33,10 @@ transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s cubic-bezier(.1
 @media (hover:hover){.bt.on:hover{filter:brightness(1.08);box-shadow:0 10px 22px -10px color-mix(in srgb,var(--ac) 80%,transparent)}}
 .bt.pri{background:var(--ink);color:var(--bg);border-color:var(--ink)} .bt.pri:hover{box-shadow:var(--sh2)}
 .bt.dng{color:#dc2626;border-color:#fca5a5} .bt.dng:hover{background:#fef2f2;border-color:#dc2626}
-.nv:hover{background:var(--sf)!important} .nv:hover svg{transform:translateX(3px)}
+@media (hover:hover){.nv:hover{background:var(--sf)!important} .nv:hover svg{transform:translateX(3px)}}
+.nv:active{background:var(--sf)!important}
 .lk{background:linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat;transition:background-size .4s var(--ez),color .2s;cursor:pointer}
-.lk:hover{background-size:100% 1px;color:var(--ink)}
+@media (hover:hover){.lk:hover{background-size:100% 1px;color:var(--ink)}}
 .mu{color:var(--mu)}
 .card{position:relative}
 .card:after{content:"";position:absolute;left:0;bottom:0;width:100%;background:linear-gradient(90deg,var(--ac),var(--am));transform:scaleX(0);border-radius:0 0 18px 18px}

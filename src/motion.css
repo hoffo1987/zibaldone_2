@@ -75,7 +75,7 @@
 .nb{z-index:1;background:transparent!important;border-color:transparent!important;box-shadow:none!important;transition:color .3s,background .2s}
 .nb:hover,.nb:active{transform:none!important}
 .nb.act{color:#fff}.root.dark .nb.act{color:#042f2a}
-.nb:not(.act):hover{background:color-mix(in srgb,var(--ac) 8%,transparent)!important}
+@media (hover:hover){.nb:not(.act):hover{background:color-mix(in srgb,var(--ac) 8%,transparent)!important}}
 .nb.act svg{animation:nbIc .5s var(--e-land)}
 @keyframes nbIc{from{transform:translateY(4px);opacity:.3}}
 

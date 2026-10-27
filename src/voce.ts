@@ -75,6 +75,7 @@ const rilascia = () => {
   a.pause(); a.removeAttribute("src"); a.load();
 };
 
+let attivo: Lettore | null = null;
 export type Stato = { i: number; playing: boolean; parola: [number, number] | null };
 type Opz = { titolo: string; album: string; frasi: Frase[]; onStato: (s: Stato) => void };
 
@@ -84,12 +85,13 @@ export class Lettore {
   private rate = 1; private voce: SpeechSynthesisVoice | null = null;
   private ascolto: HTMLAudioElement | null = null; private chiuso = false;
   constructor(private o: Opz) {}
+  get inCorso() { return this.playing; }
   get stato(): Stato { return { i: this.i, playing: this.playing, parola: null }; }
   setRate(r: number) { this.rate = r; if (this.playing) this.parla(this.i); }
   setVoce(v: SpeechSynthesisVoice | null) { this.voce = v; if (this.playing) this.parla(this.i); }
   play(from = this.i) {
     if (!this.o.frasi.length) return;
-    this.playing = true; this.chiuso = false; this.i = Math.max(0, Math.min(this.o.frasi.length - 1, from));
+    this.playing = true; this.chiuso = false; attivo = this; this.i = Math.max(0, Math.min(this.o.frasi.length - 1, from));
     this.sessione(true); this.parla(this.i);
   }
   pause() { this.playing = false; this.tok++; this.taci(); this.sessione(false); this.emit(); }
@@ -98,8 +100,10 @@ export class Lettore {
   stop() { this.playing = false; this.chiuso = true; this.tok++; this.ascolto = null; this.taci(); this.sessione(false, true); }
   // Chrome per Android a volte lascia parlare l'enunciazione in corso dopo cancel(): si ripete finché non è davvero muto
   private taci() {
-    const fermo = () => { if (this.playing && !this.chiuso) return; try { speechSynthesis.cancel(); } catch {} };
-    fermo(); [120, 400, 1000].forEach((ms) => setTimeout(fermo, ms));
+    // vale per il lettore che parla adesso, non per questa istanza: una nuova lettura non deve essere zittita da una vecchia
+    const fermo = () => { if (attivo?.inCorso) return; try { if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel(); } catch {} };
+    try { speechSynthesis.cancel(); } catch {}
+    [100, 300, 700, 1500, 3000, 6000].forEach((ms) => setTimeout(fermo, ms));
   }
 
   private emit(parola: [number, number] | null = null) { this.o.onStato({ i: this.i, playing: this.playing, parola }); }
