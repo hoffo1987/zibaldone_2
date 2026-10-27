@@ -68,6 +68,12 @@ const silenzio = () => {
   muto.loop = true; muto.volume = 0.01;
   return muto;
 };
+// alla chiusura l'elemento va svuotato e dimenticato: finché esiste, anche in pausa, il telefono tiene il riquadro multimediale
+const rilascia = () => {
+  if (!muto) return;
+  const a = muto; muto = null;
+  a.pause(); a.removeAttribute("src"); a.load();
+};
 
 export type Stato = { i: number; playing: boolean; parola: [number, number] | null };
 type Opz = { titolo: string; album: string; frasi: Frase[]; onStato: (s: Stato) => void };
@@ -76,6 +82,7 @@ type Opz = { titolo: string; album: string; frasi: Frase[]; onStato: (s: Stato) 
 export class Lettore {
   private i = 0; private playing = false; private tok = 0;
   private rate = 1; private voce: SpeechSynthesisVoice | null = null;
+  private ascolto: HTMLAudioElement | null = null;
   constructor(private o: Opz) {}
   get stato(): Stato { return { i: this.i, playing: this.playing, parola: null }; }
   setRate(r: number) { this.rate = r; if (this.playing) this.parla(this.i); }
@@ -88,7 +95,7 @@ export class Lettore {
   pause() { this.playing = false; this.tok++; speechSynthesis.cancel(); this.sessione(false); this.emit(); }
   toggle() { if (this.playing) this.pause(); else this.play(this.i); }
   vai(i: number) { this.i = Math.max(0, Math.min(this.o.frasi.length - 1, i)); if (this.playing) this.parla(this.i); else this.emit(); }
-  stop() { this.playing = false; this.tok++; try { speechSynthesis.cancel(); } catch {} this.sessione(false, true); }
+  stop() { this.playing = false; this.tok++; this.ascolto = null; try { speechSynthesis.cancel(); } catch {} this.sessione(false, true); }
 
   private emit(parola: [number, number] | null = null) { this.o.onStato({ i: this.i, playing: this.playing, parola }); }
   private parla(i: number) {
@@ -118,8 +125,17 @@ export class Lettore {
   private sessione(on: boolean, fine = false) {
     const ms: any = (navigator as any).mediaSession;
     sound.duck("voce", on ? 0.18 : null);
-    const a = silenzio();
-    if (on) a.play().catch(() => {}); else a.pause();
+    if (fine) rilascia();
+    else {
+      const a = silenzio();
+      // pausa o ripresa dal riquadro multimediale o dalle cuffie: il sistema ferma l'audio muto e la voce lo segue,
+      // così anche il tasto sul foglio cambia
+      if (this.ascolto !== a) {
+        this.ascolto = a;
+        a.addEventListener("pause", () => { if (this.ascolto === a && this.playing && !a.ended) this.pause(); });
+      }
+      if (on) a.play().catch(() => {}); else a.pause();
+    }
     if (!ms) return;
     if (fine) {
       ["play", "pause", "stop", "previoustrack", "nexttrack", "seekbackward", "seekforward"].forEach((k) => { try { ms.setActionHandler(k, null); } catch {} });
