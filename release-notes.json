@@ -1,4 +1,4 @@
 {
-  "titolo": "Lettura e scene 3D più fluide",
-  "messaggio": "Durante la lettura gli effetti nascosti si fermano e le scintille disegnano solo la porzione visibile dei testi lunghi. Stabilizzate le rotazioni rapide del logo e ridotte le ricostruzioni della scena del podio mentre muovi la visuale."
+  "titolo": "Il podio si prepara in background",
+  "messaggio": "La costruzione della sala del podio ora avviene in un processo separato: al primo ingresso la pagina resta libera di rispondere ai comandi mentre si preparano le geometrie. Coppe, telo, materiali e dettagli mantengono la stessa qualità."
 }

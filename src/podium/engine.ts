@@ -15,7 +15,8 @@
 // 11. render:  dalla risoluzione della scena (adattiva) ai pixel dello schermo, Catmull-Rom, sul canvas
 // Il canvas ha sempre i pixel dello schermo: cambiare la risoluzione della scena non lo ridimensiona (niente lampi) e
 // l'immagine non passa dal filtro bilineare del browser. Al massimo tre fotogrammi in coda sulla GPU.
-import { buildScene, VERTEX_FLOATS, type Site } from "./meshes";
+import { VERTEX_FLOATS, type Site } from "./meshes";
+import { loadSceneMesh } from './meshLoader';
 import { texgenShader, mipShader, cloudShader, shadowShader, giShader, sceneShader, volShader, postShader, combineMSShader, taaShader, GI_PROBES, FRAME_FLOATS, PASS_FLOATS, SPOT, type PodiumQuality } from "./shaders";
 import { camera, viewProj, celestial, moodAt, lightMatrix, jittered, invert4, JITTER, LIGHT_RECT, STILL, type Cam, type CamMotion } from "./stage";
 import type { Glitchtrap } from './glitchtrap';
@@ -38,7 +39,7 @@ type Geometry = { vertex: GPUBuffer; index: GPUBuffer; ranges: Record<string, [n
 // The podium device is retained for 30 seconds between visits. Keep its immutable mesh buffers as well,
 // so reopening the room does not regenerate and upload 161,539 vertices. Device destruction frees the buffers.
 // One variant per device class and per room: the podium, or the covered podium among the works (site).
-const geometryCache = new WeakMap<GPUDevice, Map<string, Geometry>>();
+const geometryCache = new WeakMap<GPUDevice, Map<string, { site: Site | null; pending: Promise<Geometry> }>>();
 const pipelineCache = new WeakMap<GPUDevice, Map<string, Promise<any>>>();
 type Materials = { marble: GPUTexture; fabric: GPUTexture; decal: GPUTexture; initialized: boolean };
 const materialCache = new WeakMap<GPUDevice, Map<boolean, Materials>>();
@@ -52,16 +53,22 @@ function materials(device: GPUDevice, mobile: boolean): Materials {
   const decal = device.createTexture({ label: "podium-decal", size: [1024, 1024], format: "rgba8unorm", mipLevelCount: mipCount(1024, 1024), usage: usage | RT.COPY_DST | RT.RENDER_ATTACHMENT });
   const result = { marble, fabric, decal, initialized: false }; variants.set(mobile, result); return result;
 }
-function geometry(device: GPUDevice, mobile: boolean, site: Site | null): Geometry {
+function geometry(device: GPUDevice, mobile: boolean, site: Site | null): Promise<Geometry> {
   let variants = geometryCache.get(device);
   if (!variants) { variants = new Map(); geometryCache.set(device, variants); }
   const key = `${mobile}:${site ? "site" : "podium"}`;
-  const saved = variants.get(key); if (saved && saved.site?.cloth === site?.cloth) return saved;
-  const mesh = buildScene(mobile, site), usage = GPUBufferUsage.COPY_DST;
-  const vertex = device.createBuffer({ label: "podium-vertices", size: mesh.vertices.byteLength, usage: GPUBufferUsage.VERTEX | usage });
-  const index = device.createBuffer({ label: "podium-indices", size: mesh.indices.byteLength, usage: GPUBufferUsage.INDEX | usage });
-  device.queue.writeBuffer(vertex, 0, mesh.vertices); device.queue.writeBuffer(index, 0, mesh.indices);
-  const result = { vertex, index, ranges: mesh.ranges, site }; variants.set(key, result); return result;
+  const saved = variants.get(key); if (saved && saved.site?.cloth === site?.cloth) return saved.pending;
+  const pending = loadSceneMesh(mobile, site).then(mesh => {
+    const usage = GPUBufferUsage.COPY_DST;
+    const vertex = device.createBuffer({ label: "podium-vertices", size: mesh.vertices.byteLength, usage: GPUBufferUsage.VERTEX | usage });
+    const index = device.createBuffer({ label: "podium-indices", size: mesh.indices.byteLength, usage: GPUBufferUsage.INDEX | usage });
+    device.queue.writeBuffer(vertex, 0, mesh.vertices); device.queue.writeBuffer(index, 0, mesh.indices);
+    return { vertex, index, ranges: mesh.ranges, site };
+  });
+  variants.set(key, { site, pending });
+  const cache = variants;
+  pending.catch(() => { if (cache.get(key)?.pending === pending) cache.delete(key); });
+  return pending;
 }
 
 // facce della cubemap (convenzione WebGPU: +X, -X, +Y, -Y, +Z, -Z): direzione, destra e alto dell'immagine
@@ -133,9 +140,10 @@ export class PodiumView {
   private readonly taaData = new Float32Array(36);
   private prevVP: Float32Array | null = null;
   private readonly gi: GPUBuffer;
-  private readonly vbuf: GPUBuffer;
-  private readonly ibuf: GPUBuffer;
-  private readonly ranges: Record<string, [number, number]>;
+  private vbuf!: GPUBuffer;
+  private ibuf!: GPUBuffer;
+  private ranges!: Record<string, [number, number]>;
+  private readonly meshReady: Promise<Geometry>;
   private readonly shadow: GPUTexture;
   private readonly spotShadow: GPUTexture;
   private readonly spotView: GPUTextureView;
@@ -212,8 +220,7 @@ export class PodiumView {
       busy: [false, false, false],
     };
 
-    const mesh = geometry(d, q.mobile, site);
-    this.ranges = mesh.ranges; this.vbuf = mesh.vertex; this.ibuf = mesh.index;
+    this.meshReady = geometry(d, q.mobile, site);
 
     const tex = (desc: GPUTextureDescriptor) => { const t = d.createTexture(desc); this.ownTextures.push(t); return t; };
     this.shadow = tex({ label: "podium-shadow", size: q.shadow, format: "depth32float", usage: RT.RENDER_ATTACHMENT | RT.TEXTURE_BINDING });
@@ -366,8 +373,9 @@ export class PodiumView {
       const cache = variants;
       ready.catch(() => { if (cache.get(key) === ready) cache.delete(key); });
     }
-    const pipes = await ready;
+    const [pipes, mesh] = await Promise.all([ready, this.meshReady]);
     if (this.dead) return;
+    this.ranges = mesh.ranges; this.vbuf = mesh.vertex; this.ibuf = mesh.index;
     this.pipes = pipes;
     const { clouds, gi, shadow, mip8, mip16, mipCube } = pipes;
 
