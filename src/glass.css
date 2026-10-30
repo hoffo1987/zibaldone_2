@@ -17,11 +17,11 @@
   --g-ease:cubic-bezier(.22,.8,.24,1);
   --g-spring:cubic-bezier(.3,1.35,.5,1);
   --g-soft:cubic-bezier(.22,1,.36,1);
-  --g-blur:22px;--g-blur-pop:30px;--g-sat:1.75;
-  --g-1:rgba(255,255,253,.76);--g-2:rgba(247,249,244,.62);
-  --g-card1:rgba(255,255,253,.9);--g-card2:rgba(249,250,246,.84);
-  --g-in:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(12,29,26,.05);
-  --g-sh:0 26px 52px -30px rgba(12,29,26,.42),0 2px 8px -3px rgba(12,29,26,.1);
+  --g-blur:20px;--g-blur-pop:26px;--g-sat:1.8;
+  --g-1:rgba(255,255,253,.64);--g-2:rgba(247,249,244,.46);
+  --g-card1:rgba(255,255,253,.86);--g-card2:rgba(249,250,246,.76);
+  --g-in:inset 0 1px 0 rgba(255,255,255,.98),inset 0 22px 28px -24px rgba(255,255,255,.8),inset 0 -1px 0 rgba(12,29,26,.06);
+  --g-sh:0 22px 46px -28px rgba(12,29,26,.36),0 1px 4px -2px rgba(12,29,26,.08);
   --g-edge:rgba(255,255,255,.72);
 }
 /* le molle vere, dove il browser sa disegnarle: un piccolo sorpasso e l'assestamento (smorzamento 0,58 e 0,78) */
@@ -32,15 +32,15 @@
   }
 }
 .root.dark{
-  --g-1:rgba(20,36,34,.7);--g-2:rgba(9,19,18,.6);
-  --g-card1:rgba(18,32,30,.9);--g-card2:rgba(11,22,21,.86);
-  --g-in:inset 0 1px 0 rgba(255,255,255,.1),inset 0 -1px 0 rgba(0,0,0,.35);
-  --g-sh:0 26px 52px -26px rgba(0,0,0,.75),0 2px 8px -3px rgba(0,0,0,.45);
+  --g-1:rgba(20,36,34,.58);--g-2:rgba(9,19,18,.48);
+  --g-card1:rgba(18,32,30,.84);--g-card2:rgba(11,22,21,.76);
+  --g-in:inset 0 1px 0 rgba(255,255,255,.16),inset 0 18px 24px -20px rgba(255,255,255,.05),inset 0 -1px 0 rgba(0,0,0,.4);
+  --g-sh:0 22px 46px -24px rgba(0,0,0,.7),0 1px 4px -2px rgba(0,0,0,.4);
   --g-edge:rgba(255,255,255,.09);
 }
-.root.vetro-liquido{--g-blur:28px;--g-blur-pop:36px;--g-sat:1.9;--g-card1:rgba(255,255,253,.8);--g-card2:rgba(249,250,246,.68)}
-.root.dark.vetro-liquido{--g-card1:rgba(18,32,30,.76);--g-card2:rgba(11,22,21,.66)}
-@media (max-width:767px){.root{--g-blur:16px;--g-blur-pop:24px}.root.vetro-liquido{--g-blur:20px;--g-blur-pop:28px}}
+.root.vetro-liquido{--g-blur:24px;--g-blur-pop:30px;--g-sat:1.85;--g-card1:rgba(255,255,253,.72);--g-card2:rgba(249,250,246,.58)}
+.root.dark.vetro-liquido{--g-card1:rgba(18,32,30,.68);--g-card2:rgba(11,22,21,.56)}
+@media (max-width:767px){.root{--g-blur:14px;--g-blur-pop:22px}.root.vetro-liquido{--g-blur:18px;--g-blur-pop:24px}}
 /* opaco (e preset leggero, o sfocature spente): niente filtro, la lastra si fa piena */
 .root:is(.vetro-opaco,.noblur,.lite){--g-1:#FDFDFA;--g-2:#F5F7F2;--g-card1:#FFFFFC;--g-card2:#F8F9F5}
 .root.dark:is(.vetro-opaco,.noblur,.lite){--g-1:#142523;--g-2:#0E1B1A;--g-card1:#132321;--g-card2:#0F1C1B}
@@ -59,7 +59,7 @@
 
 /* ---------- le finestre: menu, opzioni, fogli, fumetti, avvisi ---------- */
 :where(.root) :is(.cp.pn,.settings-panel.pn,.sc-sheet.pn,.sc-pop.pn,[role="status"].pn){
-  background-color:var(--g-1);
+  background-color:color-mix(in srgb,var(--pn) 84%,transparent);
   box-shadow:var(--g-in),0 34px 70px -28px rgba(12,29,26,.55),0 4px 14px -6px rgba(12,29,26,.18)}
 :where(.root.dark) :is(.cp.pn,.settings-panel.pn,.sc-sheet.pn,.sc-pop.pn,[role="status"].pn){box-shadow:var(--g-in),0 34px 70px -24px #000,0 4px 14px -6px rgba(0,0,0,.6)}
 .root:not(.vetro-opaco):not(.noblur):not(.lite) :is(.cp.pn,.settings-panel.pn,.sc-sheet.pn,.sc-pop.pn,[role="status"].pn){
@@ -68,11 +68,12 @@
 .root.vetro-liquido.lente:not(.noblur):not(.lite) :is(.settings-panel.pn,.sc-sheet.pn,.cp.pn){
   -webkit-backdrop-filter:url(#vetro-lente) blur(calc(var(--g-blur-pop) * .7)) saturate(1.9) brightness(1.03);backdrop-filter:url(#vetro-lente) blur(calc(var(--g-blur-pop) * .7)) saturate(1.9) brightness(1.03)}
 /* dietro le finestre il sito si abbassa e si sfoca, come sul telefono */
-.root:not(.vetro-opaco):not(.noblur):not(.lite) :is(.cpov,.sc-ov,.fade.fixed.inset-0){-webkit-backdrop-filter:blur(6px) saturate(1.2);backdrop-filter:blur(6px) saturate(1.2)}
+.root:not(.vetro-opaco):not(.noblur):not(.lite) :is(.cpov,.sc-ov,.fade.fixed.inset-0){-webkit-backdrop-filter:blur(8px) saturate(1.3);backdrop-filter:blur(8px) saturate(1.3)}
 
-/* entrare su una molla: le finestre si posano dall'alto, un po' più piccole e sfocate, e si assestano */
-@keyframes gIn{from{opacity:0;transform:translateY(10px) scale(.94);filter:blur(6px)}60%{filter:blur(0)}}
-@keyframes gPop{from{opacity:0;transform:translateY(-8px) scale(.92);filter:blur(5px)}55%{filter:blur(0)}}
+/* entrare su una molla: le finestre salgono di poco, quasi alla misura finale, e la molla le posa.
+   Niente sfocatura sul fotogramma: costa e sporca il vetro proprio mentre si sta assestando */
+@keyframes gIn{from{opacity:0;transform:translateY(16px) scale(.975)}}
+@keyframes gPop{from{opacity:0;transform:translateY(-8px) scale(.965)}}
 .root .pop{animation:gIn .62s var(--g-spring) both}
 .root .cp{transform-origin:24px 0;animation:gPop .55s var(--g-spring) backwards}
 .root .cp.cp-r{transform-origin:calc(100% - 24px) 0}
@@ -93,8 +94,8 @@
 :where(.root) .bt.on{background:radial-gradient(120% 90% at 50% 0%,rgba(255,255,255,.45),rgba(255,255,255,0) 55%),linear-gradient(180deg,color-mix(in srgb,var(--ac) 84%,#fff),var(--ac) 50%,color-mix(in srgb,var(--ac) 82%,#000));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -6px 12px -8px rgba(0,0,0,.35),0 10px 22px -12px color-mix(in srgb,var(--ac) 90%,transparent)}
 /* premere: la goccia si schiaccia subito e torna su una molla */
-:where(.root) .bt{transition:transform .55s var(--g-spring),box-shadow .35s var(--g-ease),border-color .25s,background-color .25s,color .25s,opacity .2s}
-:where(.root) .bt:active{transform:scale(.955);transition-duration:.09s}
+:where(.root) .bt{transition:transform .55s var(--g-spring),box-shadow .4s var(--g-ease),border-color .25s,background-color .4s var(--g-ease),color .3s var(--g-ease),opacity .2s}
+:where(.root) .bt:active{transform:scale(.965);transition-duration:.07s}
 @media (hover:hover){:where(.root) .bt:where(:not(.on):not(.pri):not(.dng)):hover{box-shadow:inset 0 1px 0 #fff,0 1px 1px rgba(12,29,26,.06),0 12px 22px -12px rgba(12,29,26,.5)}
   :where(.root.dark) .bt:where(:not(.on):not(.pri):not(.dng)):hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 12px 22px -12px #000}}
 /* i pulsanti trasparenti (selettori, icone della barra degli strumenti) restano senza lastra */
@@ -127,13 +128,39 @@
 :where(.root) .sw-knob{background:radial-gradient(circle at 35% 25%,#fff,rgba(255,255,255,.88) 60%,rgba(240,244,240,.8));
   box-shadow:inset 0 0 0 .5px rgba(255,255,255,.9),inset 0 -2px 3px rgba(12,29,26,.08),0 1px 2px rgba(0,0,0,.2),0 4px 10px -3px rgba(0,0,0,.25);
   transition:left .6s var(--g-spring),width .35s var(--g-spring),transform .35s var(--g-spring)}
-:where(.root) button:active>.sw-track .sw-knob{transform:scaleY(1.1)}
+:where(.root) button:active>.sw-track .sw-knob{transform:scaleX(1.08) scaleY(.9)}
 
 /* ---------- l'avviso in alto e le icone rotonde ---------- */
 :where(.root) [role="status"].pn{border-radius:999px}
 :where(.root) .help-q{transition:transform .55s var(--g-spring),box-shadow .3s}
 :where(.root) .help-q:active{transform:scale(.9);transition-duration:.09s}
 
+/* il modulo d'accesso è una lastra come la barra: più chiara in alto, il bordo acceso, il circuito che passa dietro.
+   Sul telefono resta piatto, come prima (d3.css toglie la lastra sotto i 768 px) */
+@media (min-width:768px){
+  :where(.root) .f3d{
+    border:1px solid transparent;
+    background:
+      radial-gradient(120% 80% at 8% 0%,rgba(255,255,255,.55),transparent 48%) padding-box,
+      linear-gradient(180deg,var(--g-1),color-mix(in srgb,var(--g-1) 50%,var(--g-2))) padding-box,
+      linear-gradient(155deg,#fff,rgba(255,255,255,.2) 34%,rgba(255,255,255,0) 58%,rgba(255,255,255,.7)) border-box;
+    -webkit-backdrop-filter:blur(var(--g-blur-pop)) saturate(var(--g-sat)) brightness(1.04);
+    backdrop-filter:blur(var(--g-blur-pop)) saturate(var(--g-sat)) brightness(1.04);
+    box-shadow:var(--g-in),0 40px 80px -36px rgba(12,29,26,.42),0 14px 28px -18px rgba(12,29,26,.16)}
+  :where(.root.dark) .f3d{
+    background:
+      radial-gradient(120% 80% at 8% 0%,rgba(255,255,255,.14),transparent 46%) padding-box,
+      linear-gradient(180deg,var(--g-1),color-mix(in srgb,var(--g-1) 45%,var(--g-2))) padding-box,
+      linear-gradient(155deg,rgba(255,255,255,.45),rgba(255,255,255,.05) 36%,rgba(255,255,255,0) 58%,rgba(255,255,255,.22)) border-box;
+    box-shadow:var(--g-in),0 40px 80px -32px #000,0 14px 28px -18px rgba(0,0,0,.55)}
+  .root:is(.vetro-opaco,.noblur,.lite) .f3d{-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+/* la luce sul vetro delle schede: un riflesso bianco che insegue il puntatore, sopra il colore della sezione */
+@media (hover:hover){
+  :where(.root) .card:before{background:radial-gradient(140px circle at var(--mx,50%) var(--my,28%),rgba(255,255,255,.38),transparent 68%),radial-gradient(280px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--ac) 12%,transparent),transparent 65%)}
+  :where(.root.dark) .card:before{background:radial-gradient(140px circle at var(--mx,50%) var(--my,28%),rgba(255,255,255,.16),transparent 68%),radial-gradient(280px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--ac) 16%,transparent),transparent 65%)}
+  :where(.root) .pn.card:hover{box-shadow:var(--g-in),0 26px 48px -26px color-mix(in srgb,var(--rule,var(--ac)) 46%,transparent),var(--sh2)}
+}
 /* niente movimento: le molle e le sfocature in entrata se ne vanno */
 .root:is(.lite,.nomotion) :is(.pop,.cp,.popx,.seg-ind,.sw-knob,.bt){animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){.root :is(.pop,.cp,.popx){animation-duration:.01ms!important}.root :is(.seg-ind,.sw-knob,.bt){transition:none!important}}

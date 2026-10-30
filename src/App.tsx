@@ -1434,13 +1434,23 @@ export default function App() {
     if (!G.glow && !G.tilt && !G.ripple) return;
     let raf = 0, el: any = null, ev: any = null;
     const run = () => {
-      raf = 0; if (!el || !ev) return;
+      raf = 0; if (!el || !ev || !el.isConnected) { el = null; ev = null; return; }
       const r = el.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
-      if (G.glow) { el.style.setProperty("--mx", `${x}px`); el.style.setProperty("--my", `${y}px`); }
-      if (!G.tilt || ev.pointerType !== "mouse") return;
-      const k = G.tiltI;
-      if (el.classList.contains("card")) { el.style.setProperty("--rx", `${((y / r.height - 0.5) * -3 * k).toFixed(2)}deg`); el.style.setProperty("--ry", `${((x / r.width - 0.5) * 3 * k).toFixed(2)}deg`); }
-      else { el.style.setProperty("--tx", `${((x / r.width - 0.5) * 6 * k).toFixed(1)}px`); el.style.setProperty("--ty", `${((y / r.height - 0.5) * 4 * k).toFixed(1)}px`); }
+      let again = false;
+      if (G.glow) {
+        // il riflesso resta un filo indietro, come luce dentro il vetro; l'inclinazione segue subito
+        const curx = parseFloat(el.style.getPropertyValue("--mx")), cury = parseFloat(el.style.getPropertyValue("--my"));
+        const has = Number.isFinite(curx) && Number.isFinite(cury) && !G.nomotion;
+        const nx = has ? curx + (x - curx) * 0.28 : x, ny = has ? cury + (y - cury) * 0.28 : y;
+        el.style.setProperty("--mx", `${nx.toFixed(1)}px`); el.style.setProperty("--my", `${ny.toFixed(1)}px`);
+        if (has && Math.hypot(x - nx, y - ny) > 0.7) again = true;
+      }
+      if (G.tilt && ev.pointerType === "mouse") {
+        const k = G.tiltI;
+        if (el.classList.contains("card")) { el.style.setProperty("--rx", `${((y / r.height - 0.5) * -3 * k).toFixed(2)}deg`); el.style.setProperty("--ry", `${((x / r.width - 0.5) * 3 * k).toFixed(2)}deg`); }
+        else { el.style.setProperty("--tx", `${((x / r.width - 0.5) * 6 * k).toFixed(1)}px`); el.style.setProperty("--ty", `${((y / r.height - 0.5) * 4 * k).toFixed(1)}px`); }
+      }
+      if (again) raf = requestAnimationFrame(run);
     };
     const mv = (e: any) => {
       if (e.pointerType !== "mouse") return; if (!G.glow && !G.tilt) return;
@@ -1448,7 +1458,7 @@ export default function App() {
       if (t && !raf) raf = requestAnimationFrame(run);
     };
     const out = (e: any) => {
-      const t = e.target?.closest?.(".card,.bt"); if (t && !t.contains(e.relatedTarget)) ["--rx", "--ry", "--tx", "--ty", "--mx", "--my"].forEach((k) => t.style.removeProperty(k));
+      const t = e.target?.closest?.(".card,.bt"); if (t && !t.contains(e.relatedTarget)) { ["--rx", "--ry", "--tx", "--ty", "--mx", "--my"].forEach((k) => t.style.removeProperty(k)); if (t === el) { el = null; ev = null; } }
     };
     const dn = (e: any) => {
       const t = e.target?.closest?.(".card,.bt"); if (!t) return;
@@ -1466,7 +1476,7 @@ export default function App() {
       document.removeEventListener("pointermove", mv); document.removeEventListener("pointerout", out); document.removeEventListener("pointerdown", dn); cancelAnimationFrame(raf);
       document.querySelectorAll<HTMLElement>(".card,.bt").forEach(el => ["--rx", "--ry", "--tx", "--ty"].forEach(key => el.style.removeProperty(key)));
     };
-  }, [G.glow, G.tilt, G.ripple, G.tiltI]);
+  }, [G.glow, G.tilt, G.ripple, G.tiltI, G.nomotion]);
   useEffect(() => {
     const lock = sel || toDelete || done || viewProf || optOpen;
     document.body.style.overflow = lock ? "hidden" : "";
@@ -2567,8 +2577,8 @@ export default function App() {
       );
   const vetroCls = `vetro-${lite ? "opaco" : vetro}${!lite && vetro === "liquido" && CHROMIUM ? " lente" : ""}`;
   const shell = (children: any) => <div style={gStyle} className={`root ${vetroCls} ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} ${tourHold ? "tour-hold" : ""} min-h-screen`}><div className="prog" />{children}{settingsDialog}
-    {/* la lente del vetro liquido: un rumore lentissimo che sposta appena il fondo dietro le finestre */}
-    {!lite && vetro === "liquido" && CHROMIUM && <svg className="vetro-defs" width="0" height="0" aria-hidden="true" focusable="false"><filter id="vetro-lente" x="-4%" y="-4%" width="108%" height="108%" colorInterpolationFilters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.0035 0.006" numOctaves="2" seed="11" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="34" xChannelSelector="R" yChannelSelector="G" /></filter></svg>}
+    {/* la lente del vetro liquido: una piega morbida, un solo strato di rumore, dietro le finestre */}
+    {!lite && vetro === "liquido" && CHROMIUM && <svg className="vetro-defs" width="0" height="0" aria-hidden="true" focusable="false"><filter id="vetro-lente" x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.007 0.011" numOctaves="1" seed="4" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="16" xChannelSelector="R" yChannelSelector="G" /></filter></svg>}
   </div>;
 
   if (authLoading || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);

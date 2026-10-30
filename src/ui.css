@@ -167,8 +167,8 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;transform:none;back
 @keyframes ang{to{--ang:360deg}}
 .bt:not(.absolute){position:relative}
 .bt{overflow:hidden}
-.bt:before,.card:before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s}
-.bt:before{background:radial-gradient(90px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,currentColor 22%,transparent),transparent 70%)}
+.bt:before,.card:before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .4s var(--g-ease,cubic-bezier(.22,.8,.24,1))}
+.bt:before{background:radial-gradient(120px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.5),transparent 68%)}
 .card:before{z-index:1;background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--ac) 18%,transparent),transparent 65%)}
 .card:active:before{opacity:var(--gi,1)}
 @media (hover:hover){.card:hover:before{opacity:var(--gi,1)}}

@@ -46,18 +46,40 @@ export const navigationItems = (admin: boolean, editing: boolean): Item[] => [
 const ownerOf = (tab: string) => inHub(tab) ? "scritti" : tab;
 
 // The selection is a drop of glass: it stretches on the way (useRail delays its trailing edge) and, when that edge
-// arrives, squashes along the way it came and settles.
+// arrives, compresses once along the travel and lets go. A new trip cancels the previous settle.
 const useLanding = (ref: React.RefObject<HTMLElement>, axis: "v" | "h") => useEffect(() => {
   const ind = ref.current?.querySelector<HTMLElement>(":scope > .nind"); if (!ind?.animate) return;
+  const drop = () => ind.getAnimations().forEach(a => { if (a.id === "land") a.cancel(); });
   const land = (e: TransitionEvent) => {
     const d = ind.style.transitionDelay.split(",").map(parseFloat);
     if (e.target !== ind || e.propertyName !== (axis === "v" ? (d[0] > 0 ? "top" : "bottom") : (d[2] > 0 ? "left" : "right"))) return;
-    const squash = axis === "v" ? ["scale(1.03, .9)", "scale(.99, 1.03)"] : ["scale(.9, 1.05)", "scale(1.03, .99)"];
-    ind.animate([{ transform: squash[0] }, { transform: squash[1] }, { transform: "none" }], { duration: 480, easing: "cubic-bezier(.3,.7,.3,1)" });
+    const squash = axis === "v" ? ["scale(1.016, .945)", "scale(.997, 1.01)"] : ["scale(.945, 1.028)", "scale(1.01, .996)"];
+    ind.animate([{ transform: squash[0] }, { transform: squash[1], offset: .55 }, { transform: "none" }], { duration: 520, easing: "cubic-bezier(.2,.85,.28,1)", id: "land" });
   };
+  ind.addEventListener("transitionrun", drop);
   ind.addEventListener("transitionend", land);
-  return () => ind.removeEventListener("transitionend", land);
+  return () => { ind.removeEventListener("transitionrun", drop); ind.removeEventListener("transitionend", land); };
 }, [ref, axis]);
+
+// Light inside the glass: it eases toward the pointer (the pane transitions --glx/--gly) and drifts back to the
+// upper corner when the pointer leaves. Still when motion is off, so the highlight stays where the glass catches the room.
+const useGlassLight = (ref: React.RefObject<HTMLElement | null>, homeX: number, homeY: number) => useEffect(() => {
+  const el = ref.current; if (!el) return;
+  const root = el.closest(".root");
+  if (root?.classList.contains("lite") || root?.classList.contains("nomotion")) return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  let raf = 0, x = homeX, y = homeY;
+  const put = () => { raf = 0; el.style.setProperty("--glx", `${x.toFixed(1)}px`); el.style.setProperty("--gly", `${y.toFixed(1)}px`); };
+  const move = (e: PointerEvent) => {
+    const r = el.getBoundingClientRect();
+    x = e.clientX - r.left; y = e.clientY - r.top;
+    if (!raf) raf = requestAnimationFrame(put);
+  };
+  const rest = () => { x = homeX; y = homeY; if (!raf) raf = requestAnimationFrame(put); };
+  el.addEventListener("pointermove", move, { passive: true });
+  el.addEventListener("pointerleave", rest);
+  return () => { el.removeEventListener("pointermove", move); el.removeEventListener("pointerleave", rest); cancelAnimationFrame(raf); el.style.removeProperty("--glx"); el.style.removeProperty("--gly"); };
+}, [ref, homeX, homeY]);
 
 // The section's glass tile. When the section opens, its colour rises inside the glass like a liquid, with a few bubbles,
 // and the mark turns to white glass; when you leave, the colour drains back down.
@@ -88,15 +110,8 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
   // when the panel appears, a gleam runs down the glass tiles once
   const [boot, setBoot] = useState(true);
   useEffect(() => { const t = setTimeout(() => setBoot(false), 1600); return () => clearTimeout(t); }, []);
-  // the rim of the glass panel catches the light where the pointer is
-  useEffect(() => {
-    const el = side.current; if (!el) return;
-    let raf = 0, x = 0, y = 0;
-    const put = () => { raf = 0; el.style.setProperty("--gx", `${x}px`); el.style.setProperty("--gy", `${y}px`); };
-    const move = (e: PointerEvent) => { const r = el.getBoundingClientRect(); x = Math.round(e.clientX - r.left); y = Math.round(e.clientY - r.top); if (!raf) raf = requestAnimationFrame(put); };
-    el.addEventListener("pointermove", move, { passive: true });
-    return () => { el.removeEventListener("pointermove", move); cancelAnimationFrame(raf); };
-  }, []);
+  useGlassLight(side, 72, 22);
+  useGlassLight(horizontal, 72, 18);
   useLanding(vertical, "v");
   useLanding(horizontal, "h");
   rememberRoom(tab);
