@@ -53,33 +53,39 @@ const useLanding = (ref: React.RefObject<HTMLElement>, axis: "v" | "h") => useEf
   const land = (e: TransitionEvent) => {
     const d = ind.style.transitionDelay.split(",").map(parseFloat);
     if (e.target !== ind || e.propertyName !== (axis === "v" ? (d[0] > 0 ? "top" : "bottom") : (d[2] > 0 ? "left" : "right"))) return;
-    const squash = axis === "v" ? ["scale(1.016, .945)", "scale(.997, 1.01)"] : ["scale(.945, 1.028)", "scale(1.01, .996)"];
-    ind.animate([{ transform: squash[0] }, { transform: squash[1], offset: .55 }, { transform: "none" }], { duration: 520, easing: "cubic-bezier(.2,.85,.28,1)", id: "land" });
+    const squash = axis === "v" ? ["scale(1.012, .97)", "scale(.998, 1.006)"] : ["scale(.97, 1.016)", "scale(1.006, .998)"];
+    ind.animate([{ transform: squash[0] }, { transform: squash[1], offset: .62 }, { transform: "none" }], { duration: 700, easing: "cubic-bezier(.16,1,.3,1)", id: "land" });
   };
   ind.addEventListener("transitionrun", drop);
   ind.addEventListener("transitionend", land);
   return () => { ind.removeEventListener("transitionrun", drop); ind.removeEventListener("transitionend", land); };
 }, [ref, axis]);
 
-// Light inside the glass: it eases toward the pointer (the pane transitions --glx/--gly) and drifts back to the
-// upper corner when the pointer leaves. Still when motion is off, so the highlight stays where the glass catches the room.
-const useGlassLight = (ref: React.RefObject<HTMLElement | null>, homeX: number, homeY: number) => useEffect(() => {
+// A soft pool only while the pointer is on the glass. It sits under the pointer and fades out where it is:
+// there is no resting highlight to slide back to.
+const useGlassLight = (ref: React.RefObject<HTMLElement | null>) => useEffect(() => {
   const el = ref.current; if (!el) return;
   const root = el.closest(".root");
   if (root?.classList.contains("lite") || root?.classList.contains("nomotion")) return;
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-  let raf = 0, x = homeX, y = homeY;
-  const put = () => { raf = 0; el.style.setProperty("--glx", `${x.toFixed(1)}px`); el.style.setProperty("--gly", `${y.toFixed(1)}px`); };
+  let raf = 0, x = 0, y = 0;
+  const put = () => {
+    raf = 0;
+    el.style.setProperty("--glx", `${x.toFixed(1)}px`);
+    el.style.setProperty("--gly", `${y.toFixed(1)}px`);
+    el.style.setProperty("--gl", "1");
+  };
   const move = (e: PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
     const r = el.getBoundingClientRect();
     x = e.clientX - r.left; y = e.clientY - r.top;
     if (!raf) raf = requestAnimationFrame(put);
   };
-  const rest = () => { x = homeX; y = homeY; if (!raf) raf = requestAnimationFrame(put); };
+  const rest = () => { el.style.setProperty("--gl", "0"); };
   el.addEventListener("pointermove", move, { passive: true });
   el.addEventListener("pointerleave", rest);
-  return () => { el.removeEventListener("pointermove", move); el.removeEventListener("pointerleave", rest); cancelAnimationFrame(raf); el.style.removeProperty("--glx"); el.style.removeProperty("--gly"); };
-}, [ref, homeX, homeY]);
+  return () => { el.removeEventListener("pointermove", move); el.removeEventListener("pointerleave", rest); cancelAnimationFrame(raf); el.style.removeProperty("--glx"); el.style.removeProperty("--gly"); el.style.removeProperty("--gl"); };
+}, [ref]);
 
 // The section's glass tile. When the section opens, its colour rises inside the glass like a liquid, with a few bubbles,
 // and the mark turns to white glass; when you leave, the colour drains back down.
@@ -110,8 +116,8 @@ export function Navigation({ tab, admin, editing, hidden, railKey, onNavigate, b
   // when the panel appears, a gleam runs down the glass tiles once
   const [boot, setBoot] = useState(true);
   useEffect(() => { const t = setTimeout(() => setBoot(false), 1600); return () => clearTimeout(t); }, []);
-  useGlassLight(side, 72, 22);
-  useGlassLight(horizontal, 72, 18);
+  useGlassLight(side);
+  useGlassLight(horizontal);
   useLanding(vertical, "v");
   useLanding(horizontal, "h");
   rememberRoom(tab);

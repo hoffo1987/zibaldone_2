@@ -141,9 +141,9 @@ export const useRail = (ref: React.RefObject<HTMLElement>, axis: "v" | "h", key:
       if (!act || !act.offsetWidth) { ind.style.opacity = "0"; prev.current = null; return; }
       const W = box.clientWidth, H = box.clientHeight, x = act.offsetLeft, y = act.offsetTop, w = act.offsetWidth, h = act.offsetHeight;
       const p = prev.current, go = anim && !!p && moving();
-      const fwd = p ? (axis === "v" ? y > p.y : x > p.x) : true, lag = `${Math.round(ms(110))}ms`;
-      // ordine delle proprietà: top, bottom, left, right
-      ind.style.transitionDuration = go ? `${Math.round(ms(DUR.base))}ms` : "0ms";
+      const fwd = p ? (axis === "v" ? y > p.y : x > p.x) : true, lag = `${Math.round(ms(180))}ms`;
+      // ordine delle proprietà: top, bottom, left, right. Più lunga della pista normale: la goccia di vetro si allunga e si posa.
+      ind.style.transitionDuration = go ? `${Math.round(ms(680))}ms` : "0ms";
       ind.style.transitionDelay = !go ? "0ms" : axis === "v" ? (fwd ? `${lag},0ms,0ms,0ms` : `0ms,${lag},0ms,0ms`) : (fwd ? `0ms,0ms,${lag},0ms` : `0ms,0ms,0ms,${lag}`);
       ind.style.top = `${y}px`; ind.style.bottom = `${H - y - h}px`; ind.style.left = `${x}px`; ind.style.right = `${W - x - w}px`; ind.style.opacity = "1";
       prev.current = { x, y };

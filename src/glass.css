@@ -41,9 +41,19 @@
 .root.vetro-liquido{--g-blur:24px;--g-blur-pop:30px;--g-sat:1.85;--g-card1:rgba(255,255,253,.72);--g-card2:rgba(249,250,246,.58)}
 .root.dark.vetro-liquido{--g-card1:rgba(18,32,30,.68);--g-card2:rgba(11,22,21,.56)}
 @media (max-width:767px){.root{--g-blur:14px;--g-blur-pop:22px}.root.vetro-liquido{--g-blur:18px;--g-blur-pop:24px}}
-/* opaco (e preset leggero, o sfocature spente): niente filtro, la lastra si fa piena */
-.root:is(.vetro-opaco,.noblur,.lite){--g-1:#FDFDFA;--g-2:#F5F7F2;--g-card1:#FFFFFC;--g-card2:#F8F9F5}
-.root.dark:is(.vetro-opaco,.noblur,.lite){--g-1:#142523;--g-2:#0E1B1A;--g-card1:#132321;--g-card2:#0F1C1B}
+/* opaco: lastre piene, chiare in alto e un filo più scure in basso, con bordo di luce. Niente sfocatura */
+.root.vetro-opaco{
+  --g-1:#F3F5F0;--g-2:#E3E8DF;--g-card1:#FBFCF8;--g-card2:#F0F3EC;
+  --g-edge:rgba(255,255,255,.95);
+  --g-in:inset 0 1px 0 #fff,inset 0 0 0 1px rgba(255,255,255,.7),inset 0 -14px 20px -14px rgba(12,29,26,.07);
+  --g-sh:0 16px 32px -22px rgba(12,29,26,.22),0 1px 2px rgba(12,29,26,.05)}
+.root.dark.vetro-opaco{
+  --g-1:#172826;--g-2:#0E1C1A;--g-card1:#1A2E2B;--g-card2:#12211F;
+  --g-edge:rgba(255,255,255,.14);
+  --g-in:inset 0 1px 0 rgba(255,255,255,.16),inset 0 0 0 1px rgba(255,255,255,.05),inset 0 -16px 22px -14px rgba(0,0,0,.5);
+  --g-sh:0 16px 32px -18px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.35)}
+.root:is(.noblur,.lite){--g-1:#FDFDFA;--g-2:#F5F7F2;--g-card1:#FFFFFC;--g-card2:#F8F9F5}
+.root.dark:is(.noblur,.lite){--g-1:#142523;--g-2:#0E1B1A;--g-card1:#132321;--g-card2:#0F1C1B}
 
 /* ---------- le lastre ---------- */
 /* Il vetro tocca solo il colore di fondo, il bordo e le ombre: i disegni dei riquadri (background-image) restano dei
@@ -61,6 +71,7 @@
 :where(.root) :is(.cp.pn,.settings-panel.pn,.sc-sheet.pn,.sc-pop.pn,[role="status"].pn){
   background-color:color-mix(in srgb,var(--pn) 84%,transparent);
   box-shadow:var(--g-in),0 34px 70px -28px rgba(12,29,26,.55),0 4px 14px -6px rgba(12,29,26,.18)}
+.root.vetro-opaco :is(.cp.pn,.settings-panel.pn,.sc-sheet.pn,.sc-pop.pn,[role="status"].pn){background-color:var(--g-1)}
 :where(.root.dark) :is(.cp.pn,.settings-panel.pn,.sc-sheet.pn,.sc-pop.pn,[role="status"].pn){box-shadow:var(--g-in),0 34px 70px -24px #000,0 4px 14px -6px rgba(0,0,0,.6)}
 .root:not(.vetro-opaco):not(.noblur):not(.lite) :is(.cp.pn,.settings-panel.pn,.sc-sheet.pn,.sc-pop.pn,[role="status"].pn){
   -webkit-backdrop-filter:blur(var(--g-blur-pop)) saturate(1.9) brightness(1.03);backdrop-filter:blur(var(--g-blur-pop)) saturate(1.9) brightness(1.03)}
@@ -113,7 +124,7 @@
 /* ---------- selettori: un incavo di vetro e una goccia che scivola ---------- */
 :where(.root) .seg{background:rgba(12,29,26,.06)!important;border:0!important;box-shadow:inset 0 1px 2px rgba(12,29,26,.14),inset 0 0 0 1px rgba(12,29,26,.04),0 1px 0 rgba(255,255,255,.85)}
 :where(.root.dark) .seg{background:rgba(0,0,0,.28)!important;box-shadow:inset 0 1px 2px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.05)}
-:where(.root) .seg-ind{transition:transform .6s var(--g-spring),width .4s var(--g-ease);
+:where(.root) .seg-ind{transition:transform .72s var(--g-spring),width .5s var(--g-soft);
   background:radial-gradient(130% 110% at 0% 0%,rgba(255,255,255,.4),transparent 55%),linear-gradient(180deg,color-mix(in srgb,var(--ac) 84%,#fff),var(--ac) 55%,color-mix(in srgb,var(--ac) 86%,#000));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -6px 10px -8px rgba(0,0,0,.3),0 8px 18px -10px color-mix(in srgb,var(--ac) 85%,transparent)}
 :where(.root) .seg.soft .seg-ind{background:radial-gradient(130% 110% at 0% 0%,#fff,transparent 55%),linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.7));
@@ -127,7 +138,7 @@
   box-shadow:inset 0 1px 2px rgba(0,0,0,.2),0 0 0 3px color-mix(in srgb,var(--ac) 16%,transparent),0 6px 14px -8px var(--ac)}
 :where(.root) .sw-knob{background:radial-gradient(circle at 35% 25%,#fff,rgba(255,255,255,.88) 60%,rgba(240,244,240,.8));
   box-shadow:inset 0 0 0 .5px rgba(255,255,255,.9),inset 0 -2px 3px rgba(12,29,26,.08),0 1px 2px rgba(0,0,0,.2),0 4px 10px -3px rgba(0,0,0,.25);
-  transition:left .6s var(--g-spring),width .35s var(--g-spring),transform .35s var(--g-spring)}
+  transition:left .72s var(--g-spring),width .42s var(--g-spring),transform .42s var(--g-spring)}
 :where(.root) button:active>.sw-track .sw-knob{transform:scaleX(1.08) scaleY(.9)}
 
 /* ---------- l'avviso in alto e le icone rotonde ---------- */
@@ -154,11 +165,17 @@
       linear-gradient(155deg,rgba(255,255,255,.45),rgba(255,255,255,.05) 36%,rgba(255,255,255,0) 58%,rgba(255,255,255,.22)) border-box;
     box-shadow:var(--g-in),0 40px 80px -32px #000,0 14px 28px -18px rgba(0,0,0,.55)}
   .root:is(.vetro-opaco,.noblur,.lite) .f3d{-webkit-backdrop-filter:none;backdrop-filter:none}
+  .root.vetro-opaco .f3d{
+    background:linear-gradient(180deg,#FFFFFF,#F4F6F1 52%,#E4E9E0) padding-box,linear-gradient(155deg,#fff,rgba(255,255,255,.4) 36%,rgba(12,29,26,.1)) border-box;
+    box-shadow:inset 0 1px 0 #fff,inset 0 -16px 22px -16px rgba(12,29,26,.07),0 28px 50px -28px rgba(12,29,26,.26)}
+  .root.dark.vetro-opaco .f3d{
+    background:linear-gradient(180deg,#1C3330,#12211F 55%,#0C1816) padding-box,linear-gradient(155deg,rgba(255,255,255,.28),rgba(255,255,255,.04) 40%,rgba(0,0,0,.4)) border-box;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.16),inset 0 -16px 22px -16px #000,0 28px 50px -24px #000}
 }
-/* la luce sul vetro delle schede: un riflesso bianco che insegue il puntatore, sopra il colore della sezione */
+/* sulle schede una sola luce, soffusa, e solo dov’è il puntatore: niente alone fermo al centro */
 @media (hover:hover){
-  :where(.root) .card:before{background:radial-gradient(140px circle at var(--mx,50%) var(--my,28%),rgba(255,255,255,.38),transparent 68%),radial-gradient(280px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--ac) 12%,transparent),transparent 65%)}
-  :where(.root.dark) .card:before{background:radial-gradient(140px circle at var(--mx,50%) var(--my,28%),rgba(255,255,255,.16),transparent 68%),radial-gradient(280px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--ac) 16%,transparent),transparent 65%)}
+  :where(.root) .card:before{background:radial-gradient(220px circle at var(--mx,-80px) var(--my,-80px),rgba(255,255,255,.3),transparent 72%)}
+  :where(.root.dark) .card:before{background:radial-gradient(220px circle at var(--mx,-80px) var(--my,-80px),rgba(255,255,255,.14),transparent 72%)}
   :where(.root) .pn.card:hover{box-shadow:var(--g-in),0 26px 48px -26px color-mix(in srgb,var(--rule,var(--ac)) 46%,transparent),var(--sh2)}
 }
 /* niente movimento: le molle e le sfocature in entrata se ne vanno */

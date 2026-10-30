@@ -26,7 +26,7 @@
   .root .pn.card.stat-card:hover{border-color:color-mix(in srgb,var(--tone) 60%,var(--ln));
     box-shadow:0 26px 46px -24px color-mix(in srgb,var(--tone) 60%,transparent),0 4px 0 -1px color-mix(in srgb,var(--tone) 32%,var(--ln)),var(--sh2)}
 }
-.root .stat-card:before{background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--tone) 20%,transparent),transparent 65%)}
+.root .stat-card:before{background:radial-gradient(220px circle at var(--mx,-80px) var(--my,-80px),rgba(255,255,255,.32),transparent 72%)}
 .root .stat-card:after{background:linear-gradient(90deg,var(--tone),color-mix(in srgb,var(--tone) 25%,transparent))}
 .root .stat-card:focus-visible{outline-color:var(--tone)}
 

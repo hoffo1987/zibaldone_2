@@ -1436,21 +1436,12 @@ export default function App() {
     const run = () => {
       raf = 0; if (!el || !ev || !el.isConnected) { el = null; ev = null; return; }
       const r = el.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
-      let again = false;
-      if (G.glow) {
-        // il riflesso resta un filo indietro, come luce dentro il vetro; l'inclinazione segue subito
-        const curx = parseFloat(el.style.getPropertyValue("--mx")), cury = parseFloat(el.style.getPropertyValue("--my"));
-        const has = Number.isFinite(curx) && Number.isFinite(cury) && !G.nomotion;
-        const nx = has ? curx + (x - curx) * 0.28 : x, ny = has ? cury + (y - cury) * 0.28 : y;
-        el.style.setProperty("--mx", `${nx.toFixed(1)}px`); el.style.setProperty("--my", `${ny.toFixed(1)}px`);
-        if (has && Math.hypot(x - nx, y - ny) > 0.7) again = true;
-      }
+      if (G.glow) { el.style.setProperty("--mx", `${x.toFixed(1)}px`); el.style.setProperty("--my", `${y.toFixed(1)}px`); }
       if (G.tilt && ev.pointerType === "mouse") {
         const k = G.tiltI;
         if (el.classList.contains("card")) { el.style.setProperty("--rx", `${((y / r.height - 0.5) * -3 * k).toFixed(2)}deg`); el.style.setProperty("--ry", `${((x / r.width - 0.5) * 3 * k).toFixed(2)}deg`); }
         else { el.style.setProperty("--tx", `${((x / r.width - 0.5) * 6 * k).toFixed(1)}px`); el.style.setProperty("--ty", `${((y / r.height - 0.5) * 4 * k).toFixed(1)}px`); }
       }
-      if (again) raf = requestAnimationFrame(run);
     };
     const mv = (e: any) => {
       if (e.pointerType !== "mouse") return; if (!G.glow && !G.tilt) return;
@@ -1458,7 +1449,7 @@ export default function App() {
       if (t && !raf) raf = requestAnimationFrame(run);
     };
     const out = (e: any) => {
-      const t = e.target?.closest?.(".card,.bt"); if (t && !t.contains(e.relatedTarget)) { ["--rx", "--ry", "--tx", "--ty", "--mx", "--my"].forEach((k) => t.style.removeProperty(k)); if (t === el) { el = null; ev = null; } }
+      const t = e.target?.closest?.(".card,.bt"); if (t && !t.contains(e.relatedTarget)) { ["--rx", "--ry", "--tx", "--ty"].forEach((k) => t.style.removeProperty(k)); if (t === el) { el = null; ev = null; } }
     };
     const dn = (e: any) => {
       const t = e.target?.closest?.(".card,.bt"); if (!t) return;
@@ -1476,7 +1467,7 @@ export default function App() {
       document.removeEventListener("pointermove", mv); document.removeEventListener("pointerout", out); document.removeEventListener("pointerdown", dn); cancelAnimationFrame(raf);
       document.querySelectorAll<HTMLElement>(".card,.bt").forEach(el => ["--rx", "--ry", "--tx", "--ty"].forEach(key => el.style.removeProperty(key)));
     };
-  }, [G.glow, G.tilt, G.ripple, G.tiltI, G.nomotion]);
+  }, [G.glow, G.tilt, G.ripple, G.tiltI]);
   useEffect(() => {
     const lock = sel || toDelete || done || viewProf || optOpen;
     document.body.style.overflow = lock ? "hidden" : "";
