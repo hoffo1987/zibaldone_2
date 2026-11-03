@@ -3,6 +3,7 @@ import { ChevronRight, X } from "lucide-react";
 import { useRail } from "./motion";
 import { SectionMark } from "./SectionMark";
 import { GlassMark } from "./GlassMark";
+import { nextReveal } from "./podiumReveal";
 import "./navigation.css";
 
 // The same order drives both menus and the existing directional page transitions.
@@ -37,7 +38,7 @@ export const navigationItems = (admin: boolean, editing: boolean): Item[] => [
   { id: "write", label: editing ? "Modifica scritto" : "Nuovo scritto", short: editing ? "Modifica" : "Scrivi", detail: editing ? "Riprendi la tua pagina" : "Dai forma a un’idea", group: "Il tuo spazio", tone: "teal", mark: "write" },
   { id: "scritti", label: "Scritti", short: "Scritti", detail: "Diario e scritti completi", group: "Da leggere", tone: "violet", mark: "scritti", rooms: hubRooms(admin) },
   // il podio c'è per tutti: chi non amministra lo vede coperto fino alla presentazione del mese
-  { id: "podio", label: "Podio del mese", short: "Podio", detail: admin ? "Gli scritti in primo piano" : "Si scopre alla presentazione", group: "La community", tone: "amber", mark: "podio" },
+  { id: "podio", label: "Podio del mese", short: "Podio", detail: admin ? "Gli scritti in primo piano" : nextReveal().open ? "Scoperto per la presentazione" : "Si scopre alla presentazione", group: "La community", tone: "amber", mark: "podio" },
   ...(admin ? [
     { id: "authors", label: "Autori", short: "Autori", detail: "Le persone del Circuito", group: "La community", tone: "cyan", mark: "authors" },
   ] : []),

@@ -432,3 +432,27 @@ test('pubblicare da una bozza: lo scritto nasce e la bozza se ne va, insieme', a
   await assertSucceeds(b.commit());
   assert.equal((await getDoc(doc(owner, 'pensieri', 'from-draft'))).exists(), true);
 });
+test('il podio pubblico lo scrive solo l’admin; gli altri lo leggono dal 3 al 5, e solo quello del mese presentato', async () => {
+  // l'emulatore usa l'ora vera: il risultato atteso segue la data di oggi a Roma
+  const rome = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+  const open = rome.getDate() >= 3 && rome.getDate() <= 5;
+  const key = (back) => { const d = new Date(rome.getFullYear(), rome.getMonth() - back, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+  const podio = { podio: [{ titolo: 'Lettera a chi resta', autore: 'Giulia', voto: 5 }, { titolo: 'Le scale di via Po', autore: 'Marco' }], aggiornato: 1 };
+  await assertFails(setDoc(doc(owner, 'podi', key(1)), podio));
+  await assertSucceeds(setDoc(doc(admin, 'podi', key(1)), podio)); await assertSucceeds(setDoc(doc(admin, 'podi', key(2)), podio));
+  await assertSucceeds(getDoc(doc(admin, 'podi', key(1)))); await assertSucceeds(getDocs(collection(admin, 'podi')));
+  await (open ? assertSucceeds : assertFails)(getDoc(doc(other, 'podi', key(1))));
+  await (open ? assertSucceeds : assertFails)(getDoc(doc(owner, 'podi', key(1))));
+  // un podio di un altro mese resta coperto, l'elenco e chi non ha l'account non lo leggono mai
+  await assertFails(getDoc(doc(other, 'podi', key(2)))); await assertFails(getDoc(doc(other, 'podi', key(0))));
+  await assertFails(getDocs(collection(other, 'podi'))); await assertFails(getDoc(doc(guest, 'podi', key(1))));
+  await assertFails(updateDoc(doc(other, 'podi', key(1)), { aggiornato: 2 })); await assertFails(deleteDoc(doc(owner, 'podi', key(1))));
+  // al massimo tre posti, solo titolo, nome e voto (mai id o testo), voto in mezze stelle, id del mese ben formato
+  const voce = { titolo: 'Uno', autore: 'A' };
+  await assertFails(setDoc(doc(admin, 'podi', key(1)), { podio: [voce, voce, voce, voce], aggiornato: 1 }));
+  await assertFails(setDoc(doc(admin, 'podi', key(1)), { podio: [{ ...voce, userId: 'owner' }], aggiornato: 1 }));
+  await assertFails(setDoc(doc(admin, 'podi', key(1)), { podio: [voce, { ...voce, content: 'TESTO INTEGRALE' }], aggiornato: 1 }));
+  await assertFails(setDoc(doc(admin, 'podi', key(1)), { podio: [{ ...voce, voto: 4.2 }], aggiornato: 1 }));
+  await assertFails(setDoc(doc(admin, 'podi', 'ottobre'), podio));
+  await assertSucceeds(setDoc(doc(admin, 'podi', key(1)), { podio: [], aggiornato: 2 }));
+});

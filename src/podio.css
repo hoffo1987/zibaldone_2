@@ -85,6 +85,9 @@
   background-image:linear-gradient(90deg,var(--metal-lo),var(--metal-hi) 45%,var(--metal) 60%,var(--metal-lo)),linear-gradient(180deg,color-mix(in srgb,var(--metal) 10%,var(--pn)),var(--pn) 50%);
   background-size:100% 3px,auto;background-repeat:no-repeat}
 .root .pd-flat .pdm-medal{width:44px;height:44px;font-size:1.1rem}
+/* il podio scoperto per chi non amministra: targhette da leggere, lo scritto non si apre */
+.root .pdm-still{cursor:default}
+.root .pdm-row.pdm-still:active{transform:none}
 
 .root.nomotion .pd-bar *,.root.nomotion .pdm-card:after{animation:none}
 @media (prefers-reduced-motion:reduce){.pd-bar *,.pdm-card:after{animation:none!important}}

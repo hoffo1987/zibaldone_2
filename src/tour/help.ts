@@ -55,10 +55,10 @@ export const helpSteps = (tab: string, admin: boolean): Step[] => {
       s(CARD, "I tuoi scritti", "Apri uno scritto per rileggerlo o modificarlo. Dopo la lettura dell’amministratore vedrai anche il voto."),
     ];
     case "podio": return admin ? [
-      s(HEAD, "Podio del mese", "I tre scritti completi con il voto più alto del mese salgono qui. Gli altri lo vedono coperto da un telo fino alla presentazione, dal 3 al 5."),
+      s(HEAD, "Podio del mese", "I tre scritti completi con il voto più alto del mese salgono qui. Gli altri lo vedono coperto da un telo; dal 3 al 5 del mese dopo, per la presentazione, si scopre per tutti."),
       s("css:.pd-bar", "Il mese", "Scegli il mese: la pista mostra quanto ne è passato e quanti scritti restano da valutare."),
     ] : [
-      s(HEAD, "Podio del mese", "Qui salgono i migliori scritti completi del mese. Fino ai giorni della presentazione il podio resta coperto da un telo: le scritte nella sala dicono quando si scopre."),
+      s(HEAD, "Podio del mese", "Qui salgono i migliori scritti completi del mese. Fino ai giorni della presentazione il podio resta coperto da un telo; dal 3 al 5 si scopre e mostra i primi tre del mese prima."),
     ];
     case "authors": return [
       s(HEAD, "Autori", "Le persone del Circuito: chi scrive, quanto scrive e con che media."),

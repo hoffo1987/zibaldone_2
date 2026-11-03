@@ -15,7 +15,7 @@ import {
 import { PannelloAdmin, STATI } from "./Valutazione";
 import Stars from "./Stars";
 import { clean, plain, readingHtml } from "./sanitize";
-import { pubOf, pubSig, readPublic, isDiary, signatureOf, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, cartaOf, paperClass, isCarta, CARTE, nataDaOf, type WritingKind, type Carta } from "./testi";
+import { pubOf, pubSig, stable, readPublic, isDiary, signatureOf, writingKind, writingLabel, excerptOf, canEvaluate, rankWritings, PUBLIC_VERSION, cartaOf, paperClass, isCarta, CARTE, nataDaOf, type WritingKind, type Carta } from "./testi";
 import { snapshotReader } from "./snapshot";
 import { measure, measureAt, relayout, anchorInk, inkBottom, inkBounds, inkPreviewOf } from "./ink";
 import NotificationPanel, { BellMark } from "./NotificationPanel";
@@ -56,7 +56,7 @@ import { startAmbience, stopAmbience, setAmbienceNight, setAmbienceMuffle, setAm
 import Logo3D from "./LogoView";
 // il podio del mese in 3D (WebGPU, con illuminazione globale) si scarica solo quando serve
 import { PodiumCover, PodiumScene, PodiumSign, PodiumSlot, hasWebGPU } from "./PodiumStage";
-import { nextReveal, revealCopy, revealLines } from "./podiumReveal";
+import { nextReveal, revealCopy, revealLines, revealMonth } from "./podiumReveal";
 import { savedScore, forgetScore, TIER_LABEL } from "./podium/gpuScore";
 // easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login → caricamento → gioco
 import EggPortal from "./EggPortal";
@@ -1206,7 +1206,8 @@ export default function App() {
   // dalle Opzioni si rivedono il solo filmato ("film") o il solo tour ("guide")
   const [tour, setTour] = useState<"" | "auto" | "film" | "guide" | "help">("");
   const [tourHold, setTourHold] = useState(false);
-  const [month, setMonth] = useState(() => mKey(Date.now()));
+  // nei giorni della presentazione il podio parte dal mese presentato, lo stesso che vedono gli altri
+  const [month, setMonth] = useState(() => nextReveal().open ? revealMonth() : mKey(Date.now()));
   const [monthFilter, setMonthFilter] = useState("all");
   const [onlyMarked, setOnlyMarked] = useState(false);
   const [unrated, setUnrated] = useState(false);
@@ -1473,9 +1474,21 @@ export default function App() {
     document.body.style.overflow = lock ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [sel, toDelete, done, viewProf, optOpen]);
+  // il podio scoperto per chi non amministra: dal 3 al 5 del mese i primi tre del mese presentato, dalla copia pubblica
+  // podi/{mese} che tiene aggiornata l'admin (le regole la aprono solo in quei giorni). Senza copia resta il telo.
+  // null: copia ancora in lettura (la sala aspetta, così non si monta coperta per poi ricostruirsi scoperta)
+  const [pubPodium, setPubPodium] = useState<{ titolo: string; autore: string; voto?: number }[] | null>([]);
+  const podiumOpen = !!user && !isAdmin && tab === "podio" && nextReveal().open;
+  useEffect(() => {
+    if (!db || !adminChecked || !podiumOpen) { setPubPodium([]); return; }
+    setPubPodium(null);
+    return onSnapshot(doc(db, "podi", revealMonth()), (s: any) => setPubPodium(Array.isArray(s.data()?.podio) ? s.data().podio.slice(0, 3) : []), () => setPubPodium([]));
+  }, [podiumOpen, adminChecked]);
+  const memberPodium = podiumOpen && !!pubPodium?.length;
+  const podiumWaiting = podiumOpen && pubPodium === null;
   // l'ambiente della sala del podio coperto (chi non amministra): giorno in chiaro, notte in scuro
   const ambienceDark = useRef(dark); ambienceDark.current = dark;
-  const ambienceOn = !!user && !isAdmin && tab === "podio" && opts.ambience !== false;
+  const ambienceOn = !!user && !isAdmin && tab === "podio" && !memberPodium && !podiumWaiting && opts.ambience !== false;
   useEffect(() => { if (!ambienceOn) return; preloadAmbience(); startAmbience(ambienceDark.current ? 1 : 0); return () => stopAmbience(); }, [ambienceOn]);
   useEffect(() => { setAmbienceNight(dark ? 1 : 0); }, [dark]);
   useEffect(() => { setAmbienceVolume(opts.ambVol ?? 0.7); }, [opts.ambVol]);
@@ -1557,6 +1570,22 @@ export default function App() {
       }
     })();
   }, [rawItems, rawScope, loading, isAdmin, adminChecked, user, badgeReady, badgeUid]);
+
+  // Il podio pubblico del mese che si presenta: l'admin, con l'archivio completo e i voti privati caricati, ne tiene
+  // aggiornata la copia podi/{mese} (i primi tre: titolo, nome dell'autore e il voto solo se già svelato). Gli altri la
+  // leggono dal 3 al 5; si riscrive solo quando cambia qualcosa.
+  const podiumSent = useRef("");
+  useEffect(() => {
+    if (!db || !isAdmin || rawScope !== "all" || !valsReady || loading) return;
+    const mese = revealMonth();
+    const podio = rankWritings(items.filter((t) => !isDiary(t) && mKey(t.timestamp) === mese)).slice(0, 3)
+      .map((t) => ({ titolo: String(t.title || "").slice(0, 200) || "Senza titolo", autore: String(profiles[t.userId]?.displayName || t.author || "").slice(0, 200), ...(t.svelato && t.rating > 0 ? { voto: t.rating } : {}) }));
+    const sig = mese + stable(podio);
+    if (podiumSent.current === sig) return;
+    podiumSent.current = sig;
+    setDoc(doc(db, "podi", mese), { podio, aggiornato: Date.now() })
+      .catch((e) => { podiumSent.current = ""; console.warn("Podio pubblico non aggiornato (controlla le regole di Firestore)", e); });
+  }, [items, rawScope, valsReady, loading, isAdmin, profiles]);
 
   // Scintille ed echi sui propri pensieri del diario: nessuno scrive notifiche per l'autore, le calcola il suo client
   // (scintille.ts). Si leggono le scintille dei 30 pensieri del diario più recenti, un pensiero alla volta (le regole non
@@ -2861,11 +2890,29 @@ export default function App() {
   // il podio in 3D (WebGPU) a tutto schermo; altrimenti quello semplice. Chi non amministra lo trova coperto da un telo,
   // in mezzo ai lavori, con il cartello delle date in cui si scopre
   const scene3d = !G.nomotion && !lite && !podiumFail && hasWebGPU();
-  const podium3d = scene3d && (isAdmin ? !loading && ranked.length > 0 : true);
-  const podiumSign = tab === "podio" && !isAdmin ? <PodiumSign {...revealCopy(nextReveal())} /> : null;
-  const podiumLetters = tab === "podio" && !isAdmin ? revealLines(nextReveal()) : undefined;
+  const podium3d = scene3d && (isAdmin ? !loading && ranked.length > 0 : !podiumWaiting);
+  // dal 3 al 5 il telo si toglie anche per chi non amministra (se l'admin ha già pubblicato il podio del mese)
+  const podiumCovered = !isAdmin && !memberPodium;
+  const podiumSign = tab === "podio" && podiumCovered ? <PodiumSign {...revealCopy(nextReveal())} /> : null;
+  const podiumLetters = tab === "podio" && podiumCovered ? revealLines(nextReveal()) : undefined;
+  // il podio scoperto per chi non amministra: dalla copia pubblica, quindi senza aprire lo scritto (resta privato) e con
+  // le stelle solo se il voto è già stato svelato
+  const pubTop = tab === "podio" && memberPodium ? pubPodium! : [];
+  const pubPlate = (p: { titolo: string; autore: string; voto?: number }, k: number) => (
+    <div aria-label={`${k + 1}° posto: ${p.titolo}, di ${p.autore}`} className={`pdm-card pdm-still p${k + 1}`}>
+      <div className="flex items-center justify-between gap-2"><span className="pdm-rank"><span className="pdm-medal sm hd" aria-hidden="true">{k + 1}</span>{k + 1}° posto</span>{p.voto ? <Stars v={p.voto} size={13} /> : null}</div>
+      <div className="hd font-bold leading-snug mt-1 line-clamp-2">{p.titolo}</div>
+      <div className="pdm-who flex items-center gap-2 mt-1.5 min-w-0"><Avatar name={p.autore} size={18} /><span className="mu text-xs account-name">{p.autore}</span></div>
+    </div>
+  );
+  const pubRev = nextReveal(), pubMonth = (() => { const [y, m] = revealMonth().split("-").map(Number); return { y, name: new Date(y, m - 1, 1).toLocaleDateString("it-IT", { month: "long" }) }; })();
+  const pubBar = (
+    <div className="pd-bar">
+      <div className="pd-month"><div className="pd-cal"><span className="pd-cal-y">{pubMonth.y} · presentazione del {pubRev.talk.toLocaleDateString("it-IT", { day: "numeric", month: "long" })}</span><span className="pd-cal-m hd">{pubMonth.name}</span></div></div>
+    </div>
+  );
   // sotto il telo niente targhette: chi non amministra non deve vedere chi c'è sul podio (nemmeno i propri scritti)
-  const podiumPlates = (tab === "podio" && isAdmin ? [0, 1, 2] : []).map((k) => { const t = top[k]; if (!t) return null;
+  const podiumPlates = !isAdmin ? [0, 1, 2].map((k) => pubTop[k] ? pubPlate(pubTop[k], k) : null) : (tab === "podio" ? [0, 1, 2] : []).map((k) => { const t = top[k]; if (!t) return null;
             return (
               <div data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className={`pdm-card p${k + 1}`}>
                 <div className="flex items-center justify-between gap-2"><span className="pdm-rank"><span className="pdm-medal sm hd" aria-hidden="true">{k + 1}</span>{k + 1}° posto</span><Stars v={t.rating || 0} size={13} /></div>
@@ -2874,7 +2921,15 @@ export default function App() {
               </div>
             ); });
   // telefoni: i vincitori in schede sotto il palco 3D (le targhette sopra le coppe sarebbero troppo piccole)
-  const podiumList = (tab === "podio" && isAdmin ? top : []).map((t, k) => (
+  const podiumList = !isAdmin ? pubTop.map((p, k) => (
+    <div key={k} aria-label={`${k + 1}° posto: ${p.titolo}, di ${p.autore}`} className={`pdm-row pdm-still r${k + 1}`}>
+      <span className="pdm-medal hd" aria-hidden="true">{k + 1}</span>
+      <div className="min-w-0 flex-1">
+        <div className="pdm-row-title hd">{p.titolo}</div>
+        <div className="pdm-row-meta"><Avatar name={p.autore} size={18} /><span className="who">{p.autore}</span>{p.voto ? <span className="stars"><Stars v={p.voto} size={12} /></span> : null}</div>
+      </div>
+    </div>
+  )) : (tab === "podio" ? top : []).map((t, k) => (
     <div key={t.id} data-doc={t.id} role="button" tabIndex={0} aria-label={`${k + 1}° posto: ${t.title}`} onClick={(e) => openView(t, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openView(t, e); } }} className={`pdm-row r${k + 1}`}>
       <span className="pdm-medal hd" aria-hidden="true">{k + 1}</span>
       <div className="min-w-0 flex-1">
@@ -2891,7 +2946,24 @@ export default function App() {
     return { y: yy, name: new Date(yy, mm - 1, 1).toLocaleDateString("it-IT", { month: "long" }), p: cur ? now.getDate() / days : past ? 1 : 0, l: cur ? `giorno ${now.getDate()} di ${days}` : past ? "mese chiuso" : "deve ancora cominciare" };
   })();
   const toRateM = mItems.filter((t) => !t.rating).length;
-  const podioView = tab === "podio" && (!isAdmin ? (podium3d ? <PodiumSlot /> : <Reveal><PodiumCover sign={podiumSign} /></Reveal>) : (
+  const podioView = tab === "podio" && (!isAdmin ? (podiumWaiting ? <div className="py-24 flex justify-center"><Loader2 className="animate-spin" style={{ color: "var(--ac)" }} /></div>
+    : memberPodium ? <div>{pubBar}{podium3d ? <PodiumSlot list={podiumList} /> : (
+      <div className="grid md:grid-cols-3 gap-5 items-end">
+        {[1, 0, 2].map((k) => { const p = pubTop[k]; if (!p) return <div key={k} className="hidden md:block" />;
+          return (
+            <Reveal key={k} delay={k * 120}>
+              <div aria-label={`${k + 1}° posto: ${p.titolo}, di ${p.autore}`} className={`pn card pd-flat pdm-still p${k + 1} p-6 ${k === 0 ? "md:pt-10 md:pb-16 spin-b" : ""}`}>
+                <div className="flex items-center justify-between">
+                  <span className={`pdm-medal p${k + 1} hd`} aria-hidden="true">{k + 1}</span>
+                  {p.voto ? <Stars v={p.voto} size={16} /> : null}
+                </div>
+                <h3 className="hd text-xl font-bold mt-5 line-clamp-2">{p.titolo}</h3>
+                <div className="flex items-center gap-2 mt-2"><Avatar name={p.autore} size={24} /><span className="mu text-sm">{p.autore}</span></div>
+              </div>
+            </Reveal>
+          ); })}
+      </div>)}</div>
+    : podium3d ? <PodiumSlot /> : <Reveal><PodiumCover sign={podiumSign} /></Reveal>) : (
     <div>
       <div className="pd-bar">
         {/* il mese come un quadrante: le frecce ai lati, l'anno sopra il nome, e sotto la pista dei giorni già passati */}
@@ -2985,7 +3057,7 @@ export default function App() {
   return shell(
     <>
       <Backdrop tab={tab} fx={G.pulses || G.sparks} dark={dark} art={G.art} g={G} quiet={tab === "podio" && podium3d} board={G.bg3d && CINEMA_OK && !(tab === "podio" && podium3d)} quality={opts.q3d} />
-      {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} covered={!isAdmin} sign={podiumLetters} tune={{ tier: opts.podioTier || "auto", scale: opts.podioScale || 0, fps: opts.podioFps || 60 }} onFail={() => setPodiumFail(true)} />}
+      {tab === "podio" && podium3d && <PodiumScene dark={dark} plates={podiumPlates} covered={podiumCovered} sign={podiumLetters} tune={{ tier: opts.podioTier || "auto", scale: opts.podioScale || 0, fps: opts.podioFps || 60 }} onFail={() => setPodiumFail(true)} />}
       <Navigation tab={tab} admin={isAdmin} editing={!!editingId} railKey={railKey}
         hidden={kbOpen || (tab === "write" && drawing)} onNavigate={go}
         brand={<div className="flex items-center gap-2.5 cursor-pointer select-none" title="Il Circuito">

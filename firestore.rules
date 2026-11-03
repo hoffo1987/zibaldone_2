@@ -273,6 +273,41 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ===== Podio pubblico: i primi tre del mese presentato, scoperti a tutti dal 3 al 5 del mese dopo =====
+    // Lo scrive solo l'admin (titolo, nome dell'autore e, se già svelato, il voto). Gli altri lo leggono soltanto nei
+    // giorni della presentazione, ora italiana (CET, CEST da aprile a ottobre: il cambio d'ora non cade mai tra il 3 e il 5),
+    // e soltanto quello del mese appena presentato: a novembre il podio di ottobre, a gennaio quello di dicembre.
+    function oraItaliana() {
+      return request.time + duration.value(request.time.month() >= 4 && request.time.month() <= 10 ? 2 : 1, 'h');
+    }
+    function mesePresentato() {
+      let t = oraItaliana();
+      let m = t.month() == 1 ? 12 : t.month() - 1;
+      let y = t.month() == 1 ? t.year() - 1 : t.year();
+      return string(y) + '-' + (m < 10 ? '0' : '') + string(m);
+    }
+    function podioScoperto(mese) {
+      return oraItaliana().day() >= 3 && oraItaliana().day() <= 5 && mese == mesePresentato();
+    }
+    function vocePodio(v) {
+      return v is map && v.keys().hasOnly(['titolo', 'autore', 'voto']) && v.keys().hasAll(['titolo', 'autore'])
+        && v.titolo is string && v.titolo.size() > 0 && v.titolo.size() <= 200
+        && v.autore is string && v.autore.size() <= 200
+        && (!('voto' in v) || votoValido(v.voto, 0.5));
+    }
+    function podioValido(d) {
+      return d.keys().hasOnly(['podio', 'aggiornato']) && d.keys().hasAll(['podio', 'aggiornato'])
+        && d.aggiornato is number && d.podio is list && d.podio.size() <= 3
+        && (d.podio.size() < 1 || vocePodio(d.podio[0]))
+        && (d.podio.size() < 2 || vocePodio(d.podio[1]))
+        && (d.podio.size() < 3 || vocePodio(d.podio[2]));
+    }
+    match /podi/{mese} {
+      allow get: if isAdmin() || (signedIn() && podioScoperto(mese));
+      allow list, delete: if isAdmin();
+      allow create, update: if isAdmin() && mese.matches('^[0-9]{4}-[0-9]{2}$') && podioValido(request.resource.data);
+    }
+
     // Voto, segnalibro, stato e nota privata di ogni scritto: solo admin, l'autore non li vede mai.
     match /valutazioni/{id} {
       allow read, delete: if isAdmin();

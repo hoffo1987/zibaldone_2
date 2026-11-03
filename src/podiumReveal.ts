@@ -10,6 +10,13 @@ export function nextReveal(now = new Date()): Reveal {
   return { from: day(REVEAL_DAYS.from), talk: day(REVEAL_DAYS.talk), to: day(REVEAL_DAYS.to), open: now.getDate() >= REVEAL_DAYS.from && now.getDate() <= REVEAL_DAYS.to && month === now.getMonth() };
 }
 
+// il mese che si presenta (e il cui podio si scopre): quello prima della finestra, così dal 3 al 5 novembre si vede il
+// podio di ottobre. Stesso formato delle chiavi dei mesi dell'app ("2026-10"); è anche l'id del podio pubblico
+export function revealMonth(now = new Date()) {
+  const f = nextReveal(now).from, d = new Date(f.getFullYear(), f.getMonth() - 1, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 const dayMonth = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long" });
 // il testo del cartello: titolo e frase, con le date scritte per esteso
 export function revealCopy(r: Reveal) {

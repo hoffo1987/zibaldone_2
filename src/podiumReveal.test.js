@@ -1,4 +1,4 @@
-import { nextReveal, revealCopy, revealLines } from "./podiumReveal";
+import { nextReveal, revealCopy, revealLines, revealMonth } from "./podiumReveal";
 
 const day = (d) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 
@@ -32,4 +32,13 @@ test("the floating 3D lines say the same thing in short lines, with the full mes
   expect(open.note[0]).toBe("Visibile dal 3 novembre al 5 novembre,");
   // every line stays short enough to read on a phone
   for (const l of [...closed.title, ...closed.note, ...open.title, ...open.note]) expect(l.length).toBeLessThanOrEqual(42);
+});
+
+test("the podium uncovered in a month's window is the previous month's, across the year too", () => {
+  for (const d of [3, 4, 5]) expect(revealMonth(new Date(2026, 10, d, 9))).toBe("2026-10");
+  // before the window the next presentation is still this month's, after it the next month's
+  expect(revealMonth(new Date(2026, 10, 1))).toBe("2026-10");
+  expect(revealMonth(new Date(2026, 10, 6))).toBe("2026-11");
+  expect(revealMonth(new Date(2027, 0, 4))).toBe("2026-12");
+  expect(revealMonth(new Date(2026, 11, 20))).toBe("2026-12");
 });
