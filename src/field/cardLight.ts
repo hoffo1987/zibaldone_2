@@ -11,9 +11,18 @@ type Lights = { orbs: number[][] }; // x, y, r, g, b (schermo, colore già pesat
 type Slot = { lit: HTMLElement; key: string; halo: string; glow: boolean };
 
 const slots = new Map<HTMLElement, Slot>();
-let lastScan = -1e9, lastPaint = -1e9, lastHalo = -1e9;
+let lastScan = -1e9, lastPaint = -1e9, lastHalo = -1e9, dirty = true;
+// le card di una pagina appena aperta si cercano subito (al fotogramma dopo il cambio), non al giro successivo del
+// controllo periodico: prima la luce e l'alone arrivavano fino a mezzo secondo dopo la card
+let watcher: MutationObserver | null = null;
+const watch = () => {
+  if (watcher || typeof MutationObserver === "undefined") return;
+  watcher = new MutationObserver(() => { dirty = true; });
+  watcher.observe(document.body, { childList: true, subtree: true });
+};
 
 const scan = () => {
+  let added = false;
   const found = new Set<HTMLElement>();
   document.querySelectorAll<HTMLElement>(".shell-main .pn, .shell-main .card").forEach((el) => {
     if (el.parentElement?.closest(".pn, .card")) return; // solo le card più esterne
@@ -26,19 +35,24 @@ const scan = () => {
     const glow = !el.classList.contains("hero"); // il riquadro iniziale ha già il suo bagliore
     if (glow) el.classList.add("lit-on");
     slots.set(el, { lit, key: "", halo: "", glow });
+    added = true;
   });
   slots.forEach((s, el) => { if (!found.has(el)) { s.lit.remove(); el.classList.remove("lit-on"); el.style.removeProperty("--hc"); el.style.removeProperty("--ha"); slots.delete(el); } });
+  return added;
 };
 
 export const clearCards = () => {
   slots.forEach((s, el) => { s.lit.remove(); el.classList.remove("lit-on"); el.style.removeProperty("--hc"); el.style.removeProperty("--ha"); });
-  slots.clear(); lastScan = -1e9;
+  slots.clear(); lastScan = -1e9; dirty = true;
+  watcher?.disconnect(); watcher = null;
 };
 
 const rgb = (c: number[], n: number) => c.map((v) => Math.round(Math.round(Math.min(1, v) * n) * 255 / n)).join(" ");
 
 export const lightCards = (L: Lights, dark: boolean, W: number, H: number, now: number) => {
-  if (now - lastScan > 500) { lastScan = now; scan(); }
+  watch();
+  // una card nuova si accende nello stesso fotogramma in cui la si trova, alone compreso
+  if (now - lastScan > 500 || (dirty && now - lastScan > 50)) { lastScan = now; dirty = false; if (scan()) { lastPaint = -1e9; lastHalo = -1e9; } }
   if (now - lastPaint < 66) return;
   lastPaint = now;
   const halos = now - lastHalo > 250; if (halos) lastHalo = now;

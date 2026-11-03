@@ -61,11 +61,19 @@
    così la sua lastra; chi ha un fondo tutto suo (background) lo tiene per intero, anche al passaggio del puntatore. */
 :where(.root) .pn{border-color:var(--g-edge);background-color:var(--g-1);box-shadow:var(--g-in),var(--g-sh)}
 :where(.root) .pn.card{background-color:var(--g-card1)}
-/* la sfocatura: sulle lastre (non sulle schede, tranne col vetro liquido), mai su chi ha un menu aperto dentro, né sui
-   riquadri che hanno un fondo pieno tutto loro (lì la sfocatura non si vedrebbe e costerebbe lo stesso): il riquadro
-   iniziale, le stanze e i numeri della panoramica, gli ultimi scritti, le introduzioni delle sezioni, Le tue scintille */
-.root:not(.vetro-opaco):not(.noblur):not(.lite) .pn:not(.card):not(.shell-sidebar):not(.shell-dock):not(.hdr):not(.cp):not(.settings-panel):not(.sc-sheet):not(.sc-pop):not([role="status"]):not(.hero):not(.room-card):not(.stat-card):not(.writing-intro):not(.stm):not(:has(.cp,.cpov)),
-.root.vetro-liquido:not(.noblur):not(.lite) .pn.card:not(.hero):not(.room-card):not(.stat-card):not(.writing-intro):not(.stm){-webkit-backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat))}
+/* la sfocatura: sulle lastre (non sulle schede, tranne col vetro liquido), mai su chi ha un menu aperto dentro, né sul
+   riquadro iniziale, che ha il suo fondo verde pieno. Tutte le altre card sono la stessa lastra (vedi sotto) */
+.root:not(.vetro-opaco):not(.noblur):not(.lite) .pn:not(.card):not(.shell-sidebar):not(.shell-dock):not(.hdr):not(.cp):not(.settings-panel):not(.sc-sheet):not(.sc-pop):not([role="status"]):not(.hero):not(:has(.cp,.cpov)),
+.root.vetro-liquido:not(.noblur):not(.lite) .pn.card:not(.hero){-webkit-backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat))}
+
+/* una sola lastra per tutte le card del sito: le stanze e i numeri della Panoramica, le introduzioni di Diario e Scritti
+   completi e Le tue scintille avevano un fondo pieno loro, e accanto alle altre card sembravano di un altro materiale.
+   Ora sotto c'è lo stesso vetro (colore e sfocatura come le altre lastre e schede); i loro colori restano, in velature */
+.root .pn.card:is(.room-card,.stat-card){background-color:var(--g-card1)}
+.root .writing-intro.pn.pn,.root.dark .writing-intro.pn.pn{background-color:var(--g-1);
+  background-image:linear-gradient(90deg,var(--intro),color-mix(in srgb,var(--intro) 45%,transparent) 55%,transparent 92%),linear-gradient(120deg,color-mix(in srgb,var(--intro) 11%,transparent),transparent 70%)}
+.root .stm.pn{background:linear-gradient(180deg,rgba(255,255,255,.3),transparent 55%) var(--g-1)}
+.root.dark .stm.pn{background:linear-gradient(180deg,rgba(255,255,255,.03),transparent 55%) var(--g-1)}
 
 /* ---------- le finestre: menu, opzioni, fogli, fumetti, avvisi ---------- */
 :where(.root) :is(.cp.pn,.settings-panel.pn,.sc-sheet.pn,.sc-pop.pn,[role="status"].pn){

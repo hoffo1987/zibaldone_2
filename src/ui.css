@@ -190,6 +190,10 @@ header.hdr{backdrop-filter:none;-webkit-backdrop-filter:none;transform:none;back
 .root:not(.dark) .lit{background:radial-gradient(260px circle at var(--lx,50%) var(--ly,0),rgb(var(--lc,0 0 0) / calc(var(--la) * .06)),transparent 70%)}
 .root .lit-on{box-shadow:0 0 56px -14px rgb(var(--hc,0 0 0) / var(--ha,0)),0 26px 48px -28px rgb(0 0 0 / .6)}
 .root:not(.dark) .lit-on{box-shadow:0 0 46px -16px rgb(var(--hc,0 0 0) / calc(var(--ha,0) * .75)),0 18px 36px -24px rgb(20 44 40 / .26)}
+/* sulle lastre di vetro l'alone si aggiunge all'ombra del vetro (filo di luce interno compreso) invece di sostituirla:
+   la card non cambia aspetto quando la scena la trova */
+.root :where(.pn).lit-on{box-shadow:var(--g-in),0 0 56px -14px rgb(var(--hc,0 0 0) / var(--ha,0)),var(--g-sh)}
+.root:not(.dark) :where(.pn).lit-on{box-shadow:var(--g-in),0 0 46px -16px rgb(var(--hc,0 0 0) / calc(var(--ha,0) * .75)),var(--g-sh)}
 .bd-art{position:absolute;left:0;top:-25vh;width:100%;height:150vh;opacity:calc(.34*var(--ao,1));transform:translateY(calc(var(--bg-scroll,0)*-.12px))}
 .root.dark .bd-art{opacity:calc(.32*var(--ao,1))}
 .bd-p{inset:-25vh 0;transform:translateY(calc(var(--bg-scroll,0)*-.12px))}
