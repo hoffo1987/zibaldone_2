@@ -194,7 +194,7 @@ export function BellMark({ count }: { count: number }) {
     if (count === 0 && p > 0) { setLeaving(true); const t = setTimeout(() => setLeaving(false), 900); return () => clearTimeout(t); }
   }, [count]);
   return <>
-    <span key={ring} className={`bm-bell ${ring ? "ring" : ""}`}><Bell size={18} /></span>
+    <span key={ring} className={`bm-bell ${ring ? "bm-ringing" : ""}`}><Bell size={18} /></span>
     {count > 0 ? <span key={`${count}-${mode}`} className={`bm-badge ${mode}`}>{count}</span>
       : leaving && <span className="bm-badge gone" aria-hidden="true"><Check size={10} strokeWidth={3.5} /><i /></span>}
   </>;

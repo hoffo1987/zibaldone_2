@@ -10,12 +10,15 @@ export function GlassMark({ section }: { section: string }) {
   const front = { fill: f, stroke: h, strokeWidth: 0.7 }, back = { fill: b }, acc = { fill: a, stroke: h, strokeWidth: 0.6 };
   let parts: React.ReactNode;
   switch (section) {
-    case "home":
+    case "home": // the site's logo, same geometry as Logo in App.tsx: a C open at ±40°, white node on its upper end,
+      // amber node on its lower end, a bar from the centre node out to the C's radius
       parts = <>
-        <circle className="gm-back" cx="14.5" cy="16" r="3.4" {...back} />
-        <g className="gm-front"><path {...front} d="M21.5 8.2A10.5 10.5 0 1 0 21.5 23.8 1.95 1.95 0 0 0 18.9 20.9 6.6 6.6 0 1 1 18.9 11.1 1.95 1.95 0 0 0 21.5 8.2Z" />
-          <rect {...front} x="13.5" y="14.5" width="10" height="3" rx="1.5" /></g>
-        <circle className="gm-acc" cx="25" cy="16" r="3" {...acc} />
+        <circle className="gm-back" cx="22.3" cy="22.1" r="4.6" {...back} />
+        <g className="gm-front"><path {...front} d="M23.66 8.74A11.3 11.3 0 1 0 23.66 23.26 1.8 1.8 0 0 0 20.9 20.95 7.7 7.7 0 1 1 20.9 11.05 1.8 1.8 0 0 0 23.66 8.74Z" />
+          <rect {...front} x="15" y="14.9" width="9.6" height="2.2" rx="1.1" />
+          <circle {...front} cx="15" cy="16" r="2.1" />
+          <circle {...front} cx="22.3" cy="9.9" r="2.7" /></g>
+        <circle className="gm-acc" cx="22.3" cy="22.1" r="2.7" {...acc} />
       </>;
       break;
     case "my_pages":

@@ -7,6 +7,7 @@ import "./motion.css";
 import "./d3.css";
 import "./theme.css";
 import "./glass.css";
+import "./liquid.css";
 
 const rootElement = document.getElementById("root")!;
 const root = ReactDOM.createRoot(rootElement);

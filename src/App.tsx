@@ -57,6 +57,7 @@ import Logo3D from "./LogoView";
 // il podio del mese in 3D (WebGPU, con illuminazione globale) si scarica solo quando serve
 import { PodiumCover, PodiumScene, PodiumSign, PodiumSlot, hasWebGPU } from "./PodiumStage";
 import { nextReveal, revealCopy, revealLines, revealMonth } from "./podiumReveal";
+import { startLiquid } from "./liquid";
 import { savedScore, forgetScore, TIER_LABEL } from "./podium/gpuScore";
 // easter egg: 3 tocchi sul logo in home → esci dall'account → 3 tocchi sul logo del login → caricamento → gioco
 import EggPortal from "./EggPortal";
@@ -918,8 +919,9 @@ const resolveG = (o: any): any => {
     d3: !lite && o.d3 !== false,
   };
 };
-// Il vetro (glass.css): sui computer capaci parte liquido, altrove vetro. La lente (rifrazione dietro le finestre) è un
-// filtro SVG nel backdrop-filter, che solo i browser Chromium sanno disegnare
+// Il vetro (glass.css): sui computer capaci parte liquido, altrove vetro. Vetro: lastre e schede sfocate, con una piega
+// leggera dietro le finestre. Liquido (liquid.ts): il vetro che piega il fondo sui bordi come una lente, con la luce che
+// segue il puntatore. Le pieghe sono filtri SVG nel backdrop-filter, che solo i browser Chromium sanno disegnare
 const VETRO_DEF = (() => { try { return window.matchMedia("(pointer:fine) and (min-width:1024px)").matches && (navigator.hardwareConcurrency || 4) >= 8 ? "liquido" : "vetro"; } catch { return "vetro"; } })();
 const CHROMIUM = (() => { try { return !!(navigator as any).userAgentData?.brands?.some((b: any) => /Chromium/i.test(b.brand)); } catch { return false; } })();
 let GSPD = 1;  // velocità globale delle animazioni (serve anche ai timer fuori da React)
@@ -1187,6 +1189,12 @@ export default function App() {
   LITE = G.nomotion; GSPD = G.spd; M.off = G.nomotion; M.spd = G.spd;
   const setOpt = (k: string, v: any) => setOpts((o: any) => ({ ...o, [k]: v }));
   const vetro: "opaco" | "vetro" | "liquido" = ["opaco", "vetro", "liquido"].includes(opts.vetro) ? opts.vetro : VETRO_DEF;
+  // il vetro liquido: le lenti sui bordi delle lastre (solo Chromium) e la luce che segue il puntatore
+  const liquidOn = !lite && vetro === "liquido" && G.blur !== false, liquidMoves = liquidOn && !G.nomotion;
+  useEffect(() => {
+    if (!liquidOn) return;
+    return startLiquid(document.documentElement, { lens: CHROMIUM, moving: liquidMoves });
+  }, [liquidOn, liquidMoves]);
   const music = useMusic(!!opts.music, opts.musicVol ?? 0.35);
   const setMusic = (on: boolean) => { music.toggle(on); setOpt("music", on); };
   // suoni: sblocco al primo gesto, livello dalle Opzioni, tick su ciò che è interattivo
@@ -2476,7 +2484,7 @@ export default function App() {
             <Seg v={opts.text} set={(v: number) => setOpt("text", v)} items={[[0.9, "Testo piccolo"], [1, "Normale"], [1.12, "Grande"]]} />
             <span className="block text-sm font-semibold mt-4 mb-1.5">Vetro</span>
             <Seg v={lite ? "opaco" : vetro} set={(v: string) => setOpt("vetro", v)} items={[["opaco", "Opaco"], ["vetro", "Vetro"], ["liquido", <>Liquido<sup className="vetro-plus">+</sup></>]]} />
-            <p className="text-xs mu mt-2">{lite ? "Con il preset Leggero le lastre sono piene, senza sfocature." : ({ opaco: "Lastre piene, senza sfocature: il più leggero, anche sui telefoni meno recenti.", vetro: "Riquadri e finestre di vetro: il disegno del circuito si vede sfocato dietro. Equilibrato.", liquido: `Anche le schede diventano vetro, la sfocatura è più profonda${CHROMIUM ? " e dietro le finestre il fondo si piega come sotto un vetro spesso" : ""}. Il più bello: chiede di più alla scheda video.` } as any)[vetro]}</p>
+            <p className="text-xs mu mt-2">{lite ? "Con il preset Leggero le lastre sono piene, senza sfocature." : ({ opaco: "Lastre piene, senza sfocature: il più leggero, anche sui telefoni meno recenti.", vetro: `Riquadri, schede e finestre di vetro: il disegno del circuito si vede sfocato dietro${CHROMIUM ? " e dietro le finestre il fondo si piega come sotto un vetro spesso" : ""}.`, liquido: `Vetro limpido e luminoso, come il Liquid Glass: ${CHROMIUM ? "sui bordi di ogni lastra il fondo si piega come sotto una lente, " : ""}i fili di luce seguono il puntatore e i pulsanti si flettono quando li premi. Il più bello: chiede di più alla scheda video.` } as any)[vetro]}</p>
             <h4 className="text-xs mu mt-6 mb-2">Effetti e animazioni</h4>
             <Seg cols={CINEMA_OK ? 3 : 2} v={opts.level} set={(v: string) => setLevel(v)} items={[...(CINEMA_OK ? [["cinema", <><Box size={13} />Cinema 3D</>]] : []), ["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"], ["custom", <><SlidersHorizontal size={13} />Personalizzato</>]]} />
             <p className="text-xs mu mt-2">{({ cinema: "Come Spettacolo, con lo sfondo in 3D: la scheda in prospettiva, le cariche sospese che la illuminano e le card che ne riflettono la luce. Solo su computer, chiede di più alla scheda video.", full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, campo elettrico e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria.", custom: `Scegli tu ogni effetto e quanto deve essere intenso · ${CBOOL.filter((k) => G[k]).length} di ${CBOOL.length} attivi.` } as any)[opts.level]}</p>
@@ -2595,10 +2603,10 @@ export default function App() {
             </div>
         </SettingsDialog>
       );
-  const vetroCls = `vetro-${lite ? "opaco" : vetro}${!lite && vetro === "liquido" && CHROMIUM ? " lente" : ""}`;
+  const vetroCls = `vetro-${lite ? "opaco" : vetro}${!lite && vetro === "vetro" && CHROMIUM ? " lente" : ""}${!lite && vetro === "liquido" && CHROMIUM ? " lq" : ""}`;
   const shell = (children: any) => <div style={gStyle} className={`root ${vetroCls} ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} ${tourHold ? "tour-hold" : ""} min-h-screen`}><div className="prog" />{children}{settingsDialog}
-    {/* la lente del vetro liquido: una piega morbida, un solo strato di rumore, dietro le finestre */}
-    {!lite && vetro === "liquido" && CHROMIUM && <svg className="vetro-defs" width="0" height="0" aria-hidden="true" focusable="false"><filter id="vetro-lente" x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.007 0.011" numOctaves="1" seed="4" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="16" xChannelSelector="R" yChannelSelector="G" /></filter></svg>}
+    {/* la lente del vetro: una piega morbida, un solo strato di rumore, dietro le finestre */}
+    {!lite && vetro === "vetro" && CHROMIUM && <svg className="vetro-defs" width="0" height="0" aria-hidden="true" focusable="false"><filter id="vetro-lente" x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.007 0.011" numOctaves="1" seed="4" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="16" xChannelSelector="R" yChannelSelector="G" /></filter></svg>}
   </div>;
 
   if (authLoading || (user && !adminChecked)) return shell(<div className="flex min-h-[100dvh] items-center justify-center p-6"><Wordmark stack center size={104} fs={32} /></div>);

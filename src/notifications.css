@@ -131,7 +131,8 @@ button.nt-card{cursor:pointer}
 /* il bollino esce dall'angolo del tasto: il tasto non lo ritaglia */
 .root .bt.bm{overflow:visible}
 .bm-bell{display:inline-flex}
-.bm-bell.ring svg{transform-origin:50% 2px;animation:bmRing 1s ease-in-out}
+/* bm-ringing, non ring: ring è l'anello di focus di Tailwind e disegnava un quadrato blu attorno alla campanella */
+.bm-bell.bm-ringing svg{transform-origin:50% 2px;animation:bmRing 1s ease-in-out}
 @keyframes bmRing{10%{transform:rotate(18deg)}25%{transform:rotate(-15deg)}40%{transform:rotate(10deg)}55%{transform:rotate(-6deg)}70%{transform:rotate(3deg)}100%{transform:none}}
 .bm-badge{position:absolute;top:-6px;right:-6px;display:flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;border-radius:999px;font:800 10px/1 var(--label);color:#3B2A00;
   background:linear-gradient(180deg,#FFD66B,#F2B21C);box-shadow:0 0 0 2px var(--pn),0 2px 6px -1px rgba(217,144,0,.8)}
