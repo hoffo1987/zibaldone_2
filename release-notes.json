@@ -1,4 +1,4 @@
 {
-  "titolo": "Il sito è più fluido, su telefono e computer",
-  "messaggio": "Cambiare sezione, scorrere e restare fermi sulla Panoramica costa molto meno al telefono e al computer: le animazioni di sfondo si ridisegnano insieme, le pagine entrano senza ricalcolare tutto e il vetro liquido si prepara senza bloccare la pagina. L'aspetto resta identico."
+  "titolo": "Le pagine entrano di nuovo come prima",
+  "messaggio": "Aprendo una sezione i riquadri sparivano per quasi un secondo e poi ricomparivano di colpo. Ora compaiono con la loro dissolvenza, anche quelli che arrivano un attimo dopo la pagina."
 }

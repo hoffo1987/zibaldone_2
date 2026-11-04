@@ -34,13 +34,26 @@ export const fadeGlass = (box: HTMLElement | null, direct = false) => {
   const a = box.getAnimations().find((x: any) => GLASS_IN.has(x.animationName)) as Animation | undefined;
   const t = a?.effect?.getTiming();
   if (!a || !t) return;
-  const out = new Set<Element>(Array.from(box.querySelectorAll(".pn")));
-  if (direct) Array.from(box.children).forEach((c) => { if (!c.classList.contains("pn") && !c.querySelector(".pn")) out.add(c); });
-  out.forEach((el) => {
-    const f = el.animate([{ opacity: 0 }], { duration: t.duration, delay: t.delay, easing: t.easing, fill: "backwards" });
-    f.playbackRate = a.playbackRate;
-    if (a.startTime != null) f.startTime = a.startTime;
-  });
+  const seen = new WeakSet<Element>();
+  const join = () => {
+    const out = new Set<Element>(Array.from(box.querySelectorAll(".pn")));
+    if (direct) Array.from(box.children).forEach((c) => { if (!c.classList.contains("pn") && !c.querySelector(".pn")) out.add(c); });
+    out.forEach((el) => {
+      if (seen.has(el)) return;
+      seen.add(el);
+      // offset 0: da trasparente al suo valore. Senza offset un fotogramma chiave da solo è l'arrivo, e la lastra spariva
+      const f = el.animate([{ opacity: 0, offset: 0 }], { duration: t.duration, delay: t.delay, easing: t.easing, fill: "backwards" });
+      f.playbackRate = a.playbackRate;
+      // stesso inizio del contenitore: chi arriva a metà entrata si unisce al punto in cui è la pagina, come con --gfade
+      if (a.startTime != null) f.startTime = a.startTime;
+    });
+  };
+  join();
+  // le lastre che compaiono mentre la pagina entra (dati arrivati dopo, parti montate un attimo più tardi)
+  if (typeof MutationObserver === "undefined" || !a.finished) return;
+  const mo = new MutationObserver(join);
+  mo.observe(box, { childList: true, subtree: true });
+  a.finished.then(() => mo.disconnect(), () => mo.disconnect());
 };
 
 export type Rect = { left: number; top: number; width: number; height: number };
