@@ -38,7 +38,7 @@ import { onSheet, type Spunto } from "./spunti";
 import { ScintilleReader, EchiDelPensiero, type ScMode } from "./ScintilleReader";
 import { ScintilleMie } from "./ScintilleMie";
 import { notificheScintille, notificheEchi, chiaveEco, oggi, spuntoEco, flat, leggiScintilla, CIT_MAX, type Scintilla, type Vista, type Eco } from "./scintille";
-import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving } from "./motion";
+import { M, Words, Sheets, useFlip, useReadTrace, openSheet, closeSheet, rectOf, moving, fadeGlass } from "./motion";
 import { Navigation, SectionLocation, ScrittiSwitch, NAV_ORDER, inHub } from "./Navigation";
 import { Text3D, Terminal3D } from "./d3";
 import { renderLoop, holdLoops, holdBackground } from "./renderLoop";
@@ -924,6 +924,8 @@ const resolveG = (o: any): any => {
 // segue il puntatore. Le pieghe sono filtri SVG nel backdrop-filter, che solo i browser Chromium sanno disegnare
 const VETRO_DEF = (() => { try { return window.matchMedia("(pointer:fine) and (min-width:1024px)").matches && (navigator.hardwareConcurrency || 4) >= 8 ? "liquido" : "vetro"; } catch { return "vetro"; } })();
 const CHROMIUM = (() => { try { return !!(navigator as any).userAgentData?.brands?.some((b: any) => /Chromium/i.test(b.brand)); } catch { return false; } })();
+// animazioni legate allo scorrimento (parallasse dello sfondo, barra di avanzamento) mosse dal compositore
+const SCROLL_TL = (() => { try { return typeof CSS !== "undefined" && CSS.supports("animation-timeline: scroll()"); } catch { return false; } })();
 let GSPD = 1;  // velocità globale delle animazioni (serve anche ai timer fuori da React)
 // prima apertura della sessione: l'ingresso nel Circuito si vede per intero una volta sola, poi le pagine entrano in modo asciutto
 const FIRST = (() => { try { const s = sessionStorage.getItem("circuito:ingresso"); sessionStorage.setItem("circuito:ingresso", "1"); return !s; } catch { return true; } })();
@@ -1160,6 +1162,7 @@ const Reveal = ({ children, delay = 0, className = "", fx = "", style, flip }: a
     const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { setOn(true); io.disconnect(); } }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
     io.observe(el); return () => io.disconnect();
   }, []);
+  useLayoutEffect(() => { if (on) fadeGlass(ref.current); }, [on]);
   return <div ref={ref} data-flip={flip} className={`rv ${fx ? `fx-${fx}` : ""} ${on ? "in" : ""} ${className}`} style={{ animationDelay: `${delay}ms`, ["--rd" as any]: `${delay}ms`, ...style }}>{children}</div>;
 };
 
@@ -1420,7 +1423,8 @@ export default function App() {
     d.startViewTransition(() => new Promise<void>((res) => { setDark(next); setTimeout(res, 80); }));
   };
   useEffect(() => {
-    if (lite) return;
+    // dove il browser sa legare un'animazione allo scorrimento le muove il compositore (ui.css, classe parallax)
+    if (lite || SCROLL_TL) return;
     let raf = 0;
     // parallasse e barra di avanzamento si spengono da sole: la variabile resta a zero
     const f = () => { raf = 0; const y = window.scrollY, m = document.documentElement.scrollHeight - window.innerHeight; document.querySelector<HTMLElement>(".bd")?.style.setProperty("--bg-scroll", G.parallax ? String(y) : "0"); const p = document.querySelector<HTMLElement>(".prog"); if (p) p.style.transform = `scaleX(${G.prog && m > 0 ? Math.min(1, y / m) : 0})`; };
@@ -1433,7 +1437,7 @@ export default function App() {
     const doc: any = document;
     if (typeof doc.getAnimations !== "function") return;
     let raf = 0;
-    const apply = () => { raf = 0; try { doc.getAnimations().forEach((a: any) => { if (a.id !== "m" && a.playState !== "finished" && a.playbackRate !== G.spd) a.playbackRate = G.spd; }); } catch {} };
+    const apply = () => { raf = 0; try { doc.getAnimations().forEach((a: any) => { if (a.id !== "m" && (!a.timeline || a.timeline === doc.timeline) && a.playState !== "finished" && a.playbackRate !== G.spd) a.playbackRate = G.spd; }); } catch {} };
     const sched = () => { if (!raf) raf = requestAnimationFrame(apply); };
     apply();
     if (G.spd !== 1) { document.addEventListener("animationstart", sched, true); document.addEventListener("transitionrun", sched, true); }
@@ -2415,6 +2419,10 @@ export default function App() {
   // la pagina nuova arriva dal lato verso cui ti sposti nel menu
   const pdx = useRef(0), prevTab = useRef(tab);
   if (prevTab.current !== tab) { pdx.current = NAV_ORDER.indexOf(tab) >= NAV_ORDER.indexOf(prevTab.current) ? 18 : -18; prevTab.current = tab; }
+  // la pagina nuova entra: le lastre sfumano da sé, agganciate allo spostamento della pagina (fadeGlass, motion.tsx)
+  // (al montaggio di ogni pagina nuova, anche la prima, che arriva solo quando c'è tutto il guscio)
+  const pgEl = useRef<HTMLDivElement | null>(null);
+  const pgRef = (el: HTMLDivElement | null) => { if (el && el !== pgEl.current) { pgEl.current = el; fadeGlass(el, true); } };
   const heroIntro = useRef(FIRST);
   useEffect(() => { if (tab !== "home") heroIntro.current = false; }, [tab]);
   // archivio: le schede che restano scivolano nella nuova posizione quando cambiano ricerca, filtri o ordinamento
@@ -2604,7 +2612,7 @@ export default function App() {
         </SettingsDialog>
       );
   const vetroCls = `vetro-${lite ? "opaco" : vetro}${!lite && vetro === "vetro" && CHROMIUM ? " lente" : ""}${!lite && vetro === "liquido" && CHROMIUM ? " lq" : ""}`;
-  const shell = (children: any) => <div style={gStyle} className={`root ${vetroCls} ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} ${tourHold ? "tour-hold" : ""} min-h-screen`}><div className="prog" />{children}{settingsDialog}
+  const shell = (children: any) => <div style={gStyle} className={`root ${vetroCls} ${dark ? "dark" : ""} ${lite ? "lite" : ""} ${G.nomotion && !lite ? "nomotion" : ""} ${no("glow", "noglow")} ${no("ripple", "noripple")} ${no("aurora", "noaurora")} ${no("titles", "notitles")} ${no("logo", "nologo")} ${no("reveal", "noreveal")} ${no("pages", "nopages")} ${no("scan", "noscan")} ${no("prog", "noprog")} ${no("blur", "noblur")} ${no("lift", "nolift")} ${G.parallax && !lite ? "parallax" : ""} ${tourHold ? "tour-hold" : ""} min-h-screen`}><div className="prog" />{children}{settingsDialog}
     {/* la lente del vetro: una piega morbida, un solo strato di rumore, dietro le finestre */}
     {!lite && vetro === "vetro" && CHROMIUM && <svg className="vetro-defs" width="0" height="0" aria-hidden="true" focusable="false"><filter id="vetro-lente" x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.007 0.011" numOctaves="1" seed="4" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="16" xChannelSelector="R" yChannelSelector="G" /></filter></svg>}
   </div>;
@@ -2875,6 +2883,7 @@ export default function App() {
           {isAdmin && toRate > 0 && <button className="bt ghost !px-5 !py-3" onClick={() => { go("read"); setMonthFilter(monthNow); setUnrated(true); }}><Star size={16} />Valuta ora ({toRate})</button>}
           {isAdmin && <button className="bt ghost !px-5 !py-3" onClick={() => go("podio")}><Trophy size={16} />Vai al podio</button>}
         </div>
+        <i className="hero-scan" aria-hidden="true"><i /></i>
       </div></Reveal>
       <div className="grid md:grid-cols-2 gap-4">
         <RoomCard kind="complete" onOpen={() => go(isAdmin ? "read" : "altri")} />
@@ -3086,12 +3095,12 @@ export default function App() {
       </header>} />
 
       <div className={`shell-main md:pb-12 relative ${isAdmin ? "shell-main-admin" : ""}`}>
-        <div key={tab} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12" style={{ ["--pdx" as any]: `${pdx.current}px` }}>
+        <div key={tab} ref={pgRef} className="pg max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12" style={{ ["--pdx" as any]: `${pdx.current}px` }}>
           <SectionLocation tab={tab} admin={isAdmin} editing={!!editingId} />
           {inHub(tab) && <ScrittiSwitch tab={tab} admin={isAdmin} onNavigate={go} />}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
             <div><div className="page-head" data-tour="page-head"><h1 className="hd text-3xl md:text-5xl font-bold">{G.d3 ? <Text3D text={titles[tab]} layers={9} anim={G.titles} className="t3-ink" /> : <Words text={titles[tab]} on={G.titles} />}</h1>
-              <button type="button" className="help-q" onClick={() => setTour("help")} aria-label={`Come funziona: ${titles[tab]}`} title="Come funziona questa sezione"><span aria-hidden="true">?</span></button></div>{isList && !loading && <p className="page-count mt-2" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "scritto" : "scritti"}</p>}{tab === "altri" && !(pubLoading || loading) && <p className="page-count mt-2" aria-live="polite"><span key={pubShown.length} className="tick-n">{pubShown.length}</span> {pubShown.length === 1 ? "scritto da leggere" : "scritti da leggere"} · senza nomi né date</p>}</div>
+              <button type="button" className="help-q" onClick={() => setTour("help")} aria-label={`Come funziona: ${titles[tab]}`} title="Come funziona questa sezione"><i className="help-ring" aria-hidden="true" /><span aria-hidden="true">?</span></button></div>{isList && !loading && <p className="page-count mt-2" aria-live="polite"><span key={shown.length} className="tick-n">{shown.length}</span> {shown.length === 1 ? "scritto" : "scritti"}</p>}{tab === "altri" && !(pubLoading || loading) && <p className="page-count mt-2" aria-live="polite"><span key={pubShown.length} className="tick-n">{pubShown.length}</span> {pubShown.length === 1 ? "scritto da leggere" : "scritti da leggere"} · senza nomi né date</p>}</div>
             {["altri", "diario"].includes(tab) && <div className="sr-only" aria-live="polite">{tab === "diario" ? diaryShown.length : pubShown.length} pagine</div>}
             {["altri", "diario"].includes(tab) && <div className="relative w-full sm:w-auto"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 mu" /><input className="inp !pl-9 !pr-9 !w-full sm:!w-52" placeholder="Cerca" value={search} onChange={(e) => setSearch(e.target.value)} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Cancella ricerca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 mu"><X size={15} /></button>}</div>}
             {isList && (

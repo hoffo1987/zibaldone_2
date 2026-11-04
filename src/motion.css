@@ -18,11 +18,11 @@
 @keyframes pgIn{from{opacity:0;transform:translateX(var(--pdx,0px))}}
 /* il vetro non si spegne entrando: un antenato con opacità sotto 1 isola la sfocatura dei riquadri dallo sfondo (per
    mezzo secondo il vetro spariva, poi tornava). Dove c'è vetro il contenitore si sposta soltanto e la dissolvenza la
-   fanno le lastre stesse e le parti senza vetro, con --gfade che il contenitore anima e i figli ereditano */
-@property --gfade{syntax:'<number>';inherits:true;initial-value:1}
-@keyframes pgInG{from{--gfade:0;transform:translateX(var(--pdx,0px))}}
-.pg:has(.pn){animation-name:pgInG}
-.pg:has(.pn)>:not(:has(.pn)):not(.pn),:where(.pg,.rv) :where(.pn){opacity:var(--gfade)}
+   fanno le lastre stesse e le parti senza vetro: fadeGlass (motion.tsx) dà a ciascuna la sua dissolvenza, agganciata
+   all'animazione del contenitore (stesso inizio, durata, curva e velocità). Prima era una variabile ereditata animata
+   sul contenitore, che a ogni fotogramma faceva ricalcolare lo stile dell'intera pagina */
+@keyframes pgInT{from{transform:translateX(var(--pdx,0px))}}
+.pg:has(.pn){animation-name:pgInT}
 .pg-trace{position:relative;display:block;height:9px;margin:-1.25rem 0 2rem}
 .pg-trace:before{content:"";position:absolute;left:4px;right:0;top:4px;height:1px;background:linear-gradient(90deg,var(--ac),color-mix(in srgb,var(--ac) 30%,var(--ln)) 45%,var(--ln));transform-origin:0 50%;animation:traceX .76s var(--e-trace) .12s backwards}
 .pg-trace:after{content:"";position:absolute;left:0;top:0;width:9px;height:9px;border-radius:50%;background:var(--am);box-shadow:0 0 0 3px color-mix(in srgb,var(--am) 22%,transparent);animation:nodeOn .4s var(--e-land) backwards}
@@ -49,10 +49,10 @@
 .rv:not(.in) *{animation-play-state:paused!important}
 .rv.in.fx-still{animation:none}
 /* con il vetro dentro, lo stesso arrivo senza toccare l'opacità del contenitore (vedi .pg qui sopra) */
-@keyframes settleG{from{--gfade:0;transform:translateY(14px)}}
-@keyframes fdG{from{--gfade:0}}
-.rv.in:has(.pn):not(.fx-still){animation-name:settleG}
-.rv.in.fx-sheet:has(.pn){animation-name:fdG}
+@keyframes settleT{from{transform:translateY(14px)}}
+@keyframes fdT{from{visibility:visible}}
+.rv.in:has(.pn):not(.fx-still){animation-name:settleT}
+.rv.in.fx-sheet:has(.pn){animation-name:fdT}
 /* i fogli dell'archivio si stampano: la carta scende come sotto un plotter, poi arrivano titolo e dati */
 .rv.in.fx-sheet{animation:fd .3s linear backwards}
 /* la carta millimetrata c'è già; è la scrittura che si stampa, riga dopo riga, sotto la testina */

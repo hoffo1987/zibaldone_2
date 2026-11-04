@@ -1,4 +1,4 @@
-import { squircle, bevel, edgeAt, surfaceAt, shapeOf, lightRows, lightMix, spring } from "./liquid";
+import { squircle, bevel, edgeAt, surfaceAt, surfaceData, shapeOf, lightRows, lightMix, spring } from "./liquid";
 
 test("the bevel is a convex squircle: from the edge to the flat top, with no step where it meets the flat", () => {
   expect(squircle(0)).toBe(0); expect(squircle(1)).toBe(1);
@@ -70,4 +70,20 @@ test("the glass settles on a soft spring", () => {
   expect(spring(0)).toBe(0); expect(spring(1)).toBe(1);
   const peak = Math.max(...Array.from({ length: 90 }, (_, i) => spring(i / 100)));
   expect(peak).toBeGreaterThan(1); expect(peak).toBeLessThan(1.12);
+});
+
+test("the map is computed only on the bevel, with exactly the pixels of the full computation", () => {
+  const naive = (w, h, r, b, thick) => {
+    const P = bevel(b, thick), res = Math.min(0.5, 640 / Math.max(w, h));
+    const W = Math.max(2, Math.round(w * res)), H = Math.max(2, Math.round(h * res)), D = new Uint8ClampedArray(W * H * 4);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const s = surfaceAt((x + 0.5) / res, (y + 0.5) / res, w, h, r, b, P), i = (y * W + x) * 4;
+      D[i] = Math.round(128 + s.vx * 127); D[i + 1] = Math.round(128 + s.vy * 127); D[i + 2] = Math.round(Math.pow(1 - s.nz, 1.4) * 255); D[i + 3] = 255;
+    }
+    return D;
+  };
+  for (const [w, h, r, kind] of [[536, 195, 26, "pane"], [260, 158, 22, "pane"], [1088, 370, 28, "pane"], [120, 40, 20, "btn"], [37, 37, 18, "btn"], [380, 1416, 30, "bar"], [1500, 900, 12, "win"], [61, 33, 0, "small"]]) {
+    const { b, thick } = shapeOf(kind, w, h), fast = surfaceData(w, h, r, b, thick);
+    expect(Array.from(fast.data)).toEqual(Array.from(naive(w, h, r, b, thick)));
+  }
 });

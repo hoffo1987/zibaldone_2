@@ -108,21 +108,48 @@ export const lightMix = (dark: boolean) => {
 
 // ---------------------------------------------------------------- le mappe di una lastra
 // la mappa: lo spostamento (rosso e verde) e l'inclinazione (blu, che cresce verso il bordo: 1 − nz, ammorbidita). A
-// mezza risoluzione al più (640 px di lato): è liscia, il filtro la riporta alla misura vera
-const surface = (w: number, h: number, r: number, b: number, thick: number) => {
+// mezza risoluzione al più (640 px di lato): è liscia, il filtro la riporta alla misura vera.
+// Si calcola soltanto la fascia del bordo: dove la lastra è piana (più lontano dal bordo sia del raggio sia della curva)
+// il punto vale sempre (128, 128, 0), e lì la mappa si riempie in un colpo. Stessi pixel, una frazione del lavoro.
+export const surfaceData = (w: number, h: number, r: number, b: number, thick: number) => {
   const P = bevel(b, thick);
   const res = Math.min(0.5, 640 / Math.max(w, h));
   const W = Math.max(2, Math.round(w * res)), H = Math.max(2, Math.round(h * res));
-  const c = document.createElement("canvas"); c.width = W; c.height = H;
-  const g = c.getContext("2d"); if (!g) return null;
-  const img = g.createImageData(W, H), D = img.data;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+  const D = new Uint8ClampedArray(W * H * 4);
+  new Uint32Array(D.buffer).fill(new Uint32Array(new Uint8ClampedArray([128, 128, 0, 255]).buffer)[0]);
+  const R2 = Math.max(r, b) + 1, cx = w / 2, cy = h / 2;
+  const at = (x: number, y: number) => {
     const s = surfaceAt((x + 0.5) / res, (y + 0.5) / res, w, h, r, b, P), i = (y * W + x) * 4;
     D[i] = Math.round(128 + s.vx * 127); D[i + 1] = Math.round(128 + s.vy * 127);
-    D[i + 2] = Math.round(Math.pow(1 - s.nz, 1.4) * 255); D[i + 3] = 255;
+    D[i + 2] = Math.round(Math.pow(1 - s.nz, 1.4) * 255);
+  };
+  for (let y = 0; y < H; y++) {
+    const py = (y + 0.5) / res;
+    if (Math.abs(py - cy) > cy - R2) { for (let x = 0; x < W; x++) at(x, y); continue; }
+    for (let x = 0; x < W; x++) {
+      if (Math.abs((x + 0.5) / res - cx) <= cx - R2) { // piano fino all'altra fascia: salta
+        const xr = Math.ceil((cx + (cx - R2)) * res - 0.5); x = Math.max(x, Math.min(W - 1, xr) - 1); continue;
+      }
+      at(x, y);
+    }
   }
-  g.putImageData(img, 0, 0);
-  return { disp: c.toDataURL(), max: P.max };
+  return { W, H, data: D, max: P.max };
+};
+// le mappe non dipendono dal tema: la stessa lastra chiara o scura usa la stessa immagine
+const maps = new Map<string, { disp: string; max: number }>();
+const surface = (w: number, h: number, r: number, b: number, thick: number) => {
+  const key = `${w}x${h}r${r}b${b}`;
+  const hit = maps.get(key); if (hit) return hit;
+  const S = surfaceData(w, h, r, b, thick);
+  // un canvas in memoria (willReadFrequently): con quello della GPU leggere l'immagine per l'href costringeva la pagina
+  // ad aspettare la scheda video, qualche millisecondo per ogni lastra nuova
+  const c = document.createElement("canvas"); c.width = S.W; c.height = S.H;
+  const g = c.getContext("2d", { willReadFrequently: true }); if (!g) return null;
+  g.putImageData(new ImageData(S.data, S.W, S.H), 0, 0);
+  const out = { disp: c.toDataURL(), max: S.max };
+  if (maps.size > MAX_FILTERS) maps.delete(maps.keys().next().value as string);
+  maps.set(key, out);
+  return out;
 };
 
 // ---------------------------------------------------------------- i filtri

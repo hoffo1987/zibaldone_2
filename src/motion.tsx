@@ -23,6 +23,26 @@ const ms = (d: number) => d / (M.spd || 1);
 // id "m": il regolatore di velocità globale di App non deve riscalare queste animazioni (la durata è già scalata qui)
 const run = (el: Element, k: Keyframe[], o: KeyframeAnimationOptions) => el.animate(k, { ...o, id: "m", duration: ms(Number(o.duration) || DUR.base) });
 
+// La dissolvenza di chi entra con il vetro dentro (.pg, .rv; vedi motion.css). Il contenitore anima solo lo spostamento;
+// le lastre (e, per la pagina, i figli diretti senza vetro) sfumano ciascuna da sé, con l'inizio, la durata, la curva, il
+// ritardo e la velocità dell'animazione del contenitore. È ciò che faceva la variabile ereditata --gfade, ma il browser
+// muove l'opacità delle lastre nel compositore invece di ricalcolare lo stile di tutta la pagina a ogni fotogramma.
+// Chi ha spento le animazioni (Leggero, Opzioni, movimento ridotto) non ha l'animazione del contenitore: niente da fare.
+const GLASS_IN = new Set(["pgInT", "settleT", "fdT"]);
+export const fadeGlass = (box: HTMLElement | null, direct = false) => {
+  if (!box || typeof box.getAnimations !== "function" || typeof box.animate !== "function") return;
+  const a = box.getAnimations().find((x: any) => GLASS_IN.has(x.animationName)) as Animation | undefined;
+  const t = a?.effect?.getTiming();
+  if (!a || !t) return;
+  const out = new Set<Element>(Array.from(box.querySelectorAll(".pn")));
+  if (direct) Array.from(box.children).forEach((c) => { if (!c.classList.contains("pn") && !c.querySelector(".pn")) out.add(c); });
+  out.forEach((el) => {
+    const f = el.animate([{ opacity: 0 }], { duration: t.duration, delay: t.delay, easing: t.easing, fill: "backwards" });
+    f.playbackRate = a.playbackRate;
+    if (a.startTime != null) f.startTime = a.startTime;
+  });
+};
+
 export type Rect = { left: number; top: number; width: number; height: number };
 export const rectOf = (el: Element | null | undefined): Rect | null => {
   if (!el) return null;

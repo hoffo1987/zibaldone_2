@@ -4,10 +4,17 @@
 .t3d{--dz:1.65px;position:relative;display:inline-block;max-width:100%;transform-style:preserve-3d;transform:perspective(1100px) rotateX(calc(var(--bx,7deg) + var(--gy,0)*-10deg)) rotateY(calc(var(--by,-9deg) + var(--gx,0)*16deg));transition:transform .65s cubic-bezier(.16,1,.3,1)}
 .t3w{position:relative;display:inline-block;max-width:100%;overflow-wrap:anywhere;transform-style:preserve-3d}
 .t3d,.t3d *{text-shadow:none!important}
-.t3f{position:relative;display:inline-block;transform:translateZ(.4px);color:var(--t3f,currentColor);filter:drop-shadow(0 1px 0 rgba(255,255,255,.18))}
+.t3f{position:relative;display:inline-block;transform:translateZ(.4px);color:var(--t3f,currentColor)}
+/* il filo di luce sotto le lettere: un'ombra del testo, che si dipinge una volta con le lettere. Prima era un filtro
+   drop-shadow, che su ogni parola (un livello 3D) chiedeva al compositore una superficie in più da ridisegnare a ogni
+   fotogramma in cui qualcosa si muove nel riquadro; a occhio e al pixel è la stessa linea */
+.t3d .t3f{text-shadow:0 1px 0 rgba(255,255,255,.18)!important}
 .t3l{position:absolute;left:0;top:0;width:100%;transform:translateZ(calc(var(--k)*var(--dz)*-1));color:color-mix(in srgb,var(--t3b) var(--kp),var(--t3a));-webkit-user-select:none;user-select:none;pointer-events:none}
-.t3-in{animation:t3dz 1.1s cubic-bezier(.16,1,.3,1) backwards;animation-delay:calc(var(--t3d0,0ms) + 320ms)}
-@keyframes t3dz{from{--dz:0px}}
+/* il rilievo cresce entrando: ogni strato parte dal piano delle lettere e scende alla sua profondità. Prima cresceva
+   --dz sul contenitore, ereditata da tutti gli strati: a ogni fotogramma si ricalcolava lo stile di ogni lettera di ogni
+   strato; ora ogni strato anima il proprio transform, con la stessa curva, e lo muove il compositore */
+.t3-in .t3l{animation:t3lz 1.1s cubic-bezier(.16,1,.3,1) backwards;animation-delay:calc(var(--t3d0,0ms) + 320ms)}
+@keyframes t3lz{from{transform:translateZ(0px)}}
 .t3-in .t3w{animation:t3up .85s cubic-bezier(.2,.85,.3,1.2) backwards;animation-delay:calc(var(--t3d0,0ms) + var(--i,0)*75ms)}
 @keyframes t3up{from{transform:translateY(.6em) translateZ(-160px) rotateX(-88deg)}}
 .t3s{position:absolute;left:0;top:0;width:100%;color:var(--t3s,rgba(1,25,22,.55));filter:blur(var(--t3sb,6px));transform:translateZ(var(--sz,-26px)) translate(calc(var(--sx,5px) + var(--gx,0)*-5px),calc(var(--sy,10px) + var(--gy,0)*-5px));-webkit-user-select:none;user-select:none;pointer-events:none;transition:transform .65s cubic-bezier(.16,1,.3,1)}
@@ -19,7 +26,7 @@
 .t3-hero .t3f{background:linear-gradient(180deg,#fff 32%,#CCFBF1);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
 .t3-glint .t3f{background:linear-gradient(105deg,#fff 42%,#FDE68A 50%,#fff 58%) 120% 0/260% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:t3glint 1.4s cubic-bezier(.65,0,.35,1) 1.5s backwards}
 @keyframes t3glint{from{background-position:120% 0}to{background-position:-20% 0}}
-@media (hover:none){.t3-hero{animation:t3sway 9s ease-in-out infinite}.t3-hero.t3-in{animation:t3dz 1.1s cubic-bezier(.16,1,.3,1) calc(var(--t3d0,0ms) + 320ms) backwards,t3sway 9s ease-in-out infinite}}
+@media (hover:none){.t3-hero{animation:t3sway 9s ease-in-out infinite}}
 @keyframes t3sway{0%,100%{transform:perspective(1100px) rotateX(9deg) rotateY(-14deg)}50%{transform:perspective(1100px) rotateX(5deg) rotateY(-4deg)}}
 
 /* il terminale: vetro spesso stratificato, riflesso diagonale e testo sospeso */
@@ -42,7 +49,7 @@
 
 /* ===== DIORAMA E SCHEDE 3D ===== */
 .pn.hero.h3d{overflow:visible!important;transform-style:preserve-3d;transform:perspective(1500px) rotateX(calc(var(--ny,0)*-6.5deg)) rotateY(calc(var(--nx,0)*9.5deg));transition:transform 1.1s cubic-bezier(.22,1,.36,1),box-shadow .5s;will-change:transform;box-shadow:0 42px 95px -26px rgba(10,79,73,.75),0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.38)}
-.h3d>.hrain,.h3d:before,.h3d:after{border-radius:inherit}
+.h3d>.hrain,.h3d:before,.h3d:after,.h3d>.hero-scan{border-radius:inherit}
 .h3d>.hrain{translate:0 0 1px}
 .h3d.boot{animation:h3dIn 1.25s cubic-bezier(.16,1,.3,1) .05s backwards}
 @keyframes h3dIn{from{transform:perspective(1500px) rotateX(26deg) rotateY(-9deg) translateY(50px) translateZ(-260px)}}
@@ -63,7 +70,7 @@
 @media (hover:none){
 .h3d{animation:h3dSway 11s ease-in-out infinite}
 .h3d .t3-hero,.l3d .t3-hero{animation:none}
-.h3d .t3-hero.t3-in,.l3d .t3-hero.t3-in{animation:t3dz 1.1s cubic-bezier(.16,1,.3,1) calc(var(--t3d0,0ms) + 320ms) backwards}
+.h3d .t3-hero.t3-in .t3l,.l3d .t3-hero.t3-in .t3l{animation:t3lz 1.1s cubic-bezier(.16,1,.3,1) calc(var(--t3d0,0ms) + 320ms) backwards}
 }
 @keyframes h3dSway{0%,100%{transform:perspective(1500px) rotateX(3deg) rotateY(-5deg)}50%{transform:perspective(1500px) rotateX(-2deg) rotateY(4deg)}}
 
@@ -90,7 +97,7 @@
 /* Stable depth on touch screens: preserve the relief without perpetual sway. */
 @media (max-width:767px),(pointer:coarse){
   .t3d{--dz:1.3px;--bx:3deg;--by:-4deg;--sx:2px;--sy:4px;--t3sb:2px}
-  .t3-hero,.t3-hero.t3-in,.h3d{animation:none}
+  .t3-hero,.t3-hero.t3-in,.h3d,.t3-hero.t3-in .t3l{animation:none}
   .t3-hero .t3w{animation-duration:.5s;animation-delay:calc(var(--i,0)*25ms)}
   .pn.hero.h3d{transform:none;will-change:auto;box-shadow:var(--sh2)}
   .h3d .zl{translate:0 0 0}
