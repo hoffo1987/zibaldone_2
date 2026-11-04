@@ -51,10 +51,19 @@ test("the light comes from the bend map: the flat glass is the backdrop itself, 
     expect(l).toBeCloseTo(0.5, 3);
     for (const bg of [0.1, 0.5, 0.9]) expect(glass(bg, l, dark)).toBeCloseTo(bg, 3);
   }
-  // light from the left: the left bevel pushes the backdrop to the right (R high) and faces the light
-  const rows = lightRows(-Math.PI + 0.05, true), leftEdge = [1, 0.5, 0.6], rightEdge = [0, 0.5, 0.6];
-  expect(glass(0.3, lam(rows, leftEdge), true)).toBeGreaterThan(0.6);
-  expect(glass(0.3, lam(rows, rightEdge), true)).toBeLessThan(0.3);
+  // the left bevel pushes the backdrop to the right (R high); the right one to the left
+  const leftEdge = [1, 0.5, 0.6], rightEdge = [0, 0.5, 0.6];
+  for (const dark of [false, true]) {
+    // the two ends of the arc the site light sways in: from upper left (−155°) to upper right (−75°)
+    const fromLeft = lightRows((-155 * Math.PI) / 180, dark), fromRight = lightRows((-75 * Math.PI) / 180, dark);
+    const lit = glass(0.3, lam(fromLeft, leftEdge), dark), far = glass(0.3, lam(fromLeft, rightEdge), dark);
+    // the bevel facing the light is the brighter one, but the far one stays luminous: never much darker than the
+    // backdrop (at most 15% in the light theme, less in the dark one: the reflection lifts every edge), so moving the
+    // light only makes the edges sway
+    expect(lit).toBeGreaterThan(far + 0.05);
+    expect(far).toBeGreaterThan(0.3 * 0.85);
+    expect(Math.abs(glass(0.3, lam(fromRight, leftEdge), dark) - lit)).toBeLessThan(0.35);
+  }
 });
 
 test("the glass settles on a soft spring", () => {

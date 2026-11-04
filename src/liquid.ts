@@ -11,7 +11,9 @@
 //  - il volume: la faccia del bordo rivolta alla luce è un poco più chiara, quella opposta un poco più scura;
 //  - il riflesso (Fresnel): dove la superficie è più inclinata il vetro riflette più che trasmettere e si schiarisce;
 //  - la luce speculare: un filo bianco sulle facce del bordo che guardano la luce.
-// La luce è una sola per tutto il sito: sul computer segue con calma il puntatore, sul telefono l'inclinazione.
+// La luce è una sola per tutto il sito, sempre dall'alto: sul computer ondeggia con calma da sinistra a destra
+// seguendo il puntatore, sul telefono l'inclinazione. Sopra una scheda il puntatore porta anche una piccola lampada
+// (liquid.css: luce che si somma al vetro, più forte sul bordo vicino).
 // Le lastre nuove si formano davanti agli occhi: la piega cresce da zero su una molla.
 //
 // Il filtro sta nel backdrop-filter (solo i browser Chromium sanno usarci un filtro SVG) e fa poche cose, perché si
@@ -88,17 +90,19 @@ export const shapeOf = (kind: Kind, w: number, h: number) => {
 // sul piano). Con v = 2·((R, G) − 128/255) sulla mappa, la luce di un punto è
 //   λ = ½ + kd·d + kf·B           (½ sul piano; B, l'inclinazione, è il riflesso che cresce verso il bordo)
 // e il vetro diventa  fondo · (1 + ks·(2λ − 1)) + ka·(λ − ½): più chiaro e più luminoso dove la faccia guarda la luce,
-// più scuro dall'altra parte, identico al fondo sul piano.
+// appena più scuro dall'altra parte, identico al fondo sul piano. Il riflesso (kf, uguale da ogni lato) pesa più della
+// direzione (kd): i bordi restano luminosi tutt'intorno e la luce che si sposta li fa solo ondeggiare, senza zone
+// troppo scure o troppo chiare (nel tema scuro, dove ogni ombra pesa di più, la direzione è ancora più lieve).
 export const lightRows = (az: number, dark: boolean) => {
   const lx = Math.cos(az), ly = Math.sin(az);
-  const kd = 0.7, kf = dark ? 0.6 : 0.5;
+  const kd = dark ? 0.3 : 0.4, kf = dark ? 0.72 : 0.58;
   const n = (v: number) => v.toFixed(4), c = 128 / 255; // lo zero della mappa è 128, non 127,5
   const row = `${n(-2 * kd * lx)} ${n(-2 * kd * ly)} ${n(kf)} 0 ${n(0.5 + 2 * kd * c * (lx + ly))}`;
   return `${row}  ${row}  ${row}  0 0 0 0 1`;
 };
 // quanto la luce moltiplica (ks) e quanto somma (ka): la composizione aritmetica k1·fondo·λ + k2·fondo + k3·λ + k4
 export const lightMix = (dark: boolean) => {
-  const ks = dark ? 0.55 : 0.32, ka = dark ? 0.75 : 0.6;
+  const ks = 0.24, ka = dark ? 0.7 : 0.6;
   return { k1: 2 * ks, k2: 1 - ks, k3: ka, k4: -ka / 2 };
 };
 
@@ -132,7 +136,9 @@ const ensureDefs = () => {
   return defs;
 };
 
-let az = (-125 * Math.PI) / 180, azGoal = az;
+// la luce viene sempre dall'alto, da sinistra a destra entro un arco di 80° attorno a −115°
+const AZ0 = (-115 * Math.PI) / 180, AZ_SPAN = (40 * Math.PI) / 180;
+let az = AZ0 - AZ_SPAN * 0.25, azGoal = az;
 const glasses = new Map<string, Glass>();
 const DISPERSION = 0.07; // nei vetri piccoli il rosso si piega il 7% più del verde, il blu il 7% meno
 
@@ -177,16 +183,21 @@ const setForm = (g: Glass, k: number) => {
   g.disp.forEach((d) => d.setAttribute("scale", (g.scale * k * +(d.getAttribute("data-k") || 1)).toFixed(2)));
 };
 
-let moving = true, raf = 0;
+let moving = true, raf = 0, painted = 0;
 // t in secondi: sale, supera appena la misura e si ferma, come una goccia che si posa
 export const spring = (t: number) => (t >= 0.9 ? 1 : 1 - Math.exp(-6.5 * t) * Math.cos(7.5 * t));
 const frame = () => {
   raf = 0;
   const now = performance.now();
   let busy = false;
-  // la luce scivola verso la sua meta, un dodicesimo della strada a fotogramma: lenta, rilassata
+  // la luce scivola verso la sua meta, lenta e rilassata (un ventesimo della strada ogni sessantesimo di secondo). Si
+  // ridipinge al più 30 volte al secondo: ogni volta tutti i filtri si rifanno, e a quella lentezza l'occhio non vede
+  // la differenza
   const dz = azGoal - az;
-  if (Math.abs(dz) > 0.002) { az += dz * 0.085; glasses.forEach(paintGlass); busy = true; }
+  if (Math.abs(dz) > 0.002) {
+    busy = true;
+    if (now - painted >= 32) { az += dz * (1 - Math.pow(0.95, (now - painted) / 16.7)); painted = now; glasses.forEach(paintGlass); }
+  }
   glasses.forEach((g) => {
     if (g.grow <= 0) return;
     const t = (now - g.grow) / 1000;
@@ -245,18 +256,15 @@ const follow = (root: HTMLElement) => {
     if (nx !== sx) { sx = nx; root.style.setProperty("--lq-x", nx); }
     if (ny !== sy) { sy = ny; root.style.setProperty("--lq-y", ny); }
   };
-  const aim = (a: number) => { azGoal = Math.max(-Math.PI + 0.05, Math.min(-0.05, a)); wake(); const now = performance.now(); if (now - last > 160) { last = now; css(); } };
+  // u fra −1 (luce da sinistra) e 1 (da destra)
+  const aim = (u: number) => { azGoal = AZ0 + Math.max(-1, Math.min(1, u)) * AZ_SPAN; wake(); const now = performance.now(); if (now - last > 160) { last = now; css(); } };
   const move = (e: PointerEvent) => {
     if (e.pointerType !== "mouse") return;
-    const dx = e.clientX - window.innerWidth / 2, dy = e.clientY - window.innerHeight / 2;
-    // vicino al centro dello schermo la direzione non cambia
-    if (Math.hypot(dx, dy) < Math.min(window.innerWidth, window.innerHeight) * 0.12) return;
-    aim(Math.atan2(Math.min(dy, -Math.abs(dx) * 0.15 - 40), dx));
+    aim((e.clientX / window.innerWidth - 0.5) * 2);
   };
   const tilt = (e: DeviceOrientationEvent) => {
-    if (e.gamma == null || e.beta == null) return;
-    const g = Math.max(-40, Math.min(40, e.gamma)), b = Math.max(-35, Math.min(35, e.beta - 45));
-    aim(((-110 + g * 1.4 + b * 0.5) * Math.PI) / 180);
+    if (e.gamma == null) return;
+    aim(Math.max(-30, Math.min(30, e.gamma)) / 30);
   };
   css();
   window.addEventListener("pointermove", move, { passive: true });

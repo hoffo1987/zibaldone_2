@@ -142,9 +142,20 @@
 @media (hover:hover){
   :where(.root.vetro-liquido) .bt:where(:not(.on):not(.pri):not(.dng)):hover{box-shadow:inset 0 0 14px rgba(255,255,255,.42),0 1px 1px rgba(12,29,26,.06),0 14px 26px -12px rgba(12,29,26,.46)}
   :where(.root.dark.vetro-liquido) .bt:where(:not(.on):not(.pri):not(.dng)):hover{box-shadow:inset 0 0 14px rgba(255,255,255,.08),0 14px 26px -12px #000}
-  /* sulle schede la luce sotto il puntatore è più viva: il vetro si accende da dentro dove lo tocchi */
-  :where(.root.vetro-liquido) .card:before{background:radial-gradient(240px circle at var(--mx,-80px) var(--my,-80px),rgba(255,255,255,.42),transparent 70%)}
-  :where(.root.dark.vetro-liquido) .card:before{background:radial-gradient(240px circle at var(--mx,-80px) var(--my,-80px),rgba(255,255,255,.16),transparent 70%)}
+  /* sulle schede, una piccola lampada segue il puntatore appena sopra il vetro: piena sul bordo, che è inclinato verso
+     di lei e la coglie (vicino al puntatore il bordo si accende come un filo), morbida all'interno. La maschera è il
+     bordo (un anello di 2 px) più l'interno a metà. Nel tema scuro la luce si somma a quella che il vetro lascia
+     passare (plus-lighter: schiarisce i colori sotto, non li copre di bianco); nel chiaro, dove il vetro è già bianco,
+     è un velo di luce. Vale anche per le schede che avevano un bagliore loro (stanze, numeri) */
+  .root.vetro-liquido .card.card:before{padding:2px;box-sizing:border-box;
+    background:radial-gradient(230px circle at var(--mx,-80px) var(--my,-80px),#fff,rgba(255,255,255,.6) 30%,rgba(255,255,255,0) 72%);
+    -webkit-mask:linear-gradient(rgba(0,0,0,.5) 0 0),linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:source-over,xor;
+    mask:linear-gradient(rgba(0,0,0,.5) 0 0) add,linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+  .root.dark.vetro-liquido .card.card:before{mix-blend-mode:plus-lighter;
+    background:radial-gradient(230px circle at var(--mx,-80px) var(--my,-80px),#fff,rgba(255,255,255,.55) 30%,rgba(255,255,255,0) 72%);
+    -webkit-mask:linear-gradient(rgba(0,0,0,.34) 0 0),linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    mask:linear-gradient(rgba(0,0,0,.34) 0 0) add,linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 }
 /* i selettori: la goccia scelta è vetro colorato con lo stesso filo di luce; i campi un incavo più limpido */
 :where(.root.vetro-liquido) .seg-ind{box-shadow:inset calc(var(--lq-x,-.55) * -1.4px) calc(var(--lq-y,-.85) * -1.4px) 0 -.4px rgba(255,255,255,.75),inset 0 -6px 10px -8px rgba(0,0,0,.3),0 8px 18px -10px color-mix(in srgb,var(--ac) 85%,transparent)}
