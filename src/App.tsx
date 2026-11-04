@@ -1189,12 +1189,12 @@ export default function App() {
   LITE = G.nomotion; GSPD = G.spd; M.off = G.nomotion; M.spd = G.spd;
   const setOpt = (k: string, v: any) => setOpts((o: any) => ({ ...o, [k]: v }));
   const vetro: "opaco" | "vetro" | "liquido" = ["opaco", "vetro", "liquido"].includes(opts.vetro) ? opts.vetro : VETRO_DEF;
-  // il vetro liquido: le lenti sui bordi delle lastre (solo Chromium) e la luce che segue il puntatore
+  // il vetro liquido (liquid.ts): il vetro di ogni lastra (solo Chromium) e la luce del sito, che segue il puntatore
   const liquidOn = !lite && vetro === "liquido" && G.blur !== false, liquidMoves = liquidOn && !G.nomotion;
   useEffect(() => {
     if (!liquidOn) return;
-    return startLiquid(document.documentElement, { lens: CHROMIUM, moving: liquidMoves });
-  }, [liquidOn, liquidMoves]);
+    return startLiquid(document.documentElement, { lens: CHROMIUM, motion: liquidMoves, dark });
+  }, [liquidOn, liquidMoves, dark]);
   const music = useMusic(!!opts.music, opts.musicVol ?? 0.35);
   const setMusic = (on: boolean) => { music.toggle(on); setOpt("music", on); };
   // suoni: sblocco al primo gesto, livello dalle Opzioni, tick su ciò che è interattivo
@@ -2484,7 +2484,7 @@ export default function App() {
             <Seg v={opts.text} set={(v: number) => setOpt("text", v)} items={[[0.9, "Testo piccolo"], [1, "Normale"], [1.12, "Grande"]]} />
             <span className="block text-sm font-semibold mt-4 mb-1.5">Vetro</span>
             <Seg v={lite ? "opaco" : vetro} set={(v: string) => setOpt("vetro", v)} items={[["opaco", "Opaco"], ["vetro", "Vetro"], ["liquido", <>Liquido<sup className="vetro-plus">+</sup></>]]} />
-            <p className="text-xs mu mt-2">{lite ? "Con il preset Leggero le lastre sono piene, senza sfocature." : ({ opaco: "Lastre piene, senza sfocature: il più leggero, anche sui telefoni meno recenti.", vetro: `Riquadri, schede e finestre di vetro: il disegno del circuito si vede sfocato dietro${CHROMIUM ? " e dietro le finestre il fondo si piega come sotto un vetro spesso" : ""}.`, liquido: `Vetro limpido e luminoso, come il Liquid Glass: ${CHROMIUM ? "sui bordi di ogni lastra il fondo si piega come sotto una lente, " : ""}i fili di luce seguono il puntatore e i pulsanti si flettono quando li premi. Il più bello: chiede di più alla scheda video.` } as any)[vetro]}</p>
+            <p className="text-xs mu mt-2">{lite ? "Con il preset Leggero le lastre sono piene, senza sfocature." : ({ opaco: "Lastre piene, senza sfocature: il più leggero, anche sui telefoni meno recenti.", vetro: `Riquadri, schede e finestre di vetro: il disegno del circuito si vede sfocato dietro${CHROMIUM ? " e dietro le finestre il fondo si piega come sotto un vetro spesso" : ""}.`, liquido: `Come il Liquid Glass: ogni lastra è un vetro spesso e limpido${CHROMIUM ? " che sui bordi piega e riflette ciò che ha attorno" : ""}; la luce scorre sui bordi seguendo il puntatore (sul telefono l'inclinazione) e i pulsanti si flettono quando li premi. Il più bello: chiede di più alla scheda video.` } as any)[vetro]}</p>
             <h4 className="text-xs mu mt-6 mb-2">Effetti e animazioni</h4>
             <Seg cols={CINEMA_OK ? 3 : 2} v={opts.level} set={(v: string) => setLevel(v)} items={[...(CINEMA_OK ? [["cinema", <><Box size={13} />Cinema 3D</>]] : []), ["full", "Spettacolo"], ["mid", "Equilibrato"], ["lite", "Leggero"], ["custom", <><SlidersHorizontal size={13} />Personalizzato</>]]} />
             <p className="text-xs mu mt-2">{({ cinema: "Come Spettacolo, con lo sfondo in 3D: la scheda in prospettiva, le cariche sospese che la illuminano e le card che ne riflettono la luce. Solo su computer, chiede di più alla scheda video.", full: "Tutti gli effetti attivi, regolabili qui sotto.", mid: "Niente circuito vivo, campo elettrico e inclinazione: più leggero.", lite: "Nessuna animazione né effetto: massima velocità e batteria.", custom: `Scegli tu ogni effetto e quanto deve essere intenso · ${CBOOL.filter((k) => G[k]).length} di ${CBOOL.length} attivi.` } as any)[opts.level]}</p>

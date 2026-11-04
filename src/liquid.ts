@@ -1,25 +1,128 @@
-// Il vetro liquido (Opzioni › Aspetto › Vetro › Liquido), sul modello del Liquid Glass di Apple: una lastra che non
-// si limita a sfocare ciò che ha dietro, ma lo piega come una lente spessa. Al centro la lastra è piana e lascia
-// vedere il fondo quasi com'è; verso il bordo la superficie si curva e il disegno del circuito si stira e si piega,
-// tanto più quanto la lastra è grande (una lastra grande è un vetro più spesso). La luce arriva da un punto solo,
-// lo stesso per tutto il sito, e segue piano il puntatore: i fili di luce sui bordi si spostano verso di lei.
+// Il vetro liquido (Opzioni › Aspetto › Vetro › Liquido), sul modello del Liquid Glass di Apple.
 //
-// Tutto il vetro della lastra è un filtro SVG messo nel backdrop-filter, che soltanto i browser Chromium sanno
-// disegnare (altrove resta il resto del vetro liquido, con la sfocatura normale): al centro il fondo sfocato (la
-// smerigliatura), sul bordo lo stesso fondo quasi nitido ma piegato verso l'interno (feDisplacementMap), e fra i due
-// un passaggio morbido. Ogni misura di lastra ha la sua mappa: la distanza dal bordo arrotondato diventa uno
-// spostamento verso l'interno (canali rosso e verde) e il peso del bordo (canale blu). Le lastre della stessa misura e
-// della stessa smerigliatura la condividono. Il filtro arriva alla lastra come variabile CSS (--lq-f): il CSS lo usa
-// solo dove la lastra è davvero di vetro.
-
-const SEL = ".root .pn:not(.hero), .root .shell-sidebar, .root .shell-dock";
-const MAX_FILTERS = 160;
-
-type Made = { id: string; used: number };
-const made = new Map<string, Made>();
-let defs: SVGDefsElement | null = null, seq = 0, tick = 0;
+// Ogni lastra è un solo pezzo di vetro: piana al centro, con il bordo che scende a squircle convesso
+// (y = ⁴√(1 − (1 − x)⁴), x = 0 sul bordo, 1 dove comincia il piano) e uno spessore di una volta e mezza il bordo.
+// Tutto ciò che si vede viene da quella superficie, quindi non ci sono stacchi fra bordo e centro:
+//  - la smerigliatura è la stessa su tutta la lastra e cresce con la lastra (i pulsanti sono quasi limpidi, le
+//    finestre più velate: un vetro più grande disperde di più la luce);
+//  - la rifrazione: un raggio verticale entra nella superficie inclinata, si piega (Snell, vetro n = 1,5) e arriva al
+//    fondo spostato verso l'interno; lo spostamento è massimo sul bordo e scende continuo a zero sul piano. Nei
+//    vetri piccoli (pulsanti) i tre colori si piegano appena diversi: il bordo si tinge di un filo d'arcobaleno;
+//  - il volume: la faccia del bordo rivolta alla luce è un poco più chiara, quella opposta un poco più scura;
+//  - il riflesso (Fresnel): dove la superficie è più inclinata il vetro riflette più che trasmettere e si schiarisce;
+//  - la luce speculare: un filo bianco sulle facce del bordo che guardano la luce.
+// La luce è una sola per tutto il sito: sul computer segue con calma il puntatore, sul telefono l'inclinazione.
+// Le lastre nuove si formano davanti agli occhi: la piega cresce da zero su una molla.
+//
+// Il filtro sta nel backdrop-filter (solo i browser Chromium sanno usarci un filtro SVG) e fa poche cose, perché si
+// ricalcola a ogni fotogramma per ogni lastra: cinque passaggi in tutto (oltre gli otto la pagina perde metà dei
+// fotogrammi). Smeriglia il fondo, lo piega con l'unica immagine della lastra e ci posa la luce. L'immagine porta lo
+// spostamento (rosso e verde: verso l'interno, quindi anche la direzione in cui guarda ogni faccia del bordo) e
+// l'inclinazione della superficie (blu). La luce se ne ricava con una matrice di colore (un valore per punto: ½ sul
+// piano, di più dove la faccia guarda la luce e dove la superficie è più inclinata, di meno dall'altra parte) e una
+// composizione aritmetica che la applica al fondo due volte: moltiplicandolo (il volume) e sommandola (il filo di
+// luce e il riflesso). Muovere la luce cambia soltanto quella matrice. La velatura resta nel CSS, sopra, dove non
+// costa nulla. Il CSS dice quali elementi sono vetro (--lq-want: 1); il filtro arriva all'elemento in --lq-f, con
+// l'attributo data-lq. Un attributo e non una classe: React riscrive le classi quando ridisegna.
 
 const NS = "http://www.w3.org/2000/svg";
+const N_GLASS = 1.5;
+const MAX_FILTERS = 160;
+const SEL = ".root .pn:not(.hero), .root .bt";
+const BARS = ".shell-sidebar, .shell-dock, header.hdr";
+const WINDOWS = ".cp, .settings-panel, .sc-sheet, .sc-pop, [role=status]";
+
+type Kind = "btn" | "small" | "pane" | "bar" | "win";
+type Glass = {
+  id: string; used: number; scale: number; dark: boolean;
+  disp: SVGElement[]; light: SVGElement;
+  grow: number; // istante in cui ha cominciato a formarsi (0: formata, -1: mai mostrata)
+};
+
+// ---------------------------------------------------------------- la superficie
+export const squircle = (x: number) => Math.pow(1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 4), 0.25);
+
+// il profilo del bordo, dal bordo (x = 0) al piano (x = 1): spostamento in px e pendenza della superficie
+export const bevel = (b: number, thick: number, steps = 96) => {
+  const d = new Float32Array(steps), s = new Float32Array(steps);
+  let max = 0;
+  for (let i = 0; i < steps; i++) {
+    const x = (i + 0.5) / steps, e = 0.5 / steps, x0 = Math.max(0, x - e), x1 = Math.min(1, x + e);
+    const slope = ((squircle(x1) - squircle(x0)) / (x1 - x0)) * (thick / b);
+    const t1 = Math.atan(slope), t2 = Math.asin(Math.sin(t1) / N_GLASS);
+    d[i] = thick * squircle(x) * Math.tan(t1 - t2); s[i] = slope;
+    if (d[i] > max) max = d[i];
+  }
+  return { d, s, max: max || 1, steps };
+};
+
+// un punto della lastra: distanza dal bordo arrotondato (dentro, in px) e direzione verso l'esterno
+export const edgeAt = (px: number, py: number, w: number, h: number, r: number): [number, number, number] => {
+  const cx = w / 2, cy = h / 2, sx = px < cx ? -1 : 1, sy = py < cy ? -1 : 1;
+  const qx = Math.abs(px - cx) - (w / 2 - r), qy = Math.abs(py - cy) - (h / 2 - r);
+  if (qx > 0 && qy > 0) { const l = Math.hypot(qx, qy) || 1; return [r - l, (sx * qx) / l, (sy * qy) / l]; }
+  return qx > qy ? [r - qx, sx, 0] : [r - qy, 0, sy];
+};
+
+// lo spostamento (verso l'interno, sul massimo del profilo) e la normale in un punto della lastra
+export const surfaceAt = (px: number, py: number, w: number, h: number, r: number, b: number, P: ReturnType<typeof bevel>) => {
+  const [din, gx, gy] = edgeAt(px, py, w, h, r);
+  const u = Math.max(0, din) / b;
+  if (u >= 1) return { vx: 0, vy: 0, nx: 0, ny: 0, nz: 1 };
+  const f = Math.min(P.steps - 1, u * P.steps), k = Math.floor(f), t = f - k, k1 = Math.min(P.steps - 1, k + 1);
+  const m = (P.d[k] * (1 - t) + P.d[k1] * t) / P.max, sl = P.s[k] * (1 - t) + P.s[k1] * t, l = Math.sqrt(1 + sl * sl);
+  return { vx: -gx * m, vy: -gy * m, nx: (gx * sl) / l, ny: (gy * sl) / l, nz: 1 / l };
+};
+
+// quanto è largo il bordo curvo e quanto è smerigliata ciascuna specie di lastra
+export const shapeOf = (kind: Kind, w: number, h: number) => {
+  const m = Math.min(w, h);
+  const b = kind === "btn" || kind === "small" ? Math.max(8, Math.min(22, m * 0.42)) : Math.max(12, Math.min(22, m * 0.11));
+  const frost = kind === "btn" ? 0.8 : kind === "small" ? 2.5 : kind === "bar" ? 7 : kind === "win" ? 11 : 6;
+  return { b, thick: b * 1.5, frost };
+};
+
+// ---------------------------------------------------------------- la luce
+// La faccia del bordo guarda verso l'esterno, lo spostamento va verso l'interno: d = −(v · l) è quanto la faccia guarda
+// la luce (l, la direzione della luce sul piano), già pesato dall'inclinazione (|v| è massimo sul bordo e scende a zero
+// sul piano). Con v = 2·((R, G) − 128/255) sulla mappa, la luce di un punto è
+//   λ = ½ + kd·d + kf·B           (½ sul piano; B, l'inclinazione, è il riflesso che cresce verso il bordo)
+// e il vetro diventa  fondo · (1 + ks·(2λ − 1)) + ka·(λ − ½): più chiaro e più luminoso dove la faccia guarda la luce,
+// più scuro dall'altra parte, identico al fondo sul piano.
+export const lightRows = (az: number, dark: boolean) => {
+  const lx = Math.cos(az), ly = Math.sin(az);
+  const kd = 0.7, kf = dark ? 0.6 : 0.5;
+  const n = (v: number) => v.toFixed(4), c = 128 / 255; // lo zero della mappa è 128, non 127,5
+  const row = `${n(-2 * kd * lx)} ${n(-2 * kd * ly)} ${n(kf)} 0 ${n(0.5 + 2 * kd * c * (lx + ly))}`;
+  return `${row}  ${row}  ${row}  0 0 0 0 1`;
+};
+// quanto la luce moltiplica (ks) e quanto somma (ka): la composizione aritmetica k1·fondo·λ + k2·fondo + k3·λ + k4
+export const lightMix = (dark: boolean) => {
+  const ks = dark ? 0.55 : 0.32, ka = dark ? 0.75 : 0.6;
+  return { k1: 2 * ks, k2: 1 - ks, k3: ka, k4: -ka / 2 };
+};
+
+// ---------------------------------------------------------------- le mappe di una lastra
+// la mappa: lo spostamento (rosso e verde) e l'inclinazione (blu, che cresce verso il bordo: 1 − nz, ammorbidita). A
+// mezza risoluzione al più (640 px di lato): è liscia, il filtro la riporta alla misura vera
+const surface = (w: number, h: number, r: number, b: number, thick: number) => {
+  const P = bevel(b, thick);
+  const res = Math.min(0.5, 640 / Math.max(w, h));
+  const W = Math.max(2, Math.round(w * res)), H = Math.max(2, Math.round(h * res));
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d"); if (!g) return null;
+  const img = g.createImageData(W, H), D = img.data;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const s = surfaceAt((x + 0.5) / res, (y + 0.5) / res, w, h, r, b, P), i = (y * W + x) * 4;
+    D[i] = Math.round(128 + s.vx * 127); D[i + 1] = Math.round(128 + s.vy * 127);
+    D[i + 2] = Math.round(Math.pow(1 - s.nz, 1.4) * 255); D[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return { disp: c.toDataURL(), max: P.max };
+};
+
+// ---------------------------------------------------------------- i filtri
+let defs: SVGDefsElement | null = null, seq = 0, tick = 0;
 const ensureDefs = () => {
   if (defs?.isConnected) return defs;
   const svg = document.createElementNS(NS, "svg");
@@ -29,131 +132,170 @@ const ensureDefs = () => {
   return defs;
 };
 
-// lo spessore del bordo che piega la luce: un settimo del lato corto, fra 10 e 26 px (resta fuori dal testo, che nelle
-// lastre comincia almeno a 20 px dal bordo)
-export const bandOf = (w: number, h: number) => Math.max(10, Math.min(26, Math.min(w, h) * 0.14));
+let az = (-125 * Math.PI) / 180, azGoal = az;
+const glasses = new Map<string, Glass>();
+const DISPERSION = 0.07; // nei vetri piccoli il rosso si piega il 7% più del verde, il blu il 7% meno
 
-// la mappa di una lastra w×h con raggio r: fuori dalla fascia del bordo 128/128 (nessuno spostamento) e blu a zero;
-// dentro la fascia uno spostamento verso l'interno che cresce col quadrato dell'avvicinarsi al bordo, come su una
-// superficie convessa, e un blu che sale morbido fino al bordo (quanto si vede il fondo piegato invece di quello sfocato).
-// Disegnata a mezza risoluzione (al massimo 640 px di lato): la mappa è liscia, il filtro la riporta alla misura vera
-// un punto (px, py) della lastra: lo spostamento verso l'interno (vx, vy, fra -1 e 1) e il peso del bordo (rim, 0..0,88)
-export const lensAt = (px: number, py: number, w: number, h: number, r: number, band: number): [number, number, number] => {
-  const cx = w / 2, cy = h / 2, ix = w / 2 - r, iy = h / 2 - r, sx = px < cx ? -1 : 1, sy = py < cy ? -1 : 1;
-  const qx = Math.abs(px - cx) - ix, qy = Math.abs(py - cy) - iy;
-  let din: number, gx: number, gy: number;
-  if (qx > 0 && qy > 0) { const l = Math.hypot(qx, qy) || 1; din = r - l; gx = (sx * qx) / l; gy = (sy * qy) / l; }
-  else { din = r - Math.max(qx, qy); if (qx > qy) { gx = sx; gy = 0; } else { gx = 0; gy = sy; } }
-  if (din >= band) return [0, 0, 0];
-  const t = Math.min(1, 1 - Math.max(0, din) / band), m = t * t, u = Math.min(1, t * 1.35);
-  return [-gx * m, -gy * m, 0.88 * u * u * (3 - 2 * u)];
-};
-
-export const lensMap = (w: number, h: number, r: number, band: number) => {
-  const res = Math.min(0.5, 640 / Math.max(w, h));
-  const W = Math.max(2, Math.round(w * res)), H = Math.max(2, Math.round(h * res));
-  const c = document.createElement("canvas"); c.width = W; c.height = H;
-  const g = c.getContext("2d"); if (!g) return "";
-  const img = g.createImageData(W, H), d = img.data;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const [vx, vy, rim] = lensAt((x + 0.5) / res, (y + 0.5) / res, w, h, r, band);
-    const i = (y * W + x) * 4;
-    d[i] = Math.round(128 + vx * 127); d[i + 1] = Math.round(128 + vy * 127); d[i + 2] = Math.round(rim * 255); d[i + 3] = 255;
-  }
-  g.putImageData(img, 0, 0);
-  return c.toDataURL();
-};
-
-const filterFor = (w: number, h: number, r: number, frost: number) => {
-  const key = `${w}x${h}r${r}f${frost}`;
-  const hit = made.get(key); if (hit) { hit.used = ++tick; return hit.id; }
-  const band = bandOf(w, h), href = lensMap(w, h, r, band); if (!href) return "";
+const build = (w: number, h: number, r: number, kind: Kind, dark: boolean): Glass | null => {
+  const { b, thick, frost } = shapeOf(kind, w, h);
+  const S = surface(w, h, r, b, thick); if (!S) return null;
   const id = `lq${++seq}`, f = document.createElementNS(NS, "filter");
   f.setAttribute("id", id); f.setAttribute("x", "0"); f.setAttribute("y", "0"); f.setAttribute("width", String(w)); f.setAttribute("height", String(h));
   f.setAttribute("filterUnits", "userSpaceOnUse"); f.setAttribute("primitiveUnits", "userSpaceOnUse"); f.setAttribute("color-interpolation-filters", "sRGB");
-  const el = (tag: string, a: Record<string, string>) => { const n = document.createElementNS(NS, tag); for (const k in a) n.setAttribute(k, a[k]); f.appendChild(n); };
-  // la smerigliatura del centro (edgeMode duplicate: ai margini il fondo continua, non sfuma nel trasparente)
-  el("feGaussianBlur", { in: "SourceGraphic", stdDeviation: String(frost), edgeMode: "duplicate", result: "frost" });
-  el("feImage", { href, x: "0", y: "0", width: String(w), height: String(h), preserveAspectRatio: "none", result: "lente" });
-  // il bordo: il fondo piegato verso l'interno, appena ammorbidito
-  el("feDisplacementMap", { in: "SourceGraphic", in2: "lente", scale: (band * 1.4).toFixed(1), xChannelSelector: "R", yChannelSelector: "G", result: "piega" });
-  el("feGaussianBlur", { in: "piega", stdDeviation: "1.6", edgeMode: "duplicate", result: "piega2" });
-  // il peso del bordo (il blu della mappa) diventa la trasparenza del bordo piegato, posato sopra il centro
-  el("feColorMatrix", { in: "lente", type: "matrix", values: "0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 1 0 0", result: "peso" });
-  el("feComposite", { in: "piega2", in2: "peso", operator: "in", result: "bordo" });
-  el("feComposite", { in: "bordo", in2: "frost", operator: "over" });
-  ensureDefs().appendChild(f);
-  made.set(key, { id, used: ++tick });
-  // le misure che nessuno usa più da tempo se ne vanno (una pagina ridimensionata a lungo ne crea molte)
-  if (made.size > MAX_FILTERS) {
-    const old = Array.from(made.entries()).sort((a, b) => a[1].used - b[1].used).slice(0, made.size - MAX_FILTERS);
-    for (const [k, m] of old) { document.getElementById(m.id)?.remove(); made.delete(k); }
+  const add = (tag: string, a: Record<string, string | number>) => {
+    const n = document.createElementNS(NS, tag) as SVGElement; for (const k in a) n.setAttribute(k, String(a[k])); f.appendChild(n); return n;
+  };
+  const img = { x: 0, y: 0, width: w, height: h, preserveAspectRatio: "none" };
+  // 1. la smerigliatura, uguale su tutta la lastra (ai margini il fondo continua: edgeMode duplicate)
+  add("feGaussianBlur", { in: "SourceGraphic", stdDeviation: frost, edgeMode: "duplicate", result: "fondo" });
+  add("feImage", { ...img, href: S.disp, result: "piega" });
+  // 2. la rifrazione (nei vetri piccoli un colore alla volta)
+  const disp: SVGElement[] = [];
+  if (kind === "btn" || kind === "small") {
+    const iso = ["1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0", "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0", "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"];
+    [1 + DISPERSION, 1, 1 - DISPERSION].forEach((k, c) => {
+      disp.push(add("feDisplacementMap", { in: "fondo", in2: "piega", scale: 0, "data-k": k, xChannelSelector: "R", yChannelSelector: "G", result: `d${c}` }));
+      add("feColorMatrix", { in: `d${c}`, type: "matrix", values: iso[c], result: `c${c}` });
+    });
+    add("feComposite", { in: "c0", in2: "c1", operator: "arithmetic", k2: 1, k3: 1, result: "c01" });
+    add("feComposite", { in: "c01", in2: "c2", operator: "arithmetic", k2: 1, k3: 1, result: "rifratto" });
+  } else {
+    disp.push(add("feDisplacementMap", { in: "fondo", in2: "piega", scale: 0, "data-k": 1, xChannelSelector: "R", yChannelSelector: "G", result: "rifratto" }));
   }
-  return id;
+  // 3. la luce, ricavata dalla mappa e posata sul fondo piegato
+  const light = add("feColorMatrix", { in: "piega", type: "matrix", values: lightRows(az, dark), result: "luce" });
+  add("feComposite", { in: "rifratto", in2: "luce", operator: "arithmetic", ...lightMix(dark) });
+  ensureDefs().appendChild(f);
+  return { id, used: ++tick, scale: S.max, dark, disp, light, grow: -1 };
 };
 
-const WINDOWS = ".cp, .settings-panel, .sc-sheet, .sc-pop, [role=status]";
-const fit = (el: HTMLElement) => {
-  // la misura di impaginazione, non quella disegnata: l'inclinazione al passaggio del mouse non deve cambiare la mappa
-  const w = el.offsetWidth, h = el.offsetHeight;
-  if (w < 24 || h < 24) { el.style.removeProperty("--lq-f"); return; }
+// la luce di una lastra per la direzione attuale
+const paintGlass = (gl: Glass) => { gl.light.setAttribute("values", lightRows(az, gl.dark)); };
+
+// la piega di una lastra, da 0 (appena nata) a 1 (formata)
+const setForm = (g: Glass, k: number) => {
+  g.disp.forEach((d) => d.setAttribute("scale", (g.scale * k * +(d.getAttribute("data-k") || 1)).toFixed(2)));
+};
+
+let moving = true, raf = 0;
+// t in secondi: sale, supera appena la misura e si ferma, come una goccia che si posa
+export const spring = (t: number) => (t >= 0.9 ? 1 : 1 - Math.exp(-6.5 * t) * Math.cos(7.5 * t));
+const frame = () => {
+  raf = 0;
+  const now = performance.now();
+  let busy = false;
+  // la luce scivola verso la sua meta, un dodicesimo della strada a fotogramma: lenta, rilassata
+  const dz = azGoal - az;
+  if (Math.abs(dz) > 0.002) { az += dz * 0.085; glasses.forEach(paintGlass); busy = true; }
+  glasses.forEach((g) => {
+    if (g.grow <= 0) return;
+    const t = (now - g.grow) / 1000;
+    if (t >= 0.9) { g.grow = 0; setForm(g, 1); } else { setForm(g, spring(t)); busy = true; }
+  });
+  if (busy) raf = requestAnimationFrame(frame);
+};
+const wake = () => { if (!raf) raf = requestAnimationFrame(frame); };
+
+const filterFor = (w: number, h: number, r: number, kind: Kind, dark: boolean) => {
+  const key = `${w}x${h}r${r}${kind}${dark ? "d" : "c"}`;
+  let g = glasses.get(key);
+  if (!g) {
+    const made = build(w, h, r, kind, dark); if (!made) return null;
+    g = made; glasses.set(key, g);
+    if (glasses.size > MAX_FILTERS) {
+      const old = Array.from(glasses.entries()).filter(([k]) => k !== key).sort((a, b) => a[1].used - b[1].used).slice(0, glasses.size - MAX_FILTERS);
+      for (const [k, o] of old) { document.getElementById(o.id)?.remove(); glasses.delete(k); }
+    }
+  }
+  g.used = ++tick;
+  return g;
+};
+
+const kindOf = (el: HTMLElement): Kind => {
+  if (el.matches(BARS)) return "bar";
+  if (el.classList.contains("bt")) return "btn";
+  if (el.matches(WINDOWS)) return "win";
+  return Math.min(el.offsetWidth, el.offsetHeight) < 90 ? "small" : "pane";
+};
+
+// ---------------------------------------------------------------- le lastre della pagina
+const fit = (el: HTMLElement, dark: boolean, fresh: boolean) => {
   const cs = getComputedStyle(el);
+  // vetro solo dove il CSS lo vuole; un pulsante solo se non sta su un'altra lastra (niente vetro sul vetro)
+  let want = cs.getPropertyValue("--lq-want").trim() === "1";
+  if (want && el.classList.contains("bt")) want = !el.parentElement?.closest(".pn");
+  const w = el.offsetWidth, h = el.offsetHeight;
+  if (!want || w < 20 || h < 20 || w > 4000 || h > 6000) { el.style.removeProperty("--lq-f"); el.removeAttribute("data-lq"); return; }
   const r = Math.min(Math.round(parseFloat(cs.borderTopLeftRadius) || 0), Math.floor(Math.min(w, h) / 2));
-  // la smerigliatura è quella del CSS: le finestre e le barre più fitte, le lastre e le schede più limpide
-  const bar = el.classList.contains("shell-sidebar") || el.classList.contains("shell-dock");
-  const frost = bar ? (window.innerWidth < 768 ? 12 : 14) : Math.round(parseFloat(cs.getPropertyValue(el.matches(WINDOWS) ? "--g-blur-pop" : "--g-blur")) || 9);
-  const id = filterFor(w, h, r, frost);
-  if (id) el.style.setProperty("--lq-f", `url(#${id})`);
+  const g = filterFor(w, h, r, kindOf(el), dark);
+  if (!g) return;
+  if (fresh && moving) { if (g.grow <= 0) { g.grow = performance.now(); setForm(g, 0); wake(); } }
+  else if (g.grow === -1) { g.grow = 0; setForm(g, 1); }
+  el.style.setProperty("--lq-f", `url(#${g.id})`);
+  el.setAttribute("data-lq", "");
 };
 
-// la luce del sito: un punto solo, in alto a sinistra a riposo; segue il puntatore con calma, a passi piccoli (le
-// variabili cambiano solo quando la luce si sposta davvero, a passi di un decimo del suo giro e al massimo sei volte al
-// secondo: ogni passo ridisegna i bordi di tutte le lastre)
-const light = (root: HTMLElement) => {
-  let raf = 0, last = 0, px = -0.55, py = -0.85, sx = "", sy = "";
-  const apply = () => {
-    raf = 0;
+// la luce: sul computer il puntatore (lontano, oltre lo schermo: la luce cambia direzione, non si avvicina), sul
+// telefono l'inclinazione; sempre dall'alto. Le variabili CSS (--lq-x/--lq-y, per i bordi disegnati nel CSS) a passi
+const follow = (root: HTMLElement) => {
+  let sx = "", sy = "", last = 0;
+  const css = () => {
     const q = (v: number) => (Math.round(v * 5) / 5).toFixed(1);
-    const nx = q(px), ny = q(py);
+    const nx = q(Math.cos(azGoal) * 0.95), ny = q(Math.min(-0.25, Math.sin(azGoal) * 0.95));
     if (nx !== sx) { sx = nx; root.style.setProperty("--lq-x", nx); }
     if (ny !== sy) { sy = ny; root.style.setProperty("--lq-y", ny); }
   };
+  const aim = (a: number) => { azGoal = Math.max(-Math.PI + 0.05, Math.min(-0.05, a)); wake(); const now = performance.now(); if (now - last > 160) { last = now; css(); } };
   const move = (e: PointerEvent) => {
     if (e.pointerType !== "mouse") return;
-    const now = performance.now(); if (now - last < 160) return; last = now;
-    // la luce sta oltre il puntatore, lontana: si sposta poco e non va mai sotto le lastre
-    px = Math.max(-1, Math.min(1, (e.clientX / window.innerWidth - 0.5) * 1.6));
-    py = Math.max(-1, Math.min(-0.25, (e.clientY / window.innerHeight - 0.5) * 1.4 - 0.45));
-    if (!raf) raf = requestAnimationFrame(apply);
+    const dx = e.clientX - window.innerWidth / 2, dy = e.clientY - window.innerHeight / 2;
+    // vicino al centro dello schermo la direzione non cambia
+    if (Math.hypot(dx, dy) < Math.min(window.innerWidth, window.innerHeight) * 0.12) return;
+    aim(Math.atan2(Math.min(dy, -Math.abs(dx) * 0.15 - 40), dx));
   };
-  apply();
+  const tilt = (e: DeviceOrientationEvent) => {
+    if (e.gamma == null || e.beta == null) return;
+    const g = Math.max(-40, Math.min(40, e.gamma)), b = Math.max(-35, Math.min(35, e.beta - 45));
+    aim(((-110 + g * 1.4 + b * 0.5) * Math.PI) / 180);
+  };
+  css();
   window.addEventListener("pointermove", move, { passive: true });
-  return () => { window.removeEventListener("pointermove", move); cancelAnimationFrame(raf); root.style.removeProperty("--lq-x"); root.style.removeProperty("--lq-y"); };
+  const phone = typeof window.matchMedia === "function" && window.matchMedia("(pointer:coarse)").matches;
+  if (phone) window.addEventListener("deviceorientation", tilt, { passive: true });
+  return () => {
+    window.removeEventListener("pointermove", move); window.removeEventListener("deviceorientation", tilt);
+    root.style.removeProperty("--lq-x"); root.style.removeProperty("--lq-y");
+  };
 };
 
-// avvia il vetro liquido sulla radice del sito; lens: false dove il browser non sa piegare il fondo (resta la luce)
-export function startLiquid(root: HTMLElement, { lens, moving }: { lens: boolean; moving: boolean }) {
+// avvia il vetro liquido: lens false dove il browser non sa usare un filtro SVG nel backdrop-filter (resta il resto
+// del vetro, disegnato nel CSS); motion false senza animazioni (niente luce che si muove, lastre già formate)
+export function startLiquid(root: HTMLElement, { lens, motion, dark }: { lens: boolean; motion: boolean; dark: boolean }) {
   const stops: (() => void)[] = [];
-  if (moving) stops.push(light(root));
+  moving = motion;
+  if (motion) stops.push(follow(root));
   if (lens && typeof ResizeObserver !== "undefined") {
     const seen = new Set<HTMLElement>();
-    const ro = new ResizeObserver((es) => { for (const e of es) fit(e.target as HTMLElement); });
-    let raf = 0;
+    const ro = new ResizeObserver((es) => { for (const e of es) fit(e.target as HTMLElement, dark, false); });
+    let pend = 0;
     const scan = () => {
-      raf = 0;
+      pend = 0;
       const now = new Set<HTMLElement>();
-      document.querySelectorAll<HTMLElement>(SEL).forEach((el) => { now.add(el); if (!seen.has(el)) { seen.add(el); ro.observe(el); fit(el); } });
-      seen.forEach((el) => { if (!now.has(el)) { ro.unobserve(el); seen.delete(el); } });
+      document.querySelectorAll<HTMLElement>(SEL).forEach((el) => {
+        now.add(el);
+        if (!seen.has(el)) { seen.add(el); ro.observe(el); fit(el, dark, true); }
+      });
+      seen.forEach((el) => { if (!now.has(el)) { ro.unobserve(el); seen.delete(el); el.removeAttribute("data-lq"); } });
     };
-    // le lastre di una pagina nuova si trovano al fotogramma dopo il cambio, come le luci delle card
-    const mo = new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(scan); });
+    // le lastre di una pagina nuova si trovano al fotogramma dopo il cambio, e si formano davanti agli occhi
+    const mo = new MutationObserver(() => { if (!pend) pend = requestAnimationFrame(scan); });
     mo.observe(document.body, { childList: true, subtree: true });
     scan();
     stops.push(() => {
-      mo.disconnect(); ro.disconnect(); cancelAnimationFrame(raf);
-      seen.forEach((el) => el.style.removeProperty("--lq-f")); seen.clear();
-      made.forEach((m) => document.getElementById(m.id)?.remove()); made.clear();
+      mo.disconnect(); ro.disconnect(); cancelAnimationFrame(pend);
+      seen.forEach((el) => { el.style.removeProperty("--lq-f"); el.removeAttribute("data-lq"); }); seen.clear();
+      glasses.forEach((g) => document.getElementById(g.id)?.remove()); glasses.clear();
     });
   }
-  return () => stops.forEach((s) => s());
+  return () => { stops.forEach((s) => s()); cancelAnimationFrame(raf); raf = 0; };
 }

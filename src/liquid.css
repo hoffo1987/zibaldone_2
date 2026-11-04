@@ -1,17 +1,21 @@
 /* ===================================== il vetro liquido =====================================
-   Opzioni › Aspetto › Vetro › Liquido, sul modello del Liquid Glass di Apple: un materiale che non si limita a sfocare
-   ma piega la luce. Le lastre sono più limpide e luminose (poca velatura, più saturazione e luce); sui bordi il fondo
-   si piega come sotto una lente spessa (Chromium: liquid.ts mette in --lq-f la mappa della lastra); due fili di luce
-   corrono sul bordo, uno forte dal lato della luce e uno tenue dal lato opposto, e si spostano con lei (--lq-x/--lq-y,
-   la luce del sito, segue il puntatore). Le lastre grandi sono un vetro più spesso: ombra più profonda, lente più
-   ampia. Le finestre si accendono comparendo, i pulsanti si flettono come gel quando li premi e si illuminano da dentro.
+   Opzioni › Aspetto › Vetro › Liquido, sul modello del Liquid Glass di Apple. Il vetro vero lo disegna liquid.ts: un
+   filtro per ogni misura di lastra, messo nel backdrop-filter (Chromium), con la rifrazione del bordo curvo, il
+   volume, il riflesso e il filo di luce, tutti presi dalla stessa superficie. Qui:
+   - quali elementi sono vetro (--lq-want: 1) e la loro velatura, disegnata sopra il filtro;
+   - dove il filtro c'è (attributo data-lq) i fili di luce del CSS se ne vanno: sono nel filtro;
+   - dove non c'è (Safari, Firefox, o prima che il filtro arrivi) lo stesso vetro fatto col CSS: sfocatura, velatura
+     e due fili di luce sul bordo che seguono la luce del sito (--lq-x/--lq-y);
+   - i pulsanti si flettono come gel quando li premi, le finestre si accendono comparendo, la barra in alto del
+     telefono diventa una capsula sospesa come il dock.
    Caricato dopo glass.css: stesse regole di peso, vince per ordine. */
 .root.vetro-liquido{
-  --g-blur:9px;--g-blur-pop:15px;--g-sat:2.1;--g-bri:1.08;
+  --g-blur:9px;--g-blur-pop:15px;--g-sat:1.8;--g-bri:1.06;
   --g-1:rgba(255,255,255,.36);--g-2:rgba(250,252,248,.22);
   --g-card1:rgba(255,255,255,.46);--g-card2:rgba(250,252,248,.3);
   --g-edge:rgba(255,255,255,.4);
-  --lq-hi:rgba(255,255,255,.98);--lq-lo:rgba(255,255,255,.55);--lq-ring:rgba(255,255,255,.24);--lq-glow:rgba(255,255,255,.2);
+  --lq-t-btn:rgba(255,255,255,.3);
+  --lq-hi:rgba(255,255,255,.98);--lq-lo:rgba(255,255,255,.55);--lq-ring:rgba(255,255,255,.3);--lq-glow:rgba(255,255,255,.2);
   /* la direzione della luce come angolo di un gradiente: il capo chiaro del bordo guarda la luce */
   --lq-ang:atan2(calc(var(--lq-x,-.55) * -1),var(--lq-y,-.85));
   --g-in:inset calc(var(--lq-x,-.55) * -1.7px) calc(var(--lq-y,-.85) * -1.7px) 0 -.5px var(--lq-hi),
@@ -19,28 +23,38 @@
     inset 0 0 0 1px var(--lq-ring),inset 0 0 22px var(--lq-glow);
   --g-sh:0 0 0 .5px rgba(12,29,26,.08),0 1px 2px rgba(12,29,26,.07),0 12px 28px -14px rgba(12,29,26,.26),0 36px 70px -40px rgba(12,29,26,.36)}
 .root.dark.vetro-liquido{
-  --g-bri:.97;
+  --g-bri:.98;
   --g-1:rgba(14,28,26,.4);--g-2:rgba(7,16,15,.3);
   --g-card1:rgba(16,32,29,.48);--g-card2:rgba(9,20,18,.36);
   --g-edge:rgba(255,255,255,.12);
-  --lq-hi:rgba(255,255,255,.46);--lq-lo:rgba(255,255,255,.17);--lq-ring:rgba(255,255,255,.07);--lq-glow:rgba(255,255,255,.045);
+  --lq-t-btn:rgba(60,84,80,.2);
+  --lq-hi:rgba(255,255,255,.46);--lq-lo:rgba(255,255,255,.17);--lq-ring:rgba(255,255,255,.09);--lq-glow:rgba(255,255,255,.045);
   --g-sh:0 1px 2px rgba(0,0,0,.45),0 14px 30px -14px rgba(0,0,0,.62),0 38px 74px -36px rgba(0,0,0,.8)}
 @media (max-width:767px){.root.vetro-liquido{--g-blur:8px;--g-blur-pop:13px}}
 
-/* le lastre e le schede: il filtro della lastra (smerigliatura al centro, bordo piegato), saturazione e luce */
-.root.vetro-liquido:not(.noblur):not(.lite) .pn:not(.card):not(.shell-sidebar):not(.shell-dock):not(.hdr):not(.cp):not(.settings-panel):not(.sc-sheet):not(.sc-pop):not([role="status"]):not(.hero):not(:has(.cp,.cpov)),
-.root.vetro-liquido:not(.noblur):not(.lite) .pn.card:not(.hero){
+/* ---------- chi è vetro ---------- */
+:where(.root) :is(.pn,.bt){--lq-want:0}
+.root.vetro-liquido:not(.noblur):not(.lite) .pn:not(.card):not(.shell-sidebar):not(.shell-dock):not(.hdr):not(.cp):not(.settings-panel):not(.sc-sheet):not(.sc-pop):not([role="status"]):not(.hero):not(:has(.cp,.cpov)){
+  --lq-want:1;
   -webkit-backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat)) brightness(var(--g-bri));
   backdrop-filter:var(--lq-f,blur(var(--g-blur))) saturate(var(--g-sat)) brightness(var(--g-bri))}
-/* le finestre sono il vetro più spesso: velo un poco più pieno, sfocatura e lente più ampie, ombra lunga */
+.root.vetro-liquido:not(.noblur):not(.lite) .pn.card:not(.hero){
+  --lq-want:1;
+  -webkit-backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat)) brightness(var(--g-bri));
+  backdrop-filter:var(--lq-f,blur(var(--g-blur))) saturate(var(--g-sat)) brightness(var(--g-bri))}
+/* dove c'è il filtro, i fili di luce sono già dentro: resta un filo sottile che chiude il bordo */
+.root.vetro-liquido .pn[data-lq][data-lq]{--g-in:inset 0 0 0 1px var(--lq-ring)}
+
+/* ---------- le finestre: il vetro più spesso, velatura più piena, ombra lunga ---------- */
 :where(.root.vetro-liquido) :is(.cp.pn,.settings-panel.pn,.sc-sheet.pn,.sc-pop.pn,[role="status"].pn){
   background-color:color-mix(in srgb,var(--pn) 76%,transparent);
   box-shadow:var(--g-in),0 2px 6px -2px rgba(12,29,26,.12),0 40px 80px -30px rgba(12,29,26,.5)}
 :where(.root.dark.vetro-liquido) :is(.cp.pn,.settings-panel.pn,.sc-sheet.pn,.sc-pop.pn,[role="status"].pn){
   background-color:color-mix(in srgb,var(--pn) 66%,transparent);box-shadow:var(--g-in),0 2px 6px -2px rgba(0,0,0,.5),0 40px 80px -26px #000}
 .root.vetro-liquido:not(.noblur):not(.lite) :is(.cp.pn,.settings-panel.pn,.sc-sheet.pn,.sc-pop.pn,[role="status"].pn){
-  -webkit-backdrop-filter:blur(var(--g-blur-pop)) saturate(2.1) brightness(1.12);
-  backdrop-filter:var(--lq-f,blur(var(--g-blur-pop))) saturate(2.1) brightness(1.12)}
+  --lq-want:1;
+  -webkit-backdrop-filter:blur(var(--g-blur-pop)) saturate(2) brightness(1.12);
+  backdrop-filter:var(--lq-f,blur(var(--g-blur-pop))) saturate(1.8) brightness(1.06)}
 /* comparire: le finestre non sfumano dal nulla, si accendono, come vetro che raccoglie la luce, e si posano sulla molla */
 @keyframes lqIn{from{opacity:0;transform:translateY(12px) scale(.95);filter:brightness(1.45) saturate(1.25)}55%{filter:brightness(1.08)}}
 @keyframes lqPop{from{opacity:0;transform:translateY(-6px) scale(.94);filter:brightness(1.45) saturate(1.25)}55%{filter:brightness(1.08)}}
@@ -48,29 +62,60 @@
 .root.vetro-liquido .cp{animation:lqPop .6s var(--g-spring) backwards}
 @media (max-width:767px){.root.vetro-liquido .cp{animation:sheet .62s var(--g-soft) both}}
 
-/* la barra laterale: una lastra spessa e limpida, la lente sui bordi, il filo di luce che guarda la luce del sito */
+/* ---------- la barra laterale: una lastra spessa e limpida ---------- */
+.root.vetro-liquido:not(.noblur):not(.lite) .shell-sidebar.pn{--lq-want:1;}
 .root.vetro-liquido:not(.noblur):not(.lite) .shell-sidebar.pn:before{
   background:radial-gradient(340px 220px at var(--glx,0px) var(--gly,0px),rgb(255 255 255 / calc(.42 * var(--gl,0))),transparent 68%),linear-gradient(168deg,rgba(255,255,255,.42),rgba(248,250,246,.2));
-  -webkit-backdrop-filter:blur(14px) saturate(2.1) brightness(1.08);backdrop-filter:var(--lq-f,blur(14px)) saturate(2.1) brightness(1.08);
+  -webkit-backdrop-filter:blur(14px) saturate(2) brightness(1.08);backdrop-filter:var(--lq-f,blur(14px)) saturate(1.8) brightness(1.06);
   box-shadow:var(--g-in),0 2px 8px -3px rgba(12,29,26,.1),0 34px 70px -34px rgba(12,29,26,.42)}
 .root.dark.vetro-liquido:not(.noblur):not(.lite) .shell-sidebar.pn:before{
   background:radial-gradient(340px 220px at var(--glx,0px) var(--gly,0px),rgb(255 255 255 / calc(.13 * var(--gl,0))),transparent 68%),linear-gradient(168deg,rgba(20,38,35,.46),rgba(6,15,14,.3));
-  -webkit-backdrop-filter:blur(14px) saturate(1.9) brightness(.96);backdrop-filter:var(--lq-f,blur(14px)) saturate(1.9) brightness(.96);
+  -webkit-backdrop-filter:blur(14px) saturate(1.9) brightness(.96);backdrop-filter:var(--lq-f,blur(14px)) saturate(1.7) brightness(.98);
   box-shadow:var(--g-in),0 2px 8px -3px rgba(0,0,0,.5),0 34px 70px -30px rgba(0,0,0,.8)}
+.root.vetro-liquido:not(.noblur):not(.lite) .shell-sidebar.pn[data-lq]:before{
+  box-shadow:inset 0 0 0 1px var(--lq-ring),0 2px 8px -3px rgba(12,29,26,.1),0 34px 70px -34px rgba(12,29,26,.42)}
+.root.dark.vetro-liquido:not(.noblur):not(.lite) .shell-sidebar.pn[data-lq]:before{
+  box-shadow:inset 0 0 0 1px var(--lq-ring),0 2px 8px -3px rgba(0,0,0,.5),0 34px 70px -30px rgba(0,0,0,.8)}
 .root.vetro-liquido .shell-sidebar.pn:after,.root.vetro-liquido .shell-dock.pn:after{
   background:linear-gradient(var(--lq-ang),#fff,rgba(255,255,255,.3) 18%,rgba(255,255,255,0) 44%,rgba(255,255,255,.12) 76%,rgba(255,255,255,.7))}
+.root.vetro-liquido :is(.shell-sidebar,.shell-dock).pn[data-lq]:after{opacity:.45}
+
 @media (max-width:767px){
-  .root.vetro-liquido:not(.noblur):not(.lite) .shell-dock.pn{
+  /* il dock */
+  .root.vetro-liquido:not(.noblur):not(.lite) .shell-dock.pn{--lq-want:1;
     background:radial-gradient(200px 110px at var(--glx,0px) var(--gly,0px),rgb(255 255 255 / calc(.42 * var(--gl,0))),transparent 70%),linear-gradient(180deg,rgba(255,255,255,.44),rgba(248,250,246,.24));
-    -webkit-backdrop-filter:blur(12px) saturate(2.1) brightness(1.08);backdrop-filter:var(--lq-f,blur(12px)) saturate(2.1) brightness(1.08);
+    -webkit-backdrop-filter:blur(12px) saturate(2) brightness(1.08);backdrop-filter:var(--lq-f,blur(12px)) saturate(1.8) brightness(1.06);
     box-shadow:var(--g-in),0 2px 8px -3px rgba(12,29,26,.12),0 20px 44px -18px rgba(12,29,26,.5)}
   .root.dark.vetro-liquido:not(.noblur):not(.lite) .shell-dock.pn{
     background:radial-gradient(200px 110px at var(--glx,0px) var(--gly,0px),rgb(255 255 255 / calc(.14 * var(--gl,0))),transparent 70%),linear-gradient(180deg,rgba(20,38,35,.5),rgba(6,15,14,.36));
-    -webkit-backdrop-filter:blur(12px) saturate(1.9) brightness(.96);backdrop-filter:var(--lq-f,blur(12px)) saturate(1.9) brightness(.96);
+    -webkit-backdrop-filter:blur(12px) saturate(1.9) brightness(.96);backdrop-filter:var(--lq-f,blur(12px)) saturate(1.7) brightness(.98);
     box-shadow:var(--g-in),0 2px 8px -3px rgba(0,0,0,.5),0 20px 44px -16px rgba(0,0,0,.85)}
+  .root.vetro-liquido:not(.noblur):not(.lite) .shell-dock.pn[data-lq]{
+    box-shadow:inset 0 0 0 1px var(--lq-ring),0 2px 8px -3px rgba(12,29,26,.12),0 20px 44px -18px rgba(12,29,26,.5)}
+  .root.dark.vetro-liquido:not(.noblur):not(.lite) .shell-dock.pn[data-lq]{
+    box-shadow:inset 0 0 0 1px var(--lq-ring),0 2px 8px -3px rgba(0,0,0,.5),0 20px 44px -16px rgba(0,0,0,.85)}
+
+  /* la barra in alto: non più una fascia piena ma una capsula di vetro sospesa, come il dock; la pagina le scorre
+     sotto. Il vetro sta su un livello suo (:before): un filtro sulla barra imprigionerebbe il foglio fisso delle
+     notifiche, che vive dentro di lei */
+  .root.vetro-liquido:not(.noblur):not(.lite) header.hdr{--lq-want:1;
+    top:calc(8px + env(safe-area-inset-top));margin:calc(8px + env(safe-area-inset-top)) 10px 0;
+    padding-top:.55rem;padding-bottom:.55rem;border-radius:26px!important;border-width:0!important;
+    background:transparent;box-shadow:none;isolation:isolate}
+  .root.vetro-liquido:not(.noblur):not(.lite) header.hdr:before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+    background:linear-gradient(180deg,rgba(255,255,255,.46),rgba(248,250,246,.26));
+    -webkit-backdrop-filter:blur(12px) saturate(2) brightness(1.08);backdrop-filter:var(--lq-f,blur(12px)) saturate(1.8) brightness(1.06);
+    box-shadow:var(--g-in),0 2px 8px -3px rgba(12,29,26,.12),0 18px 38px -18px rgba(12,29,26,.45)}
+  .root.dark.vetro-liquido:not(.noblur):not(.lite) header.hdr:before{background:linear-gradient(180deg,rgba(20,38,35,.52),rgba(6,15,14,.38));
+    -webkit-backdrop-filter:blur(12px) saturate(1.9) brightness(.96);backdrop-filter:var(--lq-f,blur(12px)) saturate(1.7) brightness(.98);
+    box-shadow:var(--g-in),0 2px 8px -3px rgba(0,0,0,.5),0 18px 38px -16px rgba(0,0,0,.85)}
+  .root.vetro-liquido:not(.noblur):not(.lite) header.hdr[data-lq]:before{
+    box-shadow:inset 0 0 0 1px var(--lq-ring),0 2px 8px -3px rgba(12,29,26,.12),0 18px 38px -18px rgba(12,29,26,.45)}
+  .root.dark.vetro-liquido:not(.noblur):not(.lite) header.hdr[data-lq]:before{box-shadow:inset 0 0 0 1px var(--lq-ring),0 2px 8px -3px rgba(0,0,0,.5),0 18px 38px -16px rgba(0,0,0,.85)}
 }
 
-/* i pulsanti: gocce di vetro limpido, il bordo acceso dal lato della luce, un bagliore dentro */
+/* ---------- i pulsanti: gocce di vetro ---------- */
+/* fatti col CSS (sopra un'altra lastra, o senza filtro): vetro limpido, il bordo acceso dal lato della luce */
 :where(.root.vetro-liquido) .bt:where(:not(.on):not(.pri):not(.dng)){
   background:radial-gradient(120% 130% at 50% -25%,rgba(255,255,255,.62),rgba(255,255,255,0) 62%) padding-box,
     linear-gradient(180deg,rgba(255,255,255,.52),rgba(255,255,255,.24)) padding-box,
@@ -81,6 +126,13 @@
     linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03)) padding-box,
     linear-gradient(var(--lq-ang),rgba(255,255,255,.5),rgba(255,255,255,.1) 32%,rgba(255,255,255,.02) 60%,rgba(255,255,255,.26)) border-box;
   box-shadow:inset 0 0 12px rgba(255,255,255,.05),0 8px 18px -10px #000}
+/* i pulsanti liberi (non su un'altra lastra) sono vetro vero: lo stesso filtro delle lastre, quasi limpido */
+:where(.root.vetro-liquido:not(.noblur):not(.lite)) .bt:where(:not(.on):not(.pri):not(.dng)){--lq-want:1}
+:where(.root.vetro-liquido) :is(.bt.\!bg-transparent,.seg .bt,.hero .bt){--lq-want:0}
+:where(.root.vetro-liquido) .bt[data-lq]{background:var(--lq-t-btn);border-color:transparent;
+  -webkit-backdrop-filter:blur(2px) saturate(1.8);backdrop-filter:var(--lq-f) saturate(1.8) brightness(1.06);
+  box-shadow:inset 0 0 0 1px var(--lq-ring),0 1px 2px rgba(12,29,26,.08),0 8px 18px -10px rgba(12,29,26,.4)}
+:where(.root.dark.vetro-liquido) .bt[data-lq]{box-shadow:inset 0 0 0 1px var(--lq-ring),0 8px 18px -10px #000}
 :where(.root.vetro-liquido) .bt.on{background:radial-gradient(120% 90% at 50% 0%,rgba(255,255,255,.5),rgba(255,255,255,0) 55%),linear-gradient(180deg,color-mix(in srgb,var(--ac) 78%,#fff),var(--ac) 52%,color-mix(in srgb,var(--ac) 84%,#000));
   box-shadow:inset calc(var(--lq-x,-.55) * -1.4px) calc(var(--lq-y,-.85) * -1.4px) 0 -.4px rgba(255,255,255,.7),inset 0 -6px 12px -8px rgba(0,0,0,.35),0 10px 24px -12px color-mix(in srgb,var(--ac) 90%,transparent)}
 /* premere: la goccia si allarga un poco e si schiaccia, come gel, e si illumina da dentro; lasciata, torna sulla molla */
